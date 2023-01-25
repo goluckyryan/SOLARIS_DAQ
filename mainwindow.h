@@ -11,7 +11,10 @@
 #include <QScrollBar>
 #include <QPushButton>
 
+#include <vector>
+
 #include "ClassDigitizer2Gen.h"
+#include "digiSettings.h"
 
 static Digitizer2Gen * digi = NULL;
 
@@ -30,6 +33,8 @@ private slots:
     void bnOpenDigitizers_clicked();
     void bnCloseDigitizers_clicked();
 
+    void OpenDigitizersSettings();
+
 signals :
 
 
@@ -42,9 +47,13 @@ private:
     QPushButton * bnStartACQ;
     QPushButton * bnStopACQ;
 
+    DigiSettings * digiSetting;
+
+
     QPlainTextEdit * logInfo;
 
     unsigned short nDigi;
+    std::vector<unsigned short> digiSerialNum;
 
     //QThread * StartRunThread;
 

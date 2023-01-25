@@ -11,10 +11,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   setWindowIcon(icon);
 
   nDigi = 0;
+  digiSerialNum.clear();
+  digiSetting = NULL;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
-  QVBoxLayout * layout1 = new QVBoxLayout();
+  QVBoxLayout * layout1 = new QVBoxLayout(mainLayoutWidget);
   mainLayoutWidget->setLayout(layout1);
 
   {
@@ -34,6 +36,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   
     bnDigiSettings = new QPushButton("Digitizers Settings", this);
     bnDigiSettings->setEnabled(false);
+    connect(bnDigiSettings, SIGNAL(clicked()), this, SLOT(OpenDigitizersSettings()));
 
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
@@ -69,9 +72,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   LogMsg("Welcome to SOLARIS DAQ.");
 
+  bnOpenDigitizers_clicked();
+  OpenDigitizersSettings();
+
 }
 
 MainWindow::~MainWindow(){
+
+  delete digiSetting;
 
   delete bnProgramSettings;
   delete bnOpenDigitizers;
@@ -98,10 +106,15 @@ void MainWindow::bnOpenDigitizers_clicked(){
   digi->OpenDigitizer("dig2://192.168.0.100/");
 
   if(digi->IsConnected()){
-    LogMsg("Open digitizer.");
-    bnCloseDigitizers->setEnabled(true);
 
+    digiSerialNum.push_back(digi->GetSerialNumber());
+    nDigi ++;
+
+    LogMsg("Opened digitizer : " + QString::number(digi->GetSerialNumber()));
     bnOpenDigitizers->setEnabled(false);
+    bnCloseDigitizers->setEnabled(true);
+    bnDigiSettings->setEnabled(true);
+    bnStartACQ->setEnabled(true);
 
   }else{
     LogMsg("Cannot open digitizer");
@@ -113,12 +126,29 @@ void MainWindow::bnCloseDigitizers_clicked(){
     digi->CloseDigitizer();
     delete digi;
     digi = NULL;
-    LogMsg("Closed Digitizer.");
+    LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
     
+    nDigi = 0;
+    digiSerialNum.clear();
+
     bnOpenDigitizers->setEnabled(true);
+    bnCloseDigitizers->setEnabled(false);
+    bnDigiSettings->setEnabled(false);
+    bnStartACQ->setEnabled(false);
+    bnStopACQ->setEnabled(false);
   }
 }
 
+void MainWindow::OpenDigitizersSettings(){
+  LogMsg("Open digitizers Settings Panel");
+
+  if( digiSetting == NULL){
+    digiSetting = new DigiSettings(digi, nDigi);
+    digiSetting->show();
+  }else{
+    digiSetting->show();
+  }
+}
 
 void MainWindow::LogMsg(QString msg){
 

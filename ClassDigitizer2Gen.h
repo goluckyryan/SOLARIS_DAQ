@@ -60,6 +60,8 @@ class Digitizer2Gen {
   public:
     Digitizer2Gen();
     ~Digitizer2Gen();
+
+    unsigned short GetSerialNumber() {return serialNumber;}
   
     int OpenDigitizer(const char * url);
     bool IsConnected() const {return isConnected;}
