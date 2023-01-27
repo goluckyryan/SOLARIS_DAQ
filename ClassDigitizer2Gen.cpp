@@ -568,17 +568,27 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
     //WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
 
     //======== One (or more) slef-trigger can trigger whole board, ??? depend on Channel Trigger mask
-    WriteValue("/ch/0..63/par/EventTriggerSource", "Ch64Trigger");
-    WriteValue("/ch/0..63/par/WaveTriggerSource" , "Ch64Trigger"); 
+    //WriteValue("/ch/0..63/par/EventTriggerSource", "Ch64Trigger");
+    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "Ch64Trigger"); 
 
-    WriteValue("/ch/0..63/par/ChannelsTriggerMask", "0x0000FFFF000F000F");
+    //WriteValue("/ch/0..63/par/ChannelsTriggerMask", "0x0000FFFF000F000F");
+
+    //WriteValue("/ch/0..3/par/ChannelsTriggerMask", "0x1");
+    //WriteValue("/ch/4..7/par/ChannelsTriggerMask", "0x10");
+
     //WriteValue("/ch/0/par/ChannelsTriggerMask", "0x000F");
     //WriteValue("/ch/12/par/ChannelsTriggerMask", "0x000F");
     //WriteValue("/ch/38/par/ChannelsTriggerMask", "0x000F"); // when channel has no input, it still record.
 
-    //WriteValue("/ch/0..63/par/CoincidenceMask", "Ch64Trigger");
-    //WriteValue("/ch/0..63/par/CoincidenceLength", "100"); //ns
+    //----------- coincident trigger to ch-4n
+    WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
+    WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
 
+    for(int i = 0 ; i < 16; i++){
+      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/ChannelsTriggerMask").c_str(), "0x1");
+      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceMask").c_str(), "Ch64Trigger");
+      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceLengthT").c_str(), "100"); // ns
+    }
     //======== ACQ trigger?
     //WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
     //WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); 

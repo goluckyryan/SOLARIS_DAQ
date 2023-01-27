@@ -1,16 +1,6 @@
 #include "digiSettings.h"
 
 #include <QLabel>
-#include <QLineEdit>
-#include <QSpinBox>
-#include <QDoubleSpinBox>
-#include <QGridLayout>
-#include <QScrollArea>
-#include <QTabWidget>
-#include <QGroupBox>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QDebug>
 
 DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
 
@@ -23,6 +13,8 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
   this->digi = digi;
   this->nDigi = nDigi;
+
+  this->nDigi = 1;
 
 
   std::vector<std::vector<std::string>> info = {{"Serial Num : ", "/par/SerialNum"},
@@ -41,8 +33,10 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
   QTabWidget * tabWidget = new QTabWidget(this);
   mainLayout->addWidget(tabWidget);
 
+  
+
   //============ Tab for each digitizer
-  for(unsigned short i = 0; i < nDigi; i++){
+  for(unsigned short i = 0; i < this->nDigi; i++){
   
 
     QWidget * tab = new QWidget(tabWidget);
@@ -52,7 +46,8 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
     scrollArea->setWidgetResizable(true);
     scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
+    //tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
+    tabWidget->addTab(scrollArea, "Digi-dummy");
 
     QGridLayout *tabLayout = new QGridLayout(tab);
     tab->setLayout(tabLayout);
@@ -68,22 +63,35 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
       lab->setAlignment(Qt::AlignRight);
       QLineEdit * txt = new QLineEdit(tab);
       txt->setReadOnly(true);
-      txt->setText(QString::fromStdString(digi->ReadValue(info[j][1].c_str())));
+      //txt->setText(QString::fromStdString(digi->ReadValue(info[j][1].c_str())));
       //txt->setStyleSheet("color: black;");
       infoLayout->addWidget(lab, j%3, 2*(j/3));
       infoLayout->addWidget(txt, j%3, 2*(j/3) +1);
     }
     
+    //------- Group Board status
+    QGroupBox * statusBox = new QGroupBox("Board Status", tab);
+    QGridLayout * statusLayout = new QGridLayout(statusBox);
+    statusBox->setLayout(statusLayout);
+    tabLayout->addWidget(statusBox, 1, 0);
 
     //------- Group digitizer settings
     QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
     QGridLayout * boardLayout = new QGridLayout(digiBox);
     digiBox->setLayout(boardLayout);
-    tabLayout->addWidget(digiBox, 1, 0, 2, 1);
+    tabLayout->addWidget(digiBox, 2, 0);
     
     {
       int rowId = 0;
       //-------------------------------------
+      QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
+      boardLayout->addWidget(bnResetBd, rowId, 0, 1, 2);
+      
+      QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
+      boardLayout->addWidget(bnDefaultSetting, rowId, 2, 1, 2);
+
+      //-------------------------------------
+      rowId ++;
       QLabel * lbStartSource = new QLabel("Start Source :", tab);
       lbStartSource->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbStartSource, rowId, 0);
@@ -265,32 +273,99 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
     QGridLayout * chLayout = new QGridLayout(chBox);
     chBox->setLayout(chLayout);
     tabLayout->addWidget(chBox, 0, 1, 10, 1);
+    chLayout->setVerticalSpacing(0);
 
-    for( unsigned short ch = 0; ch < digi->GetNChannels(); ch++){
+    //for( unsigned short ch = 0; ch < digi->GetNChannels(); ch++){
+    for( unsigned short ch = 0; ch < 64; ch++){
       QLabel * labCh = new QLabel(QString::number(ch), tab);
       labCh->setAlignment(Qt::AlignRight);
       chLayout->addWidget(labCh, ch, 0);
 
       QCheckBox * cbCh = new QCheckBox(tab);
-      std::string onOff = digi->ReadValue(("/ch/" + std::to_string(ch)+ "/par/ChEnable").c_str());
+      //std::string onOff = digi->ReadValue(("/ch/" + std::to_string(ch)+ "/par/ChEnable").c_str());
       //qDebug() << QString::fromStdString(std::to_string(ch)  +  ", " + onOff);
-      if( onOff == "True"){
-        cbCh->setChecked(true);
-      }else{
-        cbCh->setChecked(false);
-      }
+      //if( onOff == "True"){
+      //  cbCh->setChecked(true);
+      //}else{
+      //  cbCh->setChecked(false);
+      //}
 
       chLayout->addWidget(cbCh, ch, 1);
 
     }
 
+    //------- Group trigger settings
+    QGroupBox * triggerBox = new QGroupBox("Trigger Map", tab);
+    QGridLayout * triggerLayout = new QGridLayout(triggerBox);
+    triggerBox->setLayout(triggerLayout);
+    tabLayout->addWidget(triggerBox, 3, 0);
+    {
 
-  }
+      triggerLayout->setHorizontalSpacing(0);
+      triggerLayout->setVerticalSpacing(0);
+
+      QLabel * instr = new QLabel("Reading: Column (C) represents a trigger channel for Row (R) channel.\nFor example, R3C1 = ch-3 trigger source is ch-1.\n", tab);
+      triggerLayout->addWidget(instr, 0, 0, 1, 64+15);
+
+      QSignalMapper * triggerMapper = new QSignalMapper(tab);
+
+      int count = 0;
+      int rowID = 1;
+      int colID = 0;
+      for(int i = 0; i < 64; i++){
+        colID = 0;
+        for(int j = 0; j < 64; j++){
+          
+          bn[i][j] = new QPushButton(tab);
+          bn[i][j]->setFixedSize(QSize(10,10));
+          bnClickStatus[i][j] = false;
+
+          if( i%4 != 0 && j == (i/4)*4) {
+            bn[i][j]->setStyleSheet("background-color: red;");
+            bnClickStatus[i][j] = true;
+          }
+
+          triggerMapper->setMapping(bn[i][j], 100*i+j);
+          
+          connect(bn[i][j], SIGNAL(clicked()), triggerMapper, SLOT(map()));
+
+          count++;
+
+          triggerLayout->addWidget(bn[i][j], rowID, colID);
+
+          colID ++;
+
+          if( j%4 == 3 && j!= 63){
+            QFrame * vSeparator = new QFrame(tab);
+            vSeparator->setFrameShape(QFrame::VLine);
+            triggerLayout->addWidget(vSeparator, rowID, colID);
+            colID++;
+          }
+        }
+
+        rowID++;
+
+        if( i%4 == 3 && i != 63){
+          QFrame * hSeparator = new QFrame(tab);
+          hSeparator->setFrameShape(QFrame::HLine);
+          triggerLayout->addWidget(hSeparator, rowID, 0, 1, 64 + 15);
+          rowID++;
+        }
+
+
+      }
+
+      //connect(triggerMapper, &QSignalMapper::mappedString, this, &DigiSettings::onTriggerClick);
+
+      connect(triggerMapper, SIGNAL(mappedInt(int)), this, SLOT(onTriggerClick(int)));
+    }
+
+
+  } //=== end of tab
 
 
 }
 
 DigiSettings::~DigiSettings(){
-
 
 }

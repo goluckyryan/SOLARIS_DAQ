@@ -48,7 +48,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout->addWidget(bnCloseDigitizers, 0, 2);
     layout->addWidget(bnDigiSettings, 1, 1);
   
-    QFrame * separator = new QFrame();
+    QFrame * separator = new QFrame(this);
     separator->setFrameShape(QFrame::HLine);
     layout->addWidget(separator, 2, 0, 1, 3);
 
@@ -72,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   LogMsg("Welcome to SOLARIS DAQ.");
 
-  bnOpenDigitizers_clicked();
+  //bnOpenDigitizers_clicked();
   OpenDigitizersSettings();
 
 }
