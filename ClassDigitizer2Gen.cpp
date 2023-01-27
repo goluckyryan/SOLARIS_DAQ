@@ -16,6 +16,7 @@ void Digitizer2Gen::Initialization(){
   handle = 0;
   ret = 0;
   isConnected = false;
+  isDummy = false;
   
   modelName = "";
   cupVersion = "";
@@ -39,6 +40,13 @@ void Digitizer2Gen::Initialization(){
   evt = NULL;
 
   acqON = false;
+
+}
+
+void Digitizer2Gen::SetDummy(){
+
+  isDummy = true;
+  nChannels = 64;
 
 }
 
@@ -163,13 +171,14 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
 
 int Digitizer2Gen::CloseDigitizer(){
   printf("======== %s \n",__func__);
-  ret = CAEN_FELib_Close(handle);
-  if (ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
-    return 0;
+  if( isConnected == true ){
+    ret = CAEN_FELib_Close(handle);
+    if (ret != CAEN_FELib_Success) {
+      ErrorMsg(__func__);
+      return 0;
+    }
+    isConnected = false;
   }
-  isConnected = false;
-
   return 0;
 }
 

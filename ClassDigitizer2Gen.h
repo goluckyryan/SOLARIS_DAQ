@@ -21,6 +21,7 @@ class Digitizer2Gen {
     uint64_t stat_handle;
     //uint64_t stat_folder_handle;
 
+    bool isDummy;
     bool isConnected;
     int ret;
 
@@ -62,7 +63,10 @@ class Digitizer2Gen {
     ~Digitizer2Gen();
 
     unsigned short GetSerialNumber() {return serialNumber;}
-  
+
+    void  SetDummy();
+    bool  IsDummy() {return isDummy;}
+
     int OpenDigitizer(const char * url);
     bool IsConnected() const {return isConnected;}
     int CloseDigitizer();

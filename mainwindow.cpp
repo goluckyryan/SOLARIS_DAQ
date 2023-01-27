@@ -72,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   LogMsg("Welcome to SOLARIS DAQ.");
 
-  //bnOpenDigitizers_clicked();
+  bnOpenDigitizers_clicked();
   OpenDigitizersSettings();
 
 }
@@ -118,6 +118,13 @@ void MainWindow::bnOpenDigitizers_clicked(){
 
   }else{
     LogMsg("Cannot open digitizer");
+
+    LogMsg("use a dummy.");
+
+    digi->SetDummy();
+    digiSerialNum.push_back(0000);
+    nDigi ++;
+
   }
 }
 

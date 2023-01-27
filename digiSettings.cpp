@@ -7,33 +7,31 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
   qDebug() << "DigiSettings constructor";
 
   setWindowTitle("Digitizers Settings");
-  setGeometry(200, 50, 1000, 1000);
+  setGeometry(0, 0, 1900, 1000);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
   this->digi = digi;
   this->nDigi = nDigi;
 
-  this->nDigi = 1;
-
-
-  std::vector<std::vector<std::string>> info = {{"Serial Num : ", "/par/SerialNum"},
-                                                {"IP : ", "/par/IPAddress"},
-                                                {"Model Name : ", "/par/ModelName"},
-                                                {"FPGA version : ", "/par/FPGA_FwVer"},
-                                                {"DPP Type : ", "/par/FwType"},
-                                                {"CUP version : ", "/par/cupver"},
-                                                {"ADC bits : ", "/par/ADC_Nbit"},
-                                                {"ADC rate [Msps] : ", "/par/ADC_SamplRate"},
-                                                {"Num. of Channel : ", "/par/NumCh"}
+  std::vector<std::vector<std::string>> info = {{"Serial Num : ",            "/par/SerialNum"},
+                                                {"IP : ",                    "/par/IPAddress"},
+                                                {"Model Name : ",            "/par/ModelName"},
+                                                {"FPGA version : ",          "/par/FPGA_FwVer"},
+                                                {"DPP Type : ",              "/par/FwType"},
+                                                {"CUP version : ",           "/par/cupver"},
+                                                {"ADC bits : ",              "/par/ADC_Nbit"},
+                                                {"ADC rate [Msps] : ",       "/par/ADC_SamplRate"},
+                                                {"Num. of Channel : ",       "/par/NumCh"},
+                                                {"Input range [Vpp] : ",     "/par/InputRange"},
+                                                {"Input Type : ",            "/par/InputType"},
+                                                {"Input Impedance [Ohm] : ", "/par/Zin"}
                                                };
 
   QVBoxLayout * mainLayout = new QVBoxLayout(this);
   this->setLayout(mainLayout);
   QTabWidget * tabWidget = new QTabWidget(this);
   mainLayout->addWidget(tabWidget);
-
-  
 
   //============ Tab for each digitizer
   for(unsigned short i = 0; i < this->nDigi; i++){
@@ -46,42 +44,42 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
     scrollArea->setWidgetResizable(true);
     scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    //tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
-    tabWidget->addTab(scrollArea, "Digi-dummy");
-
+    tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
+    
     QGridLayout *tabLayout = new QGridLayout(tab);
     tab->setLayout(tabLayout);
 
-    //-------- Group of Digitizer Info
-    QGroupBox * infoBox = new QGroupBox("Board Info", tab);
-    QGridLayout * infoLayout = new QGridLayout(infoBox);
-    infoBox->setLayout(infoLayout);
-    tabLayout->addWidget(infoBox, 0, 0);
-
-    for( unsigned short j = 0; j < (unsigned short) info.size(); j++){
-      QLabel * lab = new QLabel(QString::fromStdString(info[j][0]), tab);
-      lab->setAlignment(Qt::AlignRight);
-      QLineEdit * txt = new QLineEdit(tab);
-      txt->setReadOnly(true);
-      //txt->setText(QString::fromStdString(digi->ReadValue(info[j][1].c_str())));
-      //txt->setStyleSheet("color: black;");
-      infoLayout->addWidget(lab, j%3, 2*(j/3));
-      infoLayout->addWidget(txt, j%3, 2*(j/3) +1);
+    {//-------- Group of Digitizer Info
+      QGroupBox * infoBox = new QGroupBox("Board Info", tab);
+      QGridLayout * infoLayout = new QGridLayout(infoBox);
+      infoBox->setLayout(infoLayout);
+      tabLayout->addWidget(infoBox, 0, 0);
+      
+      const unsigned short nRow = 4;
+      for( unsigned short j = 0; j < (unsigned short) info.size(); j++){
+        QLabel * lab = new QLabel(QString::fromStdString(info[j][0]), tab);
+        lab->setAlignment(Qt::AlignRight);
+        QLineEdit * txt = new QLineEdit(tab);
+        txt->setReadOnly(true);
+        txt->setText(QString::fromStdString(digi->ReadValue(info[j][1].c_str())));
+        infoLayout->addWidget(lab, j%nRow, 2*(j/nRow));
+        infoLayout->addWidget(txt, j%nRow, 2*(j/nRow) +1);
+      }
     }
-    
-    //------- Group Board status
-    QGroupBox * statusBox = new QGroupBox("Board Status", tab);
-    QGridLayout * statusLayout = new QGridLayout(statusBox);
-    statusBox->setLayout(statusLayout);
-    tabLayout->addWidget(statusBox, 1, 0);
 
-    //------- Group digitizer settings
-    QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
-    QGridLayout * boardLayout = new QGridLayout(digiBox);
-    digiBox->setLayout(boardLayout);
-    tabLayout->addWidget(digiBox, 2, 0);
-    
-    {
+    {//------- Group Board status
+      QGroupBox * statusBox = new QGroupBox("Board Status", tab);
+      QGridLayout * statusLayout = new QGridLayout(statusBox);
+      statusBox->setLayout(statusLayout);
+      tabLayout->addWidget(statusBox, 1, 0);
+    }
+
+    {//------- Group digitizer settings
+      QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
+      QGridLayout * boardLayout = new QGridLayout(digiBox);
+      digiBox->setLayout(boardLayout);
+      tabLayout->addWidget(digiBox, 2, 0);
+        
       int rowId = 0;
       //-------------------------------------
       QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
@@ -89,6 +87,17 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
       
       QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
       boardLayout->addWidget(bnDefaultSetting, rowId, 2, 1, 2);
+
+      //-------------------------------------
+      rowId ++;
+      QLabel * lbClockSource = new QLabel("Clock Source :", tab);
+      lbClockSource->setAlignment(Qt::AlignRight);
+      boardLayout->addWidget(lbClockSource, rowId, 0);
+
+      QComboBox * comClockSource = new QComboBox(tab);
+      boardLayout->addWidget(comClockSource, rowId, 1, 1, 2);
+      comClockSource->addItem("Internal 62.5 MHz");
+      comClockSource->addItem("Front Panel Clock input");
 
       //-------------------------------------
       rowId ++;
@@ -240,6 +249,17 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
       boardLayout->addWidget(comAutoDisarmAcq, rowId, 1);
       comAutoDisarmAcq->addItem("Enabled");
       comAutoDisarmAcq->addItem("Disabled");
+  
+      //-------------------------------------
+      rowId ++;
+      QLabel * lbStatEvents = new QLabel("Stat. Event :", tab);
+      lbStatEvents->setAlignment(Qt::AlignRight);
+      boardLayout->addWidget(lbStatEvents, rowId, 0);
+
+      QComboBox * comAStatEvents = new QComboBox(tab);
+      boardLayout->addWidget(comAStatEvents, rowId, 1);
+      comAStatEvents->addItem("Enabled");
+      comAStatEvents->addItem("Disabled");
 
       //-------------------------------------
       rowId ++;
@@ -268,39 +288,274 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
     }
 
-    //------- Group channel settings
-    QGroupBox * chBox = new QGroupBox("Channel Settings", tab);
-    QGridLayout * chLayout = new QGridLayout(chBox);
-    chBox->setLayout(chLayout);
-    tabLayout->addWidget(chBox, 0, 1, 10, 1);
-    chLayout->setVerticalSpacing(0);
+    {//------- Group channel settings
+      QGroupBox * chBox = new QGroupBox("Channel Settings", tab);
+      QGridLayout * chLayout = new QGridLayout(chBox);
+      chBox->setLayout(chLayout);
+      tabLayout->addWidget(chBox, 0, 1, 10, 1);
+      //chLayout->setVerticalSpacing(0);
+    
+      QSignalMapper * onOffMapper = new QSignalMapper(tab);
+      connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onChannelonOff); 
 
-    //for( unsigned short ch = 0; ch < digi->GetNChannels(); ch++){
-    for( unsigned short ch = 0; ch < 64; ch++){
-      QLabel * labCh = new QLabel(QString::number(ch), tab);
-      labCh->setAlignment(Qt::AlignRight);
-      chLayout->addWidget(labCh, ch, 0);
 
-      QCheckBox * cbCh = new QCheckBox(tab);
-      //std::string onOff = digi->ReadValue(("/ch/" + std::to_string(ch)+ "/par/ChEnable").c_str());
-      //qDebug() << QString::fromStdString(std::to_string(ch)  +  ", " + onOff);
-      //if( onOff == "True"){
-      //  cbCh->setChecked(true);
-      //}else{
-      //  cbCh->setChecked(false);
-      //}
+      
+      for( unsigned short rowID = 0; rowID < digi->GetNChannels() + 2; rowID++){
 
-      chLayout->addWidget(cbCh, ch, 1);
+        //------ set Labels
+        if( rowID == 1){
+          unsigned short colID = 0;          
 
+          QLabel * labCh = new QLabel("Ch", tab);
+          labCh->setAlignment(Qt::AlignRight);
+          chLayout->addWidget(labCh, rowID, colID);
+
+          colID ++;
+          QLabel * labOnOff = new QLabel("On", tab);
+          chLayout->addWidget(labOnOff, rowID, colID);
+
+          colID ++;
+          QLabel * labEvtTrg = new QLabel("Event Trg.", tab);
+          labEvtTrg->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labEvtTrg, rowID, colID);
+          
+          colID ++;
+          QLabel * labWaveTrg = new QLabel("Wave Trg.", tab);
+          labWaveTrg->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labWaveTrg, rowID, colID);
+          
+          colID ++;
+          QLabel * labWaveSave = new QLabel("Wave Save", tab);
+          labWaveSave->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labWaveSave, rowID, colID);
+
+          colID ++;
+          QLabel * labWaveSource = new QLabel("Wave Source", tab);
+          labWaveSource->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labWaveSource, rowID, colID);
+
+          colID ++;
+          QLabel * labWaveRes = new QLabel("Wave Res.", tab);
+          labWaveRes->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labWaveRes, rowID, colID);
+
+          colID ++;
+          QLabel * labWaveLength = new QLabel("Wave Length [ns]", tab);
+          labWaveLength->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labWaveLength, rowID, colID);
+
+          colID ++;
+          QLabel * labPreTrigger = new QLabel("Pre Trigger [ns]", tab);
+          labPreTrigger->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labPreTrigger, rowID, colID);
+
+          colID ++; QLabel * labAnaProbe0 = new QLabel("Ana. Probe 0", tab); labAnaProbe0->setAlignment(Qt::AlignCenter); chLayout->addWidget(labAnaProbe0, rowID, colID);
+          colID ++; QLabel * labAnaProbe1 = new QLabel("Ana. Probe 1", tab); labAnaProbe1->setAlignment(Qt::AlignCenter); chLayout->addWidget(labAnaProbe1, rowID, colID);
+
+          colID ++; QLabel * labDigProbe0 = new QLabel("Dig. Probe 0", tab); labDigProbe0->setAlignment(Qt::AlignCenter); chLayout->addWidget(labDigProbe0, rowID, colID);
+          colID ++; QLabel * labDigProbe1 = new QLabel("Dig. Probe 1", tab); labDigProbe1->setAlignment(Qt::AlignCenter); chLayout->addWidget(labDigProbe1, rowID, colID);
+          colID ++; QLabel * labDigProbe2 = new QLabel("Dig. Probe 2", tab); labDigProbe2->setAlignment(Qt::AlignCenter); chLayout->addWidget(labDigProbe2, rowID, colID);
+          colID ++; QLabel * labDigProbe3 = new QLabel("Dig. Probe 3", tab); labDigProbe3->setAlignment(Qt::AlignCenter); chLayout->addWidget(labDigProbe3, rowID, colID);
+
+          colID ++;
+          QLabel * labChVetoSrc = new QLabel("Veto Source", tab);
+          labChVetoSrc->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labChVetoSrc, rowID, colID);
+
+          colID ++;
+          QLabel * labChADCVetoWidth = new QLabel("Veto Width [ns]", tab);
+          labChADCVetoWidth->setAlignment(Qt::AlignCenter);
+          chLayout->addWidget(labChADCVetoWidth, rowID, colID);
+
+        }
+
+        //------ set all channel
+        if( rowID == 0 || rowID >= 2){
+
+          unsigned int ch = (rowID == 0 ? 0 : rowID-2);
+          unsigned short colID = 0;    
+
+          QLabel * labCh = new QLabel(rowID == 0 ? "All" : QString::number(ch), tab);
+          labCh->setAlignment(Qt::AlignRight);
+          chLayout->addWidget(labCh, rowID, colID);
+      
+          colID ++;
+          cbCh[ch] = new QCheckBox(tab);
+          chLayout->addWidget(cbCh[ch], rowID, colID);
+          onOffMapper->setMapping(cbCh[ch], ch);
+          connect(cbCh[ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
+
+          colID ++;
+          cmbEvtTrigger[ch] = new QComboBox(tab);
+          cmbEvtTrigger[ch]->addItem("Disable");
+          cmbEvtTrigger[ch]->addItem("SWTrigger");
+          cmbEvtTrigger[ch]->addItem("ChSelfTrigger");
+          cmbEvtTrigger[ch]->addItem("Ch64Trigger");
+          cmbEvtTrigger[ch]->addItem("TRGIN");
+          cmbEvtTrigger[ch]->addItem("Global");
+          cmbEvtTrigger[ch]->addItem("ITLA");
+          cmbEvtTrigger[ch]->addItem("ITLB");
+          chLayout->addWidget(cmbEvtTrigger[ch], rowID, colID);
+
+          colID ++;
+          cmbWaveTrigger[ch] = new QComboBox(tab);
+          cmbWaveTrigger[ch]->addItem("Disable");
+          cmbWaveTrigger[ch]->addItem("SWTrigger");
+          cmbWaveTrigger[ch]->addItem("ChSelfTrigger");
+          cmbWaveTrigger[ch]->addItem("Ch64Trigger");
+          cmbWaveTrigger[ch]->addItem("TRGIN");
+          cmbWaveTrigger[ch]->addItem("ADC Over Sat.");
+          cmbWaveTrigger[ch]->addItem("ADC under Sat.");
+          cmbWaveTrigger[ch]->addItem("Global");
+          cmbWaveTrigger[ch]->addItem("ITLA");
+          cmbWaveTrigger[ch]->addItem("ITLB");
+          cmbWaveTrigger[ch]->addItem("Ext.Inhibit");
+          chLayout->addWidget(cmbWaveTrigger[ch], rowID, colID);
+          
+          colID ++;
+          cmbWaveSave[ch] = new QComboBox(tab);
+          cmbWaveSave[ch]->addItem("Always");
+          cmbWaveSave[ch]->addItem("on Request");
+          chLayout->addWidget(cmbWaveSave[ch], rowID, colID);
+          
+          colID ++;
+          cmbWaveSource[ch] = new QComboBox(tab);
+          cmbWaveSource[ch]->addItem("ADC");
+          cmbWaveSource[ch]->addItem("Test Toggle");
+          cmbWaveSource[ch]->addItem("Test Ramp");
+          cmbWaveSource[ch]->addItem("Test Sin wave");
+          cmbWaveSource[ch]->addItem("Ramp");
+          cmbWaveSource[ch]->addItem("Square Wave");
+          chLayout->addWidget(cmbWaveSource[ch], rowID, colID);
+
+          colID ++;
+          cmbWaveRes[ch] = new QComboBox(tab);
+          cmbWaveRes[ch]->addItem(" 8 ns");
+          cmbWaveRes[ch]->addItem("16 ns");
+          cmbWaveRes[ch]->addItem("32 ns");
+          cmbWaveRes[ch]->addItem("64 ns");
+          chLayout->addWidget(cmbWaveRes[ch], rowID, colID);
+
+          colID ++;
+          sbRecordLength[ch] = new QSpinBox(tab);
+          sbRecordLength[ch]->setMinimum(32);
+          sbRecordLength[ch]->setMaximum(64800);
+          sbRecordLength[ch]->setSingleStep(8);
+          chLayout->addWidget(sbRecordLength[ch], rowID, colID);
+
+          colID ++;
+          sbPreTrigger[ch] = new QSpinBox(tab);
+          sbPreTrigger[ch]->setMinimum(32);
+          sbPreTrigger[ch]->setMaximum(32000);
+          sbPreTrigger[ch]->setSingleStep(8);
+          chLayout->addWidget(sbPreTrigger[ch], rowID, colID);
+
+          colID ++;
+          cmbAnaProbe0[ch] = new QComboBox(tab);
+          cmbAnaProbe0[ch]->addItem("ADC Input");
+          cmbAnaProbe0[ch]->addItem("Time Filter");
+          cmbAnaProbe0[ch]->addItem("Trapazoid");
+          cmbAnaProbe0[ch]->addItem("Trap. Baseline");
+          cmbAnaProbe0[ch]->addItem("Trap. - Baseline");
+          chLayout->addWidget(cmbAnaProbe0[ch], rowID, colID);
+
+          colID ++;
+          cmbAnaProbe1[ch] = new QComboBox(tab);
+          cmbAnaProbe1[ch]->addItem("ADC Input");
+          cmbAnaProbe1[ch]->addItem("Time Filter");
+          cmbAnaProbe1[ch]->addItem("Trapazoid");
+          cmbAnaProbe1[ch]->addItem("Trap. Baseline");
+          cmbAnaProbe1[ch]->addItem("Trap. - Baseline");
+          chLayout->addWidget(cmbAnaProbe1[ch], rowID, colID);
+
+          colID ++;
+          cmbDigProbe0[ch] = new QComboBox(tab);
+          cmbDigProbe0[ch]->addItem("Trigger");
+          cmbDigProbe0[ch]->addItem("Time Filter Armed");
+          cmbDigProbe0[ch]->addItem("ReTrigger Guard");
+          cmbDigProbe0[ch]->addItem("Trap. basline Freeze");
+          cmbDigProbe0[ch]->addItem("Peaking");
+          cmbDigProbe0[ch]->addItem("Peak Ready");
+          cmbDigProbe0[ch]->addItem("Pile-up Guard");
+          cmbDigProbe0[ch]->addItem("ADC Saturate");
+          cmbDigProbe0[ch]->addItem("ADC Sat. Protection");
+          cmbDigProbe0[ch]->addItem("Post Sat. Event");
+          cmbDigProbe0[ch]->addItem("Trap. Saturate");
+          cmbDigProbe0[ch]->addItem("ACQ Inhibit");
+          chLayout->addWidget(cmbDigProbe0[ch], rowID, colID);
+          colID ++;
+          cmbDigProbe1[ch] = new QComboBox(tab);
+          cmbDigProbe1[ch]->addItem("Trigger");
+          cmbDigProbe1[ch]->addItem("Time Filter Armed");
+          cmbDigProbe1[ch]->addItem("ReTrigger Guard");
+          cmbDigProbe1[ch]->addItem("Trap. basline Freeze");
+          cmbDigProbe1[ch]->addItem("Peaking");
+          cmbDigProbe1[ch]->addItem("Peak Ready");
+          cmbDigProbe1[ch]->addItem("Pile-up Guard");
+          cmbDigProbe1[ch]->addItem("ADC Saturate");
+          cmbDigProbe1[ch]->addItem("ADC Sat. Protection");
+          cmbDigProbe1[ch]->addItem("Post Sat. Event");
+          cmbDigProbe1[ch]->addItem("Trap. Saturate");
+          cmbDigProbe1[ch]->addItem("ACQ Inhibit");
+          chLayout->addWidget(cmbDigProbe1[ch], rowID, colID);
+          colID ++;
+          cmbDigProbe2[ch] = new QComboBox(tab);
+          cmbDigProbe2[ch]->addItem("Trigger");
+          cmbDigProbe2[ch]->addItem("Time Filter Armed");
+          cmbDigProbe2[ch]->addItem("ReTrigger Guard");
+          cmbDigProbe2[ch]->addItem("Trap. basline Freeze");
+          cmbDigProbe2[ch]->addItem("Peaking");
+          cmbDigProbe2[ch]->addItem("Peak Ready");
+          cmbDigProbe2[ch]->addItem("Pile-up Guard");
+          cmbDigProbe2[ch]->addItem("ADC Saturate");
+          cmbDigProbe2[ch]->addItem("ADC Sat. Protection");
+          cmbDigProbe2[ch]->addItem("Post Sat. Event");
+          cmbDigProbe2[ch]->addItem("Trap. Saturate");
+          cmbDigProbe2[ch]->addItem("ACQ Inhibit");
+          chLayout->addWidget(cmbDigProbe2[ch], rowID, colID);
+          colID ++;
+          cmbDigProbe3[ch] = new QComboBox(tab);
+          cmbDigProbe3[ch]->addItem("Trigger");
+          cmbDigProbe3[ch]->addItem("Time Filter Armed");
+          cmbDigProbe3[ch]->addItem("ReTrigger Guard");
+          cmbDigProbe3[ch]->addItem("Trap. basline Freeze");
+          cmbDigProbe3[ch]->addItem("Peaking");
+          cmbDigProbe3[ch]->addItem("Peak Ready");
+          cmbDigProbe3[ch]->addItem("Pile-up Guard");
+          cmbDigProbe3[ch]->addItem("ADC Saturate");
+          cmbDigProbe3[ch]->addItem("ADC Sat. Protection");
+          cmbDigProbe3[ch]->addItem("Post Sat. Event");
+          cmbDigProbe3[ch]->addItem("Trap. Saturate");
+          cmbDigProbe3[ch]->addItem("ACQ Inhibit");
+          chLayout->addWidget(cmbDigProbe3[ch], rowID, colID);
+
+
+          colID ++;
+          cmbChVetoSrc[ch] = new QComboBox(tab);
+          cmbChVetoSrc[ch]->addItem("Disable");
+          cmbChVetoSrc[ch]->addItem("BoardVeto");
+          cmbChVetoSrc[ch]->addItem("ADC Over Sat.");
+          cmbChVetoSrc[ch]->addItem("ADC under Sat.");
+          chLayout->addWidget(cmbChVetoSrc[ch], rowID, colID);
+
+          colID ++;
+          sbChADCVetoWidth[ch] = new QSpinBox(tab);
+          sbChADCVetoWidth[ch]->setMinimum(0);
+          sbChADCVetoWidth[ch]->setMaximum(524280);
+          sbChADCVetoWidth[ch]->setSingleStep(20);
+          chLayout->addWidget(sbChADCVetoWidth[ch], rowID, colID);
+
+        }
+
+      }
     }
 
-    //------- Group trigger settings
-    QGroupBox * triggerBox = new QGroupBox("Trigger Map", tab);
-    QGridLayout * triggerLayout = new QGridLayout(triggerBox);
-    triggerBox->setLayout(triggerLayout);
-    tabLayout->addWidget(triggerBox, 3, 0);
-    {
-
+    {//------- Group trigger settings
+      QGroupBox * triggerBox = new QGroupBox("Trigger Map", tab);
+      QGridLayout * triggerLayout = new QGridLayout(triggerBox);
+      triggerBox->setLayout(triggerLayout);
+      tabLayout->addWidget(triggerBox, 3, 0);
+      
       triggerLayout->setHorizontalSpacing(0);
       triggerLayout->setVerticalSpacing(0);
 
@@ -308,13 +563,13 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
       triggerLayout->addWidget(instr, 0, 0, 1, 64+15);
 
       QSignalMapper * triggerMapper = new QSignalMapper(tab);
+      connect(triggerMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onTriggerClick);
 
-      int count = 0;
       int rowID = 1;
       int colID = 0;
-      for(int i = 0; i < 64; i++){
+      for(int i = 0; i < digi->GetNChannels(); i++){
         colID = 0;
-        for(int j = 0; j < 64; j++){
+        for(int j = 0; j < digi->GetNChannels(); j++){
           
           bn[i][j] = new QPushButton(tab);
           bn[i][j]->setFixedSize(QSize(10,10));
@@ -324,18 +579,14 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
             bn[i][j]->setStyleSheet("background-color: red;");
             bnClickStatus[i][j] = true;
           }
+          triggerLayout->addWidget(bn[i][j], rowID, colID);
 
           triggerMapper->setMapping(bn[i][j], 100*i+j);
-          
           connect(bn[i][j], SIGNAL(clicked()), triggerMapper, SLOT(map()));
-
-          count++;
-
-          triggerLayout->addWidget(bn[i][j], rowID, colID);
 
           colID ++;
 
-          if( j%4 == 3 && j!= 63){
+          if( j%4 == 3 && j!= digi->GetNChannels() - 1){
             QFrame * vSeparator = new QFrame(tab);
             vSeparator->setFrameShape(QFrame::VLine);
             triggerLayout->addWidget(vSeparator, rowID, colID);
@@ -345,19 +596,15 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
         rowID++;
 
-        if( i%4 == 3 && i != 63){
+        if( i%4 == 3 && i != digi->GetNChannels() - 1){
           QFrame * hSeparator = new QFrame(tab);
           hSeparator->setFrameShape(QFrame::HLine);
-          triggerLayout->addWidget(hSeparator, rowID, 0, 1, 64 + 15);
+          triggerLayout->addWidget(hSeparator, rowID, 0, 1, digi->GetNChannels() + 15);
           rowID++;
         }
 
 
       }
-
-      //connect(triggerMapper, &QSignalMapper::mappedString, this, &DigiSettings::onTriggerClick);
-
-      connect(triggerMapper, SIGNAL(mappedInt(int)), this, SLOT(onTriggerClick(int)));
     }
 
 
@@ -367,5 +614,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 }
 
 DigiSettings::~DigiSettings(){
+
+  printf("%s\n", __func__);
 
 }
