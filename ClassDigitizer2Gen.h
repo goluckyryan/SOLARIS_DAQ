@@ -106,6 +106,7 @@ class Digitizer2Gen {
     void OpenOutFile(std::string fileName);
     void CloseOutFile();
     void SaveDataToFile();
+    unsigned int GetFileSize() {return outFileSize;}
 
 
 };

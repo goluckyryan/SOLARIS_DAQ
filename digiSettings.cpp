@@ -28,31 +28,24 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
                                                 {"Input Impedance [Ohm] : ", "/par/Zin"}
                                                };
 
-  QVBoxLayout * mainLayout = new QVBoxLayout(this);
-  this->setLayout(mainLayout);
-  QTabWidget * tabWidget = new QTabWidget(this);
-  mainLayout->addWidget(tabWidget);
+  QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
+  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
 
   //============ Tab for each digitizer
-  for(unsigned short i = 0; i < this->nDigi; i++){
-  
+  for(unsigned short iDigi = 0; iDigi < this->nDigi; iDigi++){
 
     QWidget * tab = new QWidget(tabWidget);
-    
-    QScrollArea * scrollArea = new QScrollArea;
-    scrollArea->setWidget(tab);
+    QScrollArea * scrollArea = new QScrollArea(this); scrollArea->setWidget(tab);
     scrollArea->setWidgetResizable(true);
     scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
     
-    QGridLayout *tabLayout = new QGridLayout(tab);
-    tab->setLayout(tabLayout);
+    QGridLayout *tabLayout = new QGridLayout(tab); tab->setLayout(tabLayout);
 
     {//-------- Group of Digitizer Info
       QGroupBox * infoBox = new QGroupBox("Board Info", tab);
       QGridLayout * infoLayout = new QGridLayout(infoBox);
-      infoBox->setLayout(infoLayout);
       tabLayout->addWidget(infoBox, 0, 0);
       
       const unsigned short nRow = 4;
@@ -70,23 +63,23 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
     {//------- Group Board status
       QGroupBox * statusBox = new QGroupBox("Board Status", tab);
       QGridLayout * statusLayout = new QGridLayout(statusBox);
-      statusBox->setLayout(statusLayout);
-      tabLayout->addWidget(statusBox, 1, 0);
+      tabLayout->addWidget(statusBox, 0, 1);
     }
 
     {//------- Group digitizer settings
       QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
       QGridLayout * boardLayout = new QGridLayout(digiBox);
-      digiBox->setLayout(boardLayout);
-      tabLayout->addWidget(digiBox, 2, 0);
+      tabLayout->addWidget(digiBox, 1, 0);
         
       int rowId = 0;
       //-------------------------------------
       QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
       boardLayout->addWidget(bnResetBd, rowId, 0, 1, 2);
+      connect(bnResetBd, &QPushButton::clicked, this, &DigiSettings::onReset);
       
       QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
       boardLayout->addWidget(bnDefaultSetting, rowId, 2, 1, 2);
+      connect(bnDefaultSetting, &QPushButton::clicked, this, &DigiSettings::onDefault);
 
       //-------------------------------------
       rowId ++;
@@ -288,18 +281,65 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
     }
 
+
     {//------- Group channel settings
-      QGroupBox * chBox = new QGroupBox("Channel Settings", tab);
-      QGridLayout * chLayout = new QGridLayout(chBox);
-      chBox->setLayout(chLayout);
-      tabLayout->addWidget(chBox, 0, 1, 10, 1);
-      //chLayout->setVerticalSpacing(0);
-    
+      QGroupBox * chBox = new QGroupBox("Channel Settings", tab); tabLayout->addWidget(chBox, 1, 1, 1, 1);
+      QGridLayout * chLayout = new QGridLayout(chBox); //chBox->setLayout(chLayout);
+
+
       QSignalMapper * onOffMapper = new QSignalMapper(tab);
       connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onChannelonOff); 
+    
+      QTabWidget * chTabWidget = new QTabWidget(tab); chLayout->addWidget(chTabWidget);
+      
+      {//.......... All Settings tab
+        QWidget * tab_All = new QWidget(tab); 
+        chTabWidget->addTab(tab_All, "All Settings");
+        tab_All->setStyleSheet("background-color: #EEEEEE");
 
+        QGridLayout * allLayout = new QGridLayout(tab_All);
+        allLayout->setHorizontalSpacing(0);
+        allLayout->setVerticalSpacing(0);
+
+        unsigned short ch = digi->GetNChannels();
+
+        cbCh[iDigi][ch] = new QCheckBox("On/Off", tab); allLayout->addWidget(cbCh[iDigi][ch], 0, 0);
+        onOffMapper->setMapping(cbCh[iDigi][ch], (iDigi << 12) + ch);
+        connect(cbCh[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
+
+        QLabel * lbRL = new QLabel("Record Length [ns]", tab); allLayout->addWidget(lbRL, 1, 0);
+        lbRL->setAlignment(Qt::AlignRight);
+        sbRecordLength[ch] = new QSpinBox(tab); allLayout->addWidget(sbRecordLength[ch], 1, 1);
+
+        QLabel * lbPT = new QLabel("Pre Trigger [ns]", tab); allLayout->addWidget(lbPT, 1, 2);
+        lbPT->setAlignment(Qt::AlignRight);
+        sbPreTrigger[ch] = new QSpinBox(tab); allLayout->addWidget(sbPreTrigger[ch], 1, 3);
+
+      }
 
       
+      {//.......... Ch On/Off
+        QWidget * tab_onOff = new QWidget(tab); chTabWidget->addTab(tab_onOff, "On/Off");
+        tab_onOff->setStyleSheet("background-color: #EEEEEE");
+
+        QGridLayout * allLayout = new QGridLayout(tab_onOff); 
+        allLayout->setHorizontalSpacing(0);
+        allLayout->setVerticalSpacing(0);
+
+        
+        for( int ch = 0; ch < digi->GetNChannels(); ch++){
+          cbCh[iDigi][ch] = new QCheckBox(QString::number(ch)); allLayout->addWidget(cbCh[iDigi][ch], ch/8, ch%8);
+          cbCh[iDigi][ch]->setLayoutDirection(Qt::RightToLeft);
+
+          onOffMapper->setMapping(cbCh[iDigi][ch], (iDigi << 12) + ch);
+          connect(cbCh[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
+        }
+
+      }
+
+
+
+      /*
       for( unsigned short rowID = 0; rowID < digi->GetNChannels() + 2; rowID++){
 
         //------ set Labels
@@ -372,7 +412,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
         //------ set all channel
         if( rowID == 0 || rowID >= 2){
 
-          unsigned int ch = (rowID == 0 ? 0 : rowID-2);
+          unsigned int ch = (rowID == 0 ? 64 : rowID-2);
           unsigned short colID = 0;    
 
           QLabel * labCh = new QLabel(rowID == 0 ? "All" : QString::number(ch), tab);
@@ -547,14 +587,14 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
         }
 
-      }
+      }*/ //-- end of ch loop;
     }
 
     {//------- Group trigger settings
       QGroupBox * triggerBox = new QGroupBox("Trigger Map", tab);
       QGridLayout * triggerLayout = new QGridLayout(triggerBox);
-      triggerBox->setLayout(triggerLayout);
-      tabLayout->addWidget(triggerBox, 3, 0);
+      //triggerBox->setLayout(triggerLayout);
+      tabLayout->addWidget(triggerBox, 2, 0);
       
       triggerLayout->setHorizontalSpacing(0);
       triggerLayout->setVerticalSpacing(0);
@@ -581,7 +621,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
           }
           triggerLayout->addWidget(bn[i][j], rowID, colID);
 
-          triggerMapper->setMapping(bn[i][j], 100*i+j);
+          triggerMapper->setMapping(bn[i][j], (iDigi << 12) + (i << 8) + j);
           connect(bn[i][j], SIGNAL(clicked()), triggerMapper, SLOT(map()));
 
           colID ++;
@@ -616,5 +656,11 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 DigiSettings::~DigiSettings(){
 
   printf("%s\n", __func__);
+
+  for( int iDig = 0; iDig < nDigi; iDig ++){
+    for( int i =0 ; i < MaxNumberOfChannel; i++){
+      if( cbCh[iDig][i] != NULL) delete cbCh[iDig][i];
+    }
+  }
 
 }

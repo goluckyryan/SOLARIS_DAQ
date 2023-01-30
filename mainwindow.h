@@ -10,13 +10,78 @@
 #include <QDateTime>
 #include <QScrollBar>
 #include <QPushButton>
+#include <QMutex>
 
 #include <vector>
+#include <time.h> // time in nano-sec
 
-#include "ClassDigitizer2Gen.h"
 #include "digiSettings.h"
 
-static Digitizer2Gen * digi = NULL;
+#include "ClassDigitizer2Gen.h"
+#include "influxdb.h"
+
+static QMutex digiMTX;
+
+class ReadDataThread : public QThread{
+  Q_OBJECT
+
+public:
+  ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
+    stop = false;
+    this->digi = dig;
+    readCount = 0;
+  }
+
+  void Stop() {stop = true;}
+
+  void run(){
+    clock_gettime(CLOCK_REALTIME, &ta);
+    readCount = 0;
+
+    //for( int i = 0; i < 10; i ++){
+    //  emit sendMsg(QString::number(i));
+    //  if( stop ) break;
+    //}
+
+    while(true){
+      digiMTX.lock();
+      int ret = digi->ReadData();
+      digiMTX.unlock();
+
+      if( ret == CAEN_FELib_Success){
+        digi->SaveDataToFile();
+      }else if(ret == CAEN_FELib_Stop){
+        digi->ErrorMsg("No more data");
+        break;
+      }else{
+        digi->ErrorMsg("ReadDataLoop()");
+      }
+
+      if( readCount % 1000 == 0 ) {
+        emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()) + " Bytes");
+        clock_gettime(CLOCK_REALTIME, &tb);
+        //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
+        //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
+        ta = tb;
+      }
+      readCount++;
+
+    }
+
+  }
+
+signals:
+  void sendMsg(const QString &msg);
+
+private:
+  bool stop;
+  Digitizer2Gen * digi; 
+  timespec ta, tb;
+  unsigned int readCount;
+
+};
+
+//=================================================
 
 class MainWindow : public QMainWindow{
     Q_OBJECT
@@ -25,10 +90,8 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    
 private slots:
-
-    //void onThreadStarted(){ qDebug() << "kkkkkkkkkkk"; }
-    //void onThreadFinished(){ qDebug() << "thread done"; }
 
     void bnOpenDigitizers_clicked();
     void bnCloseDigitizers_clicked();
@@ -39,6 +102,7 @@ signals :
 
 
 private:
+    
     QPushButton * bnProgramSettings;
     QPushButton * bnOpenDigitizers;
     QPushButton * bnCloseDigitizers;
@@ -49,15 +113,19 @@ private:
 
     DigiSettings * digiSetting;
 
-
     QPlainTextEdit * logInfo;
 
+    static Digitizer2Gen * digi; 
     unsigned short nDigi;
     std::vector<unsigned short> digiSerialNum;
 
-    //QThread * StartRunThread;
+    void StartACQ();
+    void StopACQ();
+
+    ReadDataThread * readDataThread;   
 
     void LogMsg(QString msg);
+ 
 
 };
 

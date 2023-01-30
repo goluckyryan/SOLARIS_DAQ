@@ -3,10 +3,15 @@
 #include <QLabel>
 #include <QGridLayout>
 
+#include <unistd.h>
+
+//------ static memeber
+Digitizer2Gen * MainWindow::digi = NULL;
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   setWindowTitle("SOLARIS DAQ");
-  setGeometry(500, 500, 1000, 500);
+  setGeometry(500, 100, 1000, 500);
   QIcon icon("SOLARIS_favicon.png");
   setWindowIcon(icon);
 
@@ -16,16 +21,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
-  QVBoxLayout * layout1 = new QVBoxLayout(mainLayoutWidget);
-  mainLayoutWidget->setLayout(layout1);
+  QVBoxLayout * layoutMain = new QVBoxLayout(mainLayoutWidget);
+  mainLayoutWidget->setLayout(layoutMain);
 
-  {
-    QGridLayout *layout = new QGridLayout();
-    layout1->addLayout(layout);
-    layout1->addStretch();
-    layout1->setStretchFactor(layout, 8);
+
+  {//====================== General
+    QGroupBox * box1 = new QGroupBox("General", mainLayoutWidget);
+    layoutMain->addWidget(box1);
+
+    QGridLayout * layout1 = new QGridLayout(box1);
 
     bnProgramSettings = new QPushButton("Program Settings", this);
+    bnProgramSettings->setEnabled(false);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
     connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(bnOpenDigitizers_clicked()));
@@ -38,42 +45,55 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnDigiSettings->setEnabled(false);
     connect(bnDigiSettings, SIGNAL(clicked()), this, SLOT(OpenDigitizersSettings()));
 
-    bnStartACQ = new QPushButton("Start ACQ", this);
-    bnStartACQ->setEnabled(false);
-    bnStopACQ = new QPushButton("Stop ACQ", this);
-    bnStopACQ->setEnabled(false);
 
-    layout->addWidget(bnProgramSettings, 0, 0);
-    layout->addWidget(bnOpenDigitizers, 0, 1);
-    layout->addWidget(bnCloseDigitizers, 0, 2);
-    layout->addWidget(bnDigiSettings, 1, 1);
-  
-    QFrame * separator = new QFrame(this);
-    separator->setFrameShape(QFrame::HLine);
-    layout->addWidget(separator, 2, 0, 1, 3);
-
-    layout->addWidget(bnStartACQ, 3, 0);
-    layout->addWidget(bnStopACQ, 3, 1);
+    layout1->addWidget(bnProgramSettings, 0, 0);
+    layout1->addWidget(bnOpenDigitizers, 0, 1);
+    layout1->addWidget(bnCloseDigitizers, 0, 2);
+    layout1->addWidget(bnDigiSettings, 1, 1);
 
   }
 
-  logInfo = new QPlainTextEdit(this);
-  logInfo->isReadOnly();
-  logInfo->setGeometry(100, 200, 500, 100);
 
-  layout1->addWidget(logInfo);
-  layout1->setStretchFactor(logInfo, 1);
+  {//====================== ACD control
+    QGroupBox * box2 = new QGroupBox("ACQ control", mainLayoutWidget);
+    layoutMain->addWidget(box2);
 
+    QGridLayout * layout2 = new QGridLayout(box2);
+    
+    bnStartACQ = new QPushButton("Start ACQ", this);
+    bnStartACQ->setEnabled(false);
+    connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
+    
+    bnStopACQ = new QPushButton("Stop ACQ", this);
+    bnStopACQ->setEnabled(false);
+    connect(bnStopACQ, &QPushButton::clicked, this, &MainWindow::StopACQ);
+  
+    layout2->addWidget(bnStartACQ, 0, 0);
+    layout2->addWidget(bnStopACQ, 0, 1);
 
+  }
 
-  //StartRunThread = new QThread(this);
-  //connect(StartRunThread, &QThread::started, this, &MainWindow::onThreadStarted);
-  //connect(StartRunThread, &QThread::finished, this, &MainWindow::onThreadFinished);
+  layoutMain->addStretch();
 
+  {//===================== Log Msg
+    QGroupBox * box3 = new QGroupBox("Log Message", mainLayoutWidget);
+    layoutMain->addWidget(box3);
+    layoutMain->setStretchFactor(box3, 1);
+
+    QGridLayout * layout3 = new QGridLayout(box3);
+
+    logInfo = new QPlainTextEdit(this);
+    logInfo->isReadOnly();
+    logInfo->setGeometry(100, 200, 500, 100);
+
+    layout3->addWidget(logInfo);
+
+  }
+  
   LogMsg("Welcome to SOLARIS DAQ.");
 
-  bnOpenDigitizers_clicked();
-  OpenDigitizersSettings();
+  //bnOpenDigitizers_clicked();
+  //OpenDigitizersSettings();
 
 }
 
@@ -92,9 +112,49 @@ MainWindow::~MainWindow(){
     delete digi;
   }
 
-    //StartRunThread->quit();
-    //StartRunThread->wait();
-    //delete StartRunThread;
+  readDataThread->Stop();
+  readDataThread->quit();
+  readDataThread->wait();
+  delete readDataThread;
+
+}
+
+//################################################################
+void MainWindow::StartACQ(){
+
+  digi->Reset();
+  digi->ProgramPHA(false);
+  digi->SetPHADataFormat(1);// only save 1 trace
+  remove("haha_000.sol"); // remove file
+  digi->OpenOutFile("haha");// haha_000.sol
+  digi->StartACQ();
+
+  LogMsg("Start Run....");
+
+  readDataThread->start();
+
+  bnStartACQ->setEnabled(false);
+  bnStopACQ->setEnabled(true);
+
+  LogMsg("end of " + QString::fromStdString(__func__));
+}
+
+void MainWindow::StopACQ(){
+
+  digi->StopACQ();
+  
+  //readDataThread->Stop();
+
+  readDataThread->quit();
+  readDataThread->wait();
+
+  digi->CloseOutFile();
+  
+  LogMsg("Stop Run");
+
+  bnStartACQ->setEnabled(true);
+  bnStopACQ->setEnabled(false);
+
 }
 
 
@@ -115,6 +175,10 @@ void MainWindow::bnOpenDigitizers_clicked(){
     bnCloseDigitizers->setEnabled(true);
     bnDigiSettings->setEnabled(true);
     bnStartACQ->setEnabled(true);
+    bnStopACQ->setEnabled(false);
+
+    readDataThread = new ReadDataThread(digi, this);
+    connect(readDataThread, &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
   }else{
     LogMsg("Cannot open digitizer");
@@ -126,6 +190,7 @@ void MainWindow::bnOpenDigitizers_clicked(){
     nDigi ++;
 
   }
+
 }
 
 void MainWindow::bnCloseDigitizers_clicked(){
@@ -143,6 +208,9 @@ void MainWindow::bnCloseDigitizers_clicked(){
     bnDigiSettings->setEnabled(false);
     bnStartACQ->setEnabled(false);
     bnStopACQ->setEnabled(false);
+
+    if( digiSetting != NULL )  digiSetting->close(); 
+
   }
 }
 
@@ -151,6 +219,7 @@ void MainWindow::OpenDigitizersSettings(){
 
   if( digiSetting == NULL){
     digiSetting = new DigiSettings(digi, nDigi);
+    connect(digiSetting, &DigiSettings::sendLogMsg, this, &MainWindow::LogMsg);
     digiSetting->show();
   }else{
     digiSetting->show();
@@ -163,6 +232,6 @@ void MainWindow::LogMsg(QString msg){
     logInfo->appendPlainText(countStr);
     QScrollBar *v = logInfo->verticalScrollBar();
     v->setValue(v->maximum());
-    qDebug() << msg;
+    //qDebug() << msg;
     logInfo->repaint();
 }
