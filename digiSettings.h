@@ -100,6 +100,7 @@ private:
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
   QCheckBox * cbCh[MaxNumberOfDigitizer][MaxNumberOfChannel + 1]; // index = 64 is for all channels
+  //QCheckBox * cbCh[MaxNumberOfChannel + 1]; // index = 64 is for all channels
 
   QSpinBox  * sbRecordLength[MaxNumberOfChannel + 1];
   QSpinBox  * sbPreTrigger[MaxNumberOfChannel + 1];

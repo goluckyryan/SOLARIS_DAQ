@@ -57,9 +57,10 @@ public:
         digi->ErrorMsg("ReadDataLoop()");
       }
 
-      if( readCount % 1000 == 0 ) {
-        emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()) + " Bytes");
-        clock_gettime(CLOCK_REALTIME, &tb);
+      clock_gettime(CLOCK_REALTIME, &tb);
+      //if( readCount % 1000 == 0 ) {
+      if( tb.tv_sec - ta.tv_sec > 2 ) {
+        emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
         //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
         //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
         ta = tb;
@@ -98,6 +99,9 @@ private slots:
 
     void OpenDigitizersSettings();
 
+    void SetupNewExp();
+    void ProgramSettings();
+
 signals :
 
 
@@ -110,6 +114,8 @@ private:
 
     QPushButton * bnStartACQ;
     QPushButton * bnStopACQ;
+
+    QPushButton * bnNewExp;
 
     DigiSettings * digiSetting;
 
@@ -125,7 +131,11 @@ private:
     ReadDataThread * readDataThread;   
 
     void LogMsg(QString msg);
- 
+
+    QString expName;
+    QString dataPath;
+    QString analysisPath;
+    int runID;
 
 };
 

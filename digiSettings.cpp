@@ -289,7 +289,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
       QSignalMapper * onOffMapper = new QSignalMapper(tab);
       connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onChannelonOff); 
-    
+      
       QTabWidget * chTabWidget = new QTabWidget(tab); chLayout->addWidget(chTabWidget);
       
       {//.......... All Settings tab
@@ -336,9 +336,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
         }
 
       }
-
-
-
+ 
       /*
       for( unsigned short rowID = 0; rowID < digi->GetNChannels() + 2; rowID++){
 
@@ -408,7 +406,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
           chLayout->addWidget(labChADCVetoWidth, rowID, colID);
 
         }
-
+        
         //------ set all channel
         if( rowID == 0 || rowID >= 2){
 
@@ -587,7 +585,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
         }
 
-      }*/ //-- end of ch loop;
+      } */ //-- end of ch loop;
     }
 
     {//------- Group trigger settings

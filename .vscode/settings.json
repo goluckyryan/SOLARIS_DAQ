@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "script.C": "cpp",
+    "SOLARIS_Qt6_DAQ.pro" :  "makefile"
+  }
+}

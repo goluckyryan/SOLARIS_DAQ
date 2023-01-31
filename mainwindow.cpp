@@ -2,6 +2,8 @@
 
 #include <QLabel>
 #include <QGridLayout>
+#include <QDialog>
+#include <QStorageInfo>
 
 #include <unistd.h>
 
@@ -18,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   nDigi = 0;
   digiSerialNum.clear();
   digiSetting = NULL;
+  readDataThread = NULL;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -32,7 +35,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     QGridLayout * layout1 = new QGridLayout(box1);
 
     bnProgramSettings = new QPushButton("Program Settings", this);
-    bnProgramSettings->setEnabled(false);
+    connect(bnProgramSettings, &QPushButton::clicked, this, &MainWindow::ProgramSettings);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
     connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(bnOpenDigitizers_clicked()));
@@ -45,11 +48,29 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnDigiSettings->setEnabled(false);
     connect(bnDigiSettings, SIGNAL(clicked()), this, SLOT(OpenDigitizersSettings()));
 
+    QPushButton * bnSOLSettings = new QPushButton("SOLARIS Settings", this);
+    bnSOLSettings->setEnabled(false);
+
+    QPushButton * bnOpenScope = new QPushButton("Open scope", this);
+    bnOpenScope->setEnabled(false);
+
+    bnNewExp = new QPushButton("New/Change Exp", this);
+    connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExp);
+
+    QLineEdit * lExpName = new QLineEdit("<Exp Name>", this);
+    lExpName->setReadOnly(true);
 
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnOpenDigitizers, 0, 1);
     layout1->addWidget(bnCloseDigitizers, 0, 2);
     layout1->addWidget(bnDigiSettings, 1, 1);
+    layout1->addWidget(bnSOLSettings, 1, 2);
+
+    layout1->addWidget(bnNewExp, 2, 0);
+    layout1->addWidget(lExpName, 2, 1);
+    layout1->addWidget(bnOpenScope, 2, 2);
+
+    for( int i = 0; i < layout1->columnCount(); i++) layout1->setColumnStretch(i, 1);
 
   }
 
@@ -67,9 +88,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnStopACQ = new QPushButton("Stop ACQ", this);
     bnStopACQ->setEnabled(false);
     connect(bnStopACQ, &QPushButton::clicked, this, &MainWindow::StopACQ);
-  
-    layout2->addWidget(bnStartACQ, 0, 0);
-    layout2->addWidget(bnStopACQ, 0, 1);
+
+    QLabel * lbRunID = new QLabel("Run ID : ", this);
+    lbRunID->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    QLineEdit * runID = new QLineEdit(this);
+    runID->setReadOnly(true);
+    
+    QLabel * lbRunComment = new QLabel("Run Comment : ", this);
+    lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    QLineEdit * runComment = new QLineEdit(this);
+    runComment->setReadOnly(true);
+    
+    layout2->addWidget(lbRunID, 0, 0);
+    layout2->addWidget(runID, 0, 1);
+    layout2->addWidget(bnStartACQ, 0, 2);
+    layout2->addWidget(bnStopACQ, 0, 3);
+    layout2->addWidget(lbRunComment, 1, 0);
+    layout2->addWidget(runComment, 1, 1, 1, 3);
+
+    layout2->setColumnStretch(0, 0.3);
+    for( int i = 0; i < layout2->columnCount(); i++) layout2->setColumnStretch(i, 1);
 
   }
 
@@ -99,23 +137,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
 MainWindow::~MainWindow(){
 
-  delete digiSetting;
+  //---- may be no need to delete as thay are child of this
+  //delete bnProgramSettings;
+  //delete bnOpenDigitizers;
+  //delete bnCloseDigitizers;
+  //delete bnDigiSettings;
+  //delete bnNewExp;
+  //delete logInfo;
 
-  delete bnProgramSettings;
-  delete bnOpenDigitizers;
-  delete bnCloseDigitizers;
-  delete bnDigiSettings;
-  delete logInfo;
+  //---- need manually delete
+  if( digiSetting != NULL ) delete digiSetting;
 
   if( digi != NULL ){
     digi->CloseDigitizer();
     delete digi;
   }
 
-  readDataThread->Stop();
-  readDataThread->quit();
-  readDataThread->wait();
-  delete readDataThread;
+  if( readDataThread != NULL){
+    readDataThread->Stop();
+    readDataThread->quit();
+    readDataThread->wait();
+    delete readDataThread;
+  }
 
 }
 
@@ -183,16 +226,18 @@ void MainWindow::bnOpenDigitizers_clicked(){
   }else{
     LogMsg("Cannot open digitizer");
 
-    LogMsg("use a dummy.");
+    //LogMsg("use a dummy.");
+    //digi->SetDummy();
+    //digiSerialNum.push_back(0000);
+    //nDigi ++;
 
-    digi->SetDummy();
-    digiSerialNum.push_back(0000);
-    nDigi ++;
+    delete digi;
 
   }
 
 }
 
+//######################################################################
 void MainWindow::bnCloseDigitizers_clicked(){
   if( digi != NULL ){
     digi->CloseDigitizer();
@@ -224,6 +269,73 @@ void MainWindow::OpenDigitizersSettings(){
   }else{
     digiSetting->show();
   }
+}
+//######################################################################
+
+void MainWindow::SetupNewExp(){
+
+  QDialog dialog(this);
+  dialog.setWindowTitle("Setup / change Experiment");
+  dialog.setGeometry(0, 0, 500, 500);
+
+  QVBoxLayout * layout = new QVBoxLayout(&dialog);
+
+  //------- instruction
+  QLabel *label = new QLabel("Here list the pass experiments. ", &dialog);
+  layout->addWidget(label);
+
+  //------- get and list the git repository
+  QPlainTextEdit * gitList = new QPlainTextEdit(&dialog);
+  layout->addWidget(gitList);
+  gitList->setReadOnly(true);
+
+  //------- get harddisk space;
+  //QStorageInfo storage("/path/to/drive");
+  QStorageInfo storage = QStorageInfo::root();
+  qint64 availableSpace = storage.bytesAvailable();
+
+  QLabel * lbDiskSpace = new QLabel("Disk space avalible " + QString::number(availableSpace/1024./1024./1024.) + " [GB]", &dialog);
+  layout->addWidget(lbDiskSpace);
+
+  //------- type existing or new experiment
+  QLineEdit * input = new QLineEdit(&dialog);
+  layout->addWidget(input);
+
+
+  QPushButton *button1 = new QPushButton("OK", &dialog);
+  layout->addWidget(button1);
+  QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+  dialog.exec();
+
+}
+
+void MainWindow::ProgramSettings(){
+
+  QDialog dialog(this);
+  dialog.setWindowTitle("Program Settings");
+  dialog.setGeometry(0, 0, 500, 500);
+
+  QGridLayout * layout = new QGridLayout(&dialog);
+
+  //-------- data Path
+  QLabel *lbDataPath = new QLabel("Data Path", &dialog); layout->addWidget(lbDataPath, 0, 0);
+  QLineEdit * lDataPath = new QLineEdit("/path/to/data", &dialog); layout->addWidget(lDataPath, 0, 1, 1, 2);
+  //-------- analysis Path
+
+  //-------- IP search range
+
+  //-------- DataBase IP
+
+  //-------- DataBase name
+  
+  //-------- Elog IP
+
+  QPushButton *button1 = new QPushButton("OK", &dialog);
+  layout->addWidget(button1, 2, 1);
+  QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+  dialog.exec();
 }
 
 void MainWindow::LogMsg(QString msg){
