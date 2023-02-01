@@ -99,8 +99,14 @@ private slots:
 
     void OpenDigitizersSettings();
 
-    void SetupNewExp();
+
     void ProgramSettings();
+    bool OpenProgramSettings();
+    void SaveProgramSettings();
+    void OpenDirectory(int id);
+
+    void SetupNewExp();
+    bool OpenExpSettings();
 
 signals :
 
@@ -108,6 +114,8 @@ signals :
 private:
     
     QPushButton * bnProgramSettings;
+    QPushButton * bnNewExp;
+
     QPushButton * bnOpenDigitizers;
     QPushButton * bnCloseDigitizers;
     QPushButton * bnDigiSettings;
@@ -115,7 +123,6 @@ private:
     QPushButton * bnStartACQ;
     QPushButton * bnStopACQ;
 
-    QPushButton * bnNewExp;
 
     DigiSettings * digiSetting;
 
@@ -131,10 +138,27 @@ private:
     ReadDataThread * readDataThread;   
 
     void LogMsg(QString msg);
+    bool logMsgHTMLMode = true;
+
+    //---------------- Program settings
+    QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
+    QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
+    QLineEdit * lDataPath; // only live in ProgramSettigns()
+
+    QLineEdit * lIPDomain;
+    QLineEdit * lDatbaseIP;
+    QLineEdit * lDatbaseName;
+    QLineEdit * lElogIP;
+
+    QString settingFilePath;
+    QString analysisPath;
+    QString dataPath;
+    QString IPDomain;
+    QString DatabaseIP;
+    QString DatabaseName;
+    QString ElogIP;
 
     QString expName;
-    QString dataPath;
-    QString analysisPath;
     int runID;
 
 };

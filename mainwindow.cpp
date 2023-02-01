@@ -3,7 +3,10 @@
 #include <QLabel>
 #include <QGridLayout>
 #include <QDialog>
+#include <QFileDialog>
 #include <QStorageInfo>
+#include <QDir>
+#include <QFile>
 
 #include <unistd.h>
 
@@ -61,14 +64,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     lExpName->setReadOnly(true);
 
     layout1->addWidget(bnProgramSettings, 0, 0);
-    layout1->addWidget(bnOpenDigitizers, 0, 1);
-    layout1->addWidget(bnCloseDigitizers, 0, 2);
-    layout1->addWidget(bnDigiSettings, 1, 1);
-    layout1->addWidget(bnSOLSettings, 1, 2);
+    layout1->addWidget(bnNewExp, 0, 1);
+    layout1->addWidget(lExpName, 0, 2);
 
-    layout1->addWidget(bnNewExp, 2, 0);
-    layout1->addWidget(lExpName, 2, 1);
-    layout1->addWidget(bnOpenScope, 2, 2);
+    layout1->addWidget(bnOpenScope, 1, 0);
+    layout1->addWidget(bnOpenDigitizers, 1, 1);
+    layout1->addWidget(bnCloseDigitizers, 1, 2);
+    layout1->addWidget(bnDigiSettings, 2, 1);
+    layout1->addWidget(bnSOLSettings, 2, 2);
+
 
     for( int i = 0; i < layout1->columnCount(); i++) layout1->setColumnStretch(i, 1);
 
@@ -118,17 +122,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layoutMain->addWidget(box3);
     layoutMain->setStretchFactor(box3, 1);
 
-    QGridLayout * layout3 = new QGridLayout(box3);
+    QVBoxLayout * layout3 = new QVBoxLayout(box3);
 
     logInfo = new QPlainTextEdit(this);
     logInfo->isReadOnly();
-    logInfo->setGeometry(100, 200, 500, 100);
+    QFont font; 
+    font.setFamily("Courier New");
+    logInfo->setFont(font);
 
     layout3->addWidget(logInfo);
 
   }
   
-  LogMsg("Welcome to SOLARIS DAQ.");
+  LogMsg("<font style=\"color: blue;\"><b>Welcome to SOLARIS DAQ.</b></font>");
+
+  bool isSettingOK = OpenProgramSettings();
+  if( isSettingOK == false){
+    bnProgramSettings->setStyleSheet("color: red;");
+
+    bnNewExp->setEnabled(false);
+    bnOpenDigitizers->setEnabled(false);
+  }
 
   //bnOpenDigitizers_clicked();
   //OpenDigitizersSettings();
@@ -312,36 +326,212 @@ void MainWindow::SetupNewExp(){
 
 void MainWindow::ProgramSettings(){
 
+  LogMsg("Open <b>Program Settings</b>.");
+
   QDialog dialog(this);
   dialog.setWindowTitle("Program Settings");
-  dialog.setGeometry(0, 0, 500, 500);
+  dialog.setGeometry(0, 0, 700, 450);
 
   QGridLayout * layout = new QGridLayout(&dialog);
+  layout->setVerticalSpacing(0);
+
+  unsigned int rowID = 0;
+
+  //-------- Instruction
+  QPlainTextEdit * helpInfo = new QPlainTextEdit(&dialog);
+  helpInfo->setReadOnly(true);
+  helpInfo->setLineWrapMode(QPlainTextEdit::LineWrapMode::WidgetWidth);
+  helpInfo->appendHtml("These setting will be saved at the <font style=\"color : red;\"> Settings Save Path </font> as <b>programSettings.txt</b>. If no such file exist, the program will create it.");
+  helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml("<font style=\"color : red;\">  Analysis Path  </font> is the path of the folder of the analysis code. e.g. /home/<user>/analysis/");
+  helpInfo->appendHtml("<font style=\"color : red;\">  Data Path  </font> is the path of the <b>parents folder</b> of Raw data will store. e.g. /mnt/data0/, experiment data will be saved under this folder. e.g. /mnt/data1/exp1");
+  helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change Exp </font>");
+  helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml("<font style=\"color : red;\">  Digitizers IP Domain </font> is the frist 6 digi of the digitizers IP. The program will search for all digitizers under this domain.");
+  helpInfo->appendHtml("<p></p>");
+
+  layout->addWidget(helpInfo, rowID, 0, 1, 4);
+
+  //-------- analysis Path
+  rowID ++;
+  QLabel *lbSaveSettingPath = new QLabel("Settings Save Path", &dialog);
+  lbSaveSettingPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbSaveSettingPath, rowID, 0);
+  lSaveSettingPath = new QLineEdit(QDir::current().absolutePath(), &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
+
+  QPushButton * bnSaveSettingPath = new QPushButton("browser", &dialog); layout->addWidget(bnSaveSettingPath, rowID, 3);
+  connect(bnSaveSettingPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(0);});
+
+  //-------- analysis Path
+  rowID ++;
+  QLabel *lbAnalysisPath = new QLabel("Analysis Path", &dialog);
+  lbAnalysisPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbAnalysisPath, rowID, 0);
+  lAnalysisPath = new QLineEdit(QDir::home().absolutePath() + "/analysis", &dialog); layout->addWidget(lAnalysisPath, rowID, 1, 1, 2);
+
+  QPushButton * bnAnalysisPath = new QPushButton("browser", &dialog); layout->addWidget(bnAnalysisPath, rowID, 3);
+  connect(bnAnalysisPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(1);});
 
   //-------- data Path
-  QLabel *lbDataPath = new QLabel("Data Path", &dialog); layout->addWidget(lbDataPath, 0, 0);
-  QLineEdit * lDataPath = new QLineEdit("/path/to/data", &dialog); layout->addWidget(lDataPath, 0, 1, 1, 2);
-  //-------- analysis Path
+  rowID ++;
+  QLabel *lbDataPath = new QLabel("Data Path", &dialog); 
+  lbDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbDataPath, rowID, 0);
+  lDataPath = new QLineEdit("/mnt/data1", &dialog); layout->addWidget(lDataPath, rowID, 1, 1, 2);
 
-  //-------- IP search range
+  QPushButton * bnDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnDataPath, rowID, 3);
+  connect(bnDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(2);});
 
+  //-------- IP Domain
+  rowID ++;
+  QLabel *lbIPDomain = new QLabel("Digitizers IP Domain", &dialog); 
+  lbIPDomain->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbIPDomain, rowID, 0);
+  lIPDomain = new QLineEdit("192.168.0", &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
   //-------- DataBase IP
-
+  rowID ++;
+  QLabel *lbDatbaseIP = new QLabel("Database IP", &dialog); 
+  lbDatbaseIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbDatbaseIP, rowID, 0);
+  lDatbaseIP = new QLineEdit("https://localhost:8086", &dialog); layout->addWidget(lDatbaseIP, rowID, 1, 1, 2);
   //-------- DataBase name
-  
+  rowID ++;
+  QLabel *lbDatbaseName = new QLabel("Database Name", &dialog);
+  lbDatbaseName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbDatbaseName, rowID, 0);
+  lDatbaseName = new QLineEdit("SOLARIS", &dialog); layout->addWidget(lDatbaseName, rowID, 1, 1, 2);
   //-------- Elog IP
+  rowID ++;
+  QLabel *lbElogIP = new QLabel("Elog IP", &dialog);
+  lbElogIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogIP, rowID, 0);
+  lElogIP = new QLineEdit("https://localhost:8080", &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
 
-  QPushButton *button1 = new QPushButton("OK", &dialog);
-  layout->addWidget(button1, 2, 1);
+  rowID ++;
+  QPushButton *button1 = new QPushButton("OK and Save", &dialog);
+  layout->addWidget(button1, rowID, 1);
+  QObject::connect(button1, &QPushButton::clicked, this, &MainWindow::SaveProgramSettings);
   QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+  
+  QPushButton *button2 = new QPushButton("Cancel", &dialog);
+  layout->addWidget(button2, rowID, 2);
+  QObject::connect(button2, &QPushButton::clicked, this, [=](){this->LogMsg("<b>Cancel Program Settings</b>");});
+  QObject::connect(button2, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+
+  layout->setColumnStretch(0, 2);
+  layout->setColumnStretch(1, 2);
+  layout->setColumnStretch(2, 2);
+  layout->setColumnStretch(3, 1);
 
   dialog.exec();
 }
 
+void MainWindow::OpenDirectory(int id){ 
+  QFileDialog fileDialog(this);
+  fileDialog.setFileMode(QFileDialog::Directory);
+  fileDialog.exec();
+
+  qDebug() << fileDialog.selectedFiles();
+  
+  switch (id){
+    case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 2 : lDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+  }
+}
+
+bool MainWindow::OpenProgramSettings(){
+
+  QString settingFile = QDir::current().absolutePath() + "/programSettings.txt";
+
+  LogMsg("Loading <b>" + settingFile + "</b> for Program Settings.");
+
+  QFile file(settingFile);
+
+  if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
+    LogMsg("<b>" + settingFile + "</b> not found.");
+    LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+    return false;
+  }
+  
+  QTextStream in(&file);
+  QString line = in.readLine();
+
+  int count = 0;
+  while( !line.isNull()){
+    if( line.left(6) == "//----") break;
+
+    switch (count){
+      case 0 : settingFilePath = line; break;
+      case 1 : analysisPath    = line; break;
+      case 2 : dataPath        = line; break;
+      case 3 : IPDomain        = line; break;
+      case 4 : DatabaseIP      = line; break;
+      case 5 : DatabaseName    = line; break;
+      case 6 : ElogIP          = line; break;
+    }
+
+    count ++;
+    line = in.readLine();
+  }
+
+  if( count == 7 ) {
+    logMsgHTMLMode = false;
+    LogMsg("Setting File Path : " + settingFilePath);
+    LogMsg("    Analysis Path : " + analysisPath);
+    LogMsg("        Data Path : " + dataPath);
+    LogMsg("  Digi. IP Domain : " + IPDomain);
+    LogMsg("      Database IP : " + DatabaseIP);
+    LogMsg("    Database Name : " + DatabaseName);
+    LogMsg("           ElogIP : " + ElogIP);
+    logMsgHTMLMode = true;
+    return true;
+  }else{
+    LogMsg("Settings are not complete.");
+    LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+    return false;
+  }
+}
+
+void MainWindow::SaveProgramSettings(){
+
+  IPDomain = lIPDomain->text();
+  DatabaseIP = lDatbaseIP->text();
+  DatabaseName = lDatbaseName->text();
+  ElogIP = lElogIP->text();
+
+  settingFilePath = lSaveSettingPath->text();
+  analysisPath = lAnalysisPath->text();
+  dataPath = lDataPath->text();
+
+  QFile file(settingFilePath + "/programSettings.txt");
+  
+  file.open(QIODevice::Text | QIODevice::WriteOnly);
+
+  file.write((settingFilePath+"\n").toStdString().c_str());
+  file.write((analysisPath+"\n").toStdString().c_str());
+  file.write((dataPath+"\n").toStdString().c_str());
+  file.write((IPDomain+"\n").toStdString().c_str());
+  file.write((DatabaseIP+"\n").toStdString().c_str());
+  file.write((DatabaseName+"\n").toStdString().c_str());
+  file.write((ElogIP+"\n").toStdString().c_str());
+  file.write("//------------end of file.");
+  
+  file.close();
+
+  LogMsg("Saved program settings to <b>"+settingFilePath + "/programSettings.txt<b>.");
+}
+
 void MainWindow::LogMsg(QString msg){
 
-    QString countStr = QStringLiteral("[%1] %2").arg(QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"), msg);
-    logInfo->appendPlainText(countStr);
+    QString outputStr = QStringLiteral("[%1] %2").arg(QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"), msg);
+    if( logMsgHTMLMode ){ 
+      logInfo->appendHtml(outputStr);
+    }else{
+      logInfo->appendPlainText(outputStr);
+    }
     QScrollBar *v = logInfo->verticalScrollBar();
     v->setValue(v->maximum());
     //qDebug() << msg;
