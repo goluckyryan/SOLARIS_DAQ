@@ -7,6 +7,7 @@
 #include <QStorageInfo>
 #include <QDir>
 #include <QFile>
+#include <QProcess>
 
 #include <unistd.h>
 
@@ -40,6 +41,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnProgramSettings = new QPushButton("Program Settings", this);
     connect(bnProgramSettings, &QPushButton::clicked, this, &MainWindow::ProgramSettings);
 
+    bnNewExp = new QPushButton("New/Change Exp", this);
+    connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExp);
+
+    QLabel * lExpName = new QLabel("Exp Name ", this);
+    lExpName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+
+    leExpName = new QLineEdit("<Exp Name>", this);
+    leExpName->setAlignment(Qt::AlignHCenter);
+    leExpName->setReadOnly(true);
+
+    QPushButton * bnOpenScope = new QPushButton("Open scope", this);
+    bnOpenScope->setEnabled(false);
+
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
     connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(bnOpenDigitizers_clicked()));
 
@@ -54,27 +68,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     QPushButton * bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
 
-    QPushButton * bnOpenScope = new QPushButton("Open scope", this);
-    bnOpenScope->setEnabled(false);
-
-    bnNewExp = new QPushButton("New/Change Exp", this);
-    connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExp);
-
-    QLineEdit * lExpName = new QLineEdit("<Exp Name>", this);
-    lExpName->setReadOnly(true);
-
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
+    layout1->addWidget(leExpName, 0, 3);
 
     layout1->addWidget(bnOpenScope, 1, 0);
     layout1->addWidget(bnOpenDigitizers, 1, 1);
-    layout1->addWidget(bnCloseDigitizers, 1, 2);
+    layout1->addWidget(bnCloseDigitizers, 1, 2, 1, 2);
+
     layout1->addWidget(bnDigiSettings, 2, 1);
-    layout1->addWidget(bnSOLSettings, 2, 2);
+    layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
 
-    for( int i = 0; i < layout1->columnCount(); i++) layout1->setColumnStretch(i, 1);
+    layout1->setColumnStretch(0, 2);
+    layout1->setColumnStretch(1, 2);
+    layout1->setColumnStretch(2, 1);
+    layout1->setColumnStretch(3, 1);
 
   }
 
@@ -93,10 +103,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnStopACQ->setEnabled(false);
     connect(bnStopACQ, &QPushButton::clicked, this, &MainWindow::StopACQ);
 
-    QLabel * lbRunID = new QLabel("Run ID : ", this);
+    QLabel * lbRunID = new QLabel("Run ID : ", this); 
     lbRunID->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    QLineEdit * runID = new QLineEdit(this);
-    runID->setReadOnly(true);
+
+    leRunID = new QLineEdit(this);
+    leRunID->setAlignment(Qt::AlignHCenter);
+    leRunID->setReadOnly(true);
     
     QLabel * lbRunComment = new QLabel("Run Comment : ", this);
     lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -104,14 +116,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     runComment->setReadOnly(true);
     
     layout2->addWidget(lbRunID, 0, 0);
-    layout2->addWidget(runID, 0, 1);
+    layout2->addWidget(leRunID, 0, 1);
     layout2->addWidget(bnStartACQ, 0, 2);
     layout2->addWidget(bnStopACQ, 0, 3);
+
     layout2->addWidget(lbRunComment, 1, 0);
     layout2->addWidget(runComment, 1, 1, 1, 3);
 
-    layout2->setColumnStretch(0, 0.3);
-    for( int i = 0; i < layout2->columnCount(); i++) layout2->setColumnStretch(i, 1);
+    layout2->setColumnStretch(0, 1);
+    layout2->setColumnStretch(1, 1);
+    layout2->setColumnStretch(2, 2);
+    layout2->setColumnStretch(3, 2);
 
   }
 
@@ -136,13 +151,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   
   LogMsg("<font style=\"color: blue;\"><b>Welcome to SOLARIS DAQ.</b></font>");
 
-  bool isSettingOK = OpenProgramSettings();
-  if( isSettingOK == false){
-    bnProgramSettings->setStyleSheet("color: red;");
-
-    bnNewExp->setEnabled(false);
-    bnOpenDigitizers->setEnabled(false);
-  }
+  if( OpenProgramSettings() )  OpenExpSettings();
 
   //bnOpenDigitizers_clicked();
   //OpenDigitizersSettings();
@@ -176,7 +185,7 @@ MainWindow::~MainWindow(){
 
 }
 
-//################################################################
+//^################################################################ ACQ control 
 void MainWindow::StartACQ(){
 
   digi->Reset();
@@ -251,7 +260,7 @@ void MainWindow::bnOpenDigitizers_clicked(){
 
 }
 
-//######################################################################
+//^###################################################################### open and close digitizer
 void MainWindow::bnCloseDigitizers_clicked(){
   if( digi != NULL ){
     digi->CloseDigitizer();
@@ -284,56 +293,18 @@ void MainWindow::OpenDigitizersSettings(){
     digiSetting->show();
   }
 }
-//######################################################################
 
-void MainWindow::SetupNewExp(){
-
-  QDialog dialog(this);
-  dialog.setWindowTitle("Setup / change Experiment");
-  dialog.setGeometry(0, 0, 500, 500);
-
-  QVBoxLayout * layout = new QVBoxLayout(&dialog);
-
-  //------- instruction
-  QLabel *label = new QLabel("Here list the pass experiments. ", &dialog);
-  layout->addWidget(label);
-
-  //------- get and list the git repository
-  QPlainTextEdit * gitList = new QPlainTextEdit(&dialog);
-  layout->addWidget(gitList);
-  gitList->setReadOnly(true);
-
-  //------- get harddisk space;
-  //QStorageInfo storage("/path/to/drive");
-  QStorageInfo storage = QStorageInfo::root();
-  qint64 availableSpace = storage.bytesAvailable();
-
-  QLabel * lbDiskSpace = new QLabel("Disk space avalible " + QString::number(availableSpace/1024./1024./1024.) + " [GB]", &dialog);
-  layout->addWidget(lbDiskSpace);
-
-  //------- type existing or new experiment
-  QLineEdit * input = new QLineEdit(&dialog);
-  layout->addWidget(input);
-
-
-  QPushButton *button1 = new QPushButton("OK", &dialog);
-  layout->addWidget(button1);
-  QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
-
-  dialog.exec();
-
-}
-
+//^###################################################################### Program Settings
 void MainWindow::ProgramSettings(){
 
   LogMsg("Open <b>Program Settings</b>.");
 
   QDialog dialog(this);
   dialog.setWindowTitle("Program Settings");
-  dialog.setGeometry(0, 0, 700, 450);
+  dialog.setGeometry(0, 0, 700, 500);
 
   QGridLayout * layout = new QGridLayout(&dialog);
-  layout->setVerticalSpacing(0);
+  layout->setVerticalSpacing(5);
 
   unsigned int rowID = 0;
 
@@ -416,7 +387,7 @@ void MainWindow::ProgramSettings(){
   
   QPushButton *button2 = new QPushButton("Cancel", &dialog);
   layout->addWidget(button2, rowID, 2);
-  QObject::connect(button2, &QPushButton::clicked, this, [=](){this->LogMsg("<b>Cancel Program Settings</b>");});
+  QObject::connect(button2, &QPushButton::clicked, this, [=](){this->LogMsg("Cancel <b>Program Settings</b>");});
   QObject::connect(button2, &QPushButton::clicked, &dialog, &QDialog::reject);
 
 
@@ -450,47 +421,62 @@ bool MainWindow::OpenProgramSettings(){
 
   QFile file(settingFile);
 
+  bool ret = false;
+
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found.");
     LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
-    return false;
-  }
+  }else{
   
-  QTextStream in(&file);
-  QString line = in.readLine();
+    QTextStream in(&file);
+    QString line = in.readLine();
 
-  int count = 0;
-  while( !line.isNull()){
-    if( line.left(6) == "//----") break;
+    int count = 0;
+    while( !line.isNull()){
+      if( line.left(6) == "//----") break;
 
-    switch (count){
-      case 0 : settingFilePath = line; break;
-      case 1 : analysisPath    = line; break;
-      case 2 : dataPath        = line; break;
-      case 3 : IPDomain        = line; break;
-      case 4 : DatabaseIP      = line; break;
-      case 5 : DatabaseName    = line; break;
-      case 6 : ElogIP          = line; break;
+      switch (count){
+        case 0 : settingFilePath = line; break;
+        case 1 : analysisPath    = line; break;
+        case 2 : dataPath        = line; break;
+        case 3 : IPDomain        = line; break;
+        case 4 : DatabaseIP      = line; break;
+        case 5 : DatabaseName    = line; break;
+        case 6 : ElogIP          = line; break;
+      }
+
+      count ++;
+      line = in.readLine();
     }
 
-    count ++;
-    line = in.readLine();
+    if( count == 7 ) {
+      logMsgHTMLMode = false;
+      LogMsg("Setting File Path : " + settingFilePath);
+      LogMsg("    Analysis Path : " + analysisPath);
+      LogMsg("        Data Path : " + dataPath);
+      LogMsg("  Digi. IP Domain : " + IPDomain);
+      LogMsg("      Database IP : " + DatabaseIP);
+      LogMsg("    Database Name : " + DatabaseName);
+      LogMsg("           ElogIP : " + ElogIP);
+      logMsgHTMLMode = true;
+      
+      ret = true;
+    }else{
+      LogMsg("Settings are not complete.");
+      LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+    }
   }
 
-  if( count == 7 ) {
-    logMsgHTMLMode = false;
-    LogMsg("Setting File Path : " + settingFilePath);
-    LogMsg("    Analysis Path : " + analysisPath);
-    LogMsg("        Data Path : " + dataPath);
-    LogMsg("  Digi. IP Domain : " + IPDomain);
-    LogMsg("      Database IP : " + DatabaseIP);
-    LogMsg("    Database Name : " + DatabaseName);
-    LogMsg("           ElogIP : " + ElogIP);
-    logMsgHTMLMode = true;
+  if( ret ){
     return true;
+
+    OpenProgramSettings();
+
   }else{
-    LogMsg("Settings are not complete.");
-    LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+
+    bnProgramSettings->setStyleSheet("color: red;");
+    bnNewExp->setEnabled(false);
+    bnOpenDigitizers->setEnabled(false);
     return false;
   }
 }
@@ -520,10 +506,214 @@ void MainWindow::SaveProgramSettings(){
   file.write("//------------end of file.");
   
   file.close();
-
   LogMsg("Saved program settings to <b>"+settingFilePath + "/programSettings.txt<b>.");
+
+  bnProgramSettings->setStyleSheet("");
+  bnNewExp->setEnabled(true);
+  bnOpenDigitizers->setEnabled(true);
+
+  OpenExpSettings();
+
 }
 
+//^###################################################################### Setup new exp
+
+void MainWindow::SetupNewExp(){
+
+  QDialog dialog(this);
+  dialog.setWindowTitle("Setup / change Experiment");
+  dialog.setGeometry(0, 0, 500, 300);
+
+  QGridLayout * layout = new QGridLayout(&dialog);
+  layout->setVerticalSpacing(5);
+
+  unsigned short rowID = 0;
+
+  //------- instruction
+  QPlainTextEdit * instr = new QPlainTextEdit(&dialog);
+  layout->addWidget(instr, rowID, 0, 1, 4);
+  instr->setReadOnly(true);
+  instr->appendHtml("Please select the pre-exist git branch or create a new one.");
+
+  //------- Analysis Path
+  rowID ++;
+  QLabel * l1 = new QLabel("Analysis Path ", &dialog);
+  l1->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(l1, rowID, 0);
+
+  QLineEdit * le1 = new QLineEdit(analysisPath, &dialog);
+  le1->setReadOnly(true);
+  layout->addWidget(le1, rowID, 1, 1, 3);
+
+  //------- Data Path
+  rowID ++;
+  QLabel * l2 = new QLabel("Data Path ", &dialog);
+  l2->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(l2, rowID, 0);
+
+  QLineEdit * le2 = new QLineEdit(dataPath, &dialog);
+  le2->setReadOnly(true);
+  layout->addWidget(le2, rowID, 1, 1, 3);
+
+  //------- get harddisk space;
+  rowID ++;
+  //?QStorageInfo storage("/path/to/drive");
+  QStorageInfo storage = QStorageInfo::root();
+  qint64 availableSpace = storage.bytesAvailable();
+
+  QLabel * lbDiskSpace = new QLabel("Disk space avalible ", &dialog);
+  lbDiskSpace->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(lbDiskSpace, rowID, 0);
+
+  QLineEdit * leDiskSpace = new QLineEdit(QString::number(availableSpace/1024./1024./1024.) + " [GB]", &dialog);
+  leDiskSpace->setReadOnly(true);
+  layout->addWidget(leDiskSpace, rowID, 1, 1, 3);
+
+
+  //*---------- get git branch
+  QProcess git;
+  git.setWorkingDirectory(analysisPath);
+  //?git.setWorkingDirectory("/home/ryan/digios");
+  git.start("git", QStringList() << "branch" << "-a");
+  git.waitForFinished();
+
+  QByteArray output = git.readAllStandardOutput();
+  QStringList branches = (QString::fromLocal8Bit(output)).split("\n");
+  branches.removeAll("");
+
+  if( branches.size() == 0) isGitExist = false;
+
+  //------- present git branch
+  rowID ++;
+  QLabel * l3 = new QLabel("Present Git Branches ", &dialog);
+  l3->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(l3, rowID, 0);
+
+  QLineEdit * le3 = new QLineEdit(branches[0].remove("*").remove(" "), &dialog);
+  if( isGitExist == false ) {
+    le3->setText("No git repository!!!");
+    le3->setStyleSheet("color: red;");
+  }
+  le3->setReadOnly(true);
+  layout->addWidget(le3, rowID, 1, 1, 3);
+
+  //------- add a separator
+  rowID ++;
+  QFrame * line = new QFrame;
+  line->setFrameShape(QFrame::HLine);
+  line->setFrameShadow(QFrame::Sunken);
+
+  layout->addWidget(line, rowID, 0, 1, 4);
+
+  //------- show list of exisiting git repository
+  rowID ++;
+  QLabel * l4 = new QLabel("Existing Git Branches ", &dialog);
+  l4->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(l4, rowID, 0);
+
+  QComboBox * cb = new QComboBox(&dialog);
+  layout->addWidget(cb, rowID, 1, 1, 2);
+
+  QPushButton *bnChangeBranch = new QPushButton("Change", &dialog);
+  layout->addWidget(bnChangeBranch, rowID, 3);
+  QObject::connect(bnChangeBranch, &QPushButton::clicked, this, &MainWindow::ChangeExperiment);
+  QObject::connect(bnChangeBranch, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+  if( isGitExist == false ){
+    cb->setEnabled(false);
+    bnChangeBranch->setEnabled(false);
+  }else{
+    for( int i = 1; i < branches.size(); i++){
+      cb->addItem(branches[i].remove(" "));
+    }
+  }
+
+  //------- type existing or new experiment
+  rowID ++;
+  QLabel * lNewExp = new QLabel("New Exp Name ", &dialog);
+  lNewExp->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(lNewExp, rowID, 0);
+
+  QLineEdit * newExp = new QLineEdit(&dialog);
+  layout->addWidget(newExp, rowID, 1, 1, 2);
+
+  QPushButton *button1 = new QPushButton("Create", &dialog);
+  layout->addWidget(button1, rowID, 3);
+  QObject::connect(button1, &QPushButton::clicked, this, &MainWindow::CreateNewExperiment);
+  QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+  //--------- cancel
+  rowID ++;
+  QPushButton *bnCancel = new QPushButton("Cancel", &dialog);
+  layout->addWidget(bnCancel, rowID, 0, 1, 4);
+  QObject::connect(bnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+  layout->setRowStretch(0, 1);
+  for( int i = 1; i < rowID; i++) layout->setRowStretch(i, 2);
+
+  dialog.exec();
+
+}
+ 
+bool MainWindow::OpenExpSettings(){
+  //this method set the analysis setting ann symbloic link to raw data
+  //ONLY load file, not check the git
+
+  if( analysisPath == "") return false;
+
+  QString settingFile = analysisPath + "/expName.sh";
+
+  LogMsg("Loading <b>" + settingFile + "</b> for Experiment.");
+
+  QFile file(settingFile);
+  if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
+    LogMsg("<b>" + settingFile + "</b> not found.");
+    LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+
+    bnNewExp->setStyleSheet("color: red;");
+    bnOpenDigitizers->setEnabled(false);
+    leExpName->setText("no expName found.");
+    
+    return false;
+  }
+
+  QTextStream in(&file);
+  QString line = in.readLine();
+
+  int count = 0;
+  while( !line.isNull()){
+
+    int index = line.indexOf("=");
+    QString haha = line.mid(index+1).remove(" ").remove("\"");
+
+    //qDebug() << haha;
+
+    switch (count){
+      case 0 : expName = haha; break;
+      case 1 : runID = haha.toInt(); break;
+      case 2 : elogID = haha.toInt(); break;
+    }
+
+    count ++;
+    line = in.readLine();
+  }
+
+  leExpName->setText(expName);
+  leRunID->setText(QString::number(runID));
+
+  return true;
+
+}
+
+void MainWindow::CreateNewExperiment(){
+  
+}
+
+void MainWindow::ChangeExperiment(){
+
+}
+
+//^###################################################################### log msg
 void MainWindow::LogMsg(QString msg){
 
     QString outputStr = QStringLiteral("[%1] %2").arg(QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"), msg);

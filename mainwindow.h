@@ -107,6 +107,8 @@ private slots:
 
     void SetupNewExp();
     bool OpenExpSettings();
+    void CreateNewExperiment();
+    void ChangeExperiment();
 
 signals :
 
@@ -115,6 +117,7 @@ private:
     
     QPushButton * bnProgramSettings;
     QPushButton * bnNewExp;
+    QLineEdit   * leExpName;
 
     QPushButton * bnOpenDigitizers;
     QPushButton * bnCloseDigitizers;
@@ -122,7 +125,7 @@ private:
 
     QPushButton * bnStartACQ;
     QPushButton * bnStopACQ;
-
+    QLineEdit   * leRunID;
 
     DigiSettings * digiSetting;
 
@@ -158,8 +161,11 @@ private:
     QString DatabaseName;
     QString ElogIP;
 
+    //------------- experiment settings
+    bool isGitExist;
     QString expName;
-    int runID;
+    unsigned int runID;
+    unsigned int elogID;
 
 };
 
