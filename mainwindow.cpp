@@ -41,7 +41,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnProgramSettings = new QPushButton("Program Settings", this);
     connect(bnProgramSettings, &QPushButton::clicked, this, &MainWindow::ProgramSettings);
 
-    bnNewExp = new QPushButton("New/Change Exp", this);
+    bnNewExp = new QPushButton("New/Change/Reload Exp", this);
     connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExp);
 
     QLabel * lExpName = new QLabel("Exp Name ", this);
@@ -95,6 +95,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     QGridLayout * layout2 = new QGridLayout(box2);
     
+    QLabel * lbRawDataPath = new QLabel("Raw Data Path : ", this);
+    lbRawDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    leRawDataPath = new QLineEdit(this);
+    leRawDataPath->setReadOnly(true);
+    leRawDataPath->setStyleSheet("background-color: #F3F3F3;");
+
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
     connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
@@ -115,13 +121,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     QLineEdit * runComment = new QLineEdit(this);
     runComment->setReadOnly(true);
     
-    layout2->addWidget(lbRunID, 0, 0);
-    layout2->addWidget(leRunID, 0, 1);
-    layout2->addWidget(bnStartACQ, 0, 2);
-    layout2->addWidget(bnStopACQ, 0, 3);
+    layout2->addWidget(lbRawDataPath, 0, 0);
+    layout2->addWidget(leRawDataPath, 0, 1, 1, 3);
 
-    layout2->addWidget(lbRunComment, 1, 0);
-    layout2->addWidget(runComment, 1, 1, 1, 3);
+    layout2->addWidget(lbRunID,    1, 0);
+    layout2->addWidget(leRunID,    1, 1);
+    layout2->addWidget(bnStartACQ, 1, 2);
+    layout2->addWidget(bnStopACQ,  1, 3);
+
+    layout2->addWidget(lbRunComment, 2, 0);
+    layout2->addWidget(runComment,   2, 1, 1, 3);
 
     layout2->setColumnStretch(0, 1);
     layout2->setColumnStretch(1, 1);
@@ -238,6 +247,7 @@ void MainWindow::bnOpenDigitizers_clicked(){
 
     LogMsg("Opened digitizer : " + QString::number(digi->GetSerialNumber()));
     bnOpenDigitizers->setEnabled(false);
+    bnOpenDigitizers->setStyleSheet("");
     bnCloseDigitizers->setEnabled(true);
     bnDigiSettings->setEnabled(true);
     bnStartACQ->setEnabled(true);
@@ -301,7 +311,8 @@ void MainWindow::ProgramSettings(){
 
   QDialog dialog(this);
   dialog.setWindowTitle("Program Settings");
-  dialog.setGeometry(0, 0, 700, 500);
+  dialog.setGeometry(0, 0, 700, 530);
+  dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
   layout->setVerticalSpacing(5);
@@ -311,16 +322,25 @@ void MainWindow::ProgramSettings(){
   //-------- Instruction
   QPlainTextEdit * helpInfo = new QPlainTextEdit(&dialog);
   helpInfo->setReadOnly(true);
+  helpInfo->setStyleSheet("background-color: #F3F3F3;");
   helpInfo->setLineWrapMode(QPlainTextEdit::LineWrapMode::WidgetWidth);
-  helpInfo->appendHtml("These setting will be saved at the <font style=\"color : red;\"> Settings Save Path </font> as <b>programSettings.txt</b>. If no such file exist, the program will create it.");
+  helpInfo->appendHtml("These setting will be saved at the <font style=\"color : blue;\"> \
+                            Settings Save Path </font> as <b>programSettings.txt</b>. \
+                        If no such file exist, the program will create it.");
   helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("<font style=\"color : red;\">  Analysis Path  </font> is the path of the folder of the analysis code. e.g. /home/<user>/analysis/");
-  helpInfo->appendHtml("<font style=\"color : red;\">  Data Path  </font> is the path of the <b>parents folder</b> of Raw data will store. e.g. /mnt/data0/, experiment data will be saved under this folder. e.g. /mnt/data1/exp1");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
+                           the folder of the analysis code. e.g. /home/<user>/analysis/");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
+                             <b>parents folder</b> of Raw data will store. e.g. /mnt/data0/, \
+                          experiment data will be saved under this folder. e.g. /mnt/data1/exp1");
   helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change Exp </font>");
+  helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("<font style=\"color : red;\">  Digitizers IP Domain </font> is the frist 6 digi of the digitizers IP. The program will search for all digitizers under this domain.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP Domain </font> is the frist 6 \
+                           digi of the digitizers IP. The program will search for all digitizers under this domain.");
   helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
+
 
   layout->addWidget(helpInfo, rowID, 0, 1, 4);
 
@@ -404,7 +424,7 @@ void MainWindow::OpenDirectory(int id){
   fileDialog.setFileMode(QFileDialog::Directory);
   fileDialog.exec();
 
-  qDebug() << fileDialog.selectedFiles();
+  //qDebug() << fileDialog.selectedFiles();
   
   switch (id){
     case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
@@ -520,9 +540,12 @@ void MainWindow::SaveProgramSettings(){
 
 void MainWindow::SetupNewExp(){
 
+  LogMsg("Open <b>New/Change/Reload Exp</b>.");
+
   QDialog dialog(this);
   dialog.setWindowTitle("Setup / change Experiment");
-  dialog.setGeometry(0, 0, 500, 300);
+  dialog.setGeometry(0, 0, 500, 550);
+  dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
   layout->setVerticalSpacing(5);
@@ -533,7 +556,22 @@ void MainWindow::SetupNewExp(){
   QPlainTextEdit * instr = new QPlainTextEdit(&dialog);
   layout->addWidget(instr, rowID, 0, 1, 4);
   instr->setReadOnly(true);
-  instr->appendHtml("Please select the pre-exist git branch or create a new one.");
+  instr->setStyleSheet("background-color: #F3F3F3;");
+  instr->appendHtml("Setup new experiment will do following things:");
+  instr->appendHtml("<b>0,</b> Check the git repository in <font style=\"color:blue;\">Analysis Path</font>");
+  instr->appendHtml("<b>1,</b> Create folder in <font style=\"color:blue;\">Data Path</font>");
+  instr->appendHtml("<b>2,</b> Create Symbolic links in <font style=\"color:blue;\">Analysis Path</font>");
+  instr->appendHtml("<b>3,</b> Create <b>expName.sh</b> in <font style=\"color:blue;\">Analysis Path</font> ");
+  instr->appendHtml("<p></p>");
+  instr->appendHtml("If <font style=\"color:blue;\">Use Git</font> is <b>checked</b>, \
+                    the repository <b>MUST</b> be clean. \
+                    It will then create a new branch with the <font style=\"color:blue;\">New Exp Name </font> \
+                    or change to pre-exist branch.");
+  instr->appendHtml("<p></p>");
+  instr->appendHtml("If there is no git repository in <font style=\"color:blue;\">Analysis Path</font>, \
+                    it will create one with a branch name of <font style=\"color:blue;\">New Exp Name </font>.");
+  instr->appendHtml("<p></p>");
+  instr->appendHtml("<b>expName.sh</> stores the exp name, runID, and elogID."); 
 
   //------- Analysis Path
   rowID ++;
@@ -571,6 +609,7 @@ void MainWindow::SetupNewExp(){
 
 
   //*---------- get git branch
+  isGitExist = false;
   QProcess git;
   git.setWorkingDirectory(analysisPath);
   //?git.setWorkingDirectory("/home/ryan/digios");
@@ -581,7 +620,32 @@ void MainWindow::SetupNewExp(){
   QStringList branches = (QString::fromLocal8Bit(output)).split("\n");
   branches.removeAll("");
 
-  if( branches.size() == 0) isGitExist = false;
+  //qDebug() << branches;
+
+  if( branches.size() == 0) {
+    isGitExist = false;
+  }else{
+    isGitExist = true;
+  }
+
+  QString presentBranch;
+  unsigned short bID = 0; // id of the present branch
+  for( unsigned short i = 0; i < branches.size(); i++){
+    if( branches[i].indexOf("*") != -1 ){
+      presentBranch = branches[i].remove("*").remove(" ");
+      bID = i;
+      break;
+    }
+  }
+
+  //*----------- check git branch is clean for git exist
+  bool isCleanGit = false;
+  if( isGitExist ){
+    git.start("git", QStringList() << "status" << "--porcelain" << "--untracked-files=no");
+    git.waitForFinished();
+    output = git.readAllStandardOutput();
+    if( (QString::fromLocal8Bit(output)).isEmpty() ) isCleanGit = true;
+  }
 
   //------- present git branch
   rowID ++;
@@ -589,7 +653,8 @@ void MainWindow::SetupNewExp(){
   l3->setAlignment(Qt::AlignCenter | Qt::AlignRight);
   layout->addWidget(l3, rowID, 0);
 
-  QLineEdit * le3 = new QLineEdit(branches[0].remove("*").remove(" "), &dialog);
+  QLineEdit * le3 = new QLineEdit(presentBranch, &dialog);
+
   if( isGitExist == false ) {
     le3->setText("No git repository!!!");
     le3->setStyleSheet("color: red;");
@@ -605,6 +670,24 @@ void MainWindow::SetupNewExp(){
 
   layout->addWidget(line, rowID, 0, 1, 4);
 
+  //------- use git checkbox
+  rowID ++;
+  QCheckBox * cbUseGit = new QCheckBox("Use Git", &dialog);
+  cbUseGit->setChecked(true);
+  useGit = true;
+  layout->addWidget(cbUseGit, rowID, 1);
+  connect(cbUseGit, &QCheckBox::clicked, this, [=](){this->useGit = cbUseGit->isChecked();});
+
+  //------- display git cleanness
+  //?---- don't know why isGitExist && !isCleanGit does not work
+  if( isGitExist ){
+    if ( !isCleanGit){  
+      QLabel * lCleanGit = new QLabel("Git not CLEAN!!! Nothing can be done.", &dialog);
+      lCleanGit->setStyleSheet("color: red;");
+      layout->addWidget(lCleanGit, rowID, 2, 1, 2);
+    }
+  }
+
   //------- show list of exisiting git repository
   rowID ++;
   QLabel * l4 = new QLabel("Existing Git Branches ", &dialog);
@@ -616,40 +699,71 @@ void MainWindow::SetupNewExp(){
 
   QPushButton *bnChangeBranch = new QPushButton("Change", &dialog);
   layout->addWidget(bnChangeBranch, rowID, 3);
-  QObject::connect(bnChangeBranch, &QPushButton::clicked, this, &MainWindow::ChangeExperiment);
-  QObject::connect(bnChangeBranch, &QPushButton::clicked, &dialog, &QDialog::accept);
+
+  connect(bnChangeBranch, &QPushButton::clicked, this, [=](){ this->ChangeExperiment(cb->currentText());  });
+  connect(bnChangeBranch, &QPushButton::clicked, &dialog, &QDialog::accept);
 
   if( isGitExist == false ){
     cb->setEnabled(false);
     bnChangeBranch->setEnabled(false);
   }else{
-    for( int i = 1; i < branches.size(); i++){
+    for( int i = 0; i < branches.size(); i++){
+      if( i == bID ) continue;
       cb->addItem(branches[i].remove(" "));
+    }
+    if ( branches.size() == 1) {
+      cb->setEnabled(false);
+      cb->addItem("no other branch");
+      bnChangeBranch->setEnabled(false);
     }
   }
 
+  connect(cbUseGit, &QCheckBox::clicked, this, [=](){
+                        if( branches.size() > 1 ) cb->setEnabled(cbUseGit->isChecked());
+                      });
+  connect(cbUseGit, &QCheckBox::clicked, this, [=](){
+                        if(branches.size() > 1 ) bnChangeBranch->setEnabled(cbUseGit->isChecked());
+                      });
+  
   //------- type existing or new experiment
   rowID ++;
   QLabel * lNewExp = new QLabel("New Exp Name ", &dialog);
   lNewExp->setAlignment(Qt::AlignCenter | Qt::AlignRight);
   layout->addWidget(lNewExp, rowID, 0);
 
-  QLineEdit * newExp = new QLineEdit(&dialog);
+  QLineEdit * newExp = new QLineEdit("type and Enter", &dialog);
   layout->addWidget(newExp, rowID, 1, 1, 2);
 
   QPushButton *button1 = new QPushButton("Create", &dialog);
   layout->addWidget(button1, rowID, 3);
-  QObject::connect(button1, &QPushButton::clicked, this, &MainWindow::CreateNewExperiment);
-  QObject::connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+  button1->setEnabled(false);
+  
+  connect(newExp, &QLineEdit::returnPressed, this, [=](){ if( newExp->text() != "") button1->setEnabled(true);});
+  connect(button1, &QPushButton::clicked, this, [=](){ this->CreateNewExperiment(newExp->text());});
+  connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
 
+  //----- diable all possible actions
+  //?---- don't know why isGitExist && !isCleanGit does not work
+  if( isGitExist){
+    if ( !isCleanGit ){
+      cbUseGit->setEnabled(false);
+      cb->setEnabled(false);
+      bnChangeBranch->setEnabled(false);
+      newExp->setEnabled(false);
+      button1->setEnabled(false);
+    }
+  }
   //--------- cancel
   rowID ++;
   QPushButton *bnCancel = new QPushButton("Cancel", &dialog);
   layout->addWidget(bnCancel, rowID, 0, 1, 4);
-  QObject::connect(bnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
+  connect(bnCancel, &QPushButton::clicked, this, [=](){this->LogMsg("Cancel <b>New/Change/Reload Exp</b>");});
+  connect(bnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
 
   layout->setRowStretch(0, 1);
   for( int i = 1; i < rowID; i++) layout->setRowStretch(i, 2);
+
+  OpenExpSettings();
 
   dialog.exec();
 
@@ -668,7 +782,7 @@ bool MainWindow::OpenExpSettings(){
   QFile file(settingFile);
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found.");
-    LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
+    LogMsg("Please Open the <font style=\"color : red;\">New/Change/Reload Exp</font>");
 
     bnNewExp->setStyleSheet("color: red;");
     bnOpenDigitizers->setEnabled(false);
@@ -690,27 +804,134 @@ bool MainWindow::OpenExpSettings(){
 
     switch (count){
       case 0 : expName = haha; break;
-      case 1 : runID = haha.toInt(); break;
-      case 2 : elogID = haha.toInt(); break;
+      case 1 : rawDataFolder = haha; break;
+      case 2 : runID = haha.toInt(); break;
+      case 3 : elogID = haha.toInt(); break;
     }
 
     count ++;
     line = in.readLine();
   }
 
+  leRawDataPath->setText(rawDataFolder);
   leExpName->setText(expName);
   leRunID->setText(QString::number(runID));
+
+  bnOpenDigitizers->setStyleSheet("color:red;");
 
   return true;
 
 }
 
-void MainWindow::CreateNewExperiment(){
+void MainWindow::CreateNewExperiment(const QString newExpName){
   
+  LogMsg("Creating new Exp. : <font style=\"color: red;\">" + newExpName + "</font>");
+
+  //@----- git must be clean
+  //----- creat new git branch
+  if( useGit ){
+    QProcess git;
+    git.setWorkingDirectory(analysisPath);
+    if( !isGitExist){
+      git.start("git", QStringList() << "init" << "-b" << newExpName);
+      git.waitForFinished();
+
+      LogMsg("Initialzed a git repositiory with branch name <b>" + newExpName + "</b>");
+    }else{
+      git.start("git", QStringList() << "checkout" << "-b" << newExpName);
+      git.waitForFinished();
+
+      LogMsg("Creat name branch : <b>" + newExpName + "</b>");
+    }
+  }
+
+  CreateRawDataFolderAndLink(newExpName);
+
+  //----- create the expName.sh
+  QFile file2(analysisPath + "/expName.sh");
+  
+  file2.open(QIODevice::Text | QIODevice::WriteOnly);
+  file2.write(("expName = "+ newExpName + "\n").toStdString().c_str());
+  file2.write(("rawDataPath = "+ rawDataFolder + "\n").toStdString().c_str());
+  file2.write("runID = 0\n");
+  file2.write("elogID = 0\n");
+  file2.write("//------------end of file.");
+  file2.close();
+  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/expName.sh<b>.");
+
+
+  //----- create git branch
+  if( useGit ){
+    QProcess git;
+    git.setWorkingDirectory(analysisPath);
+    git.start("git", QStringList() << "add" << "-A");
+    git.waitForFinished();
+    
+    git.start("git", QStringList() << "commit" << "-m" << "initial commit.");
+    git.waitForFinished();
+
+    LogMsg("Commit branch : <b>" + newExpName + "</b> as \"initial commit\"");
+  }
+
+  expName = newExpName;
+  runID = 0;
+  elogID = 0;
+
+  leRawDataPath->setText(rawDataFolder);
+  leExpName->setText(expName);
+  leRunID->setText(QString::number(runID));
+
+  bnNewExp->setStyleSheet("");
+  bnOpenDigitizers->setEnabled(true);
+  bnOpenDigitizers->setStyleSheet("color:red;");
+
 }
 
-void MainWindow::ChangeExperiment(){
+void MainWindow::ChangeExperiment(const QString newExpName){
 
+  //@---- git must exist.
+
+  QProcess git;
+  git.setWorkingDirectory(analysisPath);
+  git.start("git", QStringList() << "checkout" << newExpName);
+  git.waitForFinished();
+
+  LogMsg("Swicted to branch : <b>" + newExpName + "</b>");
+
+  CreateRawDataFolderAndLink(newExpName);
+
+  OpenExpSettings();
+
+}
+
+void MainWindow::CreateRawDataFolderAndLink(const QString newExpName){
+
+  //----- create data folder
+  rawDataFolder = dataPath + "/" + newExpName;
+  QDir dir;
+  if( !dir.exists(rawDataFolder)){
+    if( dir.mkdir(rawDataFolder)){
+      LogMsg("<b>" + rawDataFolder + "</b> created." );
+    }else{
+      LogMsg("<b>" + rawDataFolder + "</b> cannot be created. Access right problem?" );
+    }
+  }else{
+      LogMsg("<b>" + rawDataFolder + "</b> already exist." );
+  }
+
+  //----- create symbloic link
+  QString linkName = analysisPath + "/data_raw";
+  QFile file;
+
+  if( file.exists(linkName)) {
+    file.remove(linkName);
+  }
+
+  if (file.link(rawDataFolder, linkName)) {
+      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " created.");
+  } else {
+      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created.");
+  }
 }
 
 //^###################################################################### log msg

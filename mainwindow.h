@@ -107,8 +107,9 @@ private slots:
 
     void SetupNewExp();
     bool OpenExpSettings();
-    void CreateNewExperiment();
-    void ChangeExperiment();
+    void CreateNewExperiment(const QString newExpName);
+    void ChangeExperiment(const QString newExpName);
+    void CreateRawDataFolderAndLink(const QString newExpName);
 
 signals :
 
@@ -126,6 +127,7 @@ private:
     QPushButton * bnStartACQ;
     QPushButton * bnStopACQ;
     QLineEdit   * leRunID;
+    QLineEdit   * leRawDataPath;
 
     DigiSettings * digiSetting;
 
@@ -163,7 +165,9 @@ private:
 
     //------------- experiment settings
     bool isGitExist;
+    bool useGit;
     QString expName;
+    QString rawDataFolder;
     unsigned int runID;
     unsigned int elogID;
 
