@@ -8,9 +8,9 @@
 #include <QDir>
 #include <QFile>
 #include <QProcess>
+#include <QRandomGenerator>
 
 #include <QChartView>
-#include <QLineSeries>
 #include <QValueAxis>
 
 #include <unistd.h>
@@ -30,7 +30,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   digiSetting = NULL;
   readDataThread = NULL;
 
-  plot = new QChart();
+  SetUpPlot();
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -183,7 +183,8 @@ MainWindow::~MainWindow(){
   //delete bnNewExp;
   //delete logInfo;
 
-  if( plot != NULL )delete plot;
+  delete dataTrace; /// dataTrace must be deleted before plot
+  delete plot;
 
   //---- need manually delete
   if( digiSetting != NULL ) delete digiSetting;
@@ -328,33 +329,38 @@ void MainWindow::OpenScope(){
   QGridLayout * layout = new QGridLayout(layoutWidget);
   layoutWidget->setLayout(layout);
 
-
-  plot->removeAllSeries();
-
-  QLineSeries * data = new QLineSeries(this);
-  data->setName("data");
-
-  //--------- add data
-  data->append(1, 2);
-  data->append(2, 2);
-  data->append(3, 5);
-  data->append(4, 2);
-
-  plot->addSeries(data);
-
-
-  plot->createDefaultAxes(); /// this must be after addSeries();
-  plot->axes(Qt::Vertical).first()->setRange(0, 10); /// this must be after createDefaultAxes();
-  plot->axes(Qt::Horizontal).first()->setRange(0, 5);
-
   QChartView * plotView = new QChartView(plot);
   plotView->setRenderHints(QPainter::Antialiasing);
   
   //scope->setCentralWidget(plotView);
-  layout->addWidget(plotView);
+  layout->addWidget(plotView, 0, 0);
 
+  QPushButton * bnUpdate = new QPushButton("Random", scope);
+  layout->addWidget(bnUpdate, 1, 0);
+  connect(bnUpdate, &QPushButton::clicked, this, &MainWindow::UpdateScope);
 
   scope->show();
+
+}
+
+void MainWindow::SetUpPlot(){
+  plot = new QChart();
+  dataTrace = new QLineSeries();
+  dataTrace->setName("data");
+  for(int i = 0; i < 100; i ++) dataTrace->append(i, QRandomGenerator::global()->bounded(10));
+  plot->addSeries(dataTrace);
+  plot->createDefaultAxes(); /// this must be after addSeries();
+  plot->axes(Qt::Vertical).first()->setRange(-1, 11); /// this must be after createDefaultAxes();
+  plot->axes(Qt::Horizontal).first()->setRange(-1, 101);
+}
+
+void MainWindow::UpdateScope(){
+
+  //int nDataPoint = dataTrace->count();
+  //dataTrace->removePoints(0, 4);
+  for( int i = 0 ; i < dataTrace->count(); i++){
+    dataTrace->replace(i, i, QRandomGenerator::global()->bounded(10));
+  }
 
 }
 

@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QMutex>
 #include <QChart>
+#include <QLineSeries>
 
 #include <vector>
 #include <time.h> // time in nano-sec
@@ -99,9 +100,10 @@ private slots:
   void CloseDigitizers();
   
   void OpenScope();
+  void SetUpPlot();
+  void UpdateScope();
 
   void OpenDigitizersSettings();
-
 
   void ProgramSettings();
   bool OpenProgramSettings();
@@ -131,6 +133,7 @@ private:
 
   QPushButton * bnOpenScope;
   QChart      * plot;
+  QLineSeries * dataTrace;
 
   QPushButton * bnStartACQ;
   QPushButton * bnStopACQ;
