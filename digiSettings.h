@@ -25,18 +25,18 @@ class DigiSettings : public QWidget{
   Q_OBJECT
 
 public:
-  DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget * parent = nullptr);
+  DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent = nullptr);
   ~DigiSettings();
 
 private slots:
 
-  void onReset(){ 
-    emit sendLogMsg("Reset Digitizer-" + QString::number(digi->GetSerialNumber()));
-    digi->Reset(); 
+  void onReset(int id){ 
+    emit sendLogMsg("Reset Digitizer-" + QString::number(digi[id]->GetSerialNumber()));
+    digi[id]->Reset(); 
   }
-  void onDefault(){ 
-    emit sendLogMsg("Program Digitizer-" + QString::number(digi->GetSerialNumber()) + " to default PHA.");
-    digi->ProgramPHA();
+  void onDefault(int id){ 
+    emit sendLogMsg("Program Digitizer-" + QString::number(digi[id]->GetSerialNumber()) + " to default PHA.");
+    digi[id]->ProgramPHA();
   }
   
   void onTriggerClick(int haha){
@@ -64,17 +64,17 @@ private slots:
     if( (haha & 0xFF) == 64){
 
       if( cbCh[iDig][64]->isChecked() ){
-        for( int i = 0 ; i < digi->GetNChannels() ; i++){
+        for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
           cbCh[iDig][i]->setChecked(true);
         }
       }else{
-        for( int i = 0 ; i < digi->GetNChannels() ; i++){
+        for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
           cbCh[iDig][i]->setChecked(false);
         }
       }
     }else{
       unsigned int nOn = 0;
-      for( int i = 0; i < digi->GetNChannels(); i++){
+      for( int i = 0; i < digi[iDig]->GetNChannels(); i++){
         nOn += (cbCh[iDig][i]->isChecked() ? 1 : 0);
       }
 
@@ -93,14 +93,13 @@ signals:
 
 private:
   
-  Digitizer2Gen * digi;
+  Digitizer2Gen ** digi;
   unsigned short nDigi;
 
   QPushButton *bn[MaxNumberOfChannel][MaxNumberOfChannel];
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
   QCheckBox * cbCh[MaxNumberOfDigitizer][MaxNumberOfChannel + 1]; // index = 64 is for all channels
-  //QCheckBox * cbCh[MaxNumberOfChannel + 1]; // index = 64 is for all channels
 
   QSpinBox  * sbRecordLength[MaxNumberOfChannel + 1];
   QSpinBox  * sbPreTrigger[MaxNumberOfChannel + 1];

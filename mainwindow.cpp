@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 //------ static memeber
-Digitizer2Gen * MainWindow::digi = NULL;
+Digitizer2Gen ** MainWindow::digi = NULL;
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
@@ -55,11 +55,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnOpenScope->setEnabled(false);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
-    connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(bnOpenDigitizers_clicked()));
+    connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(OpenDigitizers()));
 
     bnCloseDigitizers = new QPushButton("Close Digitizers", this);
     bnCloseDigitizers->setEnabled(false);
-    connect(bnCloseDigitizers, SIGNAL(clicked()), this, SLOT(bnCloseDigitizers_clicked()));
+    connect(bnCloseDigitizers, SIGNAL(clicked()), this, SLOT(CloseDigitizers()));
   
     bnDigiSettings = new QPushButton("Digitizers Settings", this);
     bnDigiSettings->setEnabled(false);
@@ -181,15 +181,21 @@ MainWindow::~MainWindow(){
   if( digiSetting != NULL ) delete digiSetting;
 
   if( digi != NULL ){
-    digi->CloseDigitizer();
-    delete digi;
+    for( int i = 0 ; i < nDigi; i++) {
+      digi[i]->CloseDigitizer();
+      delete digi[i];
+    }
+    delete [] digi;
   }
 
   if( readDataThread != NULL){
-    readDataThread->Stop();
-    readDataThread->quit();
-    readDataThread->wait();
-    delete readDataThread;
+    for( int i = 0; i < nDigi; i++){
+      readDataThread[i]->Stop();
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+      delete readDataThread[i];
+    }
+    delete [] readDataThread;
   }
 
 }
@@ -197,16 +203,19 @@ MainWindow::~MainWindow(){
 //^################################################################ ACQ control 
 void MainWindow::StartACQ(){
 
-  digi->Reset();
-  digi->ProgramPHA(false);
-  digi->SetPHADataFormat(1);// only save 1 trace
-  remove("haha_000.sol"); // remove file
-  digi->OpenOutFile("haha");// haha_000.sol
-  digi->StartACQ();
-
   LogMsg("Start Run....");
+  for( int i =0 ; i < nDigi; i ++){
+    digi[i]->Reset();
+    digi[i]->ProgramPHA(false);
+    digi[i]->SetPHADataFormat(1);// only save 1 trace
 
-  readDataThread->start();
+    //TODO :: save file 
+    remove("haha_000.sol"); // remove file
+    digi[i]->OpenOutFile("haha");// haha_000.sol
+    digi[i]->StartACQ();
+
+    readDataThread[i]->start();
+  }
 
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
@@ -216,80 +225,101 @@ void MainWindow::StartACQ(){
 
 void MainWindow::StopACQ(){
 
-  digi->StopACQ();
-  
-  //readDataThread->Stop();
+  for( int i = 0; i < nDigi; i++){
+    digi[i]->StopACQ();
+    
+    //readDataThread->Stop();
 
-  readDataThread->quit();
-  readDataThread->wait();
+    readDataThread[i]->quit();
+    readDataThread[i]->wait();
+    digi[i]->CloseOutFile();
 
-  digi->CloseOutFile();
-  
+  }
+
   LogMsg("Stop Run");
-
   bnStartACQ->setEnabled(true);
   bnStopACQ->setEnabled(false);
 
 }
 
+//^###################################################################### open and close digitizer
+void MainWindow::OpenDigitizers(){
 
-void MainWindow::bnOpenDigitizers_clicked(){
+  //------- decode IPList
+
+  nDigi = 1;
+
+
   LogMsg("Opening digitizer.....");
 
-  digi = new Digitizer2Gen();
+  digi = new Digitizer2Gen*[nDigi];
+  readDataThread = new ReadDataThread*[nDigi];
 
-  digi->OpenDigitizer("dig2://192.168.0.100/");
+  for( int i = 0; i < nDigi; i++){
 
-  if(digi->IsConnected()){
+    printf("=============================== %d/%d\n" , i, nDigi);
 
-    digiSerialNum.push_back(digi->GetSerialNumber());
-    nDigi ++;
+    digi[i] = new Digitizer2Gen();
+    digi[i]->OpenDigitizer("dig2://192.168.0.100/");
 
-    LogMsg("Opened digitizer : " + QString::number(digi->GetSerialNumber()));
-    bnOpenDigitizers->setEnabled(false);
-    bnOpenDigitizers->setStyleSheet("");
-    bnCloseDigitizers->setEnabled(true);
-    bnDigiSettings->setEnabled(true);
-    bnStartACQ->setEnabled(true);
-    bnStopACQ->setEnabled(false);
+    if(digi[i]->IsConnected()){
 
-    readDataThread = new ReadDataThread(digi, this);
-    connect(readDataThread, &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
+      digiSerialNum.push_back(digi[i]->GetSerialNumber());
 
-  }else{
-    LogMsg("Cannot open digitizer");
+      LogMsg("Opened digitizer : " + QString::number(digi[i]->GetSerialNumber()));
+      bnOpenDigitizers->setEnabled(false);
+      bnOpenDigitizers->setStyleSheet("");
+      bnCloseDigitizers->setEnabled(true);
+      bnDigiSettings->setEnabled(true);
+      bnStartACQ->setEnabled(true);
+      bnStopACQ->setEnabled(false);
 
-    //LogMsg("use a dummy.");
-    //digi->SetDummy();
-    //digiSerialNum.push_back(0000);
-    //nDigi ++;
+      readDataThread[i] = new ReadDataThread(digi[i], this);
+      connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
-    delete digi;
+    }else{
+      LogMsg("Cannot open digitizer");
 
+      //LogMsg("use a dummy.");
+      //digi->SetDummy();
+      //digiSerialNum.push_back(0000);
+      //nDigi ++;
+
+      delete digi;
+
+    }
   }
-
 }
 
-//^###################################################################### open and close digitizer
-void MainWindow::bnCloseDigitizers_clicked(){
-  if( digi != NULL ){
-    digi->CloseDigitizer();
-    delete digi;
-    digi = NULL;
-    LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
-    
-    nDigi = 0;
-    digiSerialNum.clear();
+void MainWindow::CloseDigitizers(){
+  
+  for( int i = 0; i < nDigi; i++){
+    if( digi[i] != NULL ){
+      digi[i]->CloseDigitizer();
+      delete digi[i];
+      LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
+      
+      nDigi = 0;
+      digiSerialNum.clear();
 
-    bnOpenDigitizers->setEnabled(true);
-    bnCloseDigitizers->setEnabled(false);
-    bnDigiSettings->setEnabled(false);
-    bnStartACQ->setEnabled(false);
-    bnStopACQ->setEnabled(false);
+      bnOpenDigitizers->setEnabled(true);
+      bnCloseDigitizers->setEnabled(false);
+      bnDigiSettings->setEnabled(false);
+      bnStartACQ->setEnabled(false);
+      bnStopACQ->setEnabled(false);
 
-    if( digiSetting != NULL )  digiSetting->close(); 
+      if( digiSetting != NULL )  digiSetting->close(); 
 
+      readDataThread[i]->Stop();
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+      delete readDataThread[i];
+    }
   }
+  delete [] digi;
+  delete [] readDataThread;
+  digi = NULL;
+  readDataThread = NULL;
 }
 
 void MainWindow::OpenDigitizersSettings(){
@@ -336,8 +366,8 @@ void MainWindow::ProgramSettings(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP Domain </font> is the frist 6 \
-                           digi of the digitizers IP. The program will search for all digitizers under this domain.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP List </font> is the list of IP \
+                           digi of the digitizers IP. e.g. 192.168.0.100,102  for 2 digitizers, or 192.168.0.100-102 for 3 digitizers.");
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
 
@@ -376,10 +406,10 @@ void MainWindow::ProgramSettings(){
 
   //-------- IP Domain
   rowID ++;
-  QLabel *lbIPDomain = new QLabel("Digitizers IP Domain", &dialog); 
+  QLabel *lbIPDomain = new QLabel("Digitizers IP List", &dialog); 
   lbIPDomain->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbIPDomain, rowID, 0);
-  lIPDomain = new QLineEdit("192.168.0", &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
+  lIPDomain = new QLineEdit("192.168.0.100", &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
   //-------- DataBase IP
   rowID ++;
   QLabel *lbDatbaseIP = new QLabel("Database IP", &dialog); 
@@ -459,7 +489,7 @@ bool MainWindow::OpenProgramSettings(){
         case 0 : settingFilePath = line; break;
         case 1 : analysisPath    = line; break;
         case 2 : dataPath        = line; break;
-        case 3 : IPDomain        = line; break;
+        case 3 : IPList        = line; break;
         case 4 : DatabaseIP      = line; break;
         case 5 : DatabaseName    = line; break;
         case 6 : ElogIP          = line; break;
@@ -474,7 +504,7 @@ bool MainWindow::OpenProgramSettings(){
       LogMsg("Setting File Path : " + settingFilePath);
       LogMsg("    Analysis Path : " + analysisPath);
       LogMsg("        Data Path : " + dataPath);
-      LogMsg("  Digi. IP Domain : " + IPDomain);
+      LogMsg("  Digi. IP Domain : " + IPList);
       LogMsg("      Database IP : " + DatabaseIP);
       LogMsg("    Database Name : " + DatabaseName);
       LogMsg("           ElogIP : " + ElogIP);
@@ -503,7 +533,7 @@ bool MainWindow::OpenProgramSettings(){
 
 void MainWindow::SaveProgramSettings(){
 
-  IPDomain = lIPDomain->text();
+  IPList = lIPDomain->text();
   DatabaseIP = lDatbaseIP->text();
   DatabaseName = lDatbaseName->text();
   ElogIP = lElogIP->text();
@@ -519,7 +549,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((settingFilePath+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
   file.write((dataPath+"\n").toStdString().c_str());
-  file.write((IPDomain+"\n").toStdString().c_str());
+  file.write((IPList+"\n").toStdString().c_str());
   file.write((DatabaseIP+"\n").toStdString().c_str());
   file.write((DatabaseName+"\n").toStdString().c_str());
   file.write((ElogIP+"\n").toStdString().c_str());

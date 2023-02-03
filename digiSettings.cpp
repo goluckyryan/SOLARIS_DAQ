@@ -2,7 +2,7 @@
 
 #include <QLabel>
 
-DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
+DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
 
   qDebug() << "DigiSettings constructor";
 
@@ -39,7 +39,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
     scrollArea->setWidgetResizable(true);
     scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
-    tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi->GetSerialNumber()));
+    tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi[iDigi]->GetSerialNumber()));
     
     QGridLayout *tabLayout = new QGridLayout(tab); tab->setLayout(tabLayout);
 
@@ -54,7 +54,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
         lab->setAlignment(Qt::AlignRight);
         QLineEdit * txt = new QLineEdit(tab);
         txt->setReadOnly(true);
-        txt->setText(QString::fromStdString(digi->ReadValue(info[j][1].c_str())));
+        txt->setText(QString::fromStdString(digi[iDigi]->ReadValue(info[j][1].c_str())));
         infoLayout->addWidget(lab, j%nRow, 2*(j/nRow));
         infoLayout->addWidget(txt, j%nRow, 2*(j/nRow) +1);
       }
@@ -301,7 +301,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
         allLayout->setHorizontalSpacing(0);
         allLayout->setVerticalSpacing(0);
 
-        unsigned short ch = digi->GetNChannels();
+        unsigned short ch = digi[iDigi]->GetNChannels();
 
         cbCh[iDigi][ch] = new QCheckBox("On/Off", tab); allLayout->addWidget(cbCh[iDigi][ch], 0, 0);
         onOffMapper->setMapping(cbCh[iDigi][ch], (iDigi << 12) + ch);
@@ -327,7 +327,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
         allLayout->setVerticalSpacing(0);
 
         
-        for( int ch = 0; ch < digi->GetNChannels(); ch++){
+        for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
           cbCh[iDigi][ch] = new QCheckBox(QString::number(ch)); allLayout->addWidget(cbCh[iDigi][ch], ch/8, ch%8);
           cbCh[iDigi][ch]->setLayoutDirection(Qt::RightToLeft);
 
@@ -605,9 +605,9 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
       int rowID = 1;
       int colID = 0;
-      for(int i = 0; i < digi->GetNChannels(); i++){
+      for(int i = 0; i < digi[iDigi]->GetNChannels(); i++){
         colID = 0;
-        for(int j = 0; j < digi->GetNChannels(); j++){
+        for(int j = 0; j < digi[iDigi]->GetNChannels(); j++){
           
           bn[i][j] = new QPushButton(tab);
           bn[i][j]->setFixedSize(QSize(10,10));
@@ -624,7 +624,7 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
           colID ++;
 
-          if( j%4 == 3 && j!= digi->GetNChannels() - 1){
+          if( j%4 == 3 && j!= digi[iDigi]->GetNChannels() - 1){
             QFrame * vSeparator = new QFrame(tab);
             vSeparator->setFrameShape(QFrame::VLine);
             triggerLayout->addWidget(vSeparator, rowID, colID);
@@ -634,10 +634,10 @@ DigiSettings::DigiSettings(Digitizer2Gen * digi, unsigned short nDigi, QWidget *
 
         rowID++;
 
-        if( i%4 == 3 && i != digi->GetNChannels() - 1){
+        if( i%4 == 3 && i != digi[iDigi]->GetNChannels() - 1){
           QFrame * hSeparator = new QFrame(tab);
           hSeparator->setFrameShape(QFrame::HLine);
-          triggerLayout->addWidget(hSeparator, rowID, 0, 1, digi->GetNChannels() + 15);
+          triggerLayout->addWidget(hSeparator, rowID, 0, 1, digi[iDigi]->GetNChannels() + 15);
           rowID++;
         }
 

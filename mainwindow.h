@@ -94,8 +94,8 @@ public:
     
 private slots:
 
-    void bnOpenDigitizers_clicked();
-    void bnCloseDigitizers_clicked();
+    void OpenDigitizers();
+    void CloseDigitizers();
 
     void OpenDigitizersSettings();
 
@@ -133,14 +133,14 @@ private:
 
     QPlainTextEdit * logInfo;
 
-    static Digitizer2Gen * digi; 
+    static Digitizer2Gen ** digi; 
     unsigned short nDigi;
     std::vector<unsigned short> digiSerialNum;
 
     void StartACQ();
     void StopACQ();
 
-    ReadDataThread * readDataThread;   
+    ReadDataThread ** readDataThread;   
 
     void LogMsg(QString msg);
     bool logMsgHTMLMode = true;
@@ -158,7 +158,7 @@ private:
     QString settingFilePath;
     QString analysisPath;
     QString dataPath;
-    QString IPDomain;
+    QString IPList;
     QString DatabaseIP;
     QString DatabaseName;
     QString ElogIP;
