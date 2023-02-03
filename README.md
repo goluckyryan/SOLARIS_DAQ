@@ -6,7 +6,7 @@ CAEN_DIG2_v1.5.3
 
 CAEN_FELIB_v1.2.2
 
-`sudo apt install qt6-base-dev libcurl4-openssl-dev`
+`sudo apt install qt6-base-dev libcurl4-openssl-dev libqt6charts6-dev`
 
 Digitizer firmware V2745-dpp-pha-2022092903.cup
 

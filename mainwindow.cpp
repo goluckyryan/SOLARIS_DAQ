@@ -8,7 +8,10 @@
 #include <QDir>
 #include <QFile>
 #include <QProcess>
-#include <QRegularExpression>
+
+#include <QChartView>
+#include <QLineSeries>
+#include <QValueAxis>
 
 #include <unistd.h>
 
@@ -26,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   digiSerialNum.clear();
   digiSetting = NULL;
   readDataThread = NULL;
+
+  plot = new QChart();
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -52,8 +57,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leExpName->setAlignment(Qt::AlignHCenter);
     leExpName->setReadOnly(true);
 
-    QPushButton * bnOpenScope = new QPushButton("Open scope", this);
+    bnOpenScope = new QPushButton("Open scope", this);
     bnOpenScope->setEnabled(false);
+    connect(bnOpenScope, &QPushButton::clicked, this, &MainWindow::OpenScope);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
     connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(OpenDigitizers()));
@@ -66,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnDigiSettings->setEnabled(false);
     connect(bnDigiSettings, SIGNAL(clicked()), this, SLOT(OpenDigitizersSettings()));
 
-    QPushButton * bnSOLSettings = new QPushButton("SOLARIS Settings", this);
+    bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
 
     layout1->addWidget(bnProgramSettings, 0, 0);
@@ -163,8 +169,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   if( OpenProgramSettings() )  OpenExpSettings();
 
-  //bnOpenDigitizers_clicked();
-  //OpenDigitizersSettings();
+  bnOpenScope->setEnabled(true);
 
 }
 
@@ -177,6 +182,8 @@ MainWindow::~MainWindow(){
   //delete bnDigiSettings;
   //delete bnNewExp;
   //delete logInfo;
+
+  if( plot != NULL )delete plot;
 
   //---- need manually delete
   if( digiSetting != NULL ) delete digiSetting;
@@ -233,7 +240,7 @@ void MainWindow::StopACQ(){
 //^###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
-  LogMsg("Opening " + QString::number(nDigi) + " Digitizers.....");
+  LogMsg("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
 
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
@@ -252,6 +259,7 @@ void MainWindow::OpenDigitizers(){
       LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
       bnStartACQ->setEnabled(true);
       bnStopACQ->setEnabled(false);
+      bnOpenScope->setEnabled(true);
 
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
@@ -272,6 +280,8 @@ void MainWindow::OpenDigitizers(){
 }
 
 void MainWindow::CloseDigitizers(){
+
+  if( digi == NULL) return;
   
   for( int i = 0; i < nDigi; i++){
     digi[i]->CloseDigitizer();
@@ -306,6 +316,49 @@ void MainWindow::CloseDigitizers(){
   bnOpenDigitizers->setFocus();
 }
 
+//^###################################################################### Open Scope
+void MainWindow::OpenScope(){
+
+  QMainWindow * scope = new QMainWindow(this);
+  scope->setWindowTitle("Scope");
+  scope->setGeometry(0, 0, 1000, 800);  
+
+  QWidget * layoutWidget = new QWidget(scope);
+  scope->setCentralWidget(layoutWidget);
+  QGridLayout * layout = new QGridLayout(layoutWidget);
+  layoutWidget->setLayout(layout);
+
+
+  plot->removeAllSeries();
+
+  QLineSeries * data = new QLineSeries(this);
+  data->setName("data");
+
+  //--------- add data
+  data->append(1, 2);
+  data->append(2, 2);
+  data->append(3, 5);
+  data->append(4, 2);
+
+  plot->addSeries(data);
+
+
+  plot->createDefaultAxes(); /// this must be after addSeries();
+  plot->axes(Qt::Vertical).first()->setRange(0, 10); /// this must be after createDefaultAxes();
+  plot->axes(Qt::Horizontal).first()->setRange(0, 5);
+
+  QChartView * plotView = new QChartView(plot);
+  plotView->setRenderHints(QPainter::Antialiasing);
+  
+  //scope->setCentralWidget(plotView);
+  layout->addWidget(plotView);
+
+
+  scope->show();
+
+}
+
+//^###################################################################### Open digitizer setting panel
 void MainWindow::OpenDigitizersSettings(){
   LogMsg("Open digitizers Settings Panel");
 

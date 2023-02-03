@@ -1,7 +1,8 @@
 {
   "files.associations": {
     "script.C": "cpp",
-    "SOLARIS_Qt6_DAQ.pro" :  "makefile"
+    "SOLARIS_Qt6_DAQ.pro": "makefile",
+    "qlineseries": "cpp"
   },
 
   "better-comments.multilineComments": true,

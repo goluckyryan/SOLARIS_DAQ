@@ -6,7 +6,7 @@ TEMPLATE = app
 TARGET = SOLARIS_DAQ
 INCLUDEPATH += .
 
-QT += widgets
+QT += widgets charts
 
 LIBS += -lcurl -lCAEN_FELib
 

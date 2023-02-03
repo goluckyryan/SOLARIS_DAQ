@@ -11,6 +11,7 @@
 #include <QScrollBar>
 #include <QPushButton>
 #include <QMutex>
+#include <QChart>
 
 #include <vector>
 #include <time.h> // time in nano-sec
@@ -85,92 +86,99 @@ private:
 //=================================================
 
 class MainWindow : public QMainWindow{
-    Q_OBJECT
+  Q_OBJECT
 
 public:
-    MainWindow(QWidget *parent = nullptr);
-    ~MainWindow();
+  MainWindow(QWidget *parent = nullptr);
+  ~MainWindow();
 
     
 private slots:
 
-    void OpenDigitizers();
-    void CloseDigitizers();
+  void OpenDigitizers();
+  void CloseDigitizers();
+  
+  void OpenScope();
 
-    void OpenDigitizersSettings();
+  void OpenDigitizersSettings();
 
 
-    void ProgramSettings();
-    bool OpenProgramSettings();
-    void SaveProgramSettings();
-    void OpenDirectory(int id);
+  void ProgramSettings();
+  bool OpenProgramSettings();
+  void SaveProgramSettings();
+  void OpenDirectory(int id);
 
-    void SetupNewExp();
-    bool OpenExpSettings();
-    void CreateNewExperiment(const QString newExpName);
-    void ChangeExperiment(const QString newExpName);
-    void CreateRawDataFolderAndLink(const QString newExpName);
+  void SetupNewExp();
+  bool OpenExpSettings();
+  void CreateNewExperiment(const QString newExpName);
+  void ChangeExperiment(const QString newExpName);
+  void CreateRawDataFolderAndLink(const QString newExpName);
 
 signals :
 
 
 private:
     
-    QPushButton * bnProgramSettings;
-    QPushButton * bnNewExp;
-    QLineEdit   * leExpName;
+  QPushButton * bnProgramSettings;
+  QPushButton * bnNewExp;
+  QLineEdit   * leExpName;
 
-    QPushButton * bnOpenDigitizers;
-    QPushButton * bnCloseDigitizers;
-    QPushButton * bnDigiSettings;
+  QPushButton * bnOpenDigitizers;
+  QPushButton * bnCloseDigitizers;
+  
+  QPushButton * bnDigiSettings;
+  QPushButton * bnSOLSettings;
 
-    QPushButton * bnStartACQ;
-    QPushButton * bnStopACQ;
-    QLineEdit   * leRunID;
-    QLineEdit   * leRawDataPath;
+  QPushButton * bnOpenScope;
+  QChart      * plot;
 
-    DigiSettings * digiSetting;
+  QPushButton * bnStartACQ;
+  QPushButton * bnStopACQ;
+  QLineEdit   * leRunID;
+  QLineEdit   * leRawDataPath;
 
-    QPlainTextEdit * logInfo;
+  DigiSettings * digiSetting;
 
-    static Digitizer2Gen ** digi; 
-    unsigned short nDigi;
-    std::vector<unsigned short> digiSerialNum;
+  QPlainTextEdit * logInfo;
 
-    void StartACQ();
-    void StopACQ();
+  static Digitizer2Gen ** digi; 
+  unsigned short nDigi;
+  std::vector<unsigned short> digiSerialNum;
 
-    ReadDataThread ** readDataThread;   
+  void StartACQ();
+  void StopACQ();
 
-    void LogMsg(QString msg);
-    bool logMsgHTMLMode = true;
+  ReadDataThread ** readDataThread;   
 
-    //---------------- Program settings
-    QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
-    QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
-    QLineEdit * lDataPath; // only live in ProgramSettigns()
+  void LogMsg(QString msg);
+  bool logMsgHTMLMode = true;
 
-    QLineEdit * lIPDomain;
-    QLineEdit * lDatbaseIP;
-    QLineEdit * lDatbaseName;
-    QLineEdit * lElogIP;
+  //---------------- Program settings
+  QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
+  QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
+  QLineEdit * lDataPath; // only live in ProgramSettigns()
 
-    QString settingFilePath;
-    QString analysisPath;
-    QString dataPath;
-    QString IPListStr;
-    QStringList IPList;
-    QString DatabaseIP;
-    QString DatabaseName;
-    QString ElogIP;
+  QLineEdit * lIPDomain;
+  QLineEdit * lDatbaseIP;
+  QLineEdit * lDatbaseName;
+  QLineEdit * lElogIP;
 
-    //------------- experiment settings
-    bool isGitExist;
-    bool useGit;
-    QString expName;
-    QString rawDataFolder;
-    unsigned int runID;
-    unsigned int elogID;
+  QString settingFilePath;
+  QString analysisPath;
+  QString dataPath;
+  QString IPListStr;
+  QStringList IPList;
+  QString DatabaseIP;
+  QString DatabaseName;
+  QString ElogIP;
+
+  //------------- experiment settings
+  bool isGitExist;
+  bool useGit;
+  QString expName;
+  QString rawDataFolder;
+  unsigned int runID;
+  unsigned int elogID;
 
 };
 
