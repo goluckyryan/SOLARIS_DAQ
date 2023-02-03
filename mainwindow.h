@@ -158,7 +158,8 @@ private:
     QString settingFilePath;
     QString analysisPath;
     QString dataPath;
-    QString IPList;
+    QString IPListStr;
+    QStringList IPList;
     QString DatabaseIP;
     QString DatabaseName;
     QString ElogIP;

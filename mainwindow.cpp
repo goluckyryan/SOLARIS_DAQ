@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QProcess>
+#include <QRegularExpression>
 
 #include <unistd.h>
 
@@ -194,11 +195,12 @@ void MainWindow::StartACQ(){
     digi[i]->ProgramPHA(false);
     digi[i]->SetPHADataFormat(1);// only save 1 trace
 
-    //TODO :: save file 
+    //TODO =========================== save file 
     remove("haha_000.sol"); // remove file
     digi[i]->OpenOutFile("haha");// haha_000.sol
     digi[i]->StartACQ();
 
+    //TODO ========================== Sync start.
     readDataThread[i]->start();
   }
 
@@ -231,21 +233,17 @@ void MainWindow::StopACQ(){
 //^###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
-  //------- decode IPList
-  //TODO --------
-  nDigi = 1;
-
-  LogMsg("Opening digitizers.....");
+  LogMsg("Opening " + QString::number(nDigi) + " Digitizers.....");
 
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
 
   for( int i = 0; i < nDigi; i++){
 
-    printf("=============================== %d/%d\n" , i, nDigi);
+    LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
 
     digi[i] = new Digitizer2Gen();
-    digi[i]->OpenDigitizer("dig2://192.168.0.100/");
+    digi[i]->OpenDigitizer(("dig2://" + IPList[i]).toStdString().c_str());
 
     if(digi[i]->IsConnected()){
 
@@ -259,7 +257,7 @@ void MainWindow::OpenDigitizers(){
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
     }else{
-      LogMsg("Cannot open digitizer. Use a dummy. with serial number " + QString::number(i));
+      LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i));
       digi[i]->SetDummy();
       digiSerialNum.push_back(i);
 
@@ -353,7 +351,7 @@ void MainWindow::ProgramSettings(){
   helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP List </font> is the list of IP \
-                           digi of the digitizers IP. e.g. 192.168.0.100,102  for 2 digitizers, or 192.168.0.100-102 for 3 digitizers.");
+                           digi of the digitizers IP. Break by \",\", continue by \"-\". e.g. 192.168.0.100,102  for 2 digitizers, or 192.168.0.100-102 for 3 digitizers.");
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
 
@@ -365,7 +363,7 @@ void MainWindow::ProgramSettings(){
   QLabel *lbSaveSettingPath = new QLabel("Settings Save Path", &dialog);
   lbSaveSettingPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbSaveSettingPath, rowID, 0);
-  lSaveSettingPath = new QLineEdit(QDir::current().absolutePath(), &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
+  lSaveSettingPath = new QLineEdit(settingFilePath, &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
 
   QPushButton * bnSaveSettingPath = new QPushButton("browser", &dialog); layout->addWidget(bnSaveSettingPath, rowID, 3);
   connect(bnSaveSettingPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(0);});
@@ -375,7 +373,7 @@ void MainWindow::ProgramSettings(){
   QLabel *lbAnalysisPath = new QLabel("Analysis Path", &dialog);
   lbAnalysisPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbAnalysisPath, rowID, 0);
-  lAnalysisPath = new QLineEdit(QDir::home().absolutePath() + "/analysis", &dialog); layout->addWidget(lAnalysisPath, rowID, 1, 1, 2);
+  lAnalysisPath = new QLineEdit(analysisPath, &dialog); layout->addWidget(lAnalysisPath, rowID, 1, 1, 2);
 
   QPushButton * bnAnalysisPath = new QPushButton("browser", &dialog); layout->addWidget(bnAnalysisPath, rowID, 3);
   connect(bnAnalysisPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(1);});
@@ -385,7 +383,7 @@ void MainWindow::ProgramSettings(){
   QLabel *lbDataPath = new QLabel("Data Path", &dialog); 
   lbDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDataPath, rowID, 0);
-  lDataPath = new QLineEdit("/mnt/data1", &dialog); layout->addWidget(lDataPath, rowID, 1, 1, 2);
+  lDataPath = new QLineEdit(dataPath, &dialog); layout->addWidget(lDataPath, rowID, 1, 1, 2);
 
   QPushButton * bnDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnDataPath, rowID, 3);
   connect(bnDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(2);});
@@ -395,25 +393,25 @@ void MainWindow::ProgramSettings(){
   QLabel *lbIPDomain = new QLabel("Digitizers IP List", &dialog); 
   lbIPDomain->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbIPDomain, rowID, 0);
-  lIPDomain = new QLineEdit("192.168.0.100", &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
+  lIPDomain = new QLineEdit(IPListStr, &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
   //-------- DataBase IP
   rowID ++;
   QLabel *lbDatbaseIP = new QLabel("Database IP", &dialog); 
   lbDatbaseIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDatbaseIP, rowID, 0);
-  lDatbaseIP = new QLineEdit("https://localhost:8086", &dialog); layout->addWidget(lDatbaseIP, rowID, 1, 1, 2);
+  lDatbaseIP = new QLineEdit(DatabaseIP, &dialog); layout->addWidget(lDatbaseIP, rowID, 1, 1, 2);
   //-------- DataBase name
   rowID ++;
   QLabel *lbDatbaseName = new QLabel("Database Name", &dialog);
   lbDatbaseName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDatbaseName, rowID, 0);
-  lDatbaseName = new QLineEdit("SOLARIS", &dialog); layout->addWidget(lDatbaseName, rowID, 1, 1, 2);
+  lDatbaseName = new QLineEdit(DatabaseName, &dialog); layout->addWidget(lDatbaseName, rowID, 1, 1, 2);
   //-------- Elog IP
   rowID ++;
   QLabel *lbElogIP = new QLabel("Elog IP", &dialog);
   lbElogIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbElogIP, rowID, 0);
-  lElogIP = new QLineEdit("https://localhost:8080", &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
+  lElogIP = new QLineEdit(ElogIP, &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
 
   rowID ++;
   QPushButton *button1 = new QPushButton("OK and Save", &dialog);
@@ -475,7 +473,7 @@ bool MainWindow::OpenProgramSettings(){
         case 0 : settingFilePath = line; break;
         case 1 : analysisPath    = line; break;
         case 2 : dataPath        = line; break;
-        case 3 : IPList        = line; break;
+        case 3 : IPListStr          = line; break;
         case 4 : DatabaseIP      = line; break;
         case 5 : DatabaseName    = line; break;
         case 6 : ElogIP          = line; break;
@@ -490,7 +488,7 @@ bool MainWindow::OpenProgramSettings(){
       LogMsg("Setting File Path : " + settingFilePath);
       LogMsg("    Analysis Path : " + analysisPath);
       LogMsg("        Data Path : " + dataPath);
-      LogMsg("  Digi. IP Domain : " + IPList);
+      LogMsg("    Digi. IP List : " + IPListStr);
       LogMsg("      Database IP : " + DatabaseIP);
       LogMsg("    Database Name : " + DatabaseName);
       LogMsg("           ElogIP : " + ElogIP);
@@ -503,10 +501,28 @@ bool MainWindow::OpenProgramSettings(){
     }
   }
 
-  if( ret ){
-    return true;
 
-    OpenProgramSettings();
+  if( ret ){
+
+    //------- decode IPListStr
+    nDigi = 0;
+    QStringList parts = IPListStr.split(".");
+    QString IPDomain = parts[0] + "." + parts[1] + "." + parts[2] + ".";
+    parts = parts[3].split(",");
+    for(int i = 0; i < parts.size(); i++){
+      if( parts[i].indexOf("-") != -1){
+          QStringList haha = parts[i].split("-");
+          for( int j = haha[0].toInt();  j <= haha.last().toInt(); j++){
+            IPList << IPDomain + QString::number(j);
+          }
+      }else{
+        IPList << IPDomain + parts[i];
+      }
+    }
+
+    nDigi = IPList.size();
+
+    return true;
 
   }else{
 
@@ -519,7 +535,7 @@ bool MainWindow::OpenProgramSettings(){
 
 void MainWindow::SaveProgramSettings(){
 
-  IPList = lIPDomain->text();
+  IPListStr = lIPDomain->text();
   DatabaseIP = lDatbaseIP->text();
   DatabaseName = lDatbaseName->text();
   ElogIP = lElogIP->text();
@@ -535,7 +551,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((settingFilePath+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
   file.write((dataPath+"\n").toStdString().c_str());
-  file.write((IPList+"\n").toStdString().c_str());
+  file.write((IPListStr+"\n").toStdString().c_str());
   file.write((DatabaseIP+"\n").toStdString().c_str());
   file.write((DatabaseName+"\n").toStdString().c_str());
   file.write((ElogIP+"\n").toStdString().c_str());
