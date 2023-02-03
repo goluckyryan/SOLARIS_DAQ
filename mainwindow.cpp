@@ -180,23 +180,7 @@ MainWindow::~MainWindow(){
   //---- need manually delete
   if( digiSetting != NULL ) delete digiSetting;
 
-  if( digi != NULL ){
-    for( int i = 0 ; i < nDigi; i++) {
-      digi[i]->CloseDigitizer();
-      delete digi[i];
-    }
-    delete [] digi;
-  }
-
-  if( readDataThread != NULL){
-    for( int i = 0; i < nDigi; i++){
-      readDataThread[i]->Stop();
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-      delete readDataThread[i];
-    }
-    delete [] readDataThread;
-  }
+  CloseDigitizers();
 
 }
 
@@ -205,6 +189,7 @@ void MainWindow::StartACQ(){
 
   LogMsg("Start Run....");
   for( int i =0 ; i < nDigi; i ++){
+    if( digi[i]->IsDummy () ) continue;
     digi[i]->Reset();
     digi[i]->ProgramPHA(false);
     digi[i]->SetPHADataFormat(1);// only save 1 trace
@@ -226,6 +211,7 @@ void MainWindow::StartACQ(){
 void MainWindow::StopACQ(){
 
   for( int i = 0; i < nDigi; i++){
+    if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
     
     //readDataThread->Stop();
@@ -246,11 +232,10 @@ void MainWindow::StopACQ(){
 void MainWindow::OpenDigitizers(){
 
   //------- decode IPList
-
+  //TODO --------
   nDigi = 1;
 
-
-  LogMsg("Opening digitizer.....");
+  LogMsg("Opening digitizers.....");
 
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
@@ -266,11 +251,7 @@ void MainWindow::OpenDigitizers(){
 
       digiSerialNum.push_back(digi[i]->GetSerialNumber());
 
-      LogMsg("Opened digitizer : " + QString::number(digi[i]->GetSerialNumber()));
-      bnOpenDigitizers->setEnabled(false);
-      bnOpenDigitizers->setStyleSheet("");
-      bnCloseDigitizers->setEnabled(true);
-      bnDigiSettings->setEnabled(true);
+      LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
       bnStartACQ->setEnabled(true);
       bnStopACQ->setEnabled(false);
 
@@ -278,38 +259,40 @@ void MainWindow::OpenDigitizers(){
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
     }else{
-      LogMsg("Cannot open digitizer");
+      LogMsg("Cannot open digitizer. Use a dummy. with serial number " + QString::number(i));
+      digi[i]->SetDummy();
+      digiSerialNum.push_back(i);
 
-      //LogMsg("use a dummy.");
-      //digi->SetDummy();
-      //digiSerialNum.push_back(0000);
-      //nDigi ++;
-
-      delete digi;
-
+      readDataThread[i] = NULL;
     }
   }
+
+  bnDigiSettings->setEnabled(true);
+  bnCloseDigitizers->setEnabled(true);
+  bnOpenDigitizers->setEnabled(false);
+  bnOpenDigitizers->setStyleSheet("");
 }
 
 void MainWindow::CloseDigitizers(){
   
   for( int i = 0; i < nDigi; i++){
-    if( digi[i] != NULL ){
-      digi[i]->CloseDigitizer();
-      delete digi[i];
-      LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
-      
-      nDigi = 0;
-      digiSerialNum.clear();
+    digi[i]->CloseDigitizer();
 
-      bnOpenDigitizers->setEnabled(true);
-      bnCloseDigitizers->setEnabled(false);
-      bnDigiSettings->setEnabled(false);
-      bnStartACQ->setEnabled(false);
-      bnStopACQ->setEnabled(false);
+    delete digi[i];
 
-      if( digiSetting != NULL )  digiSetting->close(); 
+    LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
+    
+    digiSerialNum.clear();
 
+    bnOpenDigitizers->setEnabled(true);
+    bnCloseDigitizers->setEnabled(false);
+    bnDigiSettings->setEnabled(false);
+    bnStartACQ->setEnabled(false);
+    bnStopACQ->setEnabled(false);
+
+    if( digiSetting != NULL )  digiSetting->close(); 
+
+    if( readDataThread[i] != NULL ){
       readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
@@ -320,6 +303,9 @@ void MainWindow::CloseDigitizers(){
   delete [] readDataThread;
   digi = NULL;
   readDataThread = NULL;
+  nDigi = 0;
+
+  bnOpenDigitizers->setFocus();
 }
 
 void MainWindow::OpenDigitizersSettings(){
