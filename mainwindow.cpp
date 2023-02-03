@@ -183,6 +183,11 @@ MainWindow::~MainWindow(){
   //delete bnNewExp;
   //delete logInfo;
 
+  updateTraceThread->Stop();
+  updateTraceThread->quit();
+  updateTraceThread->wait();
+  delete updateTraceThread;
+
   delete dataTrace; /// dataTrace must be deleted before plot
   delete plot;
 
@@ -215,10 +220,16 @@ void MainWindow::StartACQ(){
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
 
+  updateTraceThread->start();
+
   LogMsg("end of " + QString::fromStdString(__func__));
 }
 
 void MainWindow::StopACQ(){
+
+  updateTraceThread->Stop();
+  updateTraceThread->quit();
+  updateTraceThread->wait();
 
   for( int i = 0; i < nDigi; i++){
     if( digi[i]->IsDummy () ) continue;
@@ -302,7 +313,6 @@ void MainWindow::CloseDigitizers(){
     if( digiSetting != NULL )  digiSetting->close(); 
 
     if( readDataThread[i] != NULL ){
-      readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
       delete readDataThread[i];
@@ -319,10 +329,6 @@ void MainWindow::CloseDigitizers(){
 
 //^###################################################################### Open Scope
 void MainWindow::OpenScope(){
-
-  QMainWindow * scope = new QMainWindow(this);
-  scope->setWindowTitle("Scope");
-  scope->setGeometry(0, 0, 1000, 800);  
 
   QWidget * layoutWidget = new QWidget(scope);
   scope->setCentralWidget(layoutWidget);
@@ -343,7 +349,11 @@ void MainWindow::OpenScope(){
 
 }
 
-void MainWindow::SetUpPlot(){
+void MainWindow::SetUpPlot(){ //@--- this function run at start up
+  scope = new QMainWindow(this);
+  scope->setWindowTitle("Scope");
+  scope->setGeometry(0, 0, 1000, 800);  
+
   plot = new QChart();
   dataTrace = new QLineSeries();
   dataTrace->setName("data");
@@ -352,12 +362,16 @@ void MainWindow::SetUpPlot(){
   plot->createDefaultAxes(); /// this must be after addSeries();
   plot->axes(Qt::Vertical).first()->setRange(-1, 11); /// this must be after createDefaultAxes();
   plot->axes(Qt::Horizontal).first()->setRange(-1, 101);
+
+  updateTraceThread = new UpdateTraceThread();
+  connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &MainWindow::UpdateScope);
+
 }
 
 void MainWindow::UpdateScope(){
 
-  //int nDataPoint = dataTrace->count();
-  //dataTrace->removePoints(0, 4);
+  if( scope->isVisible() == false) return;
+
   for( int i = 0 ; i < dataTrace->count(); i++){
     dataTrace->replace(i, i, QRandomGenerator::global()->bounded(10));
   }

@@ -24,27 +24,15 @@
 
 static QMutex digiMTX;
 
-class ReadDataThread : public QThread{
+//^#===================================================== ReadData Thread
+class ReadDataThread : public QThread {
   Q_OBJECT
-
 public:
   ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
-    stop = false;
     this->digi = dig;
-    readCount = 0;
   }
-
-  void Stop() {stop = true;}
-
   void run(){
     clock_gettime(CLOCK_REALTIME, &ta);
-    readCount = 0;
-
-    //for( int i = 0; i < 10; i ++){
-    //  emit sendMsg(QString::number(i));
-    //  if( stop ) break;
-    //}
-
     while(true){
       digiMTX.lock();
       int ret = digi->ReadData();
@@ -60,32 +48,52 @@ public:
       }
 
       clock_gettime(CLOCK_REALTIME, &tb);
-      //if( readCount % 1000 == 0 ) {
       if( tb.tv_sec - ta.tv_sec > 2 ) {
         emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
+        
         //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
         //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
         ta = tb;
       }
-      readCount++;
-
     }
-
   }
-
 signals:
   void sendMsg(const QString &msg);
+private:
+  Digitizer2Gen * digi; 
+  timespec ta, tb;
+};
+
+//^#===================================================== UpdateTrace Thread
+class UpdateTraceThread : public QThread {
+  Q_OBJECT
+public:
+  UpdateTraceThread(QObject * parent = 0) : QThread(parent){
+    waitTime = 5;
+    stop = false;
+  }
+  void Stop() {this->stop = true;}
+  void run(){
+    unsigned int count = 0;
+    stop = false;
+    do{
+      usleep(100000);
+      count ++;
+      if( count % waitTime == 0){
+        emit updateTrace();
+      }
+    }while(!stop);
+  }
+signals:
+  void updateTrace();
 
 private:
   bool stop;
-  Digitizer2Gen * digi; 
-  timespec ta, tb;
-  unsigned int readCount;
-
+  unsigned int waitTime; //100 of milisec
 };
 
-//=================================================
 
+//^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
   Q_OBJECT
 
@@ -118,7 +126,6 @@ private slots:
 
 signals :
 
-
 private:
     
   QPushButton * bnProgramSettings;
@@ -131,9 +138,11 @@ private:
   QPushButton * bnDigiSettings;
   QPushButton * bnSOLSettings;
 
+  QMainWindow * scope;
   QPushButton * bnOpenScope;
   QChart      * plot;
   QLineSeries * dataTrace;
+  UpdateTraceThread * updateTraceThread;
 
   QPushButton * bnStartACQ;
   QPushButton * bnStopACQ;
