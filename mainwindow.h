@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QScrollBar>
 #include <QPushButton>
+#include <QComboBox>
 #include <QMutex>
 #include <QChart>
 #include <QLineSeries>
@@ -30,7 +31,9 @@ class ReadDataThread : public QThread {
 public:
   ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
     this->digi = dig;
+    isScopeRun = false;
   }
+  void SetScopeRun(bool onOff) {this->isScopeRun = onOff;}
   void run(){
     clock_gettime(CLOCK_REALTIME, &ta);
     while(true){
@@ -39,7 +42,7 @@ public:
       digiMTX.unlock();
 
       if( ret == CAEN_FELib_Success){
-        digi->SaveDataToFile();
+        if( !isScopeRun) digi->SaveDataToFile();
       }else if(ret == CAEN_FELib_Stop){
         digi->ErrorMsg("No more data");
         break;
@@ -47,13 +50,15 @@ public:
         digi->ErrorMsg("ReadDataLoop()");
       }
 
-      clock_gettime(CLOCK_REALTIME, &tb);
-      if( tb.tv_sec - ta.tv_sec > 2 ) {
-        emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
-        
-        //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
-        //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
-        ta = tb;
+      if( !isScopeRun ){
+        clock_gettime(CLOCK_REALTIME, &tb);
+        if( tb.tv_sec - ta.tv_sec > 2 ) {
+          emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
+          
+          //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
+          //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
+          ta = tb;
+        }
       }
     }
   }
@@ -62,6 +67,7 @@ signals:
 private:
   Digitizer2Gen * digi; 
   timespec ta, tb;
+  bool isScopeRun;
 };
 
 //^#===================================================== UpdateTrace Thread
@@ -138,12 +144,19 @@ private:
   QPushButton * bnDigiSettings;
   QPushButton * bnSOLSettings;
 
+  //@------ scope things
   QMainWindow * scope;
   QPushButton * bnOpenScope;
   QChart      * plot;
   QLineSeries * dataTrace;
   UpdateTraceThread * updateTraceThread;
+  QComboBox   * cbScopeDigi;
+  QComboBox   * cbScopeCh;
+  QComboBox   * cbAnaProbe[2];
+  QComboBox   * cbDigProbe[4];
+  void ProbeChange(QComboBox * cb[], const int size);
 
+  //@------ ACQ things
   QPushButton * bnStartACQ;
   QPushButton * bnStopACQ;
   QLineEdit   * leRunID;

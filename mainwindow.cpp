@@ -9,9 +9,10 @@
 #include <QFile>
 #include <QProcess>
 #include <QRandomGenerator>
-
+#include <QVariant>
 #include <QChartView>
 #include <QValueAxis>
+#include <QStandardItemModel>
 
 #include <unistd.h>
 
@@ -214,13 +215,14 @@ void MainWindow::StartACQ(){
     digi[i]->StartACQ();
 
     //TODO ========================== Sync start.
+    readDataThread[i]->SetScopeRun(false);
     readDataThread[i]->start();
   }
 
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
 
-  updateTraceThread->start();
+  //updateTraceThread->start();
 
   LogMsg("end of " + QString::fromStdString(__func__));
 }
@@ -330,20 +332,22 @@ void MainWindow::CloseDigitizers(){
 //^###################################################################### Open Scope
 void MainWindow::OpenScope(){
 
-  QWidget * layoutWidget = new QWidget(scope);
-  scope->setCentralWidget(layoutWidget);
-  QGridLayout * layout = new QGridLayout(layoutWidget);
-  layoutWidget->setLayout(layout);
+  cbScopeDigi->clear(); ///thsi will also trigger QComboBox::currentIndexChanged
+  cbScopeCh->clear();
+  if( nDigi >  0 && digi != NULL) {
+    for( int i = 0 ; i < nDigi; i++) {
+      cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+      //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
+      //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
 
-  QChartView * plotView = new QChartView(plot);
-  plotView->setRenderHints(QPainter::Antialiasing);
-  
-  //scope->setCentralWidget(plotView);
-  layout->addWidget(plotView, 0, 0);
+      //digi[i]->WriteValue();
+      //readDataThread[i]->SetScopeRun(true);
 
-  QPushButton * bnUpdate = new QPushButton("Random", scope);
-  layout->addWidget(bnUpdate, 1, 0);
-  connect(bnUpdate, &QPushButton::clicked, this, &MainWindow::UpdateScope);
+    }
+    //if( nDigi == 1 ) cbScopeDigi->setEnabled(false);
+    //updateTraceThread->start();
+  }
+
 
   scope->show();
 
@@ -366,6 +370,124 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   updateTraceThread = new UpdateTraceThread();
   connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &MainWindow::UpdateScope);
 
+  //*================ ad Widgets
+  int rowID = -1;
+  QWidget * layoutWidget = new QWidget(scope);
+  scope->setCentralWidget(layoutWidget);
+  QGridLayout * layout = new QGridLayout(layoutWidget);
+  layoutWidget->setLayout(layout);
+
+  //------------ Digitizer + channel selection
+  rowID ++;
+  cbScopeDigi = new QComboBox(scope);
+  cbScopeCh = new QComboBox(scope);
+  layout->addWidget(cbScopeDigi, rowID, 0);
+  layout->addWidget(cbScopeCh, rowID, 1);
+
+  connect(cbScopeDigi, &QComboBox::currentIndexChanged, this, [=](){
+    int index = cbScopeDigi->currentIndex();
+    if( index == -1 ) return;
+    for( int i = 0; i < digi[index]->GetNChannels(); i++){
+      cbScopeCh->addItem("ch-" + QString::number(i), i);
+    }
+  });
+
+  //------------ Probe selection
+  cbAnaProbe[0] = new QComboBox(scope);
+  cbAnaProbe[0]->addItem("ADC Input");
+  cbAnaProbe[0]->addItem("Time Filter");
+  cbAnaProbe[0]->addItem("Trapazoid");
+  cbAnaProbe[0]->addItem("Trap. Baseline");
+  cbAnaProbe[0]->addItem("Trap. - Baseline");
+
+  cbAnaProbe[1] = new QComboBox(scope);
+  for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
+
+  connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
+  connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
+
+  cbAnaProbe[0]->setCurrentIndex(1); ///trigger the AnaProbeChange
+  cbAnaProbe[0]->setCurrentIndex(0);
+  cbAnaProbe[1]->setCurrentIndex(4);
+
+
+  cbDigProbe[0] = new QComboBox(scope);
+  cbDigProbe[0]->addItem("Trigger");
+  cbDigProbe[0]->addItem("Time Filter Armed");
+  cbDigProbe[0]->addItem("ReTrigger Guard");
+  cbDigProbe[0]->addItem("Trap. basline Freeze");
+  cbDigProbe[0]->addItem("Peaking");
+  cbDigProbe[0]->addItem("Peak Ready");
+  cbDigProbe[0]->addItem("Pile-up Guard");
+  cbDigProbe[0]->addItem("ADC Saturate");
+  cbDigProbe[0]->addItem("ADC Sat. Protection");
+  cbDigProbe[0]->addItem("Post Sat. Event");
+  cbDigProbe[0]->addItem("Trap. Saturate");
+  cbDigProbe[0]->addItem("ACQ Inhibit");
+
+  cbDigProbe[1] = new QComboBox(scope);
+  cbDigProbe[2] = new QComboBox(scope);
+  cbDigProbe[3] = new QComboBox(scope);
+  for( int i = 0; i < cbDigProbe[0]->count() ; i++) {
+    cbDigProbe[1]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+    cbDigProbe[2]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+    cbDigProbe[3]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+  }
+
+  connect(cbDigProbe[0], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+
+  cbDigProbe[0]->setCurrentIndex(1); ///trigger the DigProbeChange
+  cbDigProbe[0]->setCurrentIndex(0);
+  cbDigProbe[1]->setCurrentIndex(4);
+  cbDigProbe[2]->setCurrentIndex(5);
+  cbDigProbe[3]->setCurrentIndex(6);
+
+  layout->addWidget(cbAnaProbe[0], rowID, 2);
+  layout->addWidget(cbAnaProbe[1], rowID, 3);
+
+  rowID ++;
+  layout->addWidget(cbDigProbe[0], rowID, 0);
+  layout->addWidget(cbDigProbe[1], rowID, 1);
+  layout->addWidget(cbDigProbe[2], rowID, 2);
+  layout->addWidget(cbDigProbe[3], rowID, 3);
+
+  //------------ plot view
+  rowID ++;
+  QChartView * plotView = new QChartView(plot);
+  plotView->setRenderHints(QPainter::Antialiasing);
+  layout->addWidget(plotView, rowID, 0, 1, 4);
+
+  //------------ testing button
+  rowID ++;
+  QPushButton * bnUpdate = new QPushButton("Random", scope);
+  layout->addWidget(bnUpdate, rowID, 0);
+  connect(bnUpdate, &QPushButton::clicked, this, &MainWindow::UpdateScope);
+  
+}
+
+void MainWindow::ProbeChange(QComboBox * cb[], const int size ){
+
+  QStandardItemModel * model[size] = {NULL};
+  for( int i = 0; i < size; i++){
+    model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
+  }
+
+  /// Enable all items
+  for( int i = 0; i < cb[0]->count(); i++) {
+    for( int j = 0; j < size; j ++ ) model[j]->item(i)->setEnabled(true);
+  }
+
+  for( int i = 0; i < size; i++){
+    int index = cb[i]->currentIndex();
+    for( int j = 0; j < size; j++){
+      if( i == j ) continue;
+      model[j]->item(index)->setEnabled(false);
+    }
+  }
+  
 }
 
 void MainWindow::UpdateScope(){
