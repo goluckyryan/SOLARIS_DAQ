@@ -70,6 +70,8 @@ class Digitizer2Gen {
     int OpenDigitizer(const char * url);
     bool IsConnected() const {return isConnected;}
     int CloseDigitizer();
+
+    int GetRet() const {return ret;};
   
     std::string  ReadValue(const char * parameter, bool verbose = false);
     std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
@@ -110,6 +112,7 @@ class Digitizer2Gen {
     void SaveDataToFile();
     unsigned int GetFileSize() {return outFileSize;}
 
+    static unsigned short TraceStep;
 
 };
 

@@ -182,12 +182,15 @@ MainWindow::~MainWindow(){
   //delete bnNewExp;
   //delete logInfo;
 
+  StopScope();
+
   updateTraceThread->Stop();
   updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
 
-  delete dataTrace; /// dataTrace must be deleted before plot
+  for( int i = 0; i < 6; i++) delete dataTrace[i];
+  //delete [] dataTrace; /// dataTrace must be deleted before plot
   delete plot;
 
   //---- need manually delete
@@ -353,7 +356,12 @@ void MainWindow::OpenScope(){
     for( int i = 0 ; i < 2; i++){
       ans = digi[iDigi]->ReadChValue(std::to_string(ch), haha[i]);
       index = cbAnaProbe[i]->findData(QString::fromStdString(ans));
-      cbAnaProbe[i]->setCurrentIndex(index);
+      
+      if( index >= 0 ) {
+        cbAnaProbe[i]->setCurrentIndex(index);
+      }else{
+        qDebug() << QString::fromStdString(ans);
+      }
     }
 
     haha.clear();
@@ -362,7 +370,11 @@ void MainWindow::OpenScope(){
     for( int i = 0 ; i < 4; i++){
       ans = digi[iDigi]->ReadChValue(std::to_string(ch), haha[i]);
       index = cbDigProbe[i]->findData(QString::fromStdString(ans));
-      cbDigProbe[i]->setCurrentIndex(index);
+      if( index >= 0 ) {
+        cbDigProbe[i]->setCurrentIndex(index);
+      }else{
+        qDebug() << QString::fromStdString(ans);
+      }
     }
 
     ans = digi[iDigi]->ReadChValue(std::to_string(ch), "ChRecordLengthT");
@@ -383,7 +395,6 @@ void MainWindow::OpenScope(){
 
     bnStartACQ->setEnabled(false);
     bnStopACQ->setEnabled(false);
-
 
   }
 
@@ -427,10 +438,12 @@ void MainWindow::StopScope(){
       if( digi[i]->IsDummy() ) continue;
       digiMTX.lock();
       digi[i]->StopACQ();
+      digi[i]->WriteChValue("0..63", "ChEnable", "true");
       digiMTX.unlock();
 
       readDataThread[i]->quit();
       readDataThread[i]->wait();
+
     }
     bnStartACQ->setEnabled(true);
     bnStopACQ->setEnabled(true);
@@ -453,29 +466,20 @@ void MainWindow::UpdateScope(){
   if( digi ){
     digiMTX.lock();
     unsigned int traceLength = digi[iDigi]->evt->traceLenght;
-    unsigned int dataLength = dataTrace->count();
+    unsigned int dataLength = dataTrace[0]->count();
 
-    if( traceLength < dataLength){
-      for( unsigned int i = 0; i < traceLength; i++) {
-        dataTrace->replace(i, i, digi[iDigi]->evt->analog_probes[0][i]);
-      }
-      dataTrace->removePoints(traceLength, dataLength-traceLength);
-    }else{
+    //---- remove all points
+    for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
 
-      for( unsigned int i = 0 ; i < traceLength; i++){ 
-        if( i < dataLength ) {
-          dataTrace->replace(i, i, digi[iDigi]->evt->analog_probes[0][i]);
-        }else{
-          dataTrace->append(i, digi[iDigi]->evt->analog_probes[0][i]);
-        }
-        
-      }
-
+    for( unsigned int i = 0 ; i < traceLength; i++){ 
+      for( int j = 0; j < 2; j++) dataTrace[j]->append(Digitizer2Gen::TraceStep * i, digi[iDigi]->evt->analog_probes[j][i]);
+      for( int j = 2; j < 6; j++) dataTrace[j]->append(Digitizer2Gen::TraceStep * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
     }
+    
     digiMTX.unlock();
 
-    plot->axes(Qt::Vertical).first()->setRange(-1, 16000); /// this must be after createDefaultAxes();
-    plot->axes(Qt::Horizontal).first()->setRange(0, traceLength);
+    //plot->axes(Qt::Vertical).first()->setRange(-1, 16000); /// this must be after createDefaultAxes();
+    //plot->axes(Qt::Horizontal).first()->setRange(-10, traceLength*1.1);
   }
 
 }
@@ -499,15 +503,14 @@ void MainWindow::ProbeChange(QComboBox * cb[], const int size ){
       model[j]->item(index)->setEnabled(false);
     }
   }
-  
+
   digiMTX.lock();
   if( size == 2) {// analog probes
-    dataTrace->setName(cb[0]->currentText());
+    for( int j = 0; j < 2; j++ )dataTrace[j]->setName(cb[j]->currentText());
   }
   if( size == 4){ // digitial probes
-
+    for( int j = 2; j < 6; j++ )dataTrace[j]->setName(cb[j-2]->currentText());
   }
-
   digiMTX.unlock();
 
 
@@ -522,14 +525,24 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   allowChange = false;
 
   plot = new QChart();
-  dataTrace = new QLineSeries();
-  dataTrace->setName("Analog Trace 1");
-  for(int i = 0; i < 100; i ++) dataTrace->append(i, QRandomGenerator::global()->bounded(10));
+  for( int i = 0; i < 6; i++) {
+    dataTrace[i] = new QLineSeries();
+    dataTrace[i]->setName("Trace " + QString::number(i));
+    for(int j = 0; j < 100; j ++) dataTrace[i]->append(j, QRandomGenerator::global()->bounded(8000) + 8000);
+    plot->addSeries(dataTrace[i]);
+  }
 
-  plot->addSeries(dataTrace);
+  dataTrace[0]->setPen(QPen(Qt::red, 2));
+  dataTrace[1]->setPen(QPen(Qt::blue, 2));
+  dataTrace[2]->setPen(QPen(Qt::darkRed, 1));
+  dataTrace[3]->setPen(QPen(Qt::darkYellow, 1));
+  dataTrace[4]->setPen(QPen(Qt::darkGreen, 1));
+  dataTrace[5]->setPen(QPen(Qt::darkBlue, 1));
+
   plot->createDefaultAxes(); /// this must be after addSeries();
-  plot->axes(Qt::Vertical).first()->setRange(-1, 11); /// this must be after createDefaultAxes();
-  plot->axes(Qt::Horizontal).first()->setRange(-1, 101);
+  plot->axes(Qt::Vertical).first()->setRange(-2000, 16000); /// this must be after createDefaultAxes();
+  plot->axes(Qt::Horizontal).first()->setRange(0, 5000);
+  plot->axes(Qt::Horizontal).first()->setTitleText("Time [ns]");
 
   updateTraceThread = new UpdateTraceThread();
   connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &MainWindow::UpdateScope);
@@ -556,11 +569,21 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     }
   });
 
+  connect(cbScopeCh, &QComboBox::currentIndexChanged, this, [=](){
+    if( !allowChange ) return;
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue("0..63", "ChEnable", "false");
+    digi[iDigi]->WriteChValue(std::to_string(ch), "ChEnable", "true");
+    digiMTX.unlock();
+  });
+
   //------------ Probe selection
   rowID ++;
   cbAnaProbe[0] = new QComboBox(scope);
   cbAnaProbe[0]->addItem("ADC Input",        "ADCInput");
-  cbAnaProbe[0]->addItem("Time Filter",      "TimeFiler");
+  cbAnaProbe[0]->addItem("Time Filter",      "TimeFilter");
   cbAnaProbe[0]->addItem("Trapazoid",        "EnergyFilter");
   cbAnaProbe[0]->addItem("Trap. Baseline",   "EnergyFilterBaseline");
   cbAnaProbe[0]->addItem("Trap. - Baseline", "EnergyFilterMinusBaseline");
@@ -582,7 +605,14 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     digi[iDigi]->WriteChValue(std::to_string(ch), "WaveAnalogProbe0", (cbAnaProbe[0]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
-
+  
+  connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveAnalogProbe1", (cbAnaProbe[1]->currentData()).toString().toStdString());
+    digiMTX.unlock();
+  });
 
   cbDigProbe[0] = new QComboBox(scope);
   cbDigProbe[0]->addItem("Trigger",              "Trigger");
@@ -619,6 +649,36 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   cbDigProbe[2]->setCurrentIndex(5);
   cbDigProbe[3]->setCurrentIndex(6);
 
+  connect(cbDigProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe0", (cbDigProbe[0]->currentData()).toString().toStdString());
+    digiMTX.unlock();
+  });
+  connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe1", (cbDigProbe[1]->currentData()).toString().toStdString());
+    digiMTX.unlock();
+  });
+  connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ 
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe2", (cbDigProbe[2]->currentData()).toString().toStdString());
+    digiMTX.unlock();
+  });
+  connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ 
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe3", (cbDigProbe[3]->currentData()).toString().toStdString());
+    digiMTX.unlock();
+  });
+
+
   layout->addWidget(cbAnaProbe[0], rowID, 0);
   layout->addWidget(cbAnaProbe[1], rowID, 1);
 
@@ -640,6 +700,7 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   connect(sbRL, &QSpinBox::valueChanged, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
+    sbRL->setValue(8*((sbRL->value() +  7)/8));
     digiMTX.lock();
     //StopScope();
     digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), 
@@ -648,7 +709,7 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     //StartScope();
     digiMTX.unlock();
 
-    plot->axes(Qt::Horizontal).first()->setRange(0, sbRL->value()/8);
+    //plot->axes(Qt::Horizontal).first()->setRange(0, 600);
 
   });
 

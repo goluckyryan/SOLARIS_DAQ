@@ -1,5 +1,8 @@
 #include "ClassDigitizer2Gen.h"
 
+
+unsigned short Digitizer2Gen::TraceStep = 8; //? should be variable?
+
 Digitizer2Gen::Digitizer2Gen(){  
   printf("======== %s \n",__func__);
   Initialization();
@@ -453,6 +456,8 @@ int Digitizer2Gen::ReadData(){
     return CAEN_FELib_UNKNOWN;
   }
 
+  evt->traceZero = false;
+
   if( ret != CAEN_FELib_Success) {
     //ErrorMsg("ReadData()");
     return ret;
@@ -584,8 +589,8 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
     
     
     //======== Self trigger for each channel 
-    //WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
-    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
+    WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
+    WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
 
     //======== One (or more) slef-trigger can trigger whole board, ??? depend on Channel Trigger mask
     //WriteValue("/ch/0..63/par/EventTriggerSource", "Ch64Trigger");
@@ -601,14 +606,14 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
     //WriteValue("/ch/38/par/ChannelsTriggerMask", "0x000F"); // when channel has no input, it still record.
 
     //----------- coincident trigger to ch-4n
-    WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
-    WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
+    //WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
+    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
 
-    for(int i = 0 ; i < 16; i++){
-      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/ChannelsTriggerMask").c_str(), "0x1");
-      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceMask").c_str(), "Ch64Trigger");
-      WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceLengthT").c_str(), "100"); // ns
-    }
+    //for(int i = 0 ; i < 16; i++){
+    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/ChannelsTriggerMask").c_str(), "0x1");
+    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceMask").c_str(), "Ch64Trigger");
+    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceLengthT").c_str(), "100"); // ns
+    //}
     //======== ACQ trigger?
     //WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
     //WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); 
@@ -623,8 +628,8 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
   WriteValue("/ch/0..63/par/DCOffset"   , "10");  /// 10% 
   WriteValue("/ch/0..63/par/WaveSaving" , "Always");
   
-  WriteValue("/ch/0..63/par/ChRecordLengthS"   , "512");  /// 4096 ns
-  WriteValue("/ch/0..63/par/ChPreTriggerS"     , "125");  /// 1000 ns
+  WriteValue("/ch/0..63/par/ChRecordLengthT"   , "4096");  /// 4096 ns, S and T are not Sync
+  WriteValue("/ch/0..63/par/ChPreTriggerT"     , "1000");  /// 1000 ns
   WriteValue("/ch/0..63/par/WaveResolution"    , "RES8");  /// 8 ns 
   
   WriteValue("/ch/0..63/par/WaveAnalogProbe0"  , "ADCInput");

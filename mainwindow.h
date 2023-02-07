@@ -48,6 +48,7 @@ public:
         break;
       }else{
         digi->ErrorMsg("ReadDataLoop()");
+        digi->evt->ClearTrace();
       }
 
       if( !isScopeRun ){
@@ -150,7 +151,7 @@ private:
   QMainWindow * scope;
   QPushButton * bnOpenScope;
   QChart      * plot;
-  QLineSeries * dataTrace;
+  QLineSeries * dataTrace[6];
   UpdateTraceThread * updateTraceThread;
   QComboBox   * cbScopeDigi;
   QComboBox   * cbScopeCh;

@@ -36,6 +36,8 @@ class Event {
     size_t  dataSize;  /// number of byte of the data, size/8 = word [64 bits]
     uint32_t n_events;
 
+    bool traceZero;
+
     Event(){
       Init();
     }
@@ -71,6 +73,8 @@ class Event {
       digital_probes_type[2] = 0xFF;
       digital_probes_type[3] = 0xFF;
       data = NULL;
+
+      traceZero = true; // indicate trace are all zero
     }
 
     void ClearMemory(){
@@ -83,6 +87,8 @@ class Event {
       if( digital_probes[1] != NULL) delete digital_probes[1];
       if( digital_probes[2] != NULL) delete digital_probes[2];
       if( digital_probes[3] != NULL) delete digital_probes[3];
+
+      traceZero = true;
     }
 
     void SetDataType(unsigned int type){
@@ -100,8 +106,24 @@ class Event {
         digital_probes[2] = new uint8_t[MaxTraceLenght];
         digital_probes[3] = new uint8_t[MaxTraceLenght];
 
-      }
+        traceZero = true;
 
+      }
+    }
+
+    void ClearTrace(){
+      if( traceZero ) return; // no need to clear again
+
+      for( int i = 0; i < MaxTraceLenght; i++){
+        analog_probes[0][i] = 0;
+        analog_probes[1][i] = 0;
+
+        digital_probes[0][i] = 0;
+        digital_probes[1][i] = 0;
+        digital_probes[2][i] = 0;
+        digital_probes[3][i] = 0;
+      }
+      traceZero = true;
     }
 
     void PrintEnergyTimeStamp(){
