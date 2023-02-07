@@ -92,6 +92,8 @@ int main(int argc, char* argv[]){
   digi->Reset();
   digi->ProgramPHA(false);
   
+  printf("--------%s \n", digi->ReadChValue(0, "WaveAnalogprobe0", true).c_str());
+
   //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());
   //printf("%s \n", digi->ReadValue("/ch/0/par/Energy_Nbit").c_str());
   //printf("%s \n", digi->ReadValue("/par/MaxRawDataSize").c_str());
@@ -119,7 +121,8 @@ int main(int argc, char* argv[]){
   parHandle = digi->GetParentHandle(parHandle); printf("%lu|%lX\n", parHandle, parHandle);
   printf("%s\n", digi->GetPath(parHandle).c_str());    
   */
-  
+
+/*  
   digi->ReadDigitizerSettings();
 
   digi->SetPHADataFormat(1);
@@ -156,6 +159,10 @@ int main(int argc, char* argv[]){
             (t1.tv_nsec-t0.tv_nsec + t1.tv_sec*1e+9 - t0.tv_sec*1e+9)*1.0/1e9);
 
   digi->CloseOutFile();  
+
+*/
+
+
   digi->CloseDigitizer();
   
   delete digi;

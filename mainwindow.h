@@ -114,6 +114,7 @@ private slots:
   void CloseDigitizers();
   
   void OpenScope();
+  void StartScope();
   void StopScope();
   void SetUpPlot();
   void UpdateScope();
@@ -155,6 +156,11 @@ private:
   QComboBox   * cbScopeCh;
   QComboBox   * cbAnaProbe[2];
   QComboBox   * cbDigProbe[4];
+  QSpinBox * sbRL; // record length
+  QSpinBox * sbPT; // pre trigger
+  QPushButton * bnScopeStart;
+  QPushButton * bnScopeStop;
+  bool allowChange;
   void ProbeChange(QComboBox * cb[], const int size);
 
   //@------ ACQ things

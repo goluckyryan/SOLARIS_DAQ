@@ -3,6 +3,7 @@
 SOLARIS_DAQ
 *.sol
 programSettings.txt
+test
 
 *~
 *.autosave

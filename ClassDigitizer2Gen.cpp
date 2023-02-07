@@ -97,6 +97,11 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   return retValue;
 }
 
+std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bool verbose){
+  std::string haha = "/ch/" + ch + "/par/" + shortPara;
+  return ReadValue(haha.c_str(), verbose);
+}
+
 void Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   if( !isConnected ) return;
   printf(" %s| %-45s : %s\n", __func__, parameter, value.c_str());
@@ -105,6 +110,11 @@ void Digitizer2Gen::WriteValue(const char * parameter, std::string value){
     ErrorMsg(__func__);
     return;
   }
+}
+
+void Digitizer2Gen::WriteChValue(std::string ch, std::string shortPara, std::string value){
+  std::string haha = "/ch/" + ch + "/par/" + shortPara;
+  WriteValue(haha.c_str(), value);
 }
 
 void Digitizer2Gen::SendCommand(const char * parameter){

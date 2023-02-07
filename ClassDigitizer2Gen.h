@@ -72,7 +72,9 @@ class Digitizer2Gen {
     int CloseDigitizer();
   
     std::string  ReadValue(const char * parameter, bool verbose = false);
+    std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
     void         WriteValue(const char * parameter, std::string value);
+    void         WriteChValue(std::string ch, std::string shortPara, std::string value);
     void         SendCommand(const char * parameter);
 
     uint64_t    GetHandle(const char * parameter);
