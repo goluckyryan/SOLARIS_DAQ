@@ -75,7 +75,7 @@ class UpdateTraceThread : public QThread {
   Q_OBJECT
 public:
   UpdateTraceThread(QObject * parent = 0) : QThread(parent){
-    waitTime = 5;
+    waitTime = 2;
     stop = false;
   }
   void Stop() {this->stop = true;}
@@ -114,6 +114,7 @@ private slots:
   void CloseDigitizers();
   
   void OpenScope();
+  void StopScope();
   void SetUpPlot();
   void UpdateScope();
 

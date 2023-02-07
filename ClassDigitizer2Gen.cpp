@@ -223,7 +223,8 @@ void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
       return;
     }
   }
-  
+
+  if( evt ) delete evt;
   evt = new Event();
   evt->SetDataType(dataFormat);
   dataStartIndetifier += dataFormat;

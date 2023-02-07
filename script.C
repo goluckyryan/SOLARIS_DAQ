@@ -4,6 +4,7 @@
 #include "TH2.h"
 #include "TStyle.h"
 #include "TCanvas.h"
+#include "TGraph.h"
 
 
 void script(){ 
@@ -34,6 +35,8 @@ void script(){
   TH2F * h2  = new TH2F("h2", "h2", 1000, startTime, endTime, 1000, 0, reader->GetTotalNumBlock());
   TH1F * hTdiff  = new TH1F("hTdiff", "hTdiff", 400, 0, 200000);
 
+  TGraph * g1 = new TGraph();
+
   uint64_t tOld = startTime;
 
   for( int i = 0; i < reader->GetTotalNumBlock() ; i++){
@@ -59,16 +62,21 @@ void script(){
       tOld = evt->timestamp;
     }
     
+    if( i == 0){
+      for( int i = 0; i < evt->traceLenght; i++){
+        g1->AddPoint(i*8, evt->analog_probes[0][i]);
+      }
+    }
   }
 
   gStyle->SetOptStat("neiou");
 
-  TCanvas * canvas = new TCanvas("c1", "c1", 1800, 600);
-  canvas->Divide(3,1);
+  TCanvas * canvas = new TCanvas("c1", "c1", 1200, 1200);
+  canvas->Divide(2,2);
   canvas->cd(1); hid->Draw();
   canvas->cd(2); h1->SetMinimum(0); h1->Draw();
   canvas->cd(3); hTdiff->Draw();
-
+  canvas->cd(4); g1->Draw("APl");
   //printf("reader traceLength : %lu \n", evt->traceLenght);
 
   /*

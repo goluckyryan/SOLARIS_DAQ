@@ -209,6 +209,8 @@ void MainWindow::StartACQ(){
     digi[i]->ProgramPHA(false);
     digi[i]->SetPHADataFormat(1);// only save 1 trace
 
+    digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
+
     //TODO =========================== save file 
     remove("haha_000.sol"); // remove file
     digi[i]->OpenOutFile("haha");// haha_000.sol
@@ -221,6 +223,7 @@ void MainWindow::StartACQ(){
 
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
+  bnOpenScope->setEnabled(false);
 
   //updateTraceThread->start();
 
@@ -229,15 +232,9 @@ void MainWindow::StartACQ(){
 
 void MainWindow::StopACQ(){
 
-  updateTraceThread->Stop();
-  updateTraceThread->quit();
-  updateTraceThread->wait();
-
   for( int i = 0; i < nDigi; i++){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
-    
-    //readDataThread->Stop();
 
     readDataThread[i]->quit();
     readDataThread[i]->wait();
@@ -248,6 +245,10 @@ void MainWindow::StopACQ(){
   LogMsg("Stop Run");
   bnStartACQ->setEnabled(true);
   bnStopACQ->setEnabled(false);
+  bnOpenScope->setEnabled(true);
+
+  runID ++;
+  leRunID->setText(QString::number(runID));
 
 }
 
@@ -332,31 +333,128 @@ void MainWindow::CloseDigitizers(){
 //^###################################################################### Open Scope
 void MainWindow::OpenScope(){
 
+
   cbScopeDigi->clear(); ///thsi will also trigger QComboBox::currentIndexChanged
   cbScopeCh->clear();
-  if( nDigi >  0 && digi != NULL) {
+  if( digi ) {
+
+
     for( int i = 0 ; i < nDigi; i++) {
       cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
-      //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
-      //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
-
-      //digi[i]->WriteValue();
-      //readDataThread[i]->SetScopeRun(true);
-
     }
-    //if( nDigi == 1 ) cbScopeDigi->setEnabled(false);
-    //updateTraceThread->start();
-  }
 
+    //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
+    //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
+
+    int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
+
+    if( digi[iDigi]->IsDummy() ) return;
+
+    digi[iDigi]->Reset();
+    digi[iDigi]->ProgramPHA(false);
+    
+    digi[iDigi]->WriteValue("/ch/0..63/par/ChEnable", "false");
+    digi[iDigi]->WriteValue(("/ch/" + std::to_string(ch) + "/par/ChEnable").c_str(), "true");
+    digi[iDigi]->SetPHADataFormat(0);
+
+    digi[iDigi]->StartACQ();
+
+    readDataThread[iDigi]->SetScopeRun(true);
+    readDataThread[iDigi]->start();
+    
+    updateTraceThread->start();
+    bnStartACQ->setEnabled(false);
+    bnStopACQ->setEnabled(false);
+  }
 
   scope->show();
 
+}
+void MainWindow::StopScope(){
+
+  updateTraceThread->Stop();
+  updateTraceThread->quit();
+  updateTraceThread->wait();
+
+  if(digi){
+    for(int i = 0; i < nDigi; i++){
+      if( digi[i]->IsDummy() ) continue;
+      digi[i]->StopACQ();
+
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+    }
+    bnStartACQ->setEnabled(true);
+    bnStopACQ->setEnabled(true);
+  }
+
+}
+
+void MainWindow::UpdateScope(){
+
+  if( scope->isVisible() == false) return;
+
+  int iDigi = cbScopeDigi->currentIndex();
+  //int ch = cbScopeCh->currentIndex();
+
+  if( digi ){
+    digiMTX.lock();
+    unsigned int traceLength = digi[iDigi]->evt->traceLenght;
+    unsigned int dataLength = dataTrace->count();
+
+    if( traceLength < dataLength){
+      for( unsigned int i = 0; i < traceLength; i++) {
+        dataTrace->replace(i, i, digi[iDigi]->evt->analog_probes[0][i]);
+      }
+      dataTrace->removePoints(traceLength, dataLength-traceLength);
+    }else{
+
+      for( unsigned int i = 0 ; i < traceLength; i++){ 
+        if( i < dataLength ) {
+          dataTrace->replace(i, i, digi[iDigi]->evt->analog_probes[0][i]);
+        }else{
+          dataTrace->append(i, digi[iDigi]->evt->analog_probes[0][i]);
+        }
+        
+      }
+
+    }
+    digiMTX.unlock();
+
+    plot->axes(Qt::Vertical).first()->setRange(-1, 16000); /// this must be after createDefaultAxes();
+    plot->axes(Qt::Horizontal).first()->setRange(0, traceLength);
+  }
+
+}
+
+void MainWindow::ProbeChange(QComboBox * cb[], const int size ){
+
+  QStandardItemModel * model[size] = {NULL};
+  for( int i = 0; i < size; i++){
+    model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
+  }
+
+  /// Enable all items
+  for( int i = 0; i < cb[0]->count(); i++) {
+    for( int j = 0; j < size; j ++ ) model[j]->item(i)->setEnabled(true);
+  }
+
+  for( int i = 0; i < size; i++){
+    int index = cb[i]->currentIndex();
+    for( int j = 0; j < size; j++){
+      if( i == j ) continue;
+      model[j]->item(index)->setEnabled(false);
+    }
+  }
+  
 }
 
 void MainWindow::SetUpPlot(){ //@--- this function run at start up
   scope = new QMainWindow(this);
   scope->setWindowTitle("Scope");
   scope->setGeometry(0, 0, 1000, 800);  
+  scope->setWindowFlags( scope->windowFlags() & ~Qt::WindowCloseButtonHint );
 
   plot = new QChart();
   dataTrace = new QLineSeries();
@@ -370,7 +468,7 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   updateTraceThread = new UpdateTraceThread();
   connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &MainWindow::UpdateScope);
 
-  //*================ ad Widgets
+  //*================ add Widgets
   int rowID = -1;
   QWidget * layoutWidget = new QWidget(scope);
   scope->setCentralWidget(layoutWidget);
@@ -394,11 +492,11 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
 
   //------------ Probe selection
   cbAnaProbe[0] = new QComboBox(scope);
-  cbAnaProbe[0]->addItem("ADC Input");
-  cbAnaProbe[0]->addItem("Time Filter");
-  cbAnaProbe[0]->addItem("Trapazoid");
-  cbAnaProbe[0]->addItem("Trap. Baseline");
-  cbAnaProbe[0]->addItem("Trap. - Baseline");
+  cbAnaProbe[0]->addItem("ADC Input",        "ADCInput");
+  cbAnaProbe[0]->addItem("Time Filter",      "TimeFiler");
+  cbAnaProbe[0]->addItem("Trapazoid",        "EnergyFilter");
+  cbAnaProbe[0]->addItem("Trap. Baseline",   "EnergyFilterBaseline");
+  cbAnaProbe[0]->addItem("Trap. - Baseline", "EnergyFilterMinusBaseline");
 
   cbAnaProbe[1] = new QComboBox(scope);
   for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
@@ -406,24 +504,31 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
   connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
 
+  //connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+  //  int iDigi = cbScopeDigi->currentIndex();
+  //  int ch = cbScopeCh->currentIndex();
+  //  char str[200] = ("/ch/" + std::to_string(ch) + "/par/WaveAnalogProbe0").c_str();
+  //  digi[iDigi]->WriteValue(str, (cbAnaProbe[0]->currentData()).toString().toStdString());
+  //});
+
   cbAnaProbe[0]->setCurrentIndex(1); ///trigger the AnaProbeChange
   cbAnaProbe[0]->setCurrentIndex(0);
   cbAnaProbe[1]->setCurrentIndex(4);
 
-
   cbDigProbe[0] = new QComboBox(scope);
-  cbDigProbe[0]->addItem("Trigger");
-  cbDigProbe[0]->addItem("Time Filter Armed");
-  cbDigProbe[0]->addItem("ReTrigger Guard");
-  cbDigProbe[0]->addItem("Trap. basline Freeze");
-  cbDigProbe[0]->addItem("Peaking");
-  cbDigProbe[0]->addItem("Peak Ready");
-  cbDigProbe[0]->addItem("Pile-up Guard");
-  cbDigProbe[0]->addItem("ADC Saturate");
-  cbDigProbe[0]->addItem("ADC Sat. Protection");
-  cbDigProbe[0]->addItem("Post Sat. Event");
-  cbDigProbe[0]->addItem("Trap. Saturate");
-  cbDigProbe[0]->addItem("ACQ Inhibit");
+  cbDigProbe[0]->addItem("Trigger",              "Trigger");
+  cbDigProbe[0]->addItem("Time Filter Armed",    "TimeFilerArmed");
+  cbDigProbe[0]->addItem("ReTrigger Guard",      "ReTriggerGaurd");
+  cbDigProbe[0]->addItem("Trap. basline Freeze", "EnergyFilterBaselineFreeze");
+  cbDigProbe[0]->addItem("Peaking",              "EnergyFilterPeaking");
+  cbDigProbe[0]->addItem("Peak Ready",           "EnergyFilterPeakReady");
+  cbDigProbe[0]->addItem("Pile-up Guard",        "EnergyFilterPileUpGuard");
+  cbDigProbe[0]->addItem("Event Pile Up",        "EventPileUp");
+  cbDigProbe[0]->addItem("ADC Saturate",         "ADCSaturation");
+  cbDigProbe[0]->addItem("ADC Sat. Protection",  "ADCSaturationProtection");
+  cbDigProbe[0]->addItem("Post Sat. Event",      "PostSaturationEvent");
+  cbDigProbe[0]->addItem("Trap. Saturate",       "EnergylterSaturation");
+  cbDigProbe[0]->addItem("ACQ Inhibit",          "AcquisitionInhibit");
 
   cbDigProbe[1] = new QComboBox(scope);
   cbDigProbe[2] = new QComboBox(scope);
@@ -460,45 +565,19 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 4);
 
-  //------------ testing button
+  //------------ close button
   rowID ++;
-  QPushButton * bnUpdate = new QPushButton("Random", scope);
-  layout->addWidget(bnUpdate, rowID, 0);
-  connect(bnUpdate, &QPushButton::clicked, this, &MainWindow::UpdateScope);
-  
-}
+  QPushButton * bnStop = new QPushButton("Stop", scope);
+  layout->addWidget(bnStop, rowID, 2);
+  connect(bnStop, &QPushButton::clicked, this, &MainWindow::StopScope);
 
-void MainWindow::ProbeChange(QComboBox * cb[], const int size ){
-
-  QStandardItemModel * model[size] = {NULL};
-  for( int i = 0; i < size; i++){
-    model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
-  }
-
-  /// Enable all items
-  for( int i = 0; i < cb[0]->count(); i++) {
-    for( int j = 0; j < size; j ++ ) model[j]->item(i)->setEnabled(true);
-  }
-
-  for( int i = 0; i < size; i++){
-    int index = cb[i]->currentIndex();
-    for( int j = 0; j < size; j++){
-      if( i == j ) continue;
-      model[j]->item(index)->setEnabled(false);
-    }
-  }
-  
-}
-
-void MainWindow::UpdateScope(){
-
-  if( scope->isVisible() == false) return;
-
-  for( int i = 0 ; i < dataTrace->count(); i++){
-    dataTrace->replace(i, i, QRandomGenerator::global()->bounded(10));
-  }
+  QPushButton * bnClose = new QPushButton("Close", scope);
+  layout->addWidget(bnClose, rowID, 3);
+  connect(bnClose, &QPushButton::clicked, this, &MainWindow::StopScope);
+  connect(bnClose, &QPushButton::clicked, scope, &QMainWindow::close);
 
 }
+
 
 //^###################################################################### Open digitizer setting panel
 void MainWindow::OpenDigitizersSettings(){
