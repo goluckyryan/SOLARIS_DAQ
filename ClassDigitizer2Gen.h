@@ -7,11 +7,13 @@
 #include <string>
 
 #include "Event.h"
-//#include "Parameter.h"
 
 #define MaxOutFileSize 2*1024*1024*1024
 #define MaxNumberOfChannel 64
 
+#include "DigiParameters.h"
+
+//^=================== Digitizer Class
 class Digitizer2Gen {
   private:
     uint64_t handle;    
@@ -74,10 +76,13 @@ class Digitizer2Gen {
     int GetRet() const {return ret;};
   
     std::string  ReadValue(const char * parameter, bool verbose = false);
+    std::string  ReadDigValue(std::string shortPara, bool verbose = false);
     std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
     void         WriteValue(const char * parameter, std::string value);
+    void         WriteDigValue(std::string shortPara, std::string value);
     void         WriteChValue(std::string ch, std::string shortPara, std::string value);
     void         SendCommand(const char * parameter);
+    void         SendCommand(std::string shortPara);
 
     uint64_t    GetHandle(const char * parameter);
     uint64_t    GetParentHandle(uint64_t handle);
@@ -111,8 +116,6 @@ class Digitizer2Gen {
     void CloseOutFile();
     void SaveDataToFile();
     unsigned int GetFileSize() {return outFileSize;}
-
-    static unsigned short TraceStep;
 
 };
 

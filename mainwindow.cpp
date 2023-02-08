@@ -293,6 +293,16 @@ void MainWindow::OpenDigitizers(){
   bnCloseDigitizers->setEnabled(true);
   bnOpenDigitizers->setEnabled(false);
   bnOpenDigitizers->setStyleSheet("");
+
+  /// set scope digitizer
+  allowChange = false;
+  cbScopeDigi->clear(); ///this will also trigger QComboBox::currentIndexChanged
+  cbScopeCh->clear();
+  for( int i = 0 ; i < nDigi; i++) {
+    cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+  }
+  allowChange = true;
+
 }
 
 void MainWindow::CloseDigitizers(){
@@ -332,66 +342,20 @@ void MainWindow::CloseDigitizers(){
 }
 
 //^###################################################################### Open Scope
+
+//TODO ==== seperate Scope into a Scrop Panel class.
+
 void MainWindow::OpenScope(){
 
-  cbScopeDigi->clear(); ///thsi will also trigger QComboBox::currentIndexChanged
-  cbScopeCh->clear();
   if( digi ) {
-
-    for( int i = 0 ; i < nDigi; i++) {
-      cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
-    }
-
     //*---- get digi setting
     int iDigi = cbScopeDigi->currentIndex();
-    int ch = cbScopeCh->currentIndex();
-
     if( digi[iDigi]->IsDummy() ) return;
 
-    int index;
-    std::string ans;
+    //digi[iDigi]->Reset();
+    //digi[iDigi]->ProgramPHA(false);
 
-    std::vector<std::string> haha = {"WaveAnalogProbe0", "WaveAnalogProbe1"};
-
-    for( int i = 0 ; i < 2; i++){
-      ans = digi[iDigi]->ReadChValue(std::to_string(ch), haha[i]);
-      index = cbAnaProbe[i]->findData(QString::fromStdString(ans));
-      
-      if( index >= 0 ) {
-        cbAnaProbe[i]->setCurrentIndex(index);
-      }else{
-        qDebug() << QString::fromStdString(ans);
-      }
-    }
-
-    haha.clear();
-    haha = {"WaveDigitalProbe0", "WaveDigitalProbe1", "WaveDigitalProbe2", "WaveDigitalProbe3"};
-
-    for( int i = 0 ; i < 4; i++){
-      ans = digi[iDigi]->ReadChValue(std::to_string(ch), haha[i]);
-      index = cbDigProbe[i]->findData(QString::fromStdString(ans));
-      if( index >= 0 ) {
-        cbDigProbe[i]->setCurrentIndex(index);
-      }else{
-        qDebug() << QString::fromStdString(ans);
-      }
-    }
-
-    ans = digi[iDigi]->ReadChValue(std::to_string(ch), "ChRecordLengthT");
-    sbRL->setValue(atoi(ans.c_str()));
-
-    ans = digi[iDigi]->ReadChValue(std::to_string(ch), "ChPreTriggerT");
-    sbPT->setValue(atoi(ans.c_str()));
-    
-    //TODO ===== Reset and ProgramPHA should be removed
-    digi[iDigi]->Reset();
-    digi[iDigi]->ProgramPHA(false);
-
-    digi[iDigi]->WriteChValue("0..63", "ChEnable", "false");
-    digi[iDigi]->WriteChValue(std::to_string(ch), "ChEnable", "true");
-    digi[iDigi]->SetPHADataFormat(0);
-
-    StartScope();
+    StartScope(iDigi);
 
     bnStartACQ->setEnabled(false);
     bnStopACQ->setEnabled(false);
@@ -402,32 +366,89 @@ void MainWindow::OpenScope(){
 
 }
 
-void MainWindow::StartScope(){
+void MainWindow::ReadScopeSettings(int iDigi, int ch){
+  if( !digi[iDigi] && digi[iDigi]->IsDummy() ) return;
+
+  printf("%s\n", __func__);
+
+  int index;
+  std::string ans;
+
+  allowChange = false;
+
+  for( int i = 0 ; i < 2; i++){
+    ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::AnalogProbe[i]);
+    index = cbAnaProbe[i]->findData(QString::fromStdString(ans));
+    
+    if( index >= 0 ) {
+      cbAnaProbe[i]->setCurrentIndex(index);
+    }else{
+      qDebug() << QString::fromStdString(ans);
+    }
+  }
+
+  for( int i = 0 ; i < 4; i++){
+    ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::DigitalProbe[i]);
+    index = cbDigProbe[i]->findData(QString::fromStdString(ans));
+    if( index >= 0 ) {
+      cbDigProbe[i]->setCurrentIndex(index);
+    }else{
+      qDebug() << QString::fromStdString(ans);
+    }
+  }
+
+  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::RecordLength);
+  sbRL->setValue(atoi(ans.c_str()));
+
+  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::PreTrigger);
+  sbPT->setValue(atoi(ans.c_str()));
+  
+  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::DC_Offset);
+  sbDCOffset->setValue(atoi(ans.c_str()));
+  
+  allowChange = true;
+}
+
+void MainWindow::StartScope(int iDigi){
 
   if( !digi ) return; 
+  if( digi[iDigi]->IsDummy() ) return;
+
+  printf("%s\n", __func__);
+
+  int ch = cbScopeCh->currentIndex();
 
   //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
   //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
-  
-  int iDigi = cbScopeDigi->currentIndex();
+
+  ReadScopeSettings(iDigi, ch);
+
+  digi[iDigi]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "false");
+  digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::ChannelEnable, "true");
+  digi[iDigi]->SetPHADataFormat(0);
 
   digi[iDigi]->StartACQ();
 
   readDataThread[iDigi]->SetScopeRun(true);
   readDataThread[iDigi]->start();
-  
+
   updateTraceThread->start();
 
   bnScopeStart->setEnabled(false);
   bnScopeStop->setEnabled(true);
 
   sbRL->setEnabled(false);
+  sbPT->setEnabled(false);
+  sbDCOffset->setEnabled(false);
+  bnScopeReset->setEnabled(false);
 
   allowChange = true;
 
 }
 
 void MainWindow::StopScope(){
+
+  printf("%s\n", __func__);
 
   updateTraceThread->Stop();
   updateTraceThread->quit();
@@ -438,7 +459,7 @@ void MainWindow::StopScope(){
       if( digi[i]->IsDummy() ) continue;
       digiMTX.lock();
       digi[i]->StopACQ();
-      digi[i]->WriteChValue("0..63", "ChEnable", "true");
+      digi[i]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "true");
       digiMTX.unlock();
 
       readDataThread[i]->quit();
@@ -453,6 +474,9 @@ void MainWindow::StopScope(){
   bnScopeStop->setEnabled(false);
 
   sbRL->setEnabled(true);
+  sbPT->setEnabled(true);
+  sbDCOffset->setEnabled(true);
+  bnScopeReset->setEnabled(true);
 
 }
 
@@ -472,14 +496,14 @@ void MainWindow::UpdateScope(){
     for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
 
     for( unsigned int i = 0 ; i < traceLength; i++){ 
-      for( int j = 0; j < 2; j++) dataTrace[j]->append(Digitizer2Gen::TraceStep * i, digi[iDigi]->evt->analog_probes[j][i]);
-      for( int j = 2; j < 6; j++) dataTrace[j]->append(Digitizer2Gen::TraceStep * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
+      for( int j = 0; j < 2; j++) dataTrace[j]->append(DIGIPARA::TraceStep * i, digi[iDigi]->evt->analog_probes[j][i]);
+      for( int j = 2; j < 6; j++) dataTrace[j]->append(DIGIPARA::TraceStep * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
     }
-    
+
     digiMTX.unlock();
 
     //plot->axes(Qt::Vertical).first()->setRange(-1, 16000); /// this must be after createDefaultAxes();
-    //plot->axes(Qt::Horizontal).first()->setRange(-10, traceLength*1.1);
+    plot->axes(Qt::Horizontal).first()->setRange(0, DIGIPARA::TraceStep* traceLength);
   }
 
 }
@@ -540,9 +564,18 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   dataTrace[5]->setPen(QPen(Qt::darkBlue, 1));
 
   plot->createDefaultAxes(); /// this must be after addSeries();
-  plot->axes(Qt::Vertical).first()->setRange(-2000, 16000); /// this must be after createDefaultAxes();
-  plot->axes(Qt::Horizontal).first()->setRange(0, 5000);
-  plot->axes(Qt::Horizontal).first()->setTitleText("Time [ns]");
+  /// this must be after createDefaultAxes();
+  QValueAxis * yaxis = qobject_cast<QValueAxis*> (plot->axes(Qt::Vertical).first());
+  QValueAxis * xaxis = qobject_cast<QValueAxis*> (plot->axes(Qt::Horizontal).first());
+  yaxis->setTickCount(6);
+  yaxis->setTickInterval(16384);
+  yaxis->setRange(-16384, 65536);
+  yaxis->setLabelFormat("%.0f");
+
+  xaxis->setRange(0, 5000);
+  xaxis->setTickCount(10);
+  xaxis->setLabelFormat("%.0f");
+  xaxis->setTitleText("Time [ns]");
 
   updateTraceThread = new UpdateTraceThread();
   connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &MainWindow::UpdateScope);
@@ -562,11 +595,13 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   layout->addWidget(cbScopeCh, rowID, 1);
 
   connect(cbScopeDigi, &QComboBox::currentIndexChanged, this, [=](){
+    //if( allowChange ) StopScope();
     int index = cbScopeDigi->currentIndex();
     if( index == -1 ) return;
     for( int i = 0; i < digi[index]->GetNChannels(); i++){
       cbScopeCh->addItem("ch-" + QString::number(i), i);
     }
+    //if( allowChange )StartScope(index);
   });
 
   connect(cbScopeCh, &QComboBox::currentIndexChanged, this, [=](){
@@ -574,13 +609,23 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue("0..63", "ChEnable", "false");
-    digi[iDigi]->WriteChValue(std::to_string(ch), "ChEnable", "true");
+    digi[iDigi]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "false");
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::ChannelEnable, "true");
+    ReadScopeSettings(iDigi, ch);
     digiMTX.unlock();
+  });
+
+  bnScopeReset = new QPushButton("Reset Digitizer", scope);
+  layout->addWidget(bnScopeReset, rowID, 2);
+  connect(bnScopeReset, &QPushButton::clicked, this, [=](){
+    if( !allowChange ) return;
+    int iDigi = cbScopeDigi->currentIndex();
+    digi[iDigi]->Reset();
   });
 
   //------------ Probe selection
   rowID ++;
+  //TODO --- add None
   cbAnaProbe[0] = new QComboBox(scope);
   cbAnaProbe[0]->addItem("ADC Input",        "ADCInput");
   cbAnaProbe[0]->addItem("Time Filter",      "TimeFilter");
@@ -599,21 +644,24 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   cbAnaProbe[1]->setCurrentIndex(4);
 
   connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveAnalogProbe0", (cbAnaProbe[0]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
   
   connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveAnalogProbe1", (cbAnaProbe[1]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
 
+  //TODO --- add None
   cbDigProbe[0] = new QComboBox(scope);
   cbDigProbe[0]->addItem("Trigger",              "Trigger");
   cbDigProbe[0]->addItem("Time Filter Armed",    "TimeFilterArmed");
@@ -650,31 +698,35 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   cbDigProbe[3]->setCurrentIndex(6);
 
   connect(cbDigProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe0", (cbDigProbe[0]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
   connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe1", (cbDigProbe[1]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
   connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe2", (cbDigProbe[2]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
   connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ 
+    if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), "WaveDigitalProbe3", (cbDigProbe[3]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString());
     digiMTX.unlock();
   });
 
@@ -687,50 +739,170 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   layout->addWidget(cbDigProbe[2], rowID, 4);
   layout->addWidget(cbDigProbe[3], rowID, 5);
 
-  //------------ wave settings
   rowID ++;
-  QLabel * lbRL = new QLabel("Record Lenght [ns]",scope);
-  layout->addWidget(lbRL, rowID, 0);
-  sbRL = new QSpinBox(scope);
-  sbRL->setMinimum(32);
-  sbRL->setMaximum(648000);
-  sbRL->setSingleStep(8);
-  layout->addWidget(sbRL, rowID, 1);
+  {//------------ wave settings
+    QGroupBox * box = new QGroupBox("Channel Settings (need ACQ stop)", scope);
+    layout->addWidget(box, rowID, 0, 1, 6);
 
-  connect(sbRL, &QSpinBox::valueChanged, this, [=](){
-    if( !allowChange ) return;
-    int iDigi = cbScopeDigi->currentIndex();
-    sbRL->setValue(8*((sbRL->value() +  7)/8));
-    digiMTX.lock();
-    //StopScope();
-    digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), 
-                              "ChRecordLengthT", 
-                              std::to_string(sbRL->value()));
-    //StartScope();
-    digiMTX.unlock();
+    QGridLayout * bLayout = new QGridLayout(box);
+    bLayout->setSpacing(0);
 
-    //plot->axes(Qt::Horizontal).first()->setRange(0, 600);
+    QLabel * lbRL = new QLabel("Record Lenght [ns] ",scope);
+    lbRL->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbRL, 0, 0);
+    sbRL = new QSpinBox(scope);
+    sbRL->setMinimum(32);
+    sbRL->setMaximum(648000);
+    sbRL->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbRL, 0, 1);
 
-  });
+    connect(sbRL, &QSpinBox::valueChanged, this, [=](){
+      if( !allowChange ) return;
+      int iDigi = cbScopeDigi->currentIndex();
+      sbRL->setValue(DIGIPARA::TraceStep*((sbRL->value() +  DIGIPARA::TraceStep - 1)/DIGIPARA::TraceStep));
+      digiMTX.lock();
+      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::RecordLength, std::to_string(sbRL->value()));
+      digiMTX.unlock();
+    });
 
-  QLabel * lbPT = new QLabel("Pre Trigger [ns]",scope);
-  layout->addWidget(lbPT, rowID, 2);
-  sbPT = new QSpinBox(scope);
-  sbPT->setMinimum(32);
-  sbPT->setMaximum(32000);
-  sbPT->setSingleStep(8);
-  layout->addWidget(sbPT, rowID, 3);
+    QLabel * lbThreshold = new QLabel("Threshold [LSB] ",scope);
+    lbThreshold->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbThreshold, 0, 2);
+    QSpinBox * sbThreshold = new QSpinBox(scope);
+    sbThreshold->setMinimum(0);
+    sbThreshold->setMaximum(8191);
+    sbThreshold->setSingleStep(20);
+    bLayout->addWidget(sbThreshold, 0, 3);
 
-  QLabel * lbDCOffset = new QLabel("DC offset [%]",scope);
-  layout->addWidget(lbDCOffset, rowID, 4);
-  QSpinBox * sbDCOffset = new QSpinBox(scope);
-  sbDCOffset->setMinimum(0);
-  sbDCOffset->setMaximum(100);
-  sbDCOffset->setSingleStep(1);
-  layout->addWidget(sbDCOffset, rowID, 5);
+    QLabel * lbPolarity = new QLabel("Polarity ",scope);
+    lbPolarity->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbPolarity, 0, 4);
+    QComboBox * cbPolarity = new QComboBox(scope);
+    cbPolarity->addItem("Pos. +", "Positive");
+    cbPolarity->addItem("Neg. -", "Negative");
+    bLayout->addWidget(cbPolarity, 0, 5);
+
+    QLabel * lbWaveRes = new QLabel("Wave Res. ", scope);
+    lbWaveRes->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbWaveRes, 0, 6);
+    QComboBox * cbWaveRes = new QComboBox(scope);
+    cbWaveRes->addItem(" 8 ns", "Res8");
+    cbWaveRes->addItem("16 ns", "Res16");
+    cbWaveRes->addItem("32 ns", "Res32");
+    cbWaveRes->addItem("64 ns", "Res64");
+    bLayout->addWidget(cbWaveRes, 0, 7);
+
+    //------------------ next row
+    QLabel * lbPT = new QLabel("Pre Trigger [ns] ",scope);
+    lbPT->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbPT, 1, 0);
+    sbPT = new QSpinBox(scope);
+    sbPT->setMinimum(32);
+    sbPT->setMaximum(32000);
+    sbPT->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbPT, 1, 1);
+
+    connect(sbPT, &QSpinBox::valueChanged, this, [=](){
+      if( !allowChange ) return;
+      int iDigi = cbScopeDigi->currentIndex();
+      sbPT->setValue(DIGIPARA::TraceStep*((sbPT->value() +  DIGIPARA::TraceStep - 1)/DIGIPARA::TraceStep));
+      digiMTX.lock();
+      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::PreTrigger, std::to_string(sbPT->value()));
+      digiMTX.unlock();
+    });
+
+    QLabel * lbDCOffset = new QLabel("DC offset [%] ",scope);
+    lbDCOffset->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbDCOffset, 1, 2);
+    sbDCOffset = new QSpinBox(scope);
+    sbDCOffset->setMinimum(0);
+    sbDCOffset->setMaximum(100);
+    sbDCOffset->setSingleStep(1);
+    bLayout->addWidget(sbDCOffset, 1, 3);
+
+    connect(sbDCOffset, &QSpinBox::valueChanged, this, [=](){
+      if( !allowChange ) return; 
+      int iDigi = cbScopeDigi->currentIndex();
+      digiMTX.lock();
+      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::DC_Offset, std::to_string(sbDCOffset->value()));
+      digiMTX.unlock();
+    });
+
+    QLabel * lbTimeRiseTime = new QLabel("Trigger Rise Time [ns] ", scope);
+    lbTimeRiseTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTimeRiseTime, 1, 4);
+    QSpinBox * sbTimeRiseTime = new QSpinBox(scope);
+    sbTimeRiseTime->setMinimum(32);
+    sbTimeRiseTime->setMaximum(2000);
+    sbTimeRiseTime->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbTimeRiseTime, 1, 5);
+
+    QLabel * lbTimeGuard = new QLabel("Trigger Guard [ns] ", scope);
+    lbTimeGuard->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTimeGuard, 1, 6);
+    QSpinBox * sbTimeGuard = new QSpinBox(scope);
+    sbTimeGuard->setMinimum(0);
+    sbTimeGuard->setMaximum(8000);
+    sbTimeGuard->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbTimeGuard, 1, 7);
+
+    //----------------- next row
+    QLabel * lbTrapRiseTime = new QLabel("Trap. Rise Time [ns] ", scope);
+    lbTrapRiseTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTrapRiseTime, 2, 0);
+    QSpinBox * sbTrapRiseTime = new QSpinBox(scope);
+    sbTrapRiseTime->setMinimum(32);
+    sbTrapRiseTime->setMaximum(13000);
+    sbTrapRiseTime->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbTrapRiseTime, 2, 1);
+
+    QLabel * lbTrapFlatTop = new QLabel("Trap. Flat Top [ns] ", scope);
+    lbTrapFlatTop->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTrapFlatTop, 2, 2);
+    QSpinBox * sbTrapFlatTop = new QSpinBox(scope);
+    sbTrapFlatTop->setMinimum(32);
+    sbTrapFlatTop->setMaximum(3000);
+    sbTrapFlatTop->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbTrapFlatTop, 2, 3);
+
+    QLabel * lbTrapPoleZero = new QLabel("Trap. Pole Zero [ns] ", scope);
+    lbTrapPoleZero->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTrapPoleZero, 2, 4);
+    QSpinBox * sbTrapPoleZero = new QSpinBox(scope);
+    sbTrapPoleZero->setMinimum(32);
+    sbTrapPoleZero->setMaximum(524000);
+    sbTrapPoleZero->setSingleStep(DIGIPARA::TraceStep);
+    bLayout->addWidget(sbTrapPoleZero, 2, 5);
+
+    QLabel * lbEnergyFineGain = new QLabel("Energy Fine Gain ", scope);
+    lbEnergyFineGain->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbEnergyFineGain, 2, 6);
+    QSpinBox * sbEnergyFineGain = new QSpinBox(scope);
+    sbEnergyFineGain->setMinimum(1);
+    sbEnergyFineGain->setMaximum(10);
+    bLayout->addWidget(sbEnergyFineGain, 2, 7);
+
+    //----------------- next row
+    QLabel * lbTrapPeaking = new QLabel("Trap. Peaking [%] ", scope);
+    lbTrapPeaking->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTrapPeaking, 3, 0);
+    QSpinBox * sbTrapPeaking = new QSpinBox(scope);
+    sbTrapPeaking->setMinimum(0);
+    sbTrapPeaking->setMaximum(100);
+    bLayout->addWidget(sbTrapPeaking, 3, 1);
+
+    QLabel * lbTrapPeakAvg = new QLabel("Trap. Peak Avg. ", scope);
+    lbTrapPeakAvg->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    bLayout->addWidget(lbTrapPeakAvg, 3, 2);
+    QComboBox * cbTrapPeakAvg = new QComboBox(scope);
+    cbTrapPeakAvg->addItem(" 1 sample", "OneShot");
+    cbTrapPeakAvg->addItem(" 4 sample", "LowAVG");
+    cbTrapPeakAvg->addItem("16 sample", "MediumAVG");
+    cbTrapPeakAvg->addItem("64 sample", "HighAVG");
+    bLayout->addWidget(cbTrapPeakAvg, 3, 3);
 
 
-  
+  }
 
   //------------ plot view
   rowID ++;
@@ -738,12 +910,14 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 6);
 
+  //TODO zoom and pan, see Zoom Line example
+
   //------------ close button
   rowID ++;
   bnScopeStart = new QPushButton("Start", scope);
   layout->addWidget(bnScopeStart, rowID, 0);
   bnScopeStart->setEnabled(false);
-  connect(bnScopeStart, &QPushButton::clicked, this, &MainWindow::StartScope);
+  connect(bnScopeStart, &QPushButton::clicked, this, [=](){this->StartScope(cbScopeDigi->currentIndex());});
 
   bnScopeStop = new QPushButton("Stop", scope);
   layout->addWidget(bnScopeStop, rowID, 1);

@@ -1,8 +1,5 @@
 #include "ClassDigitizer2Gen.h"
 
-
-unsigned short Digitizer2Gen::TraceStep = 8; //? should be variable?
-
 Digitizer2Gen::Digitizer2Gen(){  
   printf("======== %s \n",__func__);
   Initialization();
@@ -100,6 +97,11 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   return retValue;
 }
 
+std::string Digitizer2Gen::ReadDigValue(std::string shortPara, bool verbose){
+  std::string haha = "/par/" + shortPara;
+  return ReadValue(haha.c_str(), verbose);
+}
+
 std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bool verbose){
   std::string haha = "/ch/" + ch + "/par/" + shortPara;
   return ReadValue(haha.c_str(), verbose);
@@ -115,6 +117,11 @@ void Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   }
 }
 
+void Digitizer2Gen::WriteDigValue(std::string shortPara, std::string value){
+  std::string haha = "/par/" + shortPara;
+  WriteValue(haha.c_str(), value);
+}
+
 void Digitizer2Gen::WriteChValue(std::string ch, std::string shortPara, std::string value){
   std::string haha = "/ch/" + ch + "/par/" + shortPara;
   WriteValue(haha.c_str(), value);
@@ -128,6 +135,11 @@ void Digitizer2Gen::SendCommand(const char * parameter){
     ErrorMsg(__func__);
     return;
   }
+}
+
+void Digitizer2Gen::SendCommand(std::string shortPara){
+  std::string haha = "/cmd/" + shortPara;
+  SendCommand(haha.c_str());
 }
 
 //########################################### Open digitizer
@@ -175,9 +187,10 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
   printf("     Channels : %d\n", nChannels);
 
-  ReadValue("/par/InputRange", true);
-  ReadValue("/par/InputType", true);
-  ReadValue("/par/Zin", true);
+  //ReadValue("/par/InputRange", true);
+  //ReadValue("/par/InputType", true);
+  //ReadValue("/par/Zin", true);
+  printf("====================== \n");
 
   return 0;
 }
@@ -214,6 +227,8 @@ void Digitizer2Gen::StopACQ(){
 
 void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
   
+  printf("%s : %d\n", __func__, dataFormat);
+
   ///========== get endpoint and endpoint folder handle
   if( dataFormat < 15 ){
 

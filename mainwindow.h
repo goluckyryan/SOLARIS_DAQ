@@ -115,7 +115,8 @@ private slots:
   void CloseDigitizers();
   
   void OpenScope();
-  void StartScope();
+  void ReadScopeSettings(int iDigi, int ch);
+  void StartScope(int iDigi);
   void StopScope();
   void SetUpPlot();
   void UpdateScope();
@@ -155,10 +156,12 @@ private:
   UpdateTraceThread * updateTraceThread;
   QComboBox   * cbScopeDigi;
   QComboBox   * cbScopeCh;
+  QPushButton * bnScopeReset;
   QComboBox   * cbAnaProbe[2];
   QComboBox   * cbDigProbe[4];
   QSpinBox * sbRL; // record length
   QSpinBox * sbPT; // pre trigger
+  QSpinBox * sbDCOffset;
   QPushButton * bnScopeStart;
   QPushButton * bnScopeStop;
   bool allowChange;
