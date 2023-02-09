@@ -339,7 +339,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   QPushButton * bnClose = new QPushButton("Close", this);
   layout->addWidget(bnClose, rowID, 5);
-  connect(bnClose, &QPushButton::clicked, this, &Scope::StopScope);
   connect(bnClose, &QPushButton::clicked, this, &Scope::close);
 
 

@@ -38,7 +38,8 @@ private slots:
 
   void OpenDigitizers();
   void CloseDigitizers();
-  
+
+  void OpenScope();  
   void OpenDigitizersSettings();
 
   void ProgramSettings();

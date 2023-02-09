@@ -37,10 +37,13 @@ private slots:
 
   void closeEvent(QCloseEvent * event){
     StopScope();  
+    emit CloseWindow();
     event->accept();
   }
 
 signals:
+
+  void CloseWindow();
 
 private:
 

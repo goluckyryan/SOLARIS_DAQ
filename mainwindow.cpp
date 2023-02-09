@@ -61,15 +61,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     bnOpenScope = new QPushButton("Open scope", this);
     bnOpenScope->setEnabled(false);
-    connect(bnOpenScope, &QPushButton::clicked, this, [=](){
-      if( digi ){
-        if( !scope ){
-          scope = new Scope(digi, nDigi, readDataThread, this);
-        }else{
-          scope->show();
-        }
-      }
-    });
+    connect(bnOpenScope, &QPushButton::clicked, this, &MainWindow::OpenScope);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
     connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(OpenDigitizers()));
@@ -85,7 +77,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
 
-    //QPushButton * newScope = new QPushButton("Scope2", this);
+    //QPushButton * bnCustomCommand = new QPushButton("Command line", this);
 
 
     layout1->addWidget(bnProgramSettings, 0, 0);
@@ -97,7 +89,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnOpenDigitizers, 1, 1);
     layout1->addWidget(bnCloseDigitizers, 1, 2, 1, 2);
 
-    //layout1->addWidget(newScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
@@ -106,7 +97,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->setColumnStretch(1, 2);
     layout1->setColumnStretch(2, 1);
     layout1->setColumnStretch(3, 1);
-
 
   }
 
@@ -231,8 +221,6 @@ void MainWindow::StartACQ(){
   bnStopACQ->setEnabled(true);
   bnOpenScope->setEnabled(false);
 
-  //updateTraceThread->start();
-
   LogMsg("end of " + QString::fromStdString(__func__));
 }
 
@@ -299,15 +287,6 @@ void MainWindow::OpenDigitizers(){
   bnOpenDigitizers->setEnabled(false);
   bnOpenDigitizers->setStyleSheet("");
 
-  ///// set scope digitizer
-  //allowChange = false;
-  //cbScopeDigi->clear(); ///this will also trigger QComboBox::currentIndexChanged
-  //cbScopeCh->clear();
-  //for( int i = 0 ; i < nDigi; i++) {
-  //  cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
-  //}
-  //allowChange = true;
-
 }
 
 void MainWindow::CloseDigitizers(){
@@ -346,6 +325,21 @@ void MainWindow::CloseDigitizers(){
 }
 
 //^###################################################################### Open Scope
+void MainWindow::OpenScope(){
+
+  if( digi ){
+    if( !scope ){
+      scope = new Scope(digi, nDigi, readDataThread, this);
+      connect(scope, &Scope::CloseWindow, this, [=](){
+        bnStartACQ->setEnabled(true);
+      });
+    }else{
+      scope->show();
+    }
+  }
+
+  bnStartACQ->setEnabled(false);
+}
 
 //^###################################################################### Open digitizer setting panel
 void MainWindow::OpenDigitizersSettings(){
