@@ -185,6 +185,11 @@ private:
   QComboBox * cbWaveRes;
   QComboBox * cbTrapPeakAvg;
 
+  QSpinBox * sbBaselineGuard;
+  QSpinBox * sbPileUpGuard;
+  QComboBox * cbBaselineAvg;
+  QComboBox * cbLowFreqFilter;
+
   bool allowChange;
   void ProbeChange(QComboBox * cb[], const int size);
 

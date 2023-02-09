@@ -239,7 +239,7 @@ namespace DIGIPARA{
 
     /// ======= read write
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite);
-    const Reg DC_Offset        ("DCOffset", RW::ReadWrite);
+    const Reg DC_Offset        ("DCOffset", RW::ReadWrite); 
     const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite);
     const Reg Polarity         ("PulsePolarity", RW::ReadWrite);
 
@@ -253,13 +253,13 @@ namespace DIGIPARA{
     const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite);
     const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite);
     const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite);
-    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite);
-    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite);
     const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite);
     const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite);
-    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite);
-    const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite);
     const Reg EnergyFilterBaselineAvg     ("EnergyFilterBaselineAvg", RW::ReadWrite);
+    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite);
+    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite);
+    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite);
+    const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite);
     const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite);
     const Reg WaveAnalogProbe1            ("WaveAnalogProbe1", RW::ReadWrite);
     const Reg WaveDigitalProbe0           ("WaveDigitalProbe0", RW::ReadWrite);

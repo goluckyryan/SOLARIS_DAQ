@@ -384,6 +384,8 @@ void MainWindow::ReadScopeSettings(int iDigi, int ch){
   ScopeReadComboBoxValue(iDigi, ch, cbPolarity, DIGIPARA::CH::Polarity);
   ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, DIGIPARA::CH::WaveResolution);
   ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, DIGIPARA::CH::EnergyFilterPeakingAvg);
+  ScopeReadComboBoxValue(iDigi, ch, cbBaselineAvg, DIGIPARA::CH::EnergyFilterBaselineAvg);
+  ScopeReadComboBoxValue(iDigi, ch, cbLowFreqFilter, DIGIPARA::CH::EnergyFilterLowFreqFilter);
 
   ScopeReadSpinBoxValue(iDigi, ch, sbRL, DIGIPARA::CH::RecordLength);
   ScopeReadSpinBoxValue(iDigi, ch, sbPT, DIGIPARA::CH::PreTrigger);
@@ -396,6 +398,9 @@ void MainWindow::ReadScopeSettings(int iDigi, int ch){
   ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, DIGIPARA::CH::EnergyFilterPoleZero);
   ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, DIGIPARA::CH::EnergyFilterFineGain);
   ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, DIGIPARA::CH::EnergyFilterPeakingPosition);
+  ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, DIGIPARA::CH::EnergyFilterBaselineGuard);
+  ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, DIGIPARA::CH::EnergyFilterPileUpGuard);
+
   allowChange = true;
 }
 
@@ -536,6 +541,11 @@ void MainWindow::ScopeControlOnOff(bool on){
   cbPolarity->setEnabled(on);
   cbWaveRes->setEnabled(on);
   cbTrapPeakAvg->setEnabled(on);
+
+  sbBaselineGuard->setEnabled(on);
+  sbPileUpGuard->setEnabled(on);
+  cbBaselineAvg->setEnabled(on);
+  cbLowFreqFilter->setEnabled(on);
 }
 
 void MainWindow::ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara){
@@ -618,7 +628,7 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   yaxis->setLabelFormat("%.0f");
 
   xaxis->setRange(0, 5000);
-  xaxis->setTickCount(10);
+  xaxis->setTickCount(11);
   xaxis->setLabelFormat("%.0f");
   xaxis->setTitleText("Time [ns]");
 
@@ -857,6 +867,29 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     cbTrapPeakAvg->addItem("16 sample", "MediumAVG");
     cbTrapPeakAvg->addItem("64 sample", "HighAVG");
     ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, DIGIPARA::CH::EnergyFilterPeakingAvg);
+
+    sbBaselineGuard = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, 0, 8000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterBaselineGuard);
+
+    cbBaselineAvg = new QComboBox(scope);
+    cbBaselineAvg->addItem("    0 samp.", "Fixed");
+    cbBaselineAvg->addItem("   16 samp.", "VeryLow");
+    cbBaselineAvg->addItem("   64 samp.", "Low");
+    cbBaselineAvg->addItem("  256 samp.", "MediumLow");
+    cbBaselineAvg->addItem(" 1024 samp.", "Medium");
+    cbBaselineAvg->addItem(" 4096 samp.", "MediumHigh");
+    cbBaselineAvg->addItem("16384 samp.", "High");
+    ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, DIGIPARA::CH::EnergyFilterBaselineAvg);
+    //----------------
+
+    sbPileUpGuard = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, 0, 64000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterPileUpGuard);
+
+    cbLowFreqFilter = new QComboBox(scope);
+    cbLowFreqFilter->addItem("Disabled", "0");
+    cbLowFreqFilter->addItem("Enabled", "1");
+    ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, DIGIPARA::CH::EnergyFilterLowFreqFilter);
+
   }
 
   //------------ plot view
