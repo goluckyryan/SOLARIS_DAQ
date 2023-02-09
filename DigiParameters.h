@@ -241,7 +241,7 @@ namespace DIGIPARA{
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite);
     const Reg DC_Offset        ("DCOffset", RW::ReadWrite);
     const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite);
-    const Reg Polarity         ("Pulse Polarity", RW::ReadWrite);
+    const Reg Polarity         ("PulsePolarity", RW::ReadWrite);
 
     const Reg WaveDataSource              ("WaveDataSouce", RW::ReadWrite);
     const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite);

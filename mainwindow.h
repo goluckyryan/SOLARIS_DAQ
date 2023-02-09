@@ -118,8 +118,13 @@ private slots:
   void ReadScopeSettings(int iDigi, int ch);
   void StartScope(int iDigi);
   void StopScope();
-  void SetUpPlot();
   void UpdateScope();
+  void ScopeControlOnOff(bool on);
+  void ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara);
+  void ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string digPara);
+  void ScopeMakeSpinBox(QSpinBox * sb, QString str,  QGridLayout* layout, int row, int col, int min, int max, int step, std::string digPara);
+  void ScopeMakeComoBox(QComboBox * cb, QString str, QGridLayout* layout, int row, int col, std::string digPara);
+  void SetUpPlot();
 
   void OpenDigitizersSettings();
 
@@ -157,13 +162,29 @@ private:
   QComboBox   * cbScopeDigi;
   QComboBox   * cbScopeCh;
   QPushButton * bnScopeReset;
+  QPushButton * bnScopeReadSettings;
+  
+  
+  QPushButton * bnScopeStart;
+  QPushButton * bnScopeStop;
+  
   QComboBox   * cbAnaProbe[2];
   QComboBox   * cbDigProbe[4];
   QSpinBox * sbRL; // record length
   QSpinBox * sbPT; // pre trigger
   QSpinBox * sbDCOffset;
-  QPushButton * bnScopeStart;
-  QPushButton * bnScopeStop;
+  QSpinBox * sbThreshold;
+  QSpinBox * sbTimeRiseTime;
+  QSpinBox * sbTimeGuard;
+  QSpinBox * sbTrapRiseTime;
+  QSpinBox * sbTrapFlatTop;
+  QSpinBox * sbTrapPoleZero;
+  QSpinBox * sbEnergyFineGain;
+  QSpinBox * sbTrapPeaking;
+  QComboBox * cbPolarity;
+  QComboBox * cbWaveRes;
+  QComboBox * cbTrapPeakAvg;
+
   bool allowChange;
   void ProbeChange(QComboBox * cb[], const int size);
 

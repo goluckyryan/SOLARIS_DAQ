@@ -371,41 +371,31 @@ void MainWindow::ReadScopeSettings(int iDigi, int ch){
 
   printf("%s\n", __func__);
 
-  int index;
-  std::string ans;
-
   allowChange = false;
 
   for( int i = 0 ; i < 2; i++){
-    ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::AnalogProbe[i]);
-    index = cbAnaProbe[i]->findData(QString::fromStdString(ans));
-    
-    if( index >= 0 ) {
-      cbAnaProbe[i]->setCurrentIndex(index);
-    }else{
-      qDebug() << QString::fromStdString(ans);
-    }
+    ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], DIGIPARA::CH::AnalogProbe[i]);
   }
 
   for( int i = 0 ; i < 4; i++){
-    ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::DigitalProbe[i]);
-    index = cbDigProbe[i]->findData(QString::fromStdString(ans));
-    if( index >= 0 ) {
-      cbDigProbe[i]->setCurrentIndex(index);
-    }else{
-      qDebug() << QString::fromStdString(ans);
-    }
+    ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], DIGIPARA::CH::DigitalProbe[i]);
   }
 
-  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::RecordLength);
-  sbRL->setValue(atoi(ans.c_str()));
+  ScopeReadComboBoxValue(iDigi, ch, cbPolarity, DIGIPARA::CH::Polarity);
+  ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, DIGIPARA::CH::WaveResolution);
+  ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, DIGIPARA::CH::EnergyFilterPeakingAvg);
 
-  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::PreTrigger);
-  sbPT->setValue(atoi(ans.c_str()));
-  
-  ans = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::DC_Offset);
-  sbDCOffset->setValue(atoi(ans.c_str()));
-  
+  ScopeReadSpinBoxValue(iDigi, ch, sbRL, DIGIPARA::CH::RecordLength);
+  ScopeReadSpinBoxValue(iDigi, ch, sbPT, DIGIPARA::CH::PreTrigger);
+  ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset, DIGIPARA::CH::DC_Offset);
+  ScopeReadSpinBoxValue(iDigi, ch, sbThreshold, DIGIPARA::CH::TriggerThreshold);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTimeRiseTime, DIGIPARA::CH::TimeFilterRiseTime);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTimeGuard, DIGIPARA::CH::TimeFilterRetriggerGuard);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapRiseTime, DIGIPARA::CH::EnergyFilterRiseTime);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapFlatTop, DIGIPARA::CH::EnergyFilterFlatTop);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, DIGIPARA::CH::EnergyFilterPoleZero);
+  ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, DIGIPARA::CH::EnergyFilterFineGain);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, DIGIPARA::CH::EnergyFilterPeakingPosition);
   allowChange = true;
 }
 
@@ -434,16 +424,9 @@ void MainWindow::StartScope(int iDigi){
 
   updateTraceThread->start();
 
-  bnScopeStart->setEnabled(false);
-  bnScopeStop->setEnabled(true);
-
-  sbRL->setEnabled(false);
-  sbPT->setEnabled(false);
-  sbDCOffset->setEnabled(false);
-  bnScopeReset->setEnabled(false);
+  ScopeControlOnOff(false);
 
   allowChange = true;
-
 }
 
 void MainWindow::StopScope(){
@@ -470,14 +453,8 @@ void MainWindow::StopScope(){
     bnStopACQ->setEnabled(true);
   }
 
-  bnScopeStart->setEnabled(true);
-  bnScopeStop->setEnabled(false);
-
-  sbRL->setEnabled(true);
-  sbPT->setEnabled(true);
-  sbDCOffset->setEnabled(true);
-  bnScopeReset->setEnabled(true);
-
+  ScopeControlOnOff(true);
+  allowChange = true;
 }
 
 void MainWindow::UpdateScope(){
@@ -485,7 +462,7 @@ void MainWindow::UpdateScope(){
   if( scope->isVisible() == false) return;
 
   int iDigi = cbScopeDigi->currentIndex();
-  //int ch = cbScopeCh->currentIndex();
+  int sample2ns = DIGIPARA::TraceStep * (1 << cbWaveRes->currentIndex());
 
   if( digi ){
     digiMTX.lock();
@@ -496,14 +473,13 @@ void MainWindow::UpdateScope(){
     for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
 
     for( unsigned int i = 0 ; i < traceLength; i++){ 
-      for( int j = 0; j < 2; j++) dataTrace[j]->append(DIGIPARA::TraceStep * i, digi[iDigi]->evt->analog_probes[j][i]);
-      for( int j = 2; j < 6; j++) dataTrace[j]->append(DIGIPARA::TraceStep * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
+      for( int j = 0; j < 2; j++) dataTrace[j]->append(sample2ns * i, digi[iDigi]->evt->analog_probes[j][i]);
+      for( int j = 2; j < 6; j++) dataTrace[j]->append(sample2ns * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
     }
 
     digiMTX.unlock();
 
-    //plot->axes(Qt::Vertical).first()->setRange(-1, 16000); /// this must be after createDefaultAxes();
-    plot->axes(Qt::Horizontal).first()->setRange(0, DIGIPARA::TraceStep* traceLength);
+    plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
   }
 
 }
@@ -537,7 +513,76 @@ void MainWindow::ProbeChange(QComboBox * cb[], const int size ){
   }
   digiMTX.unlock();
 
+}
 
+void MainWindow::ScopeControlOnOff(bool on){
+  bnScopeStop->setEnabled(!on);
+
+  bnScopeStart->setEnabled(on);
+  bnScopeReset->setEnabled(on);
+  bnScopeReadSettings->setEnabled(on);
+
+  sbRL->setEnabled(on);
+  sbPT->setEnabled(on);
+  sbDCOffset->setEnabled(on);
+  sbThreshold->setEnabled(on);
+  sbTimeRiseTime->setEnabled(on);
+  sbTimeGuard->setEnabled(on);
+  sbTrapRiseTime->setEnabled(on);
+  sbTrapFlatTop->setEnabled(on);
+  sbTrapPoleZero->setEnabled(on);
+  sbEnergyFineGain->setEnabled(on);
+  sbTrapPeaking->setEnabled(on);
+  cbPolarity->setEnabled(on);
+  cbWaveRes->setEnabled(on);
+  cbTrapPeakAvg->setEnabled(on);
+}
+
+void MainWindow::ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara){
+  std::string ans = digi[iDigi]->ReadChValue(std::to_string(ch), digPara);
+  sb->setValue(atoi(ans.c_str()));
+}
+
+void MainWindow::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string digPara){
+  std::string ans = digi[iDigi]->ReadChValue(std::to_string(ch), digPara);
+  int index = cb->findData(QString::fromStdString(ans));
+  if( index >= 0 && index < cb->count()) {
+    cb->setCurrentIndex(index);
+  }else{
+    qDebug() << QString::fromStdString(ans);
+  }
+}
+
+void MainWindow::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int row, int col, int min, int max, int step, std::string digPara){
+  QLabel * lb = new QLabel(str, scope);
+  lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lb, row, col);
+  sb->setMinimum(min);
+  sb->setMaximum(max);
+  sb->setSingleStep(abs(step));
+  layout->addWidget(sb, row, col+1);
+  connect(sb, &QSpinBox::valueChanged, this, [=](){
+    if( !allowChange ) return;
+    int iDigi = cbScopeDigi->currentIndex();
+    if( step > 1 ) sb->setValue(step*((sb->value() +  step - 1)/step));
+    digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, std::to_string(sb->value()));
+    digiMTX.unlock();
+  });
+}
+
+void MainWindow::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, int row, int col, std::string digPara){
+  QLabel * lb = new QLabel(str, scope);
+  lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lb, row, col);
+  layout->addWidget(cb, row, col+1);
+  connect(cb, &QComboBox::currentIndexChanged, this, [=](){
+    if( !allowChange ) return;
+    int iDigi = cbScopeDigi->currentIndex();
+     digiMTX.lock();
+    digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, cb->currentData().toString().toStdString());
+    digiMTX.unlock();
+  });
 }
 
 void MainWindow::SetUpPlot(){ //@--- this function run at start up
@@ -615,13 +660,25 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     digiMTX.unlock();
   });
 
-  bnScopeReset = new QPushButton("Reset Digitizer", scope);
+  bnScopeReset = new QPushButton("ReProgram Digitizer", scope);
   layout->addWidget(bnScopeReset, rowID, 2);
   connect(bnScopeReset, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     digi[iDigi]->Reset();
+    digi[iDigi]->ProgramPHA(false);
   });
+
+  bnScopeReadSettings = new QPushButton("Read Ch. Settings", scope);
+  layout->addWidget(bnScopeReadSettings, rowID, 3);
+  connect(bnScopeReadSettings, &QPushButton::clicked, this, [=](){
+    if( !allowChange ) return;
+    ReadScopeSettings(cbScopeDigi->currentIndex(), cbScopeCh->currentIndex());
+  });
+
+  //TODO----- add copy settings and paste settings
+  QCheckBox * chkSetAllChannel = new QCheckBox("apply to all channels", scope);
+  layout->addWidget(chkSetAllChannel, rowID, 4);
 
   //------------ Probe selection
   rowID ++;
@@ -665,7 +722,7 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
   cbDigProbe[0] = new QComboBox(scope);
   cbDigProbe[0]->addItem("Trigger",              "Trigger");
   cbDigProbe[0]->addItem("Time Filter Armed",    "TimeFilterArmed");
-  cbDigProbe[0]->addItem("ReTrigger Guard",      "ReTriggerGaurd");
+  cbDigProbe[0]->addItem("ReTrigger Guard",      "ReTriggerGuard");
   cbDigProbe[0]->addItem("Trap. basline Freeze", "EnergyFilterBaselineFreeze");
   cbDigProbe[0]->addItem("Peaking",              "EnergyFilterPeaking");
   cbDigProbe[0]->addItem("Peak Ready",           "EnergyFilterPeakReady");
@@ -730,7 +787,6 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     digiMTX.unlock();
   });
 
-
   layout->addWidget(cbAnaProbe[0], rowID, 0);
   layout->addWidget(cbAnaProbe[1], rowID, 1);
 
@@ -747,161 +803,60 @@ void MainWindow::SetUpPlot(){ //@--- this function run at start up
     QGridLayout * bLayout = new QGridLayout(box);
     bLayout->setSpacing(0);
 
-    QLabel * lbRL = new QLabel("Record Lenght [ns] ",scope);
-    lbRL->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbRL, 0, 0);
     sbRL = new QSpinBox(scope);
-    sbRL->setMinimum(32);
-    sbRL->setMaximum(648000);
-    sbRL->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbRL, 0, 1);
+    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, 32, 648000, DIGIPARA::TraceStep, DIGIPARA::CH::RecordLength);
 
-    connect(sbRL, &QSpinBox::valueChanged, this, [=](){
-      if( !allowChange ) return;
-      int iDigi = cbScopeDigi->currentIndex();
-      sbRL->setValue(DIGIPARA::TraceStep*((sbRL->value() +  DIGIPARA::TraceStep - 1)/DIGIPARA::TraceStep));
-      digiMTX.lock();
-      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::RecordLength, std::to_string(sbRL->value()));
-      digiMTX.unlock();
-    });
+    sbThreshold = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, 0, 8191, -20, DIGIPARA::CH::TriggerThreshold);
 
-    QLabel * lbThreshold = new QLabel("Threshold [LSB] ",scope);
-    lbThreshold->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbThreshold, 0, 2);
-    QSpinBox * sbThreshold = new QSpinBox(scope);
-    sbThreshold->setMinimum(0);
-    sbThreshold->setMaximum(8191);
-    sbThreshold->setSingleStep(20);
-    bLayout->addWidget(sbThreshold, 0, 3);
-
-    QLabel * lbPolarity = new QLabel("Polarity ",scope);
-    lbPolarity->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbPolarity, 0, 4);
-    QComboBox * cbPolarity = new QComboBox(scope);
+    cbPolarity = new QComboBox(scope);
     cbPolarity->addItem("Pos. +", "Positive");
     cbPolarity->addItem("Neg. -", "Negative");
-    bLayout->addWidget(cbPolarity, 0, 5);
+    ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, DIGIPARA::CH::Polarity);
 
-    QLabel * lbWaveRes = new QLabel("Wave Res. ", scope);
-    lbWaveRes->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbWaveRes, 0, 6);
-    QComboBox * cbWaveRes = new QComboBox(scope);
-    cbWaveRes->addItem(" 8 ns", "Res8");
-    cbWaveRes->addItem("16 ns", "Res16");
-    cbWaveRes->addItem("32 ns", "Res32");
-    cbWaveRes->addItem("64 ns", "Res64");
-    bLayout->addWidget(cbWaveRes, 0, 7);
+    cbWaveRes = new QComboBox(scope);
+    cbWaveRes->addItem(" 8 ns", "RES8");
+    cbWaveRes->addItem("16 ns", "RES16");
+    cbWaveRes->addItem("32 ns", "RES32");
+    cbWaveRes->addItem("64 ns", "RES64");
+    ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, DIGIPARA::CH::WaveResolution);
 
     //------------------ next row
-    QLabel * lbPT = new QLabel("Pre Trigger [ns] ",scope);
-    lbPT->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbPT, 1, 0);
     sbPT = new QSpinBox(scope);
-    sbPT->setMinimum(32);
-    sbPT->setMaximum(32000);
-    sbPT->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbPT, 1, 1);
+    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, 32, 32000, DIGIPARA::TraceStep, DIGIPARA::CH::PreTrigger);
 
-    connect(sbPT, &QSpinBox::valueChanged, this, [=](){
-      if( !allowChange ) return;
-      int iDigi = cbScopeDigi->currentIndex();
-      sbPT->setValue(DIGIPARA::TraceStep*((sbPT->value() +  DIGIPARA::TraceStep - 1)/DIGIPARA::TraceStep));
-      digiMTX.lock();
-      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::PreTrigger, std::to_string(sbPT->value()));
-      digiMTX.unlock();
-    });
-
-    QLabel * lbDCOffset = new QLabel("DC offset [%] ",scope);
-    lbDCOffset->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbDCOffset, 1, 2);
     sbDCOffset = new QSpinBox(scope);
-    sbDCOffset->setMinimum(0);
-    sbDCOffset->setMaximum(100);
-    sbDCOffset->setSingleStep(1);
-    bLayout->addWidget(sbDCOffset, 1, 3);
+    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2, 0, 100, -10, DIGIPARA::CH::DC_Offset);
 
-    connect(sbDCOffset, &QSpinBox::valueChanged, this, [=](){
-      if( !allowChange ) return; 
-      int iDigi = cbScopeDigi->currentIndex();
-      digiMTX.lock();
-      digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), DIGIPARA::CH::DC_Offset, std::to_string(sbDCOffset->value()));
-      digiMTX.unlock();
-    });
+    sbTimeRiseTime = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, 32, 2000, DIGIPARA::TraceStep, DIGIPARA::CH::TimeFilterRiseTime);
 
-    QLabel * lbTimeRiseTime = new QLabel("Trigger Rise Time [ns] ", scope);
-    lbTimeRiseTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTimeRiseTime, 1, 4);
-    QSpinBox * sbTimeRiseTime = new QSpinBox(scope);
-    sbTimeRiseTime->setMinimum(32);
-    sbTimeRiseTime->setMaximum(2000);
-    sbTimeRiseTime->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbTimeRiseTime, 1, 5);
-
-    QLabel * lbTimeGuard = new QLabel("Trigger Guard [ns] ", scope);
-    lbTimeGuard->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTimeGuard, 1, 6);
-    QSpinBox * sbTimeGuard = new QSpinBox(scope);
-    sbTimeGuard->setMinimum(0);
-    sbTimeGuard->setMaximum(8000);
-    sbTimeGuard->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbTimeGuard, 1, 7);
+    sbTimeGuard = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, 0, 8000, DIGIPARA::TraceStep, DIGIPARA::CH::TimeFilterRetriggerGuard);
 
     //----------------- next row
-    QLabel * lbTrapRiseTime = new QLabel("Trap. Rise Time [ns] ", scope);
-    lbTrapRiseTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTrapRiseTime, 2, 0);
-    QSpinBox * sbTrapRiseTime = new QSpinBox(scope);
-    sbTrapRiseTime->setMinimum(32);
-    sbTrapRiseTime->setMaximum(13000);
-    sbTrapRiseTime->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbTrapRiseTime, 2, 1);
+    sbTrapRiseTime = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, 32, 13000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterRiseTime);
 
-    QLabel * lbTrapFlatTop = new QLabel("Trap. Flat Top [ns] ", scope);
-    lbTrapFlatTop->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTrapFlatTop, 2, 2);
-    QSpinBox * sbTrapFlatTop = new QSpinBox(scope);
-    sbTrapFlatTop->setMinimum(32);
-    sbTrapFlatTop->setMaximum(3000);
-    sbTrapFlatTop->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbTrapFlatTop, 2, 3);
+    sbTrapFlatTop = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, 32, 3000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterFlatTop);
 
-    QLabel * lbTrapPoleZero = new QLabel("Trap. Pole Zero [ns] ", scope);
-    lbTrapPoleZero->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTrapPoleZero, 2, 4);
-    QSpinBox * sbTrapPoleZero = new QSpinBox(scope);
-    sbTrapPoleZero->setMinimum(32);
-    sbTrapPoleZero->setMaximum(524000);
-    sbTrapPoleZero->setSingleStep(DIGIPARA::TraceStep);
-    bLayout->addWidget(sbTrapPoleZero, 2, 5);
+    sbTrapPoleZero = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, 32, 524000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterPoleZero);
 
-    QLabel * lbEnergyFineGain = new QLabel("Energy Fine Gain ", scope);
-    lbEnergyFineGain->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbEnergyFineGain, 2, 6);
-    QSpinBox * sbEnergyFineGain = new QSpinBox(scope);
-    sbEnergyFineGain->setMinimum(1);
-    sbEnergyFineGain->setMaximum(10);
-    bLayout->addWidget(sbEnergyFineGain, 2, 7);
+    sbEnergyFineGain = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, 1, 10, -1, DIGIPARA::CH::EnergyFilterFineGain);
 
     //----------------- next row
-    QLabel * lbTrapPeaking = new QLabel("Trap. Peaking [%] ", scope);
-    lbTrapPeaking->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTrapPeaking, 3, 0);
-    QSpinBox * sbTrapPeaking = new QSpinBox(scope);
-    sbTrapPeaking->setMinimum(0);
-    sbTrapPeaking->setMaximum(100);
-    bLayout->addWidget(sbTrapPeaking, 3, 1);
+    sbTrapPeaking = new QSpinBox(scope);
+    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, 1, 100, -10, DIGIPARA::CH::EnergyFilterPeakingPosition);
 
-    QLabel * lbTrapPeakAvg = new QLabel("Trap. Peak Avg. ", scope);
-    lbTrapPeakAvg->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    bLayout->addWidget(lbTrapPeakAvg, 3, 2);
-    QComboBox * cbTrapPeakAvg = new QComboBox(scope);
+    cbTrapPeakAvg = new QComboBox(scope);
     cbTrapPeakAvg->addItem(" 1 sample", "OneShot");
     cbTrapPeakAvg->addItem(" 4 sample", "LowAVG");
     cbTrapPeakAvg->addItem("16 sample", "MediumAVG");
     cbTrapPeakAvg->addItem("64 sample", "HighAVG");
-    bLayout->addWidget(cbTrapPeakAvg, 3, 3);
-
-
+    ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, DIGIPARA::CH::EnergyFilterPeakingAvg);
   }
 
   //------------ plot view
