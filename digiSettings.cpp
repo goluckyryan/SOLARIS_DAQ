@@ -660,5 +660,4 @@ DigiSettings::~DigiSettings(){
       if( cbCh[iDig][i] != NULL) delete cbCh[iDig][i];
     }
   }
-
 }

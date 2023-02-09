@@ -5,100 +5,25 @@
 #include <QMainWindow>
 #include <QTabWidget>
 #include <QPlainTextEdit>
-#include <QThread>
 #include <qdebug.h>
 #include <QDateTime>
 #include <QScrollBar>
 #include <QPushButton>
 #include <QComboBox>
-#include <QMutex>
+
 #include <QChart>
 #include <QLineSeries>
 
 #include <vector>
 #include <time.h> // time in nano-sec
 
-#include "digiSettings.h"
-
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
 
-static QMutex digiMTX;
+#include "manyThread.h"
 
-//^#===================================================== ReadData Thread
-class ReadDataThread : public QThread {
-  Q_OBJECT
-public:
-  ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
-    this->digi = dig;
-    isScopeRun = false;
-  }
-  void SetScopeRun(bool onOff) {this->isScopeRun = onOff;}
-  void run(){
-    clock_gettime(CLOCK_REALTIME, &ta);
-    while(true){
-      digiMTX.lock();
-      int ret = digi->ReadData();
-      digiMTX.unlock();
-
-      if( ret == CAEN_FELib_Success){
-        if( !isScopeRun) digi->SaveDataToFile();
-      }else if(ret == CAEN_FELib_Stop){
-        digi->ErrorMsg("No more data");
-        break;
-      }else{
-        digi->ErrorMsg("ReadDataLoop()");
-        digi->evt->ClearTrace();
-      }
-
-      if( !isScopeRun ){
-        clock_gettime(CLOCK_REALTIME, &tb);
-        if( tb.tv_sec - ta.tv_sec > 2 ) {
-          emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
-          
-          //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
-          //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
-          ta = tb;
-        }
-      }
-    }
-  }
-signals:
-  void sendMsg(const QString &msg);
-private:
-  Digitizer2Gen * digi; 
-  timespec ta, tb;
-  bool isScopeRun;
-};
-
-//^#===================================================== UpdateTrace Thread
-class UpdateTraceThread : public QThread {
-  Q_OBJECT
-public:
-  UpdateTraceThread(QObject * parent = 0) : QThread(parent){
-    waitTime = 2;
-    stop = false;
-  }
-  void Stop() {this->stop = true;}
-  void run(){
-    unsigned int count = 0;
-    stop = false;
-    do{
-      usleep(100000);
-      count ++;
-      if( count % waitTime == 0){
-        emit updateTrace();
-      }
-    }while(!stop);
-  }
-signals:
-  void updateTrace();
-
-private:
-  bool stop;
-  unsigned int waitTime; //100 of milisec
-};
-
+#include "digiSettings.h"
+#include "scope.h"
 
 //^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
@@ -114,18 +39,6 @@ private slots:
   void OpenDigitizers();
   void CloseDigitizers();
   
-  void OpenScope();
-  void ReadScopeSettings(int iDigi, int ch);
-  void StartScope(int iDigi);
-  void StopScope();
-  void UpdateScope();
-  void ScopeControlOnOff(bool on);
-  void ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara);
-  void ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string digPara);
-  void ScopeMakeSpinBox(QSpinBox * sb, QString str,  QGridLayout* layout, int row, int col, int min, int max, int step, std::string digPara);
-  void ScopeMakeComoBox(QComboBox * cb, QString str, QGridLayout* layout, int row, int col, std::string digPara);
-  void SetUpPlot();
-
   void OpenDigitizersSettings();
 
   void ProgramSettings();
@@ -138,6 +51,13 @@ private slots:
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
   void CreateRawDataFolderAndLink(const QString newExpName);
+
+  void closeEvent(QCloseEvent * event){
+    if( digiSetting != NULL ) digiSetting->close();
+    if( scope != NULL ) scope->close();
+    event->accept();
+  }
+
 
 signals :
 
@@ -153,45 +73,9 @@ private:
   QPushButton * bnDigiSettings;
   QPushButton * bnSOLSettings;
 
-  //@------ scope things
-  QMainWindow * scope;
+  //@--- new scope
+  Scope * scope;
   QPushButton * bnOpenScope;
-  QChart      * plot;
-  QLineSeries * dataTrace[6];
-  UpdateTraceThread * updateTraceThread;
-  QComboBox   * cbScopeDigi;
-  QComboBox   * cbScopeCh;
-  QPushButton * bnScopeReset;
-  QPushButton * bnScopeReadSettings;
-  
-  
-  QPushButton * bnScopeStart;
-  QPushButton * bnScopeStop;
-  
-  QComboBox   * cbAnaProbe[2];
-  QComboBox   * cbDigProbe[4];
-  QSpinBox * sbRL; // record length
-  QSpinBox * sbPT; // pre trigger
-  QSpinBox * sbDCOffset;
-  QSpinBox * sbThreshold;
-  QSpinBox * sbTimeRiseTime;
-  QSpinBox * sbTimeGuard;
-  QSpinBox * sbTrapRiseTime;
-  QSpinBox * sbTrapFlatTop;
-  QSpinBox * sbTrapPoleZero;
-  QSpinBox * sbEnergyFineGain;
-  QSpinBox * sbTrapPeaking;
-  QComboBox * cbPolarity;
-  QComboBox * cbWaveRes;
-  QComboBox * cbTrapPeakAvg;
-
-  QSpinBox * sbBaselineGuard;
-  QSpinBox * sbPileUpGuard;
-  QComboBox * cbBaselineAvg;
-  QComboBox * cbLowFreqFilter;
-
-  bool allowChange;
-  void ProbeChange(QComboBox * cb[], const int size);
 
   //@------ ACQ things
   QPushButton * bnStartACQ;

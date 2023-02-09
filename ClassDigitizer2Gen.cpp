@@ -6,7 +6,7 @@ Digitizer2Gen::Digitizer2Gen(){
 }
 
 Digitizer2Gen::~Digitizer2Gen(){
-  printf("======== %s \n",__func__);
+  printf("========Digitizer2Gen::%s \n",__func__);
   if(isConnected ) CloseDigitizer();
 }
 
@@ -196,7 +196,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
 }
 
 int Digitizer2Gen::CloseDigitizer(){
-  printf("======== %s \n",__func__);
+  printf("========Digitizer2Gen::%s \n",__func__);
   if( isConnected == true ){
     ret = CAEN_FELib_Close(handle);
     if (ret != CAEN_FELib_Success) {
