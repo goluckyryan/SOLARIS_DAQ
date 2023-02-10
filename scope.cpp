@@ -323,8 +323,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 6);
 
-  //TODO zoom and pan, see Zoom Line example
-
   //------------ close button
   rowID ++;
   bnScopeStart = new QPushButton("Start", this);
