@@ -3,10 +3,8 @@
 #include <QValueAxis>
 #include <QRandomGenerator>
 #include <QGroupBox>
-#include <QChartView>
 #include <QStandardItemModel>
 #include <QLabel>
-
 
 Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow *parent) : QMainWindow(parent){
   this->digi = digi;
@@ -19,11 +17,11 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   allowChange = false;
 
-  plot = new QChart();
+  plot = new Trace();
   for( int i = 0; i < 6; i++) {
     dataTrace[i] = new QLineSeries();
     dataTrace[i]->setName("Trace " + QString::number(i));
-    for(int j = 0; j < 100; j ++) dataTrace[i]->append(j, QRandomGenerator::global()->bounded(8000) + 8000);
+    for(int j = 0; j < 100; j ++) dataTrace[i]->append(40*j, QRandomGenerator::global()->bounded(8000) + 8000);
     plot->addSeries(dataTrace[i]);
   }
 
@@ -34,6 +32,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   dataTrace[4]->setPen(QPen(Qt::darkGreen, 1));
   dataTrace[5]->setPen(QPen(Qt::darkBlue, 1));
 
+  plot->setAnimationOptions(QChart::SeriesAnimations);
   plot->createDefaultAxes(); /// this must be after addSeries();
   /// this must be after createDefaultAxes();
   QValueAxis * yaxis = qobject_cast<QValueAxis*> (plot->axes(Qt::Vertical).first());
@@ -320,7 +319,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //------------ plot view
   rowID ++;
-  QChartView * plotView = new QChartView(plot);
+  TraceView * plotView = new TraceView(plot);
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 6);
 
