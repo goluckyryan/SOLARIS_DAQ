@@ -66,7 +66,7 @@ class Digitizer2Gen {
 
     unsigned short GetSerialNumber() {return serialNumber;}
 
-    void  SetDummy();
+    void  SetDummy(unsigned short sn);
     bool  IsDummy() {return isDummy;}
 
     int OpenDigitizer(const char * url);

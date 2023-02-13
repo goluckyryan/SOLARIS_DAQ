@@ -338,7 +338,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(bnClose, rowID, 5);
   connect(bnClose, &QPushButton::clicked, this, &Scope::close);
 
-
   show();
 
   StartScope();

@@ -6,7 +6,7 @@ Digitizer2Gen::Digitizer2Gen(){
 }
 
 Digitizer2Gen::~Digitizer2Gen(){
-  printf("========Digitizer2Gen::%s \n",__func__);
+  printf("========Digitizer2Gen::%s (%d)\n",__func__, serialNumber);
   if(isConnected ) CloseDigitizer();
 }
 
@@ -43,9 +43,10 @@ void Digitizer2Gen::Initialization(){
 
 }
 
-void Digitizer2Gen::SetDummy(){
+void Digitizer2Gen::SetDummy(unsigned short sn){
 
   isDummy = true;
+  serialNumber = sn;
   nChannels = 64;
 
 }

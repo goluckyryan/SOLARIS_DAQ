@@ -42,9 +42,14 @@ private slots:
   void OpenScope();  
   void OpenDigitizersSettings();
 
+  void OpenScaler();
+  void SetUpScalar();
+  void DeleteTriggerLineEdit();
+
   void ProgramSettings();
   bool OpenProgramSettings();
   void SaveProgramSettings();
+  void DecodeIPList();
   void OpenDirectory(int id);
 
   void SetupNewExp();
@@ -54,7 +59,10 @@ private slots:
   void CreateRawDataFolderAndLink(const QString newExpName);
 
   void closeEvent(QCloseEvent * event){
+    printf("___ %s \n", __func__);
+    printf("+++++++++++++++  digiSetting %p\n", digiSetting);
     if( digiSetting != NULL ) digiSetting->close();
+    printf("+++++++++++++++  scope %p\n", scope);
     if( scope != NULL ) scope->close();
     event->accept();
   }
@@ -78,11 +86,20 @@ private:
   Scope * scope;
   QPushButton * bnOpenScope;
 
+  //@----- scalar;
+  QMainWindow * scalar;
+  QPushButton * bnOpenScalar;
+  QLineEdit *** leTrigger; // need to delete manually
+  QGridLayout * scalarLayout;
+
   //@------ ACQ things
   QPushButton * bnStartACQ;
   QPushButton * bnStopACQ;
   QLineEdit   * leRunID;
   QLineEdit   * leRawDataPath;
+  ReadDataThread ** readDataThread;   
+  void StartACQ();
+  void StopACQ();
 
   DigiSettings * digiSetting;
 
@@ -90,12 +107,6 @@ private:
 
   static Digitizer2Gen ** digi; 
   unsigned short nDigi;
-  std::vector<unsigned short> digiSerialNum;
-
-  void StartACQ();
-  void StopACQ();
-
-  ReadDataThread ** readDataThread;   
 
   void LogMsg(QString msg);
   bool logMsgHTMLMode = true;

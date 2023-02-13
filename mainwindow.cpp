@@ -28,17 +28,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   setWindowIcon(icon);
 
   nDigi = 0;
-  digiSerialNum.clear();
   digiSetting = NULL;
   readDataThread = NULL;
-
   scope = NULL;
-  
+
+  {
+    scalar = new QMainWindow(this);
+    scalar->setWindowTitle("Scalar");
+    scalar->setGeometry(0, 0, 1000, 800);
+
+    QWidget * layoutWidget = new QWidget(scalar);
+    scalar->setCentralWidget(layoutWidget);
+    scalarLayout = new QGridLayout(layoutWidget);
+    scalarLayout->setSpacing(0);
+
+    leTrigger = NULL;
+  }
+
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
   QVBoxLayout * layoutMain = new QVBoxLayout(mainLayoutWidget);
   mainLayoutWidget->setLayout(layoutMain);
-
 
   {//====================== General
     QGroupBox * box1 = new QGroupBox("General", mainLayoutWidget);
@@ -113,6 +123,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leRawDataPath->setReadOnly(true);
     leRawDataPath->setStyleSheet("background-color: #F3F3F3;");
 
+    bnOpenScalar = new QPushButton("Open Scalar", this);
+    bnOpenScalar->setEnabled(false);
+    connect(bnOpenScalar, &QPushButton::clicked, this, &MainWindow::OpenScaler);
+
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
     connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
@@ -134,7 +148,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     runComment->setReadOnly(true);
     
     layout2->addWidget(lbRawDataPath, 0, 0);
-    layout2->addWidget(leRawDataPath, 0, 1, 1, 3);
+    layout2->addWidget(leRawDataPath, 0, 1, 1, 2);
+    layout2->addWidget(bnOpenScalar, 0, 3);
 
     layout2->addWidget(lbRunID,    1, 0);
     layout2->addWidget(leRunID,    1, 1);
@@ -187,6 +202,7 @@ MainWindow::~MainWindow(){
   //delete logInfo;
   printf("- %s\n", __func__);
 
+  DeleteTriggerLineEdit();
   CloseDigitizers();
   
   //---- need manually delete
@@ -263,8 +279,6 @@ void MainWindow::OpenDigitizers(){
 
     if(digi[i]->IsConnected()){
 
-      digiSerialNum.push_back(digi[i]->GetSerialNumber());
-
       LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
       bnStartACQ->setEnabled(true);
       bnStopACQ->setEnabled(false);
@@ -274,9 +288,8 @@ void MainWindow::OpenDigitizers(){
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
     }else{
-      LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i));
-      digi[i]->SetDummy();
-      digiSerialNum.push_back(i);
+      digi[i]->SetDummy(i);
+      LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digi[i]->GetNChannels()) + " ch.");
 
       readDataThread[i] = NULL;
     }
@@ -287,26 +300,23 @@ void MainWindow::OpenDigitizers(){
   bnOpenDigitizers->setEnabled(false);
   bnOpenDigitizers->setStyleSheet("");
 
+  SetUpScalar();
+  bnOpenScalar->setEnabled(true);
 }
 
 void MainWindow::CloseDigitizers(){
 
   if( digi == NULL) return;
+
+  scalar->close();
+  DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
   
   for( int i = 0; i < nDigi; i++){    
     if( digi[i] == NULL) return;
     digi[i]->CloseDigitizer();
     delete digi[i];
 
-    LogMsg("Closed Digitizer : " + QString::number(digiSerialNum[0]));
-
-    digiSerialNum.clear();
-
-    bnOpenDigitizers->setEnabled(true);
-    bnCloseDigitizers->setEnabled(false);
-    bnDigiSettings->setEnabled(false);
-    bnStartACQ->setEnabled(false);
-    bnStopACQ->setEnabled(false);
+    LogMsg("Closed Digitizer : " + QString::number(digi[i]->GetSerialNumber()));
 
     if( digiSetting != NULL )  digiSetting->close(); 
 
@@ -321,7 +331,15 @@ void MainWindow::CloseDigitizers(){
   digi = NULL;
   readDataThread = NULL;
 
+
+  bnOpenDigitizers->setEnabled(true);
+  bnCloseDigitizers->setEnabled(false);
+  bnDigiSettings->setEnabled(false);
+  bnStartACQ->setEnabled(false);
+  bnStopACQ->setEnabled(false);
   bnOpenDigitizers->setFocus();
+  bnOpenScalar->setEnabled(false);
+
 }
 
 //^###################################################################### Open Scope
@@ -329,7 +347,7 @@ void MainWindow::OpenScope(){
 
   if( digi ){
     if( !scope ){
-      scope = new Scope(digi, nDigi, readDataThread, this);
+      scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){
         bnStartACQ->setEnabled(true);
       });
@@ -352,6 +370,69 @@ void MainWindow::OpenDigitizersSettings(){
   }else{
     digiSetting->show();
   }
+}
+
+//^###################################################################### Open Scaler, when DAQ is running
+//TODO #################################
+void MainWindow::OpenScaler(){
+  scalar->show();
+}
+
+void MainWindow::SetUpScalar(){
+
+  scalar->setGeometry(0, 0, 10 + nDigi * 100, 1000);
+
+  int rowID = 0;
+  for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+
+    if( ch == 0 ){
+      QLabel * lbCH_H = new QLabel("Ch", scalar); scalarLayout->addWidget(lbCH_H, rowID, 0);
+    }  
+
+    rowID ++;
+    QLabel * lbCH = new QLabel(QString::number(ch), scalar);
+    lbCH->setAlignment(Qt::AlignCenter);
+    scalarLayout->addWidget(lbCH, rowID, 0);
+  }
+  
+  leTrigger = new QLineEdit**[nDigi];
+  for( int iDigi = 0; iDigi < nDigi; iDigi++){
+    rowID = 0;
+    leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
+    for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+
+      if( ch == 0 ){
+          QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
+          lbDigi->setAlignment(Qt::AlignCenter);
+          scalarLayout->addWidget(lbDigi, rowID, iDigi+1);
+      }
+    
+      rowID ++;
+      
+      leTrigger[iDigi][ch] = new QLineEdit();
+      leTrigger[iDigi][ch]->setReadOnly(true);
+      scalarLayout->addWidget(leTrigger[iDigi][ch], rowID, iDigi+1);
+    }
+  }
+
+}
+
+void MainWindow::DeleteTriggerLineEdit(){
+
+  printf("__________ %s \n", __func__);
+
+  if( leTrigger == NULL ) return;
+
+  for( int i = 0; i < nDigi; i++){
+    for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){
+      delete leTrigger[i][ch];
+    }
+    delete [] leTrigger[i];
+  }
+  delete [] leTrigger;
+  leTrigger = NULL;
+  printf("end of ____ %s \n", __func__);
+
 }
 
 //^###################################################################### Program Settings
@@ -460,7 +541,6 @@ void MainWindow::ProgramSettings(){
   QObject::connect(button2, &QPushButton::clicked, this, [=](){this->LogMsg("Cancel <b>Program Settings</b>");});
   QObject::connect(button2, &QPushButton::clicked, &dialog, &QDialog::reject);
 
-
   layout->setColumnStretch(0, 2);
   layout->setColumnStretch(1, 2);
   layout->setColumnStretch(2, 2);
@@ -540,24 +620,7 @@ bool MainWindow::OpenProgramSettings(){
 
   if( ret ){
 
-    //------- decode IPListStr
-    nDigi = 0;
-    QStringList parts = IPListStr.split(".");
-    QString IPDomain = parts[0] + "." + parts[1] + "." + parts[2] + ".";
-    parts = parts[3].split(",");
-    for(int i = 0; i < parts.size(); i++){
-      if( parts[i].indexOf("-") != -1){
-          QStringList haha = parts[i].split("-");
-          for( int j = haha[0].toInt();  j <= haha.last().toInt(); j++){
-            IPList << IPDomain + QString::number(j);
-          }
-      }else{
-        IPList << IPDomain + parts[i];
-      }
-    }
-
-    nDigi = IPList.size();
-
+    DecodeIPList();
     return true;
 
   }else{
@@ -567,6 +630,26 @@ bool MainWindow::OpenProgramSettings(){
     bnOpenDigitizers->setEnabled(false);
     return false;
   }
+}
+
+void MainWindow::DecodeIPList(){
+  //------- decode IPListStr
+  nDigi = 0;
+  IPList.clear();
+  QStringList parts = IPListStr.split(".");
+  QString IPDomain = parts[0] + "." + parts[1] + "." + parts[2] + ".";
+  parts = parts[3].split(",");
+  for(int i = 0; i < parts.size(); i++){
+    if( parts[i].indexOf("-") != -1){
+        QStringList haha = parts[i].split("-");
+        for( int j = haha[0].toInt();  j <= haha.last().toInt(); j++){
+          IPList << IPDomain + QString::number(j);
+        }
+    }else{
+      IPList << IPDomain + parts[i];
+    }
+  }
+  nDigi = IPList.size();
 }
 
 void MainWindow::SaveProgramSettings(){
@@ -599,6 +682,8 @@ void MainWindow::SaveProgramSettings(){
   bnProgramSettings->setStyleSheet("");
   bnNewExp->setEnabled(true);
   bnOpenDigitizers->setEnabled(true);
+
+  DecodeIPList();
 
   OpenExpSettings();
 
