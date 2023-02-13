@@ -8,6 +8,7 @@
 #include <QSpinBox>
 #include <QPushButton>
 #include <QCheckBox>
+#include <QLineEdit>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QLineSeries>
@@ -163,6 +164,8 @@ private:
   QComboBox * cbPolarity;
   QComboBox * cbWaveRes;
   QComboBox * cbTrapPeakAvg;
+
+  QLineEdit * leTriggerRate;
 
   QSpinBox * sbBaselineGuard;
   QSpinBox * sbPileUpGuard;

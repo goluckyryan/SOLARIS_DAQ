@@ -334,6 +334,15 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(bnScopeStop, rowID, 1);
   connect(bnScopeStop, &QPushButton::clicked, this, &Scope::StopScope);
 
+  QLabel * lbTriggerRate = new QLabel("Trigger Rate [Hz] : ", this);
+  lbTriggerRate->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(lbTriggerRate, rowID, 2);
+
+  leTriggerRate = new QLineEdit(this);
+  leTriggerRate->setAlignment(Qt::AlignRight);
+  leTriggerRate->setReadOnly(true);
+  layout->addWidget(leTriggerRate, rowID, 3);
+
   QPushButton * bnClose = new QPushButton("Close", this);
   layout->addWidget(bnClose, rowID, 5);
   connect(bnClose, &QPushButton::clicked, this, &Scope::close);
@@ -458,15 +467,24 @@ void Scope::StopScope(){
 void Scope::UpdateScope(){
 
   int iDigi = cbScopeDigi->currentIndex();
+  int ch = cbScopeCh->currentIndex();
   int sample2ns = DIGIPARA::TraceStep * (1 << cbWaveRes->currentIndex());
 
   if( digi ){
-    digiMTX.lock();
-    unsigned int traceLength = digi[iDigi]->evt->traceLenght;
-    unsigned int dataLength = dataTrace[0]->count();
-
     //---- remove all points
+    unsigned int dataLength = dataTrace[0]->count();
     for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
+
+    digiMTX.lock();    
+    std::string time = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelRealtime); // for refreashing SelfTrgRate and SavedCount
+    std::string haha = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::SelfTrgRate);
+    leTriggerRate->setText(QString::fromStdString(haha));
+    if( atoi(haha.c_str()) == 0 ) {
+      digiMTX.unlock();
+      return;
+    }
+    
+    unsigned int traceLength = digi[iDigi]->evt->traceLenght;
 
     for( unsigned int i = 0 ; i < traceLength; i++){ 
       for( int j = 0; j < 2; j++) dataTrace[j]->append(sample2ns * i, digi[iDigi]->evt->analog_probes[j][i]);

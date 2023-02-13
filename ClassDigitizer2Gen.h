@@ -64,10 +64,10 @@ class Digitizer2Gen {
     Digitizer2Gen();
     ~Digitizer2Gen();
 
-    unsigned short GetSerialNumber() {return serialNumber;}
+    unsigned short GetSerialNumber() const{return serialNumber;}
 
     void  SetDummy(unsigned short sn);
-    bool  IsDummy() {return isDummy;}
+    bool  IsDummy() const {return isDummy;}
 
     int OpenDigitizer(const char * url);
     bool IsConnected() const {return isConnected;}
@@ -100,8 +100,10 @@ class Digitizer2Gen {
                                                 // 3 = only ch, energy, timestamp, minimum
                                                 // 15 = raw data
     int  ReadData();
-    int  ReadStat();
+    int  ReadStat(); // digitizer update it every 500 msec
     void PrintStat();
+    uint32_t GetTriggerCount(int ch) const {return triggerCount[ch];}
+    uint64_t GetRealTime(int ch) const {return realTime[ch];}
 
     void Reset();
     void ProgramPHA(bool testPulse = false);

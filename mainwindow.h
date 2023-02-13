@@ -45,6 +45,7 @@ private slots:
   void OpenScaler();
   void SetUpScalar();
   void DeleteTriggerLineEdit();
+  void UpdateScalar();
 
   void ProgramSettings();
   bool OpenProgramSettings();
@@ -59,10 +60,7 @@ private slots:
   void CreateRawDataFolderAndLink(const QString newExpName);
 
   void closeEvent(QCloseEvent * event){
-    printf("___ %s \n", __func__);
-    printf("+++++++++++++++  digiSetting %p\n", digiSetting);
     if( digiSetting != NULL ) digiSetting->close();
-    printf("+++++++++++++++  scope %p\n", scope);
     if( scope != NULL ) scope->close();
     event->accept();
   }
@@ -90,7 +88,9 @@ private:
   QMainWindow * scalar;
   QPushButton * bnOpenScalar;
   QLineEdit *** leTrigger; // need to delete manually
+  QLineEdit *** leAccept; // need to delete manually
   QGridLayout * scalarLayout;
+  ScalarThread * scalarThread;
 
   //@------ ACQ things
   QPushButton * bnStartACQ;

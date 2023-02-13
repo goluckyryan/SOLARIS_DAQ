@@ -43,6 +43,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     scalarLayout->setSpacing(0);
 
     leTrigger = NULL;
+    leAccept = NULL;
+
+    scalarThread = new ScalarThread();
+    connect(scalarThread, &ScalarThread::updataScalar, this, &MainWindow::UpdateScalar);
   }
 
   QWidget * mainLayoutWidget = new QWidget(this);
@@ -203,6 +207,7 @@ MainWindow::~MainWindow(){
   printf("- %s\n", __func__);
 
   DeleteTriggerLineEdit();
+  delete scalarThread;
   CloseDigitizers();
   
   //---- need manually delete
@@ -233,6 +238,9 @@ void MainWindow::StartACQ(){
     readDataThread[i]->start();
   }
 
+  if( !scalar->isVisible() ) scalar->show();
+  scalarThread->start();
+
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
   bnOpenScope->setEnabled(false);
@@ -252,6 +260,10 @@ void MainWindow::StopACQ(){
 
   }
 
+  scalarThread->Stop();
+  scalarThread->quit();
+  scalarThread->wait();
+
   LogMsg("Stop Run");
   bnStartACQ->setEnabled(true);
   bnStopACQ->setEnabled(false);
@@ -259,6 +271,9 @@ void MainWindow::StopACQ(){
 
   runID ++;
   leRunID->setText(QString::number(runID));
+
+  //if( scalarThread->isRunning()) printf("Scalar Thread still running.\n");
+  //if( scalarThread->isFinished()) printf("Scalar Thread finsihed.\n");
 
 }
 
@@ -380,7 +395,7 @@ void MainWindow::OpenScaler(){
 
 void MainWindow::SetUpScalar(){
 
-  scalar->setGeometry(0, 0, 10 + nDigi * 100, 1000);
+  scalar->setGeometry(0, 0, 10 + nDigi * 200, 1000);
 
   int rowID = 0;
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
@@ -396,22 +411,30 @@ void MainWindow::SetUpScalar(){
   }
   
   leTrigger = new QLineEdit**[nDigi];
+  leAccept = new QLineEdit**[nDigi];
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
     rowID = 0;
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
+    leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
       if( ch == 0 ){
           QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
           lbDigi->setAlignment(Qt::AlignCenter);
-          scalarLayout->addWidget(lbDigi, rowID, iDigi+1);
+          scalarLayout->addWidget(lbDigi, rowID, 2*iDigi+1, 1, 2);
       }
     
       rowID ++;
       
       leTrigger[iDigi][ch] = new QLineEdit();
       leTrigger[iDigi][ch]->setReadOnly(true);
-      scalarLayout->addWidget(leTrigger[iDigi][ch], rowID, iDigi+1);
+      leTrigger[iDigi][ch]->setAlignment(Qt::AlignRight);
+      scalarLayout->addWidget(leTrigger[iDigi][ch], rowID, 2*iDigi+1);
+
+      leAccept[iDigi][ch] = new QLineEdit();
+      leAccept[iDigi][ch]->setReadOnly(true);
+      leAccept[iDigi][ch]->setAlignment(Qt::AlignRight);
+      scalarLayout->addWidget(leAccept[iDigi][ch], rowID, 2*iDigi+2);
     }
   }
 
@@ -419,19 +442,55 @@ void MainWindow::SetUpScalar(){
 
 void MainWindow::DeleteTriggerLineEdit(){
 
-  printf("__________ %s \n", __func__);
-
   if( leTrigger == NULL ) return;
 
   for( int i = 0; i < nDigi; i++){
     for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){
       delete leTrigger[i][ch];
+      delete leAccept[i][ch];
     }
     delete [] leTrigger[i];
+    delete [] leAccept[i];
   }
   delete [] leTrigger;
   leTrigger = NULL;
-  printf("end of ____ %s \n", __func__);
+  leAccept = NULL;
+
+}
+
+void MainWindow::UpdateScalar(){
+  if( !digi ) return;
+
+  ///===== Get trigger for all channel
+  for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
+    if( digi[iDigi]->IsDummy() ) return;
+    
+    //=========== use ReadStat to get the trigger rate
+    //digiMTX.lock();
+    //digi[iDigi]->ReadStat(); // digitizer update it every 500 msec;
+    //digiMTX.unlock();
+    //for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
+    //  leTrigger[iDigi][ch]->setText(QString::number(digi[iDigi]->GetTriggerCount(ch)*1e9*1.0/ digi[iDigi]->GetRealTime(ch)));
+    //}
+
+    //=========== another method, directly readValue
+    digiMTX.lock();
+    for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
+      std::string time = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelRealtime); // for refreashing SelfTrgRate and SavedCount
+      std::string haha = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::SelfTrgRate);
+      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha));
+      std::string kaka = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelSavedCount);
+      double acceptRate = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
+      //if( kaka != "0" )  {
+      //  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
+      //}
+      leAccept[iDigi][ch]->setText(QString::number(acceptRate,'f', 1));
+
+      ///TODO============== push the trigger, acceptRate rate database
+
+    }
+    digiMTX.unlock();
+  }
 
 }
 
