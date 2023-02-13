@@ -52,6 +52,7 @@ private slots:
   bool OpenProgramSettings();
   void SaveProgramSettings();
   void DecodeIPList();
+  void SetupInflux();
   void OpenDirectory(int id);
 
   void SetupNewExp();
@@ -93,6 +94,7 @@ private:
   QGridLayout * scalarLayout;
   ScalarThread * scalarThread;
   QLabel      * lbLastUpdateTime;
+  InfluxDB   * influx;
 
   //@------ ACQ things
   QPushButton * bnStartACQ;

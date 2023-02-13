@@ -30,6 +30,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   nDigi = 0;
   digiSetting = NULL;
+  influx = NULL;
   readDataThread = NULL;
   scope = NULL;
 
@@ -235,6 +236,8 @@ MainWindow::~MainWindow(){
   //---- need manually delete
   if( scope != NULL ) delete scope;
   if( digiSetting != NULL ) delete digiSetting;
+
+  if( influx != NULL ) delete influx;
 
 }
 
@@ -502,6 +505,8 @@ void MainWindow::UpdateScalar(){
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
+  if( influx ) influx->ClearDataPointsBuffer();
+
   ///===== Get trigger for all channel
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
     if( digi[iDigi]->IsDummy() ) return;
@@ -515,23 +520,34 @@ void MainWindow::UpdateScalar(){
     //}
 
     //=========== another method, directly readValue
+
+    std::string haha[MaxNumberOfChannel] = {""};
+    double acceptRate[MaxNumberOfChannel] = {0};
+
     digiMTX.lock();
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
       std::string time = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelRealtime); // for refreashing SelfTrgRate and SavedCount
-      std::string haha = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::SelfTrgRate);
-      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha));
+      haha[ch] = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::SelfTrgRate);
+      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
       std::string kaka = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelSavedCount);
-      double acceptRate = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
+      acceptRate[ch] = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
       //if( kaka != "0" )  {
       //  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       //}
-      leAccept[iDigi][ch]->setText(QString::number(acceptRate,'f', 1));
-
-      ///TODO============== push the trigger, acceptRate rate database
-
+      leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
     }
     digiMTX.unlock();
+
+    ///============== push the trigger, acceptRate rate database
+    if( influx ){
+      for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
+        influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + haha[ch]);
+      }
+    }
   }
+
+  influx->WriteData(DatabaseName.toStdString());
+  influx->ClearDataPointsBuffer();
 
 }
 
@@ -721,6 +737,7 @@ bool MainWindow::OpenProgramSettings(){
   if( ret ){
 
     DecodeIPList();
+    SetupInflux();
     return true;
 
   }else{
@@ -750,6 +767,24 @@ void MainWindow::DecodeIPList(){
     }
   }
   nDigi = IPList.size();
+}
+
+void MainWindow::SetupInflux(){
+  if( influx ) {
+    delete influx;
+    influx = NULL;
+  }
+  if( DatabaseIP != ""){
+    influx = new InfluxDB(DatabaseIP.toStdString(), false);
+
+    if( influx->TestingConnection() ){
+      LogMsg("InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid");
+    }else{
+      LogMsg("<font style=\"color : red;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is NOT Valid </font>");
+      delete influx;
+      influx = NULL;
+    }
+  }
 }
 
 void MainWindow::SaveProgramSettings(){
@@ -784,6 +819,7 @@ void MainWindow::SaveProgramSettings(){
   bnOpenDigitizers->setEnabled(true);
 
   DecodeIPList();
+  SetupInflux();
 
   OpenExpSettings();
 

@@ -19,6 +19,12 @@ void InfluxDB::SetURL(std::string url){
   this->databaseIP = url;
 }
 
+bool InfluxDB::TestingConnection(){
+  ShowDatabases();
+  if( respond != CURLE_OK ) return false;
+  return true;
+}
+
 std::string InfluxDB::ShowDatabases(){
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
@@ -34,8 +40,10 @@ std::string InfluxDB::ShowDatabases(){
   
   Execute();
   
-  printf("|%s|\n", readBuffer.c_str());
+  //printf("|%s|\n", readBuffer.c_str());
   
+  if( respond != CURLE_OK) return "";
+
   databaseList.clear();
   
   size_t pos = readBuffer.find("values");
@@ -88,7 +96,7 @@ std::string InfluxDB::Query(std::string databaseName, std::string query){
   
   Execute();
   
-  printf("|%s|\n", readBuffer.c_str());
+  //printf("|%s|\n", readBuffer.c_str());
   
   return readBuffer;
 }
@@ -129,7 +137,7 @@ void InfluxDB::Execute(){
   respond = curl_easy_perform(curl);
   curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respondCode);
   //printf("==== respond code %ld \n", respondCode);
-  if( respond != CURLE_OK) printf("############# fail\n");
+  if( respond != CURLE_OK) printf("############# InfluxDB::Execute fail\n");
 }
 
 size_t InfluxDB::WriteCallBack(char *contents, size_t size, size_t nmemb, void *userp){

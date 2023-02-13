@@ -10,6 +10,8 @@
 class InfluxDB{
   private:
     
+    bool isURLValid;
+
     CURL * curl;
     CURLcode respond;
     long respondCode;
@@ -29,6 +31,8 @@ class InfluxDB{
     ~InfluxDB();
     
     void SetURL(std::string url);
+    bool TestingConnection();
+    bool IsURLValid() const {return isURLValid;}
 
     /// Query
     std::string ShowDatabases(); /// this save the list of database into databaseList
