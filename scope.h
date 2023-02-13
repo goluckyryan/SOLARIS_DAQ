@@ -128,6 +128,8 @@ private slots:
 signals:
 
   void CloseWindow();
+  void SendLogMsg(const QString &msg);
+  void UpdateScalar();
 
 private:
 

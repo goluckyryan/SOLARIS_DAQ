@@ -49,7 +49,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   updateTraceThread = new UpdateTraceThread();
   connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &Scope::UpdateScope);
-
+  
   //*================ add Widgets
   int rowID = -1;
   QWidget * layoutWidget = new QWidget(this);
@@ -469,6 +469,8 @@ void Scope::UpdateScope(){
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
   int sample2ns = DIGIPARA::TraceStep * (1 << cbWaveRes->currentIndex());
+
+  emit UpdateScalar();
 
   if( digi ){
     //---- remove all points

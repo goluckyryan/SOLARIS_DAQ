@@ -14,6 +14,7 @@
 #include <QValueAxis>
 #include <QStandardItemModel>
 #include <QApplication>
+#include <QDateTime>
 
 #include <unistd.h>
 
@@ -37,8 +38,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     scalar->setWindowTitle("Scalar");
     scalar->setGeometry(0, 0, 1000, 800);
 
+    QScrollArea * scopeScroll = new QScrollArea(scalar);
+    scalar->setCentralWidget(scopeScroll);
+    scopeScroll->setWidgetResizable(true);
+    scopeScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
     QWidget * layoutWidget = new QWidget(scalar);
-    scalar->setCentralWidget(layoutWidget);
+    scopeScroll->setWidget(layoutWidget);
+
     scalarLayout = new QGridLayout(layoutWidget);
     scalarLayout->setSpacing(0);
 
@@ -131,6 +138,24 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnOpenScalar->setEnabled(false);
     connect(bnOpenScalar, &QPushButton::clicked, this, &MainWindow::OpenScaler);
 
+    QLabel * lbRunID = new QLabel("Run ID : ", this); 
+    lbRunID->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+
+    leRunID = new QLineEdit(this);
+    leRunID->setAlignment(Qt::AlignHCenter);
+    leRunID->setReadOnly(true);
+
+    chkSaveRun = new QCheckBox("Save Run", this);
+
+    cbAutoRun = new QComboBox(this);
+    cbAutoRun->addItem("Single Run");
+    cbAutoRun->addItem("Auto 30 mins");
+    cbAutoRun->addItem("Auto 60 mins");
+    cbAutoRun->addItem("Auto 2 hrs");
+    cbAutoRun->addItem("Auto 3 hrs");
+    cbAutoRun->addItem("Auto 5 hrs");
+    cbAutoRun->setEnabled(false);
+
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
     connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
@@ -139,34 +164,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnStopACQ->setEnabled(false);
     connect(bnStopACQ, &QPushButton::clicked, this, &MainWindow::StopACQ);
 
-    QLabel * lbRunID = new QLabel("Run ID : ", this); 
-    lbRunID->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-
-    leRunID = new QLineEdit(this);
-    leRunID->setAlignment(Qt::AlignHCenter);
-    leRunID->setReadOnly(true);
-    
     QLabel * lbRunComment = new QLabel("Run Comment : ", this);
     lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
     QLineEdit * runComment = new QLineEdit(this);
     runComment->setReadOnly(true);
     
     layout2->addWidget(lbRawDataPath, 0, 0);
-    layout2->addWidget(leRawDataPath, 0, 1, 1, 2);
-    layout2->addWidget(bnOpenScalar, 0, 3);
+    layout2->addWidget(leRawDataPath, 0, 1, 1, 4);
+    layout2->addWidget(bnOpenScalar, 0, 5);
 
     layout2->addWidget(lbRunID,    1, 0);
     layout2->addWidget(leRunID,    1, 1);
-    layout2->addWidget(bnStartACQ, 1, 2);
-    layout2->addWidget(bnStopACQ,  1, 3);
+    layout2->addWidget(chkSaveRun, 1, 2);
+    layout2->addWidget(cbAutoRun,  1, 3);
+    layout2->addWidget(bnStartACQ, 1, 4);
+    layout2->addWidget(bnStopACQ,  1, 5);
 
     layout2->addWidget(lbRunComment, 2, 0);
-    layout2->addWidget(runComment,   2, 1, 1, 3);
+    layout2->addWidget(runComment,   2, 1, 1, 5);
 
-    layout2->setColumnStretch(0, 1);
+    layout2->setColumnStretch(0, 2);
     layout2->setColumnStretch(1, 1);
-    layout2->setColumnStretch(2, 2);
-    layout2->setColumnStretch(3, 2);
+    layout2->setColumnStretch(2, 1);
+    layout2->setColumnStretch(3, 1);
+    layout2->setColumnStretch(4, 3);
+    layout2->setColumnStretch(5, 3);
 
   }
 
@@ -234,7 +256,7 @@ void MainWindow::StartACQ(){
     digi[i]->StartACQ();
 
     //TODO ========================== Sync start.
-    readDataThread[i]->SetScopeRun(false);
+    readDataThread[i]->SetScopeRun(!chkSaveRun->isChecked ());
     readDataThread[i]->start();
   }
 
@@ -269,9 +291,10 @@ void MainWindow::StopACQ(){
   bnStopACQ->setEnabled(false);
   bnOpenScope->setEnabled(true);
 
-  runID ++;
-  leRunID->setText(QString::number(runID));
-
+  if( chkSaveRun->isChecked() ){
+    runID ++;
+    leRunID->setText(QString::number(runID));
+  }
   //if( scalarThread->isRunning()) printf("Scalar Thread still running.\n");
   //if( scalarThread->isFinished()) printf("Scalar Thread finsihed.\n");
 
@@ -363,9 +386,9 @@ void MainWindow::OpenScope(){
   if( digi ){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
-      connect(scope, &Scope::CloseWindow, this, [=](){
-        bnStartACQ->setEnabled(true);
-      });
+      connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
+      connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
+      connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
     }else{
       scope->show();
     }
@@ -395,9 +418,14 @@ void MainWindow::OpenScaler(){
 
 void MainWindow::SetUpScalar(){
 
-  scalar->setGeometry(0, 0, 10 + nDigi * 200, 1000);
+  scalar->setGeometry(0, 0, 10 + nDigi * 200, 800);
 
-  int rowID = 0;
+  lbLastUpdateTime = new QLabel("Last update : ");
+  lbLastUpdateTime->setAlignment(Qt::AlignCenter);
+  scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, 1 + nDigi);
+
+  ///==== create the 1st row
+  int rowID = 2;
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
@@ -410,10 +438,11 @@ void MainWindow::SetUpScalar(){
     scalarLayout->addWidget(lbCH, rowID, 0);
   }
   
+  ///===== create the trigger and accept
   leTrigger = new QLineEdit**[nDigi];
   leAccept = new QLineEdit**[nDigi];
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
-    rowID = 0;
+    rowID = 1;
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
@@ -422,6 +451,15 @@ void MainWindow::SetUpScalar(){
           QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
           lbDigi->setAlignment(Qt::AlignCenter);
           scalarLayout->addWidget(lbDigi, rowID, 2*iDigi+1, 1, 2);
+
+          rowID ++;
+
+          QLabel * lbA = new QLabel("Trig. [Hz]", scalar);
+          lbA->setAlignment(Qt::AlignCenter);
+          scalarLayout->addWidget(lbA, rowID, 2*iDigi+1);
+          QLabel * lbB = new QLabel("Accp. [Hz]", scalar);
+          lbB->setAlignment(Qt::AlignCenter);
+          scalarLayout->addWidget(lbB, rowID, 2*iDigi+2);
       }
     
       rowID ++;
@@ -434,6 +472,7 @@ void MainWindow::SetUpScalar(){
       leAccept[iDigi][ch] = new QLineEdit();
       leAccept[iDigi][ch]->setReadOnly(true);
       leAccept[iDigi][ch]->setAlignment(Qt::AlignRight);
+      leAccept[iDigi][ch]->setStyleSheet("background-color: #F0F0F0;");
       scalarLayout->addWidget(leAccept[iDigi][ch], rowID, 2*iDigi+2);
     }
   }
@@ -460,6 +499,8 @@ void MainWindow::DeleteTriggerLineEdit(){
 
 void MainWindow::UpdateScalar(){
   if( !digi ) return;
+
+  lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
   ///===== Get trigger for all channel
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){

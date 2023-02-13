@@ -10,6 +10,7 @@
 #include <QScrollBar>
 #include <QPushButton>
 #include <QComboBox>
+#include <QLabel>
 
 #include <QChart>
 #include <QLineSeries>
@@ -91,10 +92,13 @@ private:
   QLineEdit *** leAccept; // need to delete manually
   QGridLayout * scalarLayout;
   ScalarThread * scalarThread;
+  QLabel      * lbLastUpdateTime;
 
   //@------ ACQ things
   QPushButton * bnStartACQ;
   QPushButton * bnStopACQ;
+  QCheckBox   * chkSaveRun;
+  QComboBox   * cbAutoRun;
   QLineEdit   * leRunID;
   QLineEdit   * leRawDataPath;
   ReadDataThread ** readDataThread;   
