@@ -170,7 +170,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     QLabel * lbRunComment = new QLabel("Run Comment : ", this);
     lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    QLineEdit * leRunComment = new QLineEdit(this);
+    leRunComment = new QLineEdit(this);
     leRunComment->setReadOnly(true);
     leRunComment->setStyleSheet("background-color: #F3F3F3;");
     
@@ -255,8 +255,37 @@ void MainWindow::StartACQ(){
   if( chkSaveRun->isChecked() ){
     runIDStr = QString::number(runID).rightJustified(3, '0');
     LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
-    //TODO ============ start comment
 
+    //============ start comment
+    QDialog * dOpen = new QDialog(this);
+    dOpen->setWindowTitle("Start Run Comment");
+    dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+    dOpen->setMinimumWidth(600);
+    connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
+
+    QGridLayout * vlayout = new QGridLayout(dOpen);
+    QLabel *label = new QLabel("Enter Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
+    QLineEdit *lineEdit = new QLineEdit(dOpen);
+    QPushButton *button1 = new QPushButton("OK", dOpen);
+    QPushButton *button2 = new QPushButton("Cancel", dOpen);
+
+    vlayout->addWidget(label, 0, 0, 1, 2);
+    vlayout->addWidget(lineEdit, 1, 0, 1, 2);
+    vlayout->addWidget(button1, 2, 0);
+    vlayout->addWidget(button2, 2, 1);
+
+    connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
+    connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
+    int result = dOpen->exec();
+
+    if(result == QDialog::Accepted ){
+      startComment = lineEdit->text();
+      if( startComment == "") startComment = "No commet was typed.";
+      leRunComment->setText(startComment);
+    }else{
+      LogMsg("Start Run aborted. ");
+      return;
+    }
     //TODO ============ elog
 
     //TODO ============ update expName.sh
@@ -296,6 +325,39 @@ void MainWindow::StartACQ(){
 
 void MainWindow::StopACQ(){
 
+  if( chkSaveRun->isChecked() ){
+    //============ stop comment
+    QDialog * dOpen = new QDialog(this);
+    dOpen->setWindowTitle("Stop Run Comment");
+    dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+    dOpen->setMinimumWidth(600);
+    connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
+
+    QGridLayout * vlayout = new QGridLayout(dOpen);
+    QLabel *label = new QLabel("Enter Run comment for ending <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
+    QLineEdit *lineEdit = new QLineEdit(dOpen);
+    QPushButton *button1 = new QPushButton("OK", dOpen);
+    QPushButton *button2 = new QPushButton("Cancel", dOpen);
+
+    vlayout->addWidget(label, 0, 0, 1, 2);
+    vlayout->addWidget(lineEdit, 1, 0, 1, 2);
+    vlayout->addWidget(button1, 2, 0);
+    vlayout->addWidget(button2, 2, 1);
+
+    connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
+    connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
+    int result = dOpen->exec();
+
+    if(result == QDialog::Accepted ){
+      stopComment = lineEdit->text();
+      if( stopComment == "") stopComment = "No commet was typed.";
+      leRunComment->setText(stopComment);
+    }else{
+      LogMsg("Cancel Run aborted. ");
+      return;
+    }
+  }
+
   for( int i = 0; i < nDigi; i++){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
@@ -323,12 +385,7 @@ void MainWindow::StopACQ(){
   chkSaveRun->setEnabled(true);
 
   if( chkSaveRun->isChecked() ){
-
-    //TODO ============ stop comment
-
-
     //TODO ============= elog
-    
     runID ++;
     leRunID->setText(QString::number(runID));
   }
@@ -542,7 +599,6 @@ void MainWindow::UpdateScalar(){
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
-  printf("++++++++++++++++++ influx %p\n", influx);
   if( influx ) influx->ClearDataPointsBuffer();
   std::string haha[MaxNumberOfChannel] = {""};
   double acceptRate[MaxNumberOfChannel] = {0};
@@ -560,8 +616,6 @@ void MainWindow::UpdateScalar(){
     //}
 
     //=========== another method, directly readValue
-
-
     digiMTX.lock();
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
       std::string time = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelRealtime); // for refreashing SelfTrgRate and SavedCount
@@ -569,9 +623,7 @@ void MainWindow::UpdateScalar(){
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
       std::string kaka = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelSavedCount);
       acceptRate[ch] = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
-      //if( kaka != "0" )  {
-      //  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
-      //}
+      //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
     }
     digiMTX.unlock();
@@ -580,6 +632,7 @@ void MainWindow::UpdateScalar(){
     if( influx ){
       for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
         influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + haha[ch]);
+        influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + std::to_string(acceptRate[ch]));
       }
     }
   }

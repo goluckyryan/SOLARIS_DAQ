@@ -32,7 +32,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   dataTrace[4]->setPen(QPen(Qt::darkGreen, 1));
   dataTrace[5]->setPen(QPen(Qt::darkBlue, 1));
 
-  plot->setAnimationOptions(QChart::SeriesAnimations);
+  plot->setAnimationDuration(1); // msec
+  plot->setAnimationOptions(QChart::NoAnimation);
   plot->createDefaultAxes(); /// this must be after addSeries();
   /// this must be after createDefaultAxes();
   QValueAxis * yaxis = qobject_cast<QValueAxis*> (plot->axes(Qt::Vertical).first());
@@ -322,6 +323,11 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   TraceView * plotView = new TraceView(plot);
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 6);
+
+  //------------- Ketbinding
+  rowID ++;
+  QLabel * lbhints = new QLabel("Type 'r' to restore view.", this);
+  layout->addWidget(lbhints, rowID, 0, 1, 4);
 
   //------------ close button
   rowID ++;

@@ -103,9 +103,12 @@ private:
   QComboBox   * cbAutoRun;
   QLineEdit   * leRunID;
   QLineEdit   * leRawDataPath;
+  QLineEdit   * leRunComment;
   ReadDataThread ** readDataThread;   
   void StartACQ();
   void StopACQ();
+  QString startComment;
+  QString stopComment;
 
   DigiSettings * digiSetting;
 

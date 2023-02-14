@@ -31,7 +31,7 @@ public:
         digi->ErrorMsg("No more data");
         break;
       }else{
-        digi->ErrorMsg("ReadDataLoop()");
+        //digi->ErrorMsg("ReadDataLoop()");
         digi->evt->ClearTrace();
       }
 
