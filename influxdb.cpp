@@ -5,27 +5,31 @@ InfluxDB::InfluxDB(std::string url, bool verbose){
 
   curl = curl_easy_init();  
   if( verbose) curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
-  this->databaseIP  = url;
+  SetURL(url);
   respondCode = 0;
   dataPoints = "";
 }
 
 InfluxDB::~InfluxDB(){
-  
   curl_easy_cleanup(curl);
 }
 
 void InfluxDB::SetURL(std::string url){
-  this->databaseIP = url;
+  // check the last char of url is "/"
+  if( url.back() != '/') {
+    this->databaseIP = url + "/";
+  }else{
+    this->databaseIP = url;
+  }
 }
 
 bool InfluxDB::TestingConnection(){
-  ShowDatabases();
+  CheckDatabases();
   if( respond != CURLE_OK ) return false;
   return true;
 }
 
-std::string InfluxDB::ShowDatabases(){
+std::string InfluxDB::CheckDatabases(){
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
   curl_easy_setopt(curl, CURLOPT_URL, (databaseIP   + "/query").c_str());
@@ -124,9 +128,9 @@ void InfluxDB::PrintDataPoints(){
   printf("%s\n", dataPoints.c_str());
 }
 
-void InfluxDB::WriteData(std::string databaseName){
+void InfluxDB::WriteData(std::string databaseName){  
   curl_easy_setopt(curl, CURLOPT_URL, (databaseIP + "write?db=" + databaseName).c_str());
-  curl_easy_setopt(curl, CURLOPT_POST, 1);
+  curl_easy_setopt(curl, CURLOPT_POST, 1L);
   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(dataPoints.length()));
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, dataPoints.c_str());
   Execute();

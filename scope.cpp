@@ -428,7 +428,7 @@ void Scope::StartScope(){
 
   digi[iDigi]->StartACQ();
 
-  readDataThread[iDigi]->SetScopeRun(true);
+  readDataThread[iDigi]->SetSaveData(false);
   readDataThread[iDigi]->start();
 
   updateTraceThread->start();

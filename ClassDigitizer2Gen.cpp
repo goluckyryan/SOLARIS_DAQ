@@ -484,17 +484,17 @@ int Digitizer2Gen::ReadData(){
 
 //###########################################
 
-void Digitizer2Gen::OpenOutFile(std::string fileName){
+void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   outFileNameBase = fileName;
   sprintf(outFileName, "%s_%03d.sol", fileName.c_str(), outFileIndex);
-  outFile = fopen(outFileName, "a+");
+  outFile = fopen(outFileName, mode);
   fseek(outFile, 0L, SEEK_END);
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB
 
 }
 
 void Digitizer2Gen::CloseOutFile(){
-  fclose(outFile);
+  if( outFile != NULL ) fclose(outFile);
 }
 
 void Digitizer2Gen::SaveDataToFile(){

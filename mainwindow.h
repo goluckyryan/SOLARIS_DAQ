@@ -142,6 +142,7 @@ private:
   QString expName;
   QString rawDataFolder;
   unsigned int runID;
+  QString runIDStr;
   unsigned int elogID;
 
 };

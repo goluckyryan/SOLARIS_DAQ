@@ -15,9 +15,9 @@ class ReadDataThread : public QThread {
 public:
   ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
     this->digi = dig;
-    isScopeRun = false;
+    isSaveData = false;
   }
-  void SetScopeRun(bool onOff) {this->isScopeRun = onOff;}
+  void SetSaveData(bool onOff) {this->isSaveData = onOff;}
   void run(){
     clock_gettime(CLOCK_REALTIME, &ta);
     while(true){
@@ -26,16 +26,16 @@ public:
       digiMTX.unlock();
 
       if( ret == CAEN_FELib_Success){
-        if( !isScopeRun) digi->SaveDataToFile();
+        if( isSaveData) digi->SaveDataToFile();
       }else if(ret == CAEN_FELib_Stop){
         digi->ErrorMsg("No more data");
         break;
       }else{
-        //digi->ErrorMsg("ReadDataLoop()");
+        digi->ErrorMsg("ReadDataLoop()");
         digi->evt->ClearTrace();
       }
 
-      if( !isScopeRun ){
+      if( isSaveData ){
         clock_gettime(CLOCK_REALTIME, &tb);
         if( tb.tv_sec - ta.tv_sec > 2 ) {
           emit sendMsg("FileSize : " +  QString::number(digi->GetFileSize()/1024./1024.) + " MB");
@@ -52,7 +52,7 @@ signals:
 private:
   Digitizer2Gen * digi; 
   timespec ta, tb;
-  bool isScopeRun;
+  bool isSaveData;
 };
 
 //^#===================================================== UpdateTrace Thread

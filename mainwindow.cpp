@@ -145,8 +145,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leRunID = new QLineEdit(this);
     leRunID->setAlignment(Qt::AlignHCenter);
     leRunID->setReadOnly(true);
+    leRunID->setStyleSheet("background-color: #F3F3F3;");
 
     chkSaveRun = new QCheckBox("Save Run", this);
+    chkSaveRun->setChecked(true);
+    chkSaveRun->setEnabled(false);
 
     cbAutoRun = new QComboBox(this);
     cbAutoRun->addItem("Single Run");
@@ -167,8 +170,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     QLabel * lbRunComment = new QLabel("Run Comment : ", this);
     lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-    QLineEdit * runComment = new QLineEdit(this);
-    runComment->setReadOnly(true);
+    QLineEdit * leRunComment = new QLineEdit(this);
+    leRunComment->setReadOnly(true);
+    leRunComment->setStyleSheet("background-color: #F3F3F3;");
     
     layout2->addWidget(lbRawDataPath, 0, 0);
     layout2->addWidget(leRawDataPath, 0, 1, 1, 4);
@@ -182,7 +186,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout2->addWidget(bnStopACQ,  1, 5);
 
     layout2->addWidget(lbRunComment, 2, 0);
-    layout2->addWidget(runComment,   2, 1, 1, 5);
+    layout2->addWidget(leRunComment,   2, 1, 1, 5);
 
     layout2->setColumnStretch(0, 2);
     layout2->setColumnStretch(1, 1);
@@ -229,6 +233,10 @@ MainWindow::~MainWindow(){
   //delete logInfo;
   printf("- %s\n", __func__);
 
+  for( int i = 0; i < nDigi ; i++){
+    if( readDataThread[i]->isRunning()) StopACQ();
+  }
+
   DeleteTriggerLineEdit();
   delete scalarThread;
   CloseDigitizers();
@@ -244,7 +252,18 @@ MainWindow::~MainWindow(){
 //^################################################################ ACQ control 
 void MainWindow::StartACQ(){
 
-  LogMsg("Start Run....");
+  if( chkSaveRun->isChecked() ){
+    runIDStr = QString::number(runID).rightJustified(3, '0');
+    LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
+    //TODO ============ start comment
+
+    //TODO ============ elog
+
+    //TODO ============ update expName.sh
+
+  }else{
+    LogMsg("=========================== Start no-save Run");
+  }
   for( int i =0 ; i < nDigi; i ++){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->Reset();
@@ -253,13 +272,15 @@ void MainWindow::StartACQ(){
 
     digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
 
-    //TODO =========================== save file 
-    remove("haha_000.sol"); // remove file
-    digi[i]->OpenOutFile("haha");// haha_000.sol
+    if( chkSaveRun->isChecked() ){
+      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr+ "_" + QString::number(digi[i]->GetSerialNumber());
+      qDebug() << outFileName;
+      digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
+    }
     digi[i]->StartACQ();
 
     //TODO ========================== Sync start.
-    readDataThread[i]->SetScopeRun(!chkSaveRun->isChecked ());
+    readDataThread[i]->SetSaveData(chkSaveRun->isChecked());
     readDataThread[i]->start();
   }
 
@@ -269,8 +290,8 @@ void MainWindow::StartACQ(){
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
   bnOpenScope->setEnabled(false);
+  chkSaveRun->setEnabled(false);
 
-  LogMsg("end of " + QString::fromStdString(__func__));
 }
 
 void MainWindow::StopACQ(){
@@ -279,22 +300,35 @@ void MainWindow::StopACQ(){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
 
-    readDataThread[i]->quit();
-    readDataThread[i]->wait();
-    digi[i]->CloseOutFile();
-
+    if( readDataThread[i]->isRunning()){
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+    }
+    if( chkSaveRun->isChecked() ) digi[i]->CloseOutFile();
   }
 
-  scalarThread->Stop();
-  scalarThread->quit();
-  scalarThread->wait();
-
-  LogMsg("Stop Run");
+  if( scalarThread->isRunning()){
+    scalarThread->Stop();
+    scalarThread->quit();
+    scalarThread->wait();
+  }
+  if( chkSaveRun->isChecked() ){
+    LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
+  }else{
+    LogMsg("===========================  no-Save Run stopped.");
+  }
   bnStartACQ->setEnabled(true);
   bnStopACQ->setEnabled(false);
   bnOpenScope->setEnabled(true);
+  chkSaveRun->setEnabled(true);
 
   if( chkSaveRun->isChecked() ){
+
+    //TODO ============ stop comment
+
+
+    //TODO ============= elog
+    
     runID ++;
     leRunID->setText(QString::number(runID));
   }
@@ -324,9 +358,15 @@ void MainWindow::OpenDigitizers(){
       bnStartACQ->setEnabled(true);
       bnStopACQ->setEnabled(false);
       bnOpenScope->setEnabled(true);
+      chkSaveRun->setEnabled(true);
+      bnOpenDigitizers->setEnabled(false);
+      bnOpenDigitizers->setStyleSheet("");
 
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
+
+      SetUpScalar();
+      bnOpenScalar->setEnabled(true);
 
     }else{
       digi[i]->SetDummy(i);
@@ -338,11 +378,7 @@ void MainWindow::OpenDigitizers(){
 
   bnDigiSettings->setEnabled(true);
   bnCloseDigitizers->setEnabled(true);
-  bnOpenDigitizers->setEnabled(false);
-  bnOpenDigitizers->setStyleSheet("");
 
-  SetUpScalar();
-  bnOpenScalar->setEnabled(true);
 }
 
 void MainWindow::CloseDigitizers(){
@@ -380,6 +416,7 @@ void MainWindow::CloseDigitizers(){
   bnStopACQ->setEnabled(false);
   bnOpenDigitizers->setFocus();
   bnOpenScalar->setEnabled(false);
+  chkSaveRun->setEnabled(false);
 
 }
 
@@ -421,7 +458,7 @@ void MainWindow::OpenScaler(){
 
 void MainWindow::SetUpScalar(){
 
-  scalar->setGeometry(0, 0, 10 + nDigi * 200, 800);
+  scalar->setGeometry(0, 0, 10 + nDigi * 230, 800);
 
   lbLastUpdateTime = new QLabel("Last update : ");
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
@@ -505,7 +542,10 @@ void MainWindow::UpdateScalar(){
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
+  printf("++++++++++++++++++ influx %p\n", influx);
   if( influx ) influx->ClearDataPointsBuffer();
+  std::string haha[MaxNumberOfChannel] = {""};
+  double acceptRate[MaxNumberOfChannel] = {0};
 
   ///===== Get trigger for all channel
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
@@ -521,8 +561,6 @@ void MainWindow::UpdateScalar(){
 
     //=========== another method, directly readValue
 
-    std::string haha[MaxNumberOfChannel] = {""};
-    double acceptRate[MaxNumberOfChannel] = {0};
 
     digiMTX.lock();
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
@@ -546,9 +584,11 @@ void MainWindow::UpdateScalar(){
     }
   }
 
-  influx->WriteData(DatabaseName.toStdString());
-  influx->ClearDataPointsBuffer();
-
+  if( influx ){
+    //influx->PrintDataPoints();
+    influx->WriteData(DatabaseName.toStdString());
+    influx->ClearDataPointsBuffer();
+  }
 }
 
 //^###################################################################### Program Settings
@@ -778,12 +818,30 @@ void MainWindow::SetupInflux(){
     influx = new InfluxDB(DatabaseIP.toStdString(), false);
 
     if( influx->TestingConnection() ){
-      LogMsg("InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid");
+      LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid </font>");
+
+      //==== chck database exist
+      std::vector<std::string> databaseList = influx->GetDatabaseList();
+      bool foundDatabase = false;
+      for( int i = 0; i < (int) databaseList.size(); i++){
+        if( databaseList[i] == DatabaseName.toStdString() ) foundDatabase = true;
+      }
+
+      if( foundDatabase ){
+        LogMsg("<font style=\"color : green;\"> Database <b>" + DatabaseName + "</b> found.");
+      }else{
+        LogMsg("<font style=\"color : red;\"> Database <b>" + DatabaseName + "</b> NOT found.");
+        delete influx;
+        influx = NULL;
+      }
+
     }else{
       LogMsg("<font style=\"color : red;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is NOT Valid </font>");
       delete influx;
       influx = NULL;
     }
+  }else{
+    LogMsg("No database is provided.");
   }
 }
 

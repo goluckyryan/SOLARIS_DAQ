@@ -35,10 +35,10 @@ class InfluxDB{
     bool IsURLValid() const {return isURLValid;}
 
     /// Query
-    std::string ShowDatabases(); /// this save the list of database into databaseList
+    std::string CheckDatabases(); /// this save the list of database into databaseList
     std::string Query(std::string databaseName, std::string query);
 
-    /// the ShowDatabases() function must be called before  
+    /// the CheckDatabases() function must be called before  
     std::vector<std::string> GetDatabaseList() {return databaseList;}
 
     void CreateDatabase(std::string databaseName);
