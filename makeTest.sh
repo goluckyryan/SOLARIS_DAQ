@@ -22,7 +22,11 @@ OBJS="ClassDigitizer2Gen.o influxdb.o"
 
 
 
-
+echo "------- influxdb.o"
 ${CC} ${COPTS} -c influxdb.cpp ${CURLLIBS}
+echo "------- ClassDigitizer2Gen.o"
 ${CC} ${COPTS} -c ClassDigitizer2Gen.cpp ${CAENLIBS}
+echo "------- test"
 ${CC} ${COPTS} ${OBJS} -o test test.cpp  ${CAENLIBS} ${CURLLIBS}
+echo "------- windowID"
+${CC} ${COPTS} -o windowID windowID.cpp  -lX11 -lpng

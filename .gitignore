@@ -4,6 +4,8 @@ SOLARIS_DAQ
 *.sol
 programSettings.txt
 test
+windowID
+screenshot.*
 
 *~
 *.autosave

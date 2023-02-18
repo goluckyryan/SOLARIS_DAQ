@@ -11,12 +11,14 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QLabel>
+#include <QTimer>
 
 #include <QChart>
 #include <QLineSeries>
 
 #include <vector>
 #include <time.h> // time in nano-sec
+
 
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
@@ -43,20 +45,23 @@ private slots:
   void OpenScope();  
   void OpenDigitizersSettings();
 
+  void AutoRun();
+
   void OpenScaler();
   void SetUpScalar();
   void DeleteTriggerLineEdit();
   void UpdateScalar();
 
-  void ProgramSettings();
-  bool OpenProgramSettings();
+  void ProgramSettingsPanel();
+  bool LoadProgramSettings();
   void SaveProgramSettings();
   void DecodeIPList();
   void SetupInflux();
+  void CheckElog();
   void OpenDirectory(int id);
 
-  void SetupNewExp();
-  bool OpenExpSettings();
+  void SetupNewExpPanel();
+  bool LoadExpSettings();
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
   void CreateRawDataFolderAndLink(const QString newExpName);
@@ -67,6 +72,8 @@ private slots:
     event->accept();
   }
 
+  void WriteElog(QString htmlText, QString category = "", QString subject = "");
+  void AppendElog(QString appendHtmlText, int screenID = -1);
 
 signals :
 
@@ -146,7 +153,11 @@ private:
   QString rawDataFolder;
   unsigned int runID;
   QString runIDStr;
-  unsigned int elogID;
+  int elogID;  // 0 = ready, -1 = disable, >1 = elogID
+
+  QTimer * runTimer;
+  unsigned int autoRunStartRunID;
+
 
 };
 

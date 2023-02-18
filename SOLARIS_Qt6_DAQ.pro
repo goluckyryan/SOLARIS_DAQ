@@ -8,7 +8,7 @@ INCLUDEPATH += .
 
 QT += widgets charts
 
-LIBS += -lcurl -lCAEN_FELib
+LIBS += -lcurl -lCAEN_FELib -lX11
 
 # You can make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.

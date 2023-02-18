@@ -15,6 +15,11 @@
 #include <QStandardItemModel>
 #include <QApplication>
 #include <QDateTime>
+#include <QProcess>
+#include <QScreen>
+
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 
 #include <unistd.h>
 
@@ -33,6 +38,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   influx = NULL;
   readDataThread = NULL;
   scope = NULL;
+  runTimer = new QTimer();
+  connect(runTimer, &QTimer::timeout, this, &MainWindow::AutoRun);
 
   {
     scalar = new QMainWindow(this);
@@ -69,10 +76,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     QGridLayout * layout1 = new QGridLayout(box1);
 
     bnProgramSettings = new QPushButton("Program Settings", this);
-    connect(bnProgramSettings, &QPushButton::clicked, this, &MainWindow::ProgramSettings);
+    connect(bnProgramSettings, &QPushButton::clicked, this, &MainWindow::ProgramSettingsPanel);
 
     bnNewExp = new QPushButton("New/Change/Reload Exp", this);
-    connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExp);
+    connect(bnNewExp, &QPushButton::clicked, this, &MainWindow::SetupNewExpPanel);
 
     QLabel * lExpName = new QLabel("Exp Name ", this);
     lExpName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -107,10 +114,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(lExpName, 0, 2);
     layout1->addWidget(leExpName, 0, 3);
 
-    layout1->addWidget(bnOpenScope, 1, 0);
     layout1->addWidget(bnOpenDigitizers, 1, 1);
     layout1->addWidget(bnCloseDigitizers, 1, 2, 1, 2);
 
+    layout1->addWidget(bnOpenScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
@@ -152,12 +159,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     chkSaveRun->setEnabled(false);
 
     cbAutoRun = new QComboBox(this);
-    cbAutoRun->addItem("Single Run");
-    cbAutoRun->addItem("Auto 30 mins");
-    cbAutoRun->addItem("Auto 60 mins");
-    cbAutoRun->addItem("Auto 2 hrs");
-    cbAutoRun->addItem("Auto 3 hrs");
-    cbAutoRun->addItem("Auto 5 hrs");
+    cbAutoRun->addItem("Single infinte", -1);
+    cbAutoRun->addItem("Single 30 mins", 30);
+    cbAutoRun->addItem("Single 60 mins", 60);
+    cbAutoRun->addItem("Single 2 hrs",  120);
+    cbAutoRun->addItem("Single 3 hrs",  180);
+    cbAutoRun->addItem("Single 5 hrs",  300);
+    cbAutoRun->addItem("Every 30 mins", -30);
+    cbAutoRun->addItem("Every 60 mins", -60);
+    cbAutoRun->addItem("Every 2 hrs",  -120);
+    cbAutoRun->addItem("Every 3 hrs",  -180);
+    cbAutoRun->addItem("Every 5 hrs",  -300);
     cbAutoRun->setEnabled(false);
 
     bnStartACQ = new QPushButton("Start ACQ", this);
@@ -218,7 +230,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   
   LogMsg("<font style=\"color: blue;\"><b>Welcome to SOLARIS DAQ.</b></font>");
 
-  if( OpenProgramSettings() )  OpenExpSettings();
+  if( LoadProgramSettings() )  LoadExpSettings();
 
 }
 
@@ -233,8 +245,10 @@ MainWindow::~MainWindow(){
   //delete logInfo;
   printf("- %s\n", __func__);
 
-  for( int i = 0; i < nDigi ; i++){
-    if( readDataThread[i]->isRunning()) StopACQ();
+  if( digi ){
+    for( int i = 0; i < nDigi ; i++){
+      if( readDataThread[i]->isRunning()) StopACQ();
+    }
   }
 
   DeleteTriggerLineEdit();
@@ -257,35 +271,37 @@ void MainWindow::StartACQ(){
     LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
 
     //============ start comment
-    QDialog * dOpen = new QDialog(this);
-    dOpen->setWindowTitle("Start Run Comment");
-    dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-    dOpen->setMinimumWidth(600);
-    connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
+    //if( cbAutoRun->currentData().toInt() > 0  ){
+      QDialog * dOpen = new QDialog(this);
+      dOpen->setWindowTitle("Start Run Comment");
+      dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+      dOpen->setMinimumWidth(600);
+      connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
 
-    QGridLayout * vlayout = new QGridLayout(dOpen);
-    QLabel *label = new QLabel("Enter Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
-    QLineEdit *lineEdit = new QLineEdit(dOpen);
-    QPushButton *button1 = new QPushButton("OK", dOpen);
-    QPushButton *button2 = new QPushButton("Cancel", dOpen);
+      QGridLayout * vlayout = new QGridLayout(dOpen);
+      QLabel *label = new QLabel("Enter Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
+      QLineEdit *lineEdit = new QLineEdit(dOpen);
+      QPushButton *button1 = new QPushButton("OK", dOpen);
+      QPushButton *button2 = new QPushButton("Cancel", dOpen);
 
-    vlayout->addWidget(label, 0, 0, 1, 2);
-    vlayout->addWidget(lineEdit, 1, 0, 1, 2);
-    vlayout->addWidget(button1, 2, 0);
-    vlayout->addWidget(button2, 2, 1);
+      vlayout->addWidget(label, 0, 0, 1, 2);
+      vlayout->addWidget(lineEdit, 1, 0, 1, 2);
+      vlayout->addWidget(button1, 2, 0);
+      vlayout->addWidget(button2, 2, 1);
 
-    connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
-    connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
-    int result = dOpen->exec();
+      connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
+      connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
+      int result = dOpen->exec();
 
-    if(result == QDialog::Accepted ){
-      startComment = lineEdit->text();
-      if( startComment == "") startComment = "No commet was typed.";
-      leRunComment->setText(startComment);
-    }else{
-      LogMsg("Start Run aborted. ");
-      return;
-    }
+      if(result == QDialog::Accepted ){
+        startComment = lineEdit->text();
+        if( startComment == "") startComment = "No commet was typed.";
+        leRunComment->setText(startComment);
+      }else{
+        LogMsg("Start Run aborted. ");
+        return;
+      }
+    //}
     //TODO ============ elog
 
     //TODO ============ update expName.sh
@@ -293,6 +309,8 @@ void MainWindow::StartACQ(){
   }else{
     LogMsg("=========================== Start no-save Run");
   }
+
+  //============================= start digitizer
   for( int i =0 ; i < nDigi; i ++){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->Reset();
@@ -320,6 +338,13 @@ void MainWindow::StartACQ(){
   bnStopACQ->setEnabled(true);
   bnOpenScope->setEnabled(false);
   chkSaveRun->setEnabled(false);
+  cbAutoRun->setEnabled(false);
+
+  //TODO ======= Auto Run
+  if( cbAutoRun->currentIndex() > 0 ){
+    int timeMinite = cbAutoRun->currentData().toInt();
+    runTimer->start(timeMinite * 60 * 1000); // unit is msec
+  }
 
 }
 
@@ -358,6 +383,10 @@ void MainWindow::StopACQ(){
     }
   }
 
+  //TODO ======= Stop the Auto Run
+  runTimer->stop();
+
+  //=============== Stop digitizer
   for( int i = 0; i < nDigi; i++){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
@@ -394,6 +423,17 @@ void MainWindow::StopACQ(){
 
 }
 
+void MainWindow::AutoRun(){
+
+  if( cbAutoRun->currentData().toInt() > 0  ){ 
+    //---- stop run
+
+  }else{
+    //----- stop run and start a new run
+  }
+
+}
+
 //^###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
@@ -418,6 +458,8 @@ void MainWindow::OpenDigitizers(){
       chkSaveRun->setEnabled(true);
       bnOpenDigitizers->setEnabled(false);
       bnOpenDigitizers->setStyleSheet("");
+      //cbAutoRun->setEnabled(true);
+      cbAutoRun->setEnabled(false);
 
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
@@ -467,13 +509,15 @@ void MainWindow::CloseDigitizers(){
 
 
   bnOpenDigitizers->setEnabled(true);
+  bnOpenDigitizers->setFocus();
   bnCloseDigitizers->setEnabled(false);
   bnDigiSettings->setEnabled(false);
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(false);
-  bnOpenDigitizers->setFocus();
+  bnOpenScope->setEnabled(false);
   bnOpenScalar->setEnabled(false);
   chkSaveRun->setEnabled(false);
+  cbAutoRun->setEnabled(false);
 
 }
 
@@ -484,7 +528,7 @@ void MainWindow::OpenScope(){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
-      connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
+      //connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
     }else{
       scope->show();
@@ -645,7 +689,7 @@ void MainWindow::UpdateScalar(){
 }
 
 //^###################################################################### Program Settings
-void MainWindow::ProgramSettings(){
+void MainWindow::ProgramSettingsPanel(){
 
   LogMsg("Open <b>Program Settings</b>.");
 
@@ -772,7 +816,7 @@ void MainWindow::OpenDirectory(int id){
   }
 }
 
-bool MainWindow::OpenProgramSettings(){
+bool MainWindow::LoadProgramSettings(){
 
   QString settingFile = QDir::current().absolutePath() + "/programSettings.txt";
 
@@ -898,6 +942,27 @@ void MainWindow::SetupInflux(){
   }
 }
 
+void MainWindow::CheckElog(){
+
+  WriteElog("Checking elog writing", "checking", "Testing communication");
+
+  if( elogID > 0 ){
+    LogMsg("Ckecked Elog writing. OK.");
+
+    //TODO =========== chrome windowID
+    AppendElog("Check Elog append.", 10485763);
+    if( elogID > 0 ){
+      LogMsg("Checked Elog Append. OK.");
+    }else{
+      LogMsg("Checked Elog Append. FAIL. (no elog will be used.)");
+    }
+
+  }else{
+    LogMsg("Ckecked Elog writing. FAIL. (no elog will be used.)");
+  }
+
+}
+
 void MainWindow::SaveProgramSettings(){
 
   IPListStr = lIPDomain->text();
@@ -932,13 +997,13 @@ void MainWindow::SaveProgramSettings(){
   DecodeIPList();
   SetupInflux();
 
-  OpenExpSettings();
+  LoadExpSettings();
 
 }
 
 //^###################################################################### Setup new exp
 
-void MainWindow::SetupNewExp(){
+void MainWindow::SetupNewExpPanel(){
 
   LogMsg("Open <b>New/Change/Reload Exp</b>.");
 
@@ -1163,13 +1228,13 @@ void MainWindow::SetupNewExp(){
   layout->setRowStretch(0, 1);
   for( int i = 1; i < rowID; i++) layout->setRowStretch(i, 2);
 
-  OpenExpSettings();
+  LoadExpSettings();
 
   dialog.exec();
 
 }
  
-bool MainWindow::OpenExpSettings(){
+bool MainWindow::LoadExpSettings(){
   //this method set the analysis setting ann symbloic link to raw data
   //ONLY load file, not check the git
 
@@ -1218,6 +1283,8 @@ bool MainWindow::OpenExpSettings(){
   leRunID->setText(QString::number(runID));
 
   bnOpenDigitizers->setStyleSheet("color:red;");
+
+  CheckElog();
 
   return true;
 
@@ -1300,7 +1367,7 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 
   CreateRawDataFolderAndLink(newExpName);
 
-  OpenExpSettings();
+  LoadExpSettings();
 
 }
 
@@ -1348,3 +1415,86 @@ void MainWindow::LogMsg(QString msg){
     //qDebug() << msg;
     logInfo->repaint();
 }
+
+void MainWindow::WriteElog(QString htmlText, QString category, QString subject){
+  
+  if( elogID < 0 ) return;
+  if( expName == "" ) return;
+
+  QStringList arg;
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" 
+      << "-a" << "Author=GeneralFSU" << "-a" << "Category=" + category
+      << "-a" << "Subject=" + subject 
+      << "-n " << "2" <<  htmlText  ;
+
+  QProcess elogBash(this);
+  elogBash.start("elog", arg); 
+  elogBash.waitForFinished();
+
+  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
+
+  int index = output.indexOf("ID=");
+  if( index != -1 ){
+    elogID = output.mid(index+3).toInt();
+  }else{
+    elogID = -1;
+  }
+
+}
+
+void MainWindow::AppendElog(QString appendHtmlText, int screenID){
+  if( elogID < 1 ) return;
+  if( expName == "" ) return;
+  
+  QProcess elogBash(this);
+
+  QStringList arg;
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" << "-w" << QString::number(elogID);
+
+  //retrevie the elog
+  elogBash.start("elog", arg); 
+  elogBash.waitForFinished();
+
+  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
+  //qDebug() << output;
+
+  QString separator = "========================================";
+
+  int index = output.indexOf(separator);
+  if( index != -1){
+
+    QString originalHtml = output.mid(index + separator.length());
+
+    arg.clear();
+    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" << "-e" << QString::number(elogID)
+        << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
+
+    if( screenID >= 0) {
+      
+      //TODO =========== chrome windowID
+      
+      QScreen * screen = QGuiApplication::primaryScreen();
+      if( screen){
+        QPixmap screenshot = screen->grabWindow(screenID);
+        screenshot.save("screenshot.png");
+        arg << "-f" << "screenshot.png";
+      }
+    }
+
+    elogBash.start("elog", arg); 
+    elogBash.waitForFinished();
+
+    output = QString::fromUtf8(elogBash.readAllStandardOutput());
+    index = output.indexOf("ID=");
+    if( index != -1 ){
+      elogID = output.mid(index+3).toInt();
+    }else{
+      elogID = -1;
+    }
+
+  }else{
+    elogID = -1;
+  }
+
+}
+

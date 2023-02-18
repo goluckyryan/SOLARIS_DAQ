@@ -63,6 +63,8 @@ public:
     waitTime = 2;
     stop = false;
   }
+  unsigned int GetWaitTimeSec() const {return waitTime;}
+  void SetWaitTimeSec(unsigned sec) {waitTime = sec;}
   void Stop() {this->stop = true;}
   void run(){
     unsigned int count = 0;
