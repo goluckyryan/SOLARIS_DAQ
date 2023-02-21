@@ -528,7 +528,7 @@ void MainWindow::OpenScope(){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
-      //connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
+      connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
     }else{
       scope->show();
@@ -676,12 +676,12 @@ void MainWindow::UpdateScalar(){
     if( influx ){
       for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
         influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + haha[ch]);
-        influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + std::to_string(acceptRate[ch]));
+        if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + std::to_string(acceptRate[ch]));
       }
     }
   }
 
-  if( influx ){
+  if( influx && influx->GetDataLength() > 0 ){
     //influx->PrintDataPoints();
     influx->WriteData(DatabaseName.toStdString());
     influx->ClearDataPointsBuffer();
@@ -926,6 +926,16 @@ void MainWindow::SetupInflux(){
 
       if( foundDatabase ){
         LogMsg("<font style=\"color : green;\"> Database <b>" + DatabaseName + "</b> found.");
+
+        influx->AddDataPoint("Rate,Bd=0,Ch=0 value=1");
+        influx->WriteData(DatabaseName.toStdString());
+        influx->ClearDataPointsBuffer();
+        if( influx->IsWriteOK() ){
+          LogMsg("test write OK.");
+        }else{
+          LogMsg("test write FAIL.");
+        }
+
       }else{
         LogMsg("<font style=\"color : red;\"> Database <b>" + DatabaseName + "</b> NOT found.");
         delete influx;

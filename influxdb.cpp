@@ -129,6 +129,8 @@ void InfluxDB::PrintDataPoints(){
 }
 
 void InfluxDB::WriteData(std::string databaseName){  
+  if( dataPoints.length() == 0 ) return;
+  //printf("|%s|\n", (databaseIP + "write?db=" + databaseName).c_str());
   curl_easy_setopt(curl, CURLOPT_URL, (databaseIP + "write?db=" + databaseName).c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1L);
   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(dataPoints.length()));
@@ -138,10 +140,15 @@ void InfluxDB::WriteData(std::string databaseName){
 
 
 void InfluxDB::Execute(){
-  respond = curl_easy_perform(curl);
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respondCode);
-  //printf("==== respond code %ld \n", respondCode);
-  if( respond != CURLE_OK) printf("############# InfluxDB::Execute fail\n");
+  try{
+    respond = curl_easy_perform(curl);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respondCode);
+    //printf("==== respond code %ld \n", respondCode);
+    if( respond != CURLE_OK) printf("############# InfluxDB::Execute fail\n");
+  } catch (std::exception& e){ // in case of unexpected error
+    printf("%s\n", e.what());
+    respond = CURLE_SEND_ERROR;
+  }
 }
 
 size_t InfluxDB::WriteCallBack(char *contents, size_t size, size_t nmemb, void *userp){

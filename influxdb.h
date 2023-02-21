@@ -47,9 +47,11 @@ class InfluxDB{
     /// 1, addDataPoint first, you can add as many as you like
     /// 2, writeData.
     void AddDataPoint(std::string fullString);
+    unsigned int GetDataLength() const {return dataPoints.length();}
     void ClearDataPointsBuffer();
     void PrintDataPoints();
     void WriteData(std::string databaseName);
+    bool IsWriteOK() const {return (respondCode == CURLE_OK) ? true: false;}
 
 };
 
