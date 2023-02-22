@@ -96,14 +96,15 @@ private:
   QPushButton * bnOpenScope;
 
   //@----- scalar;
-  QMainWindow * scalar;
-  QPushButton * bnOpenScalar;
-  QLineEdit *** leTrigger; // need to delete manually
-  QLineEdit *** leAccept; // need to delete manually
-  QGridLayout * scalarLayout;
+  QMainWindow  * scalar;
+  QPushButton  * bnOpenScalar;
+  QLineEdit  *** leTrigger; // need to delete manually
+  QLineEdit  *** leAccept; // need to delete manually
+  QGridLayout  * scalarLayout;
   ScalarThread * scalarThread;
-  QLabel      * lbLastUpdateTime;
-  InfluxDB   * influx;
+  QLabel       * lbLastUpdateTime;
+  QLabel       * lbScalarACQStatus;
+  InfluxDB     * influx;
 
   //@------ ACQ things
   QPushButton * bnStartACQ;

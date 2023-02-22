@@ -340,6 +340,7 @@ void MainWindow::StartACQ(){
   }
 
   if( !scalar->isVisible() ) scalar->show();
+  lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   scalarThread->start();
 
   bnStartACQ->setEnabled(false);
@@ -433,6 +434,9 @@ void MainWindow::StopACQ(){
         + "======================";
     AppendElog(msg, chromeWindowID);
   }
+
+  lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
+
   //if( scalarThread->isRunning()) printf("Scalar Thread still running.\n");
   //if( scalarThread->isFinished()) printf("Scalar Thread finsihed.\n");
 
@@ -581,8 +585,12 @@ void MainWindow::SetUpScalar(){
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
   scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, 1 + nDigi);
 
+  lbScalarACQStatus = new QLabel("ACQ status");
+  lbScalarACQStatus->setAlignment(Qt::AlignCenter);
+  scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
+
   ///==== create the 1st row
-  int rowID = 2;
+  int rowID = 3;
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
@@ -599,7 +607,7 @@ void MainWindow::SetUpScalar(){
   leTrigger = new QLineEdit**[nDigi];
   leAccept = new QLineEdit**[nDigi];
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
-    rowID = 1;
+    rowID = 2;
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
