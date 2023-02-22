@@ -267,6 +267,9 @@ MainWindow::~MainWindow(){
 void MainWindow::StartACQ(){
 
   if( chkSaveRun->isChecked() ){
+    runID ++;
+    leRunID->setText(QString::number(runID));
+
     runIDStr = QString::number(runID).rightJustified(3, '0');
     LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
 
@@ -303,8 +306,13 @@ void MainWindow::StartACQ(){
       }
     //}
     //TODO ============ elog
-
+    QString elogMsg = "=============== Run-" + runIDStr + "<br />"
+                    +  QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />"
+                    + "comment : " + startComment + "<br />" + 
+                    + "----------------------------------------------";
+    WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
     //TODO ============ update expName.sh
+    WriteExpNameSh();
 
   }else{
     LogMsg("=========================== Start no-save Run");
@@ -415,8 +423,15 @@ void MainWindow::StopACQ(){
 
   if( chkSaveRun->isChecked() ){
     //TODO ============= elog
-    runID ++;
-    leRunID->setText(QString::number(runID));
+    QString msg = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />";
+
+    for( int i = 0; i < nDigi; i++){
+      if( digi[i]->IsDummy () ) continue;
+      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
+    }
+    msg += "comment : " + stopComment + "<br />"
+        + "======================";
+    AppendElog(msg, chromeWindowID);
   }
   //if( scalarThread->isRunning()) printf("Scalar Thread still running.\n");
   //if( scalarThread->isFinished()) printf("Scalar Thread finsihed.\n");
@@ -463,6 +478,8 @@ void MainWindow::OpenDigitizers(){
 
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
+      //connect(readDataThread[i], &ReadDataThread::checkFileSize, this, &MainWindow::CheckOutFileSize);
+      //connect(readDataThread[i], &ReadDataThread::endOfLastData, this, &MainWindow::CheckOutFileSize);
 
       SetUpScalar();
       bnOpenScalar->setEnabled(true);
@@ -552,7 +569,6 @@ void MainWindow::OpenDigitizersSettings(){
 }
 
 //^###################################################################### Open Scaler, when DAQ is running
-//TODO #################################
 void MainWindow::OpenScaler(){
   scalar->show();
 }
@@ -954,21 +970,21 @@ void MainWindow::SetupInflux(){
 
 void MainWindow::CheckElog(){
 
-  WriteElog("Checking elog writing", "checking", "Testing communication");
+  WriteElog("Checking elog writing", "Testing communication", "checking");
 
   if( elogID > 0 ){
     LogMsg("Ckecked Elog writing. OK.");
 
     //TODO =========== chrome windowID
-    AppendElog("Check Elog append.", 10485763);
+    AppendElog("Check Elog append.", chromeWindowID);
     if( elogID > 0 ){
       LogMsg("Checked Elog Append. OK.");
     }else{
-      LogMsg("Checked Elog Append. FAIL. (no elog will be used.)");
+      LogMsg("<font style=\"color : red;\">Checked Elog Append. FAIL. (no elog will be used.) </font>");
     }
 
   }else{
-    LogMsg("Ckecked Elog writing. FAIL. (no elog will be used.)");
+    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) </font>");
   }
 
 }
@@ -1304,6 +1320,13 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   
   LogMsg("Creating new Exp. : <font style=\"color: red;\">" + newExpName + "</font>");
 
+  expName = newExpName;
+  runID = -1;
+  elogID = 0;
+
+  CreateRawDataFolderAndLink();
+  WriteExpNameSh();
+
   //@----- git must be clean
   //----- creat new git branch
   if( useGit ){
@@ -1322,21 +1345,6 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
     }
   }
 
-  CreateRawDataFolderAndLink(newExpName);
-
-  //----- create the expName.sh
-  QFile file2(analysisPath + "/expName.sh");
-  
-  file2.open(QIODevice::Text | QIODevice::WriteOnly);
-  file2.write(("expName = "+ newExpName + "\n").toStdString().c_str());
-  file2.write(("rawDataPath = "+ rawDataFolder + "\n").toStdString().c_str());
-  file2.write("runID = 0\n");
-  file2.write("elogID = 0\n");
-  file2.write("//------------end of file.");
-  file2.close();
-  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/expName.sh<b>.");
-
-
   //----- create git branch
   if( useGit ){
     QProcess git;
@@ -1349,10 +1357,6 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
     LogMsg("Commit branch : <b>" + newExpName + "</b> as \"initial commit\"");
   }
-
-  expName = newExpName;
-  runID = 0;
-  elogID = 0;
 
   leRawDataPath->setText(rawDataFolder);
   leExpName->setText(expName);
@@ -1375,25 +1379,52 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 
   LogMsg("Swicted to branch : <b>" + newExpName + "</b>");
 
-  CreateRawDataFolderAndLink(newExpName);
-
+  expName = newExpName;
+  CreateRawDataFolderAndLink();
   LoadExpSettings();
 
 }
 
-void MainWindow::CreateRawDataFolderAndLink(const QString newExpName){
+void MainWindow::WriteExpNameSh(){
+  //----- create the expName.sh
+  QFile file2(analysisPath + "/expName.sh");
+  
+  file2.open(QIODevice::Text | QIODevice::WriteOnly);
+  file2.write(("expName="+ expName + "\n").toStdString().c_str());
+  file2.write(("rawDataPath="+ rawDataFolder + "\n").toStdString().c_str());
+  file2.write(("runID="+std::to_string(runID)+"\n").c_str());
+  file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
+  file2.write("//------------end of file.");
+  file2.close();
+  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/expName.sh<b>.");
+
+}
+
+void MainWindow::CreateRawDataFolderAndLink(){
 
   //----- create data folder
-  rawDataFolder = dataPath + "/" + newExpName;
+  rawDataFolder = dataPath + "/" + expName;
   QDir dir;
   if( !dir.exists(rawDataFolder)){
     if( dir.mkdir(rawDataFolder)){
       LogMsg("<b>" + rawDataFolder + "</b> created." );
     }else{
-      LogMsg("<b>" + rawDataFolder + "</b> cannot be created. Access right problem?" );
+      LogMsg("<font style=\"color:red;\"><b>" + rawDataFolder + "</b> cannot be created. Access right problem? </font>" );
     }
   }else{
       LogMsg("<b>" + rawDataFolder + "</b> already exist." );
+  }
+
+  //----- create analysis Folder
+  QDir anaDir;
+  if( !anaDir.exists(analysisPath)){
+    if( anaDir.mkdir(analysisPath)){
+      LogMsg("<b>" + analysisPath + "</b> created." );
+    }else{
+      LogMsg("<font style=\"color:red;\"><b>" + analysisPath + "</b> cannot be created. Access right problem?</font>" );
+    }
+  }else{
+    LogMsg("<b>" + analysisPath + "</b> already exist.");
   }
 
   //----- create symbloic link
@@ -1407,7 +1438,7 @@ void MainWindow::CreateRawDataFolderAndLink(const QString newExpName){
   if (file.link(rawDataFolder, linkName)) {
       LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " created.");
   } else {
-      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created.");
+      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created. </font>");
   }
 }
 
@@ -1426,15 +1457,18 @@ void MainWindow::LogMsg(QString msg){
     logInfo->repaint();
 }
 
-void MainWindow::WriteElog(QString htmlText, QString category, QString subject){
+void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
   
   if( elogID < 0 ) return;
   if( expName == "" ) return;
 
   QStringList arg;
   arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" 
-      << "-a" << "Author=GeneralFSU" << "-a" << "Category=" + category
-      << "-a" << "Subject=" + subject 
+      << "-a" << "Author=GeneralFSU" ;
+  if( runNumber > 0 ) arg << "-a" << "Run=" + QString::number(runNumber);
+  if( category != "" ) arg << "-a" << "Category=" + category;
+
+  arg << "-a" << "Subject=" + subject 
       << "-n " << "2" <<  htmlText  ;
 
   QProcess elogBash(this);

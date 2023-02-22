@@ -33,6 +33,7 @@ void Digitizer2Gen::Initialization(){
   gateway = "";
 
   outFileIndex = 0;
+  FinishedOutFilesSize = 0;
   dataStartIndetifier = 0xAAA0;
   outFile = NULL;
   outFileSize = 0;
@@ -214,7 +215,11 @@ void Digitizer2Gen::StartACQ(){
   
   SendCommand("/cmd/armacquisition"); // this will also clear data
   SendCommand("/cmd/swstartacquisition");
-    
+  
+  outFileIndex = 0;
+  outFileSize = 0;
+  FinishedOutFilesSize = 0;
+
   acqON = true;
 }
 
@@ -500,6 +505,7 @@ void Digitizer2Gen::CloseOutFile(){
 void Digitizer2Gen::SaveDataToFile(){
 
   if( outFileSize > (unsigned int) MaxOutFileSize){
+    FinishedOutFilesSize += ftell(outFile);
     fclose(outFile);
     outFileIndex ++;
     sprintf(outFileName, "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);

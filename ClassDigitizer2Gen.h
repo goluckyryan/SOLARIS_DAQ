@@ -8,7 +8,8 @@
 
 #include "Event.h"
 
-#define MaxOutFileSize 2*1024*1024*1024
+#define MaxOutFileSize 2*1024*1024*1024  //2GB
+//#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
 
 #include "DigiParameters.h"
@@ -57,6 +58,7 @@ class Digitizer2Gen {
     char outFileName[100];
     FILE * outFile;
     unsigned int outFileSize;
+    uint64_t FinishedOutFilesSize;
 
     bool acqON;
   
@@ -117,7 +119,8 @@ class Digitizer2Gen {
     void OpenOutFile(std::string fileName, const char * mode = "w");
     void CloseOutFile();
     void SaveDataToFile();
-    unsigned int GetFileSize() {return outFileSize;}
+    unsigned int GetFileSize() const {return outFileSize;}
+    uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
 
 };
 

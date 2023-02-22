@@ -67,7 +67,8 @@
     "cinttypes": "cpp",
     "typeinfo": "cpp",
     "variant": "cpp",
-    "qdatetime": "cpp"
+    "qdatetime": "cpp",
+    "fstream": "cpp"
   },
 
   "better-comments.multilineComments": true,

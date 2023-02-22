@@ -19,7 +19,6 @@
 #include <vector>
 #include <time.h> // time in nano-sec
 
-
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
 
@@ -27,6 +26,8 @@
 
 #include "digiSettings.h"
 #include "scope.h"
+
+const int chromeWindowID = 10485763;
 
 //^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
@@ -64,7 +65,8 @@ private slots:
   bool LoadExpSettings();
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
-  void CreateRawDataFolderAndLink(const QString newExpName);
+  void WriteExpNameSh();
+  void CreateRawDataFolderAndLink();
 
   void closeEvent(QCloseEvent * event){
     if( digiSetting != NULL ) digiSetting->close();
@@ -72,7 +74,7 @@ private slots:
     event->accept();
   }
 
-  void WriteElog(QString htmlText, QString category = "", QString subject = "");
+  void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
 
 signals :
@@ -151,7 +153,7 @@ private:
   bool useGit;
   QString expName;
   QString rawDataFolder;
-  unsigned int runID;
+  int runID;
   QString runIDStr;
   int elogID;  // 0 = ready, -1 = disable, >1 = elogID
 
