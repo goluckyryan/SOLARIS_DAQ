@@ -26,3 +26,7 @@ influxdb.o : influxdb.cpp influxdb.h
 windowID : windowID.cpp
 	@echo "------- windowID"
 	${CC} ${COPTS} -o windowID windowID.cpp  -lX11 -lpng
+
+
+clean :
+	rm -f $(ALL) $(OBJS)

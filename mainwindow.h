@@ -24,7 +24,7 @@
 
 #include "manyThread.h"
 
-#include "digiSettings.h"
+#include "digiSettingsPanel.h"
 #include "scope.h"
 
 const int chromeWindowID = 10485763;
@@ -120,7 +120,7 @@ private:
   QString startComment;
   QString stopComment;
 
-  DigiSettings * digiSetting;
+  DigiSettingsPanel * digiSetting;
 
   QPlainTextEdit * logInfo;
 

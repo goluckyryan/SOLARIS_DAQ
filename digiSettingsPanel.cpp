@@ -1,87 +1,98 @@
-#include "digiSettings.h"
+#include "digiSettingsPanel.h"
 
 #include <QLabel>
+#include <QFileDialog>
 
-DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
+std::vector<std::pair<std::string, int>> infoIndex = {{"Serial Num : ",            8},
+                                                      {"IP : ",                    20},
+                                                      {"Model Name : ",            5},
+                                                      {"FPGA version : ",          1},
+                                                      {"DPP Type : ",              2},
+                                                      {"CUP version : ",           0},
+                                                      {"ADC bits : ",              15},
+                                                      {"ADC rate [Msps] : ",       16},
+                                                      {"Num. of Channel : ",       14},
+                                                      {"Input range [Vpp] : ",     17},
+                                                      {"Input Type : ",            18},
+                                                      {"Input Impedance [Ohm] : ", 19}
+                                                    };
 
-  qDebug() << "DigiSettings constructor";
+DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
+
+  qDebug() << "DigiSettingsPanel constructor";
 
   setWindowTitle("Digitizers Settings");
-  setGeometry(0, 0, 1900, 1000);
+  setGeometry(0, 0, 1600, 1000);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
   this->digi = digi;
   this->nDigi = nDigi;
+  if( nDigi > MaxNumberOfDigitizer ) {
+    this->nDigi = MaxNumberOfChannel;
+    qDebug() << "Please increase the MaxNumberOfChannel";
+  }
 
-  std::vector<std::vector<std::string>> info = {{"Serial Num : ",            "/par/SerialNum"},
-                                                {"IP : ",                    "/par/IPAddress"},
-                                                {"Model Name : ",            "/par/ModelName"},
-                                                {"FPGA version : ",          "/par/FPGA_FwVer"},
-                                                {"DPP Type : ",              "/par/FwType"},
-                                                {"CUP version : ",           "/par/cupver"},
-                                                {"ADC bits : ",              "/par/ADC_Nbit"},
-                                                {"ADC rate [Msps] : ",       "/par/ADC_SamplRate"},
-                                                {"Num. of Channel : ",       "/par/NumCh"},
-                                                {"Input range [Vpp] : ",     "/par/InputRange"},
-                                                {"Input Type : ",            "/par/InputType"},
-                                                {"Input Impedance [Ohm] : ", "/par/Zin"}
-                                               };
+  ID = 0;
 
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
   QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
+  connect(tabWidget, &QTabWidget::currentChanged, this, [=](int index){ ID = index;});
 
   //@========================== Tab for each digitizer
   for(unsigned short iDigi = 0; iDigi < this->nDigi; iDigi++){
 
-    QWidget * tab = new QWidget(tabWidget);
-    QScrollArea * scrollArea = new QScrollArea(this); scrollArea->setWidget(tab);
+    QScrollArea * scrollArea = new QScrollArea(this); 
     scrollArea->setWidgetResizable(true);
     scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
     tabWidget->addTab(scrollArea, "Digi-" + QString::number(digi[iDigi]->GetSerialNumber()));
+
+    QWidget * tab = new QWidget(tabWidget);
+    scrollArea->setWidget(tab);
     
-    QGridLayout *tabLayout = new QGridLayout(tab); tab->setLayout(tabLayout);
+    QHBoxLayout * tabLayout_H  = new QHBoxLayout(tab); //tab->setLayout(tabLayout_H);
+
+    QVBoxLayout * tabLayout_V1 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V1);
+    QVBoxLayout * tabLayout_V2 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V2);
 
     {//^====================== Group of Digitizer Info
       QGroupBox * infoBox = new QGroupBox("Board Info", tab);
       QGridLayout * infoLayout = new QGridLayout(infoBox);
-      tabLayout->addWidget(infoBox, 0, 0);
+      tabLayout_V1->addWidget(infoBox);
       
       const unsigned short nRow = 4;
-      for( unsigned short j = 0; j < (unsigned short) info.size(); j++){
-        QLabel * lab = new QLabel(QString::fromStdString(info[j][0]), tab);
+      for( unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
+        QLabel * lab = new QLabel(QString::fromStdString(infoIndex[j].first), tab);
         lab->setAlignment(Qt::AlignRight);
-        QLineEdit * txt = new QLineEdit(tab);
-        txt->setReadOnly(true);
-        txt->setText(QString::fromStdString(digi[iDigi]->ReadValue(info[j][1].c_str())));
+        leInfo[iDigi][j] = new QLineEdit(tab);
+        leInfo[iDigi][j]->setReadOnly(true);
+        leInfo[iDigi][j]->setText(QString::fromStdString(digi[iDigi]->ReadValue(TYPE::DIG, infoIndex[j].second)));
         infoLayout->addWidget(lab, j%nRow, 2*(j/nRow));
-        infoLayout->addWidget(txt, j%nRow, 2*(j/nRow) +1);
+        infoLayout->addWidget(leInfo[iDigi][j], j%nRow, 2*(j/nRow) +1);
       }
     }
 
     {//^====================== Group Board status
       QGroupBox * statusBox = new QGroupBox("Board Status", tab);
-      QSizePolicy sizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
-      sizePolicy.setHorizontalStretch(0);
-      sizePolicy.setVerticalStretch(0);
-      statusBox->setSizePolicy(sizePolicy);
+      //QSizePolicy sizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+      //sizePolicy.setHorizontalStretch(0);
+      //sizePolicy.setVerticalStretch(0);
+      //statusBox->setSizePolicy(sizePolicy);
       QGridLayout * statusLayout = new QGridLayout(statusBox);
       statusLayout->setHorizontalSpacing(0);
 
-      tabLayout->addWidget(statusBox, 0, 1);
+      tabLayout_V1->addWidget(statusBox);
 
       //------- LED Status
       QLabel * lbLED = new QLabel("LED status : ");
       lbLED->setAlignment(Qt::AlignRight | Qt::AlignCenter);
       statusLayout->addWidget(lbLED, 0, 0);
 
-      QPushButton ** LEDStatus = new QPushButton *[19];      
       for( int i = 0; i < 19; i++){
-        LEDStatus[i] = new QPushButton(tab);
-        LEDStatus[i]->setEnabled(false);
-        LEDStatus[i]->setFixedSize(QSize(30,30));
-        statusLayout->addWidget(LEDStatus[i], 0, 1 + i);
+        LEDStatus[iDigi][i] = new QPushButton(tab);
+        LEDStatus[iDigi][i]->setEnabled(false);
+        LEDStatus[iDigi][i]->setFixedSize(QSize(30,30));
+        statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + i);
       }
 
       //------- ACD Status
@@ -89,12 +100,11 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
       lbACQ->setAlignment(Qt::AlignRight | Qt::AlignCenter);
       statusLayout->addWidget(lbACQ, 1, 0);
 
-      QPushButton ** ACQStatus = new QPushButton *[7];      
       for( int i = 0; i < 7; i++){
-        ACQStatus[i] = new QPushButton(tab);
-        ACQStatus[i]->setEnabled(false);
-        ACQStatus[i]->setFixedSize(QSize(30,30));
-        statusLayout->addWidget(ACQStatus[i], 1, 1 + i);
+        ACQStatus[iDigi][i] = new QPushButton(tab);
+        ACQStatus[iDigi][i]->setEnabled(false);
+        ACQStatus[iDigi][i]->setFixedSize(QSize(30,30));
+        statusLayout->addWidget(ACQStatus[iDigi][i], 1, 1 + i);
       }
 
       //------- Temperatures
@@ -109,30 +119,52 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
         leTemp[i]->setEnabled(false);
         statusLayout->addWidget(leTemp[i], 2, 1 + 2*i, 1, 2);
       }
+    }
+
+    {//^====================== Board Setting Buttons
+      QGridLayout * bnLayout = new QGridLayout();
+      tabLayout_V2->addLayout(bnLayout);
+      
+      int rowId = 0;
+      //-------------------------------------
+      QLabel * lbSettingFile = new QLabel("Setting File : ", tab);
+      lbSettingFile->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+      bnLayout->addWidget(lbSettingFile, rowId, 0);
+
+      leSettingFile[iDigi] = new QLineEdit(tab);
+      leSettingFile[iDigi]->setReadOnly(true);
+      bnLayout->addWidget(leSettingFile[iDigi], rowId, 1, 1, 9);
+      
+      //-------------------------------------
+      rowId ++;
+      QPushButton * bnReadSettngs = new QPushButton("Refresh Settings", tab);
+      bnLayout->addWidget(bnReadSettngs, rowId, 0, 1, 2);
+      connect(bnReadSettngs, &QPushButton::clicked, this, &DigiSettingsPanel::RefreshSettings);
+      
+      QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
+      bnLayout->addWidget(bnResetBd, rowId, 2, 1, 2);
+      connect(bnResetBd, &QPushButton::clicked, this, &DigiSettingsPanel::onReset);
+      
+      QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
+      bnLayout->addWidget(bnDefaultSetting, rowId, 4, 1, 2);
+      connect(bnDefaultSetting, &QPushButton::clicked, this, &DigiSettingsPanel::onDefault);
+
+      QPushButton * bnSaveSettings = new QPushButton("Save Settings", tab);
+      bnLayout->addWidget(bnSaveSettings, rowId, 6, 1, 2);
+      connect(bnSaveSettings, &QPushButton::clicked, this, &DigiSettingsPanel::SaveSettings);
+
+      QPushButton * bnLoadSettings = new QPushButton("Load Settings", tab);
+      bnLayout->addWidget(bnLoadSettings, rowId, 8, 1, 2);
+      connect(bnLoadSettings, &QPushButton::clicked, this, &DigiSettingsPanel::LoadSettings);
 
     }
 
     {//^====================== Group Board settings
       QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
       QGridLayout * boardLayout = new QGridLayout(digiBox);
-      tabLayout->addWidget(digiBox, 1, 0);
+      tabLayout_V2->addWidget(digiBox);
         
       int rowId = 0;
-      //-------------------------------------
-      QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
-      boardLayout->addWidget(bnResetBd, rowId, 0, 1, 2);
-      connect(bnResetBd, &QPushButton::clicked, this, &DigiSettings::onReset);
-      
-      QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
-      boardLayout->addWidget(bnDefaultSetting, rowId, 2, 1, 2);
-      connect(bnDefaultSetting, &QPushButton::clicked, this, &DigiSettings::onDefault);
-
-      QPushButton * bnSaveSettings = new QPushButton("Save Settings", tab);
-      boardLayout->addWidget(bnSaveSettings, rowId, 4, 1, 2);
-      
-      QPushButton * bnLoadSettings = new QPushButton("Load Settings", tab);
-      boardLayout->addWidget(bnLoadSettings, rowId, 6, 1, 2);
-
       //-------------------------------------
       rowId ++;
       QLabel * lbClockSource = new QLabel("Clock Source :", tab);
@@ -332,12 +364,13 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
 
 
     {//^====================== Group channel settings
-      QGroupBox * chBox = new QGroupBox("Channel Settings", tab); tabLayout->addWidget(chBox, 1, 1, 1, 1);
+      QGroupBox * chBox = new QGroupBox("Channel Settings", tab); 
+      tabLayout_V2->addWidget(chBox);
       QGridLayout * chLayout = new QGridLayout(chBox); //chBox->setLayout(chLayout);
 
 
       QSignalMapper * onOffMapper = new QSignalMapper(tab);
-      connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onChannelonOff); 
+      connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettingsPanel::onChannelonOff); 
       
       QTabWidget * chTabWidget = new QTabWidget(tab); chLayout->addWidget(chTabWidget);
       
@@ -392,7 +425,7 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
       QGroupBox * triggerBox = new QGroupBox("Trigger Map", tab);
       QGridLayout * triggerLayout = new QGridLayout(triggerBox);
       //triggerBox->setLayout(triggerLayout);
-      tabLayout->addWidget(triggerBox, 2, 0);
+      tabLayout_V1->addWidget(triggerBox);
       
       triggerLayout->setHorizontalSpacing(0);
       triggerLayout->setVerticalSpacing(0);
@@ -401,7 +434,7 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
       triggerLayout->addWidget(instr, 0, 0, 1, 64+15);
 
       QSignalMapper * triggerMapper = new QSignalMapper(tab);
-      connect(triggerMapper, &QSignalMapper::mappedInt, this, &DigiSettings::onTriggerClick);
+      connect(triggerMapper, &QSignalMapper::mappedInt, this, &DigiSettingsPanel::onTriggerClick);
 
       int rowID = 1;
       int colID = 0;
@@ -451,7 +484,7 @@ DigiSettings::DigiSettings(Digitizer2Gen ** digi, unsigned short nDigi, QWidget 
 
 }
 
-DigiSettings::~DigiSettings(){
+DigiSettingsPanel::~DigiSettingsPanel(){
 
   printf("%s\n", __func__);
 
@@ -460,4 +493,126 @@ DigiSettings::~DigiSettings(){
       if( cbCh[iDig][i] != NULL) delete cbCh[iDig][i];
     }
   }
+}
+
+//^================================================================
+void DigiSettingsPanel::onTriggerClick(int haha){
+  
+  unsigned short iDig = haha >> 12;
+  unsigned short ch = (haha >> 8 ) & 0xF;
+  unsigned short ch2 = haha & 0xFF;
+
+  qDebug() << "Digi-" << iDig << ", Ch-" << ch << ", " << ch2; 
+
+  if(bnClickStatus[ch][ch2]){
+    bn[ch][ch2]->setStyleSheet(""); 
+    bnClickStatus[ch][ch2] = false;
+  }else{
+    bn[ch][ch2]->setStyleSheet("background-color: red;"); 
+    bnClickStatus[ch][ch2] = true;
+  }
+}
+
+void DigiSettingsPanel::onChannelonOff(int haha){
+  
+  unsigned short iDig = haha >> 12;
+  //qDebug()<< "nDigi-" << iDig << ", ch-" << (haha & 0xFF);
+  if( (haha & 0xFF) == 64){
+
+    if( cbCh[iDig][64]->isChecked() ){
+      for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
+        cbCh[iDig][i]->setChecked(true);
+      }
+    }else{
+      for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
+        cbCh[iDig][i]->setChecked(false);
+      }
+    }
+  }else{
+    unsigned int nOn = 0;
+    for( int i = 0; i < digi[iDig]->GetNChannels(); i++){
+      nOn += (cbCh[iDig][i]->isChecked() ? 1 : 0);
+    }
+
+    if( nOn == 64){
+      cbCh[iDig][64]->setChecked(true);
+    }else{
+      cbCh[iDig][64]->setChecked(false);
+    }
+
+  }
+}
+
+//^================================================================
+void DigiSettingsPanel::onReset(){
+  emit sendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
+  digi[ID]->Reset(); 
+}
+
+void DigiSettingsPanel::onDefault(){ 
+  emit sendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
+  digi[ID]->ProgramPHA();
+}
+
+void DigiSettingsPanel::RefreshSettings(){
+  digi[ID]->ReadAllSettings();
+  ShowSettingsToPanel();
+}
+
+void DigiSettingsPanel::SaveSettings(){
+
+
+
+}
+
+void DigiSettingsPanel::LoadSettings(){
+  QFileDialog fileDialog(this);
+  fileDialog.setFileMode(QFileDialog::ExistingFile);
+  fileDialog.setNameFilter("Data file (*.dat);;Text file (*.txt);;All file (*.*)");
+  fileDialog.exec();
+
+  QString fileName = fileDialog.selectedFiles().at(0);
+
+  leSettingFile[ID]->setText(fileName);
+  //TODO ==== check is the file valid;
+
+  if( digi[ID]->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
+    emit sendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+  }else{
+    emit sendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+  }
+
+  //TODO ==== show result
+  ShowSettingsToPanel();
+}
+
+void DigiSettingsPanel::ShowSettingsToPanel(){
+
+  for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
+    leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, infoIndex[j].second)));
+  } 
+
+  //--------- LED Status
+  unsigned int ledStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, 23).c_str());
+  for( int i = 0; i < 19; i++){
+    if( (ledStatus >> i) & 0x1 ) {
+      LEDStatus[ID][i]->setStyleSheet("background-color:green;");
+    }else{
+      LEDStatus[ID][i]->setStyleSheet("");
+    }
+  }
+
+  //--------- ACQ Status
+  unsigned int acqStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, 24).c_str());
+  for( int i = 0; i < 7; i++){
+    if( (acqStatus >> i) & 0x1 ) {
+      ACQStatus[ID][i]->setStyleSheet("background-color:green;");
+    }else{
+      ACQStatus[ID][i]->setStyleSheet("");
+    }
+  }
+
+
+
+
 }

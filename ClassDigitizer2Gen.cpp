@@ -45,6 +45,7 @@ void Digitizer2Gen::Initialization(){
 
   acqON = false;
 
+  settingFileName = "";
   boardSettings = DIGIPARA::DIG::AllSettings;
   for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = DIGIPARA::CH::AllSettings;
   for( int index = 0 ; index < 4; index ++) VGASetting[index] = DIGIPARA::VGA::VGAGain;
@@ -110,6 +111,18 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
 std::string Digitizer2Gen::ReadValue(Reg &para, int ch_index,  bool verbose){
   para.SetValue( ReadValue(para.GetFullPara(ch_index).c_str(), verbose)  );
   return para.GetValue();
+}
+
+std::string Digitizer2Gen::ReadValue(TYPE type, unsigned short index, int ch_index, bool verbose){
+  if( !isConnected ) return "not connected";
+  switch (type){
+    case TYPE::DIG: return ReadValue( boardSettings[index], ch_index, verbose );
+    case TYPE::CH:  return ReadValue( chSettings[ch_index][index], ch_index, verbose );
+    case TYPE::VGA: return ReadValue( VGASetting[index], ch_index, verbose);
+    case TYPE::LVDS: return "no defined";
+  }
+
+  return "invalid";
 }
 
 std::string Digitizer2Gen::ReadDigValue(std::string shortPara, bool verbose){
@@ -213,6 +226,9 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("     ADC bits : %d\n", adcBits);
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
   printf("     Channels : %d\n", nChannels);
+
+  //------ set default setting file name
+  settingFileName = "settings_"+ std::to_string(serialNumber) + ".dat";
 
   //ReadValue("/par/InputRange", true);
   //ReadValue("/par/InputType", true);
@@ -723,6 +739,7 @@ std::string Digitizer2Gen::ErrorMsg(const char * funcName){
 
 //^===================================================== Settings
 void Digitizer2Gen::ReadAllSettings(){
+  if( !isConnected ) return;
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
     ReadValue(boardSettings[i]);
@@ -739,8 +756,10 @@ void Digitizer2Gen::ReadAllSettings(){
 }
 
 bool Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
-  //printf("Saving settings....\n");
-  FILE * saveFile = fopen(saveFileName, "w");
+  if( !isConnected ) return false;
+  if( saveFileName != NULL) settingFileName = saveFileName;
+
+  FILE * saveFile = fopen(settingFileName.c_str(), "w");
   if( saveFile ){
     for(int i = 0; i < (int) boardSettings.size(); i++){
       if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
@@ -783,8 +802,9 @@ bool Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
 
 bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
-  FILE * loadFile = fopen(loadFileName, "r");
+  if( loadFileName != NULL) settingFileName = loadFileName;
 
+  FILE * loadFile = fopen(settingFileName.c_str(), "r");
 
   if( loadFile ){
     char * para      = new char[100];
@@ -837,7 +857,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         VGASetting[id - 9000].SetValue(value);
       }
       //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
-      if( std::strcmp(readWrite, "2") == 0 )  WriteValue(para, value);
+      if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value);
     }
 
 

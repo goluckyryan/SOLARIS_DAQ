@@ -63,6 +63,7 @@ class Digitizer2Gen {
     bool acqON;
 
     //all read and read/write settings
+    std::string settingFileName;
     std::vector<Reg> boardSettings; 
     std::vector<Reg> chSettings[MaxNumberOfChannel];
     Reg VGASetting[4]; 
@@ -84,6 +85,7 @@ class Digitizer2Gen {
   
     std::string  ReadValue(const char * parameter, bool verbose = false);
     std::string  ReadValue(Reg &para, int ch_index = -1, bool verbose = false);
+    std::string  ReadValue(TYPE type, unsigned short index, int ch_index = -1, bool verbose = false);
     std::string  ReadDigValue(std::string shortPara, bool verbose = false);
     std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
     bool         WriteValue(const char * parameter, std::string value);
@@ -128,11 +130,20 @@ class Digitizer2Gen {
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
 
+    std::string GetSettingFileName() const {return settingFileName;}
+    void SetSettingFileName(std::string fileName) {settingFileName = fileName;}
     void ReadAllSettings(); // read settings from digitier and save to memory
-    bool SaveSettingsToFile(const char * saveFileName); // ReadAllSettings + text file
-    bool LoadSettingsFromFile(const char * loadFileName); // Load settings, write to digitizer and save to memory
-    //void PrintAllSetting();
-
+    bool SaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
+    bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
+    std::string GetSettingValue(TYPE type, unsigned short index, int ch_index = -1) const {
+      switch(type){
+        case TYPE::DIG: return boardSettings[index].GetValue();
+        case TYPE::CH:  return chSettings[ch_index][index].GetValue();
+        case TYPE::VGA: return VGASetting[ch_index].GetValue();
+        case TYPE::LVDS: return "not defined";
+      }
+      return "invalid";
+    }
 };
 
 #endif

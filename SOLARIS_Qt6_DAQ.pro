@@ -18,5 +18,5 @@ LIBS += -lcurl -lCAEN_FELib -lX11
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 # Input
-HEADERS += ClassDigitizer2Gen.h Event.h influxdb.h mainwindow.h digiSettings.h Digiparameters.h scope.h manyThread.h
-SOURCES += ClassDigitizer2Gen.cpp influxdb.cpp main.cpp mainwindow.cpp digiSettings.cpp scope.cpp
+HEADERS += ClassDigitizer2Gen.h Event.h influxdb.h mainwindow.h digiSettingsPanel.h Digiparameters.h scope.h manyThread.h
+SOURCES += ClassDigitizer2Gen.cpp influxdb.cpp main.cpp mainwindow.cpp digiSettingsPanel.cpp scope.cpp

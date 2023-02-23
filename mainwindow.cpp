@@ -496,8 +496,10 @@ void MainWindow::OpenDigitizers(){
       QString settingFile = analysisPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
         LogMsg("Found setting file <b>" + settingFile + "</b> and loaded.");
+        digi[i]->SetSettingFileName(settingFile.toStdString());
       }else{
         LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
+        digi[i]->SetSettingFileName("");
       }
 
       SetUpScalar();
@@ -579,8 +581,8 @@ void MainWindow::OpenDigitizersSettings(){
   LogMsg("Open digitizers Settings Panel");
 
   if( digiSetting == NULL){
-    digiSetting = new DigiSettings(digi, nDigi);
-    connect(digiSetting, &DigiSettings::sendLogMsg, this, &MainWindow::LogMsg);
+    digiSetting = new DigiSettingsPanel(digi, nDigi);
+    connect(digiSetting, &DigiSettingsPanel::sendLogMsg, this, &MainWindow::LogMsg);
     digiSetting->show();
   }else{
     digiSetting->show();
