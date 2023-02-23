@@ -94,11 +94,11 @@ int main(int argc, char* argv[]){
   
   //printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
 
-  //digi->SaveSettingsToFile("settings.txt");
+  //digi->SaveSettingsToFile(("settings_" + std::to_string(digi->GetSerialNumber()) + ".dat").c_str());
 
   printf("===================================\n");
 
-  digi->LoadSettingsFromFile("settings.txt");
+  digi->LoadSettingsFromFile("settings_21245.dat");
   //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());
   //printf("%s \n", digi->ReadValue("/ch/0/par/Energy_Nbit").c_str());
   //printf("%s \n", digi->ReadValue("/par/MaxRawDataSize").c_str());

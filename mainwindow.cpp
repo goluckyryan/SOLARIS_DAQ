@@ -492,6 +492,14 @@ void MainWindow::OpenDigitizers(){
       //connect(readDataThread[i], &ReadDataThread::checkFileSize, this, &MainWindow::CheckOutFileSize);
       //connect(readDataThread[i], &ReadDataThread::endOfLastData, this, &MainWindow::CheckOutFileSize);
 
+      //*------ search for settings_XXXX.dat
+      QString settingFile = analysisPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
+        LogMsg("Found setting file <b>" + settingFile + "</b> and loaded.");
+      }else{
+        LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
+      }
+
       SetUpScalar();
       bnOpenScalar->setEnabled(true);
 

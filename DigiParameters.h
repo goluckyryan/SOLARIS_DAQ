@@ -2,6 +2,7 @@
 #define  DIGITIZER_PARAMETER_H
 
 #include <cstdlib>
+#include <string>
 #include <vector>
 
 enum TYPE {CH, DIG, LVDS, VGA};
@@ -11,18 +12,30 @@ enum RW { ReadOnly, WriteOnly, ReadWrite};
 class Reg {
   private:
     std::string name;
+    std::string value;
     TYPE type;
     RW readWrite; // true for read/write, false for read-only
     bool isCmd;
     
   public:
+    Reg(){
+      this->name = "";
+      this->readWrite = RW::ReadWrite;
+      this->type = TYPE::CH;
+      this->isCmd = false;
+      this->value = "";
+    }
     Reg(std::string para, RW readwrite, TYPE type = TYPE::CH, bool isCmd = false){
       this->name = para;
       this->readWrite = readwrite;
       this->type = type;
       this->isCmd = isCmd;
+      this->value = "";
     }
     ~Reg(){};
+
+    void        SetValue(std::string sv) { this->value = sv;}
+    std::string GetValue() const { return value;}
 
     std::string GetPara()   const {return name;}
     std::string GetFullPara(int ch_index = -1) const {

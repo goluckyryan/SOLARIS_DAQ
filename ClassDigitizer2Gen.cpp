@@ -45,6 +45,10 @@ void Digitizer2Gen::Initialization(){
 
   acqON = false;
 
+  boardSettings = DIGIPARA::DIG::AllSettings;
+  for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = DIGIPARA::CH::AllSettings;
+  for( int index = 0 ; index < 4; index ++) VGASetting[index] = DIGIPARA::VGA::VGAGain;
+
 }
 
 void Digitizer2Gen::SetDummy(unsigned short sn){
@@ -103,6 +107,11 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   return retValue;
 }
 
+std::string Digitizer2Gen::ReadValue(Reg &para, int ch_index,  bool verbose){
+  para.SetValue( ReadValue(para.GetFullPara(ch_index).c_str(), verbose)  );
+  return para.GetValue();
+}
+
 std::string Digitizer2Gen::ReadDigValue(std::string shortPara, bool verbose){
   std::string haha = "/par/" + shortPara;
   return ReadValue(haha.c_str(), verbose);
@@ -113,25 +122,36 @@ std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bo
   return ReadValue(haha.c_str(), verbose);
 }
 
-void Digitizer2Gen::WriteValue(const char * parameter, std::string value){
-  if( !isConnected ) return;
+bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
+  if( !isConnected ) return false;
   printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
     printf("|%s||%s|\n", parameter, value.c_str());
     ErrorMsg(__func__);
-    return;
+    return false;
+  }
+  return true;
+}
+
+bool Digitizer2Gen::WriteValue(Reg &para, std::string value, int ch_index){
+
+  if( WriteValue(para.GetFullPara(ch_index).c_str(), value)){
+    para.SetValue(value);
+    return true;
+  }else{
+    return false;
   }
 }
 
-void Digitizer2Gen::WriteDigValue(std::string shortPara, std::string value){
+bool Digitizer2Gen::WriteDigValue(std::string shortPara, std::string value){
   std::string haha = "/par/" + shortPara;
-  WriteValue(haha.c_str(), value);
+  return WriteValue(haha.c_str(), value);
 }
 
-void Digitizer2Gen::WriteChValue(std::string ch, std::string shortPara, std::string value){
+bool Digitizer2Gen::WriteChValue(std::string ch, std::string shortPara, std::string value){
   std::string haha = "/ch/" + ch + "/par/" + shortPara;
-  WriteValue(haha.c_str(), value);
+  return WriteValue(haha.c_str(), value);
 }
 
 void Digitizer2Gen::SendCommand(const char * parameter){
@@ -687,24 +707,6 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
   
 }
 
-void Digitizer2Gen::ReadDigitizerSettings(){
-
-  ReadValue("/ch/4/par/ChRecordLengthS"  , true);
-  ReadValue("/ch/4/par/ChPreTriggerS"    , true);
-  ReadValue("/ch/4/par/WaveResolution"   , true);
-  ReadValue("/ch/4/par/WaveAnalogProbe0" , true);
-  ReadValue("/ch/4/par/WaveAnalogProbe1" , true);
-  ReadValue("/ch/4/par/WaveDigitalProbe0", true);
-  ReadValue("/ch/4/par/WaveDigitalProbe1", true);
-  ReadValue("/ch/4/par/WaveDigitalProbe2", true); 
-  ReadValue("/ch/4/par/WaveDigitalProbe3", true); 
-
-  ReadValue("/ch/4/par/ChannelsTriggerMask", true); 
-
-  ReadValue("/ch/0/par/ChannelsTriggerMask", true); 
-
-}
-
 std::string Digitizer2Gen::ErrorMsg(const char * funcName){
   printf("======== %s | %s\n",__func__, funcName);
   char msg[1024];
@@ -719,49 +721,77 @@ std::string Digitizer2Gen::ErrorMsg(const char * funcName){
   return msg;
 }
 
-void Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
-  printf("Saving settings....\n");
+//^===================================================== Settings
+void Digitizer2Gen::ReadAllSettings(){
+  for(int i = 0; i < (int) boardSettings.size(); i++){
+    if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
+    ReadValue(boardSettings[i]);
+  }
+
+  for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
+
+  for(int ch = 0; ch < nChannels ; ch++ ){
+    for( int i = 0; i < (int) chSettings[ch].size(); i++){
+      if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+      ReadValue(chSettings[ch][i], i);
+    }
+  }
+}
+
+bool Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
+  //printf("Saving settings....\n");
   FILE * saveFile = fopen(saveFileName, "w");
   if( saveFile ){
-    std::string para, value;
-    for(int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++){
-      if( DIGIPARA::DIG::AllSettings[i].ReadWrite() == RW::WriteOnly) continue;
-      para = DIGIPARA::DIG::AllSettings[i].GetFullPara();
-      value = ReadValue(para.c_str());
-      fprintf(saveFile, "%-45s|%d|%s\n", para.c_str(),  DIGIPARA::DIG::AllSettings[i].ReadWrite(), value.c_str());
+    for(int i = 0; i < (int) boardSettings.size(); i++){
+      if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
+      ReadValue(boardSettings[i]);
+      fprintf(saveFile, "%-45s|%d|%4d|%s\n", boardSettings[i].GetFullPara().c_str(),  
+                                             boardSettings[i].ReadWrite(),
+                                             8000 + i, 
+                                             boardSettings[i].GetValue().c_str());
     }
 
     for(int i = 0; i < 4 ; i ++){
-      para = DIGIPARA::VGA::VGAGain.GetFullPara(i);
-      value = ReadValue(para.c_str());
-      fprintf(saveFile, "%-45s|%d|%s\n", para.c_str(), DIGIPARA::DIG::AllSettings[i].ReadWrite(), value.c_str());
+      ReadValue(VGASetting[i], i);
+      fprintf(saveFile, "%-45s|%d|%4d|%s\n", VGASetting[i].GetFullPara(i).c_str(), 
+                                             VGASetting[i].ReadWrite(), 
+                                             9000 + i,
+                                             VGASetting[i].GetValue().c_str());
     }
     for(int ch = 0; ch < nChannels ; ch++ ){
-      for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++){
-        if( DIGIPARA::CH::AllSettings[i].ReadWrite() == RW::WriteOnly) continue;
-        para = DIGIPARA::CH::AllSettings[i].GetFullPara(ch);
-        value = ReadValue(para.c_str());
-        fprintf(saveFile, "%-45s|%d|%s\n",para.c_str(), DIGIPARA::DIG::AllSettings[i].ReadWrite(),value.c_str());
+      for( int i = 0; i < (int) chSettings[ch].size(); i++){
+        if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+        ReadValue(chSettings[ch][i], i);
+        fprintf(saveFile, "%-45s|%d|%4d|%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
+                                               chSettings[ch][i].ReadWrite(),
+                                               ch*100 + i,
+                                               chSettings[ch][i].GetValue().c_str());
       }
     }
     
     fclose(saveFile);
 
-    printf("Saved setting files to %s\n", saveFileName);
+    //printf("Saved setting files to %s\n", saveFileName);
+    return true;
 
   }else{
-    printf("Save file accessing error.");
+    //printf("Save file accessing error.");
   }
+
+  return false;
 }
 
-void Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
+bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
   FILE * loadFile = fopen(loadFileName, "r");
-  char * para      = new char[100];
-  char * readWrite = new char[100];
-  char * value     = new char[100];
+
 
   if( loadFile ){
+    char * para      = new char[100];
+    char * readWrite = new char[100];
+    char * idStr     = new char[100];
+    char * value     = new char[100];
+
     char line[100];
     while(fgets(line, sizeof(line), loadFile) != NULL){
 
@@ -780,20 +810,47 @@ void Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
         if( count == 0 ) std::strcpy(para, token);
         if( count == 1 ) std::strcpy(readWrite, token);
-        if( count == 2 ) std::strcpy(value, token);
-        if( count > 2) break;
+        if( count == 2 ) std::strcpy(idStr, token);
+        if( count == 3 ) std::strcpy(value, token);
+        if( count > 3) break;
         
         count ++;
         token = std::strtok(nullptr, "|");
       }
 
-      //printf("%s|%s|%s|\n", para, readWrite, value);
+      int id = atoi(idStr);
+      if( id < 8000){ // channel
+        int ch = id / 100;
+        int index = id - ch * 100;
+        chSettings[ch][index].SetValue(value);
+        //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
+        //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(), 
+        //                         chSettings[ch][index].ReadWrite(), id, 
+        //                         chSettings[ch][index].GetValue().c_str());
 
+      }else if ( 8000 <= id && id < 9000){ // board
+        boardSettings[id - 8000].SetValue(value);
+        //printf("%s|%d|%d|%s\n", boardSettings[id-8000].GetFullPara().c_str(),
+        //                        boardSettings[id-8000].ReadWrite(), id,
+        //                        boardSettings[id-8000].GetValue().c_str());
+      }else{ // vga
+        VGASetting[id - 9000].SetValue(value);
+      }
+      //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
       if( std::strcmp(readWrite, "2") == 0 )  WriteValue(para, value);
-
     }
+
+
+    delete [] para;
+    delete [] readWrite;
+    delete [] idStr;
+    delete [] value;
+
+    return true;
   }else{
-    printf("Fail to load file %s\n", loadFileName);
+    //printf("Fail to load file %s\n", loadFileName);
   }
+
+  return false;
   
 }

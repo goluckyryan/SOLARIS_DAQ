@@ -61,7 +61,12 @@ class Digitizer2Gen {
     uint64_t FinishedOutFilesSize;
 
     bool acqON;
-  
+
+    //all read and read/write settings
+    std::vector<Reg> boardSettings; 
+    std::vector<Reg> chSettings[MaxNumberOfChannel];
+    Reg VGASetting[4]; 
+
   public:
     Digitizer2Gen();
     ~Digitizer2Gen();
@@ -78,11 +83,13 @@ class Digitizer2Gen {
     int GetRet() const {return ret;};
   
     std::string  ReadValue(const char * parameter, bool verbose = false);
+    std::string  ReadValue(Reg &para, int ch_index = -1, bool verbose = false);
     std::string  ReadDigValue(std::string shortPara, bool verbose = false);
     std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
-    void         WriteValue(const char * parameter, std::string value);
-    void         WriteDigValue(std::string shortPara, std::string value);
-    void         WriteChValue(std::string ch, std::string shortPara, std::string value);
+    bool         WriteValue(const char * parameter, std::string value);
+    bool         WriteValue(Reg &para, std::string value, int ch_index = -1);
+    bool         WriteDigValue(std::string shortPara, std::string value);
+    bool         WriteChValue(std::string ch, std::string shortPara, std::string value);
     void         SendCommand(const char * parameter);
     void         SendCommand(std::string shortPara);
 
@@ -109,7 +116,6 @@ class Digitizer2Gen {
 
     void Reset();
     void ProgramPHA(bool testPulse = false);
-    void ReadDigitizerSettings();
     
     unsigned short GetNChannels() const {return nChannels;}
     unsigned short GetCh2ns()     const {return ch2ns;}
@@ -122,8 +128,10 @@ class Digitizer2Gen {
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
 
-    void SaveSettingsToFile(const char * saveFileName); // text file
-    void LoadSettingsFromFile(const char * loadFileName);
+    void ReadAllSettings(); // read settings from digitier and save to memory
+    bool SaveSettingsToFile(const char * saveFileName); // ReadAllSettings + text file
+    bool LoadSettingsFromFile(const char * loadFileName); // Load settings, write to digitizer and save to memory
+    //void PrintAllSetting();
 
 };
 
