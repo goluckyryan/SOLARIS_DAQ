@@ -6,6 +6,7 @@ programSettings.txt
 test
 windowID
 screenshot.*
+*settings*.txt
 
 *~
 *.autosave

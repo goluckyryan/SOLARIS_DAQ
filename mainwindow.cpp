@@ -245,20 +245,27 @@ MainWindow::~MainWindow(){
   //delete logInfo;
   printf("- %s\n", __func__);
 
+  printf("-------- Delete readData Thread\n");
   if( digi ){
     for( int i = 0; i < nDigi ; i++){
+      if( digi[i]->IsDummy()) continue;
       if( readDataThread[i]->isRunning()) StopACQ();
     }
   }
+  CloseDigitizers();
 
+  printf("-------- Delete scalar Thread\n");
   DeleteTriggerLineEdit();
   delete scalarThread;
-  CloseDigitizers();
   
   //---- need manually delete
+  printf("-------- delete scope\n");
   if( scope != NULL ) delete scope;
+  
+  printf("-------- delete digiSetting\n");
   if( digiSetting != NULL ) delete digiSetting;
 
+  printf("-------- delete influx\n");
   if( influx != NULL ) delete influx;
 
 }

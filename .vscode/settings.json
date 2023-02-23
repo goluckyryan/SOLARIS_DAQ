@@ -68,7 +68,8 @@
     "typeinfo": "cpp",
     "variant": "cpp",
     "qdatetime": "cpp",
-    "fstream": "cpp"
+    "fstream": "cpp",
+    "allocator": "cpp"
   },
 
   "better-comments.multilineComments": true,

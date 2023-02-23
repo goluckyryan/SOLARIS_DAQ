@@ -90,10 +90,15 @@ int main(int argc, char* argv[]){
 
   digi->OpenDigitizer(url);
   digi->Reset();
-  digi->ProgramPHA(false);
+  //digi->ProgramPHA(false);
   
-  printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
+  //printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
 
+  //digi->SaveSettingsToFile("settings.txt");
+
+  printf("===================================\n");
+
+  digi->LoadSettingsFromFile("settings.txt");
   //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());
   //printf("%s \n", digi->ReadValue("/ch/0/par/Energy_Nbit").c_str());
   //printf("%s \n", digi->ReadValue("/par/MaxRawDataSize").c_str());
@@ -122,7 +127,7 @@ int main(int argc, char* argv[]){
   printf("%s\n", digi->GetPath(parHandle).c_str());    
   */
 
-  
+  /*
   digi->ReadDigitizerSettings();
 
   digi->SetPHADataFormat(1);
@@ -159,7 +164,7 @@ int main(int argc, char* argv[]){
 
   digi->CloseOutFile();  
 
-
+  */
 
   digi->CloseDigitizer();
   

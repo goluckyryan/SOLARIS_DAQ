@@ -1,5 +1,8 @@
 #include "ClassDigitizer2Gen.h"
 
+#include <cstring>
+#include <algorithm>
+
 Digitizer2Gen::Digitizer2Gen(){  
   printf("======== %s \n",__func__);
   Initialization();
@@ -92,6 +95,7 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   //printf(" %s|%s \n", __func__, parameter);
   ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
+    printf("%-45s\n", parameter);
     return ErrorMsg(__func__);
   }else{
     if( verbose ) printf("%-45s : %s\n", parameter, retValue);
@@ -111,9 +115,10 @@ std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bo
 
 void Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   if( !isConnected ) return;
-  printf(" %s| %-45s : %s\n", __func__, parameter, value.c_str());
+  printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
+    printf("|%s||%s|\n", parameter, value.c_str());
     ErrorMsg(__func__);
     return;
   }
@@ -509,7 +514,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fclose(outFile);
     outFileIndex ++;
     sprintf(outFileName, "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
-    outFile = fopen(outFileName, "a+");
+    outFile = fopen(outFileName, "a+b");
   }
 
   if( evt->dataType == 0){
@@ -712,4 +717,83 @@ std::string Digitizer2Gen::ErrorMsg(const char * funcName){
   }
   printf("Error msg (%d): %s\n", ret, msg);
   return msg;
+}
+
+void Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
+  printf("Saving settings....\n");
+  FILE * saveFile = fopen(saveFileName, "w");
+  if( saveFile ){
+    std::string para, value;
+    for(int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++){
+      if( DIGIPARA::DIG::AllSettings[i].ReadWrite() == RW::WriteOnly) continue;
+      para = DIGIPARA::DIG::AllSettings[i].GetFullPara();
+      value = ReadValue(para.c_str());
+      fprintf(saveFile, "%-45s|%d|%s\n", para.c_str(),  DIGIPARA::DIG::AllSettings[i].ReadWrite(), value.c_str());
+    }
+
+    for(int i = 0; i < 4 ; i ++){
+      para = DIGIPARA::VGA::VGAGain.GetFullPara(i);
+      value = ReadValue(para.c_str());
+      fprintf(saveFile, "%-45s|%d|%s\n", para.c_str(), DIGIPARA::DIG::AllSettings[i].ReadWrite(), value.c_str());
+    }
+    for(int ch = 0; ch < nChannels ; ch++ ){
+      for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++){
+        if( DIGIPARA::CH::AllSettings[i].ReadWrite() == RW::WriteOnly) continue;
+        para = DIGIPARA::CH::AllSettings[i].GetFullPara(ch);
+        value = ReadValue(para.c_str());
+        fprintf(saveFile, "%-45s|%d|%s\n",para.c_str(), DIGIPARA::DIG::AllSettings[i].ReadWrite(),value.c_str());
+      }
+    }
+    
+    fclose(saveFile);
+
+    printf("Saved setting files to %s\n", saveFileName);
+
+  }else{
+    printf("Save file accessing error.");
+  }
+}
+
+void Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
+
+  FILE * loadFile = fopen(loadFileName, "r");
+  char * para      = new char[100];
+  char * readWrite = new char[100];
+  char * value     = new char[100];
+
+  if( loadFile ){
+    char line[100];
+    while(fgets(line, sizeof(line), loadFile) != NULL){
+
+      //printf("%s", line);
+      char* token = std::strtok(line, "|");
+      int count = 0;
+      while( token != nullptr){
+
+        char * end = std::remove_if(token, token + std::strlen(token), [](char c) {
+          return std::isspace(c);
+        });
+        *end = '\0';
+
+        size_t len = std::strcspn(token, "\n");
+        if( len > 0 ) token[len] = '\0';
+
+        if( count == 0 ) std::strcpy(para, token);
+        if( count == 1 ) std::strcpy(readWrite, token);
+        if( count == 2 ) std::strcpy(value, token);
+        if( count > 2) break;
+        
+        count ++;
+        token = std::strtok(nullptr, "|");
+      }
+
+      //printf("%s|%s|%s|\n", para, readWrite, value);
+
+      if( std::strcmp(readWrite, "2") == 0 )  WriteValue(para, value);
+
+    }
+  }else{
+    printf("Fail to load file %s\n", loadFileName);
+  }
+  
 }

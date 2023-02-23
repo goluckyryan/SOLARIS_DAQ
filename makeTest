@@ -1,0 +1,28 @@
+CC       = g++
+COPTS    = -fPIC -DLINUX -O2 -std=c++17 -lpthread
+CAENLIBS = -lCAEN_FELib
+CURLLIBS = -lcurl
+
+OBJS= ClassDigitizer2Gen.o influxdb.o
+
+#
+ALL = test windowID
+#
+################################################################
+
+#
+test : test.cpp ClassDigitizer2Gen.o influxdb.o
+	@echo "------- test"
+	$(CC) $(COPTS) $(OBJS) -o test test.cpp  $(CAENLIBS) $(CURLLIBS)
+#
+ClassDigitizer2Gen.o : ClassDigitizer2Gen.cpp ClassDigitizer2Gen.h Event.h
+	@echo "------- ClassDigitizer2Gen.o"
+	$(CC) $(COPTS) -c ClassDigitizer2Gen.cpp $(CAENLIBS)
+#
+influxdb.o : influxdb.cpp influxdb.h
+	@echo "------- influxdb.o"
+	$(CC) $(COPTS) -c influxdb.cpp $(CURLLIBS)
+#
+windowID : windowID.cpp
+	@echo "------- windowID"
+	${CC} ${COPTS} -o windowID windowID.cpp  -lX11 -lpng

@@ -122,6 +122,9 @@ class Digitizer2Gen {
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
 
+    void SaveSettingsToFile(const char * saveFileName); // text file
+    void LoadSettingsFromFile(const char * loadFileName);
+
 };
 
 #endif
