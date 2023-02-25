@@ -135,7 +135,7 @@ class Digitizer2Gen {
     void ReadAllSettings(); // read settings from digitier and save to memory
     bool SaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
     bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
-    std::string GetSettingValue(TYPE type, unsigned short index, int ch_index = -1) const {
+    std::string GetSettingValue(TYPE type, unsigned short index, unsigned int ch_index = 0) const {
       switch(type){
         case TYPE::DIG: return boardSettings[index].GetValue();
         case TYPE::CH:  return chSettings[ch_index][index].GetValue();
@@ -143,6 +143,30 @@ class Digitizer2Gen {
         case TYPE::LVDS: return "not defined";
       }
       return "invalid";
+    }
+    std::string GetSettingValue(TYPE type, const Reg para, unsigned int ch_index = 0) const{
+      switch(type){
+        case TYPE::DIG:{
+          for( int i = 0; i < (int) boardSettings.size(); i++){
+            if( para.GetPara() == boardSettings[i].GetPara()){
+              return boardSettings[i].GetValue();
+            }
+          }
+        };break;
+        case TYPE::CH:{
+          for( int i = 0; i < (int) chSettings[ch_index].size(); i++){
+            if( para.GetPara() == chSettings[ch_index][i].GetPara()){
+              return chSettings[ch_index][i].GetValue();
+            }
+          }
+        };break;
+        case TYPE::VGA:  return VGASetting[ch_index].GetValue();
+        case TYPE::LVDS: return "not defined";
+        default : return "invalid";
+      }
+
+      return "no such parameter";
+
     }
 };
 

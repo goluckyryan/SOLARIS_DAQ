@@ -34,6 +34,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   }
 
   ID = 0;
+  enableSignalSlot = false;
 
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
   QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
@@ -112,12 +113,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbTemp->setAlignment(Qt::AlignRight | Qt::AlignCenter);
       statusLayout->addWidget(lbTemp, 2, 0);
 
-      const int nTemp = (int) DIGIPARA::DIG::TempSensADC.size();
-      QLineEdit ** leTemp = new QLineEdit* [nTemp]; 
-      for( int i = 0; i < nTemp; i++){
-        leTemp[i] = new QLineEdit(tab);
-        leTemp[i]->setEnabled(false);
-        statusLayout->addWidget(leTemp[i], 2, 1 + 2*i, 1, 2);
+      for( int i = 0; i < 8; i++){
+        leTemp[iDigi][i] = new QLineEdit(tab);
+        leTemp[iDigi][i]->setReadOnly(true);
+        leTemp[iDigi][i]->setAlignment(Qt::AlignHCenter);
+        statusLayout->addWidget(leTemp[iDigi][i], 2, 1 + 2*i, 1, 2);
       }
     }
 
@@ -171,10 +171,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbClockSource->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbClockSource, rowId, 0);
 
-      QComboBox * comClockSource = new QComboBox(tab);
-      boardLayout->addWidget(comClockSource, rowId, 1, 1, 2);
-      comClockSource->addItem("Internal 62.5 MHz");
-      comClockSource->addItem("Front Panel Clock input");
+      cbbClockSource[iDigi] = new QComboBox(tab);
+      boardLayout->addWidget(cbbClockSource[iDigi], rowId, 1, 1, 2);
+      cbbClockSource[iDigi]->addItem("Internal 62.5 MHz", "Internal");
+      cbbClockSource[iDigi]->addItem("Front Panel Clock input", "FPClkIn");
 
       //-------------------------------------
       rowId ++;
@@ -182,14 +182,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbStartSource->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbStartSource, rowId, 0);
 
-      QCheckBox * cbStartSource1 = new QCheckBox("EncodedClkIn", tab);
-      boardLayout->addWidget(cbStartSource1, rowId, 1);
-      QCheckBox * cbStartSource2 = new QCheckBox("SIN Level", tab);
-      boardLayout->addWidget(cbStartSource2, rowId, 2);
-      QCheckBox * cbStartSource3 = new QCheckBox("SIN Edge", tab);
-      boardLayout->addWidget(cbStartSource3, rowId, 3);
-      QCheckBox * cbStartSource4 = new QCheckBox("LVDS", tab);
-      boardLayout->addWidget(cbStartSource4, rowId, 4);
+      QStringList startSourceText = {"EncodedClkIn", "SINlevel", "SINedge", "SWcmd", "LVDS"};
+      for( int i = 0; i < 5; i++){
+        cbStartSource[iDigi][i] = new QCheckBox(startSourceText[i], tab);
+        boardLayout->addWidget(cbStartSource[iDigi][i], rowId, 1 + i);
+      }
 
       //-------------------------------------
       rowId ++;
@@ -588,12 +585,14 @@ void DigiSettingsPanel::LoadSettings(){
 
 void DigiSettingsPanel::ShowSettingsToPanel(){
 
+  enableSignalSlot = false;
+
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, infoIndex[j].second)));
   } 
 
   //--------- LED Status
-  unsigned int ledStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, 23).c_str());
+  unsigned int ledStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::LED_status).c_str());
   for( int i = 0; i < 19; i++){
     if( (ledStatus >> i) & 0x1 ) {
       LEDStatus[ID][i]->setStyleSheet("background-color:green;");
@@ -603,7 +602,7 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   }
 
   //--------- ACQ Status
-  unsigned int acqStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, 24).c_str());
+  unsigned int acqStatus = atoi(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::ACQ_status).c_str());
   for( int i = 0; i < 7; i++){
     if( (acqStatus >> i) & 0x1 ) {
       ACQStatus[ID][i]->setStyleSheet("background-color:green;");
@@ -612,7 +611,35 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
     }
   }
 
+  //-------- temperature
+  for( int i = 0; i < 8; i++){
+    leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::TempSensADC[i])));
+  }
+
+  //-------- board settings
+  ReadCombBoxValue(cbbClockSource[ID], TYPE::DIG, DIGIPARA::DIG::ClockSource);
+
+  QString result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::StartSource));
+  QStringList resultList = result.remove(QChar(' ')).split("|");
+  qDebug() << resultList;
+  //for( int j = 0; j < 5; j++){
+  //  cbStartSource[ID][j]->setChecked(false);
+  //  for( int i = 0; resultList.count(); i++){
+  //    if( resultList[i] == cbStartSource[ID][j]->text()) cbStartSource[ID][j]->setChecked(true);
+  //  }
+  //}
 
 
+  enableSignalSlot = true;
 
+}
+
+void DigiSettingsPanel::ReadCombBoxValue(QComboBox *cb, TYPE type, Reg para){
+  QString result = QString::fromStdString(digi[ID]->GetSettingValue(type, para));
+  int index = cb->findData(result);
+  if( index >= 0 && index < cb->count()) {
+    cb->setCurrentIndex(index);
+  }else{
+    qDebug() << result;
+  }
 }

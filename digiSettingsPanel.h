@@ -52,10 +52,15 @@ private:
 
   void ShowSettingsToPanel();
 
+  bool enableSignalSlot;
+
   QLineEdit * leInfo[MaxNumberOfChannel][12];
   QPushButton * LEDStatus[MaxNumberOfDigitizer][19];
   QPushButton * ACQStatus[MaxNumberOfDigitizer][19];
+  QLineEdit * leTemp[MaxNumberOfDigitizer][8];
 
+  QComboBox * cbbClockSource[MaxNumberOfDigitizer];
+  QCheckBox * cbStartSource[MaxNumberOfDigitizer][5];
 
 
   QPushButton *bn[MaxNumberOfChannel][MaxNumberOfChannel];
@@ -85,6 +90,8 @@ private:
 
   QLineEdit * leSettingFile[MaxNumberOfDigitizer];
   
+
+  void ReadCombBoxValue(QComboBox * cb, TYPE type, Reg para );
 
 
 
