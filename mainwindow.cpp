@@ -500,6 +500,9 @@ void MainWindow::OpenDigitizers(){
       }else{
         LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
         digi[i]->SetSettingFileName("");
+        LogMsg("Reset digitizer and use deault setting");
+        digi[i]->Reset();
+        digi[i]->ProgramPHA(false);
       }
 
       SetUpScalar();

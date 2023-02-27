@@ -22,7 +22,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   qDebug() << "DigiSettingsPanel constructor";
 
   setWindowTitle("Digitizers Settings");
-  setGeometry(0, 0, 1600, 1000);
+  setGeometry(0, 0, 1650, 1000);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
@@ -143,11 +143,17 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       
       QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
       bnLayout->addWidget(bnResetBd, rowId, 2, 1, 2);
-      connect(bnResetBd, &QPushButton::clicked, this, &DigiSettingsPanel::onReset);
+      connect(bnResetBd, &QPushButton::clicked, this, [=](){
+         emit sendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
+         digi[ID]->Reset();    
+      });
       
       QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
       bnLayout->addWidget(bnDefaultSetting, rowId, 4, 1, 2);
-      connect(bnDefaultSetting, &QPushButton::clicked, this, &DigiSettingsPanel::onDefault);
+      connect(bnDefaultSetting, &QPushButton::clicked, this, [=](){
+        emit sendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
+        digi[ID]->ProgramPHA();
+      });
 
       QPushButton * bnSaveSettings = new QPushButton("Save Settings", tab);
       bnLayout->addWidget(bnSaveSettings, rowId, 6, 1, 2);
@@ -156,6 +162,33 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       QPushButton * bnLoadSettings = new QPushButton("Load Settings", tab);
       bnLayout->addWidget(bnLoadSettings, rowId, 8, 1, 2);
       connect(bnLoadSettings, &QPushButton::clicked, this, &DigiSettingsPanel::LoadSettings);
+
+      //---------------------------------------
+      rowId ++;
+      QPushButton * bnClearData = new QPushButton("Clear Data", tab);
+      bnLayout->addWidget(bnClearData, rowId, 0, 1, 2);
+      connect(bnClearData, &QPushButton::clicked, this, [=](){ 
+          digi[ID]->SendCommand(DIGIPARA::DIG::ClearData); });
+      
+      QPushButton * bnArmACQ = new QPushButton("Arm ACQ", tab);
+      bnLayout->addWidget(bnArmACQ, rowId, 2, 1, 2);
+      connect(bnArmACQ, &QPushButton::clicked, this, [=](){ 
+          digi[ID]->SendCommand(DIGIPARA::DIG::ArmACQ); });
+      
+      QPushButton * bnDisarmACQ = new QPushButton("Disarm ACQ", tab);
+      bnLayout->addWidget(bnDisarmACQ, rowId, 4, 1, 2);
+      connect(bnDisarmACQ, &QPushButton::clicked, this, [=](){ 
+          digi[ID]->SendCommand(DIGIPARA::DIG::DisarmACQ); });
+
+      QPushButton * bnSoftwareStart= new QPushButton("Software Start ACQ", tab);
+      bnLayout->addWidget(bnSoftwareStart, rowId, 6, 1, 2);
+      connect(bnSoftwareStart, &QPushButton::clicked, this, [=](){ 
+          digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStartACQ); });
+
+      QPushButton * bnSoftwareStop= new QPushButton("Software Stop ACQ", tab);
+      bnLayout->addWidget(bnSoftwareStop, rowId, 8, 1, 2);
+      connect(bnSoftwareStop, &QPushButton::clicked, this, [=](){ 
+          digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStopACQ); });
 
     }
 
@@ -167,14 +200,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       int rowId = 0;
       //-------------------------------------
       rowId ++;
-      QLabel * lbClockSource = new QLabel("Clock Source :", tab);
-      lbClockSource->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbClockSource, rowId, 0);
-
-      cbbClockSource[iDigi] = new QComboBox(tab);
-      boardLayout->addWidget(cbbClockSource[iDigi], rowId, 1, 1, 2);
-      cbbClockSource[iDigi]->addItem("Internal 62.5 MHz", "Internal");
-      cbbClockSource[iDigi]->addItem("Front Panel Clock input", "FPClkIn");
+      SetupComboBox(cbbClockSource[iDigi], DIGIPARA::DIG::ClockSource, tab, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
       //-------------------------------------
       rowId ++;
@@ -182,10 +208,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbStartSource->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbStartSource, rowId, 0);
 
-      QStringList startSourceText = {"EncodedClkIn", "SINlevel", "SINedge", "SWcmd", "LVDS"};
-      for( int i = 0; i < 5; i++){
-        cbStartSource[iDigi][i] = new QCheckBox(startSourceText[i], tab);
-        boardLayout->addWidget(cbStartSource[iDigi][i], rowId, 1 + i);
+      for( int i = 0; i < (int) DIGIPARA::DIG::StartSource.GetAnswers().size(); i++){
+        ckbStartSource[iDigi][i] = new QCheckBox( QString::fromStdString((DIGIPARA::DIG::StartSource.GetAnswers())[i].second), tab);
+        boardLayout->addWidget(ckbStartSource[iDigi][i], rowId, 1 + i);
       }
 
       //-------------------------------------
@@ -194,132 +219,62 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbGlobalTrgSource->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbGlobalTrgSource, rowId, 0);
 
-      QCheckBox * cbGlbTrgSource1 = new QCheckBox("Trg-IN", tab);
-      boardLayout->addWidget(cbGlbTrgSource1, rowId, 1);
-      QCheckBox * cbGlbTrgSource2 = new QCheckBox("SwTrg", tab);
-      boardLayout->addWidget(cbGlbTrgSource2, rowId, 2);
-      QCheckBox * cbGlbTrgSource3 = new QCheckBox("LVDS", tab);
-      boardLayout->addWidget(cbGlbTrgSource3, rowId, 3);
-      QCheckBox * cbGlbTrgSource4 = new QCheckBox("GPIO", tab);
-      boardLayout->addWidget(cbGlbTrgSource4, rowId, 4);
-      QCheckBox * cbGlbTrgSource5 = new QCheckBox("TestPulse", tab);
-      boardLayout->addWidget(cbGlbTrgSource5, rowId, 5);
+      for( int i = 0; i < (int) DIGIPARA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
+        ckbGlbTrgSource[iDigi][i] = new QCheckBox( QString::fromStdString((DIGIPARA::DIG::GlobalTriggerSource.GetAnswers())[i].second), tab);
+        boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i);
+      }
 
       //-------------------------------------
       rowId ++;
-      QLabel * lbTrgOutMode = new QLabel("Trg-OUT Mode :", tab);
-      lbTrgOutMode->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbTrgOutMode, rowId, 0);
-
-      QComboBox * comTrgOut = new QComboBox(tab);
-      boardLayout->addWidget(comTrgOut, rowId, 1, 1, 2);
-      comTrgOut->addItem("Disabled");
-      comTrgOut->addItem("TRG-IN");
-      comTrgOut->addItem("SwTrg");
-      comTrgOut->addItem("LVDS");
-      comTrgOut->addItem("Run");
-      comTrgOut->addItem("TestPulse");
-      comTrgOut->addItem("Busy");
-      comTrgOut->addItem("Fixed 0");
-      comTrgOut->addItem("Fixed 1");
-      comTrgOut->addItem("SyncIn signal");
-      comTrgOut->addItem("S-IN signal");
-      comTrgOut->addItem("GPIO signal");
-      comTrgOut->addItem("Accepted triggers");
-      comTrgOut->addItem("Trigger Clock signal");
-
+      SetupComboBox(cbbTrgOut[iDigi], DIGIPARA::DIG::TrgOutMode, tab, "Trg-OUT Mode :", boardLayout, rowId, 0, 1, 2);
+            
       //-------------------------------------
       rowId ++;
-      QLabel * lbGPIOMode = new QLabel("GPIO Mode :", tab);
-      lbGPIOMode->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbGPIOMode, rowId, 0);
-
-      QComboBox * comGPIO = new QComboBox(tab);
-      boardLayout->addWidget(comGPIO, rowId, 1, 1, 2);
-      comGPIO->addItem("Disabled");
-      comGPIO->addItem("TRG-IN");
-      comGPIO->addItem("S-IN");
-      comGPIO->addItem("LVDS");
-      comGPIO->addItem("SwTrg");
-      comGPIO->addItem("Run");
-      comGPIO->addItem("TestPulse");
-      comGPIO->addItem("Busy");
-      comGPIO->addItem("Fixed 0");
-      comGPIO->addItem("Fixed 1");
+      SetupComboBox(cbbGPIO[iDigi], DIGIPARA::DIG::GPIOMode, tab, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
 
       //-------------------------------------
       QLabel * lbAutoDisarmAcq = new QLabel("Auto disarm ACQ :", tab);
       lbAutoDisarmAcq->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbAutoDisarmAcq, rowId, 4, 1, 2);
 
-      QComboBox * comAutoDisarmAcq = new QComboBox(tab);
-      boardLayout->addWidget(comAutoDisarmAcq, rowId, 6);
-      comAutoDisarmAcq->addItem("Enabled");
-      comAutoDisarmAcq->addItem("Disabled");
+      cbbAutoDisarmAcq[iDigi] = new QComboBox(tab);
+      boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
+      SetupCombBox(cbbAutoDisarmAcq[iDigi], DIGIPARA::DIG::EnableAutoDisarmACQ);
 
       //-------------------------------------
       rowId ++;
-      QLabel * lbBusyInSource = new QLabel("Busy In Source :", tab);
-      lbBusyInSource->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbBusyInSource, rowId, 0);
+      SetupComboBox(cbbBusyIn[iDigi], DIGIPARA::DIG::BusyInSource, tab, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
 
-      QComboBox * comBusyIn = new QComboBox(tab);
-      boardLayout->addWidget(comBusyIn, rowId, 1, 1, 2);
-      comBusyIn->addItem("Disabled");
-      comBusyIn->addItem("GPIO");
-      comBusyIn->addItem("LVDS");
-      comBusyIn->addItem("LVDS");
-  
       //-------------------------------------
       QLabel * lbStatEvents = new QLabel("Stat. Event :", tab);
       lbStatEvents->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbStatEvents, rowId, 4, 1, 2);
 
-      QComboBox * comAStatEvents = new QComboBox(tab);
-      boardLayout->addWidget(comAStatEvents, rowId, 6);
-      comAStatEvents->addItem("Enabled");
-      comAStatEvents->addItem("Disabled");
+      cbbStatEvents[iDigi] = new QComboBox(tab);
+      boardLayout->addWidget(cbbStatEvents[iDigi], rowId, 6);
+      SetupCombBox(cbbStatEvents[iDigi], DIGIPARA::DIG::EnableStatisticEvents);
 
       //-------------------------------------
       rowId ++;
-      QLabel * lbSyncOutMode = new QLabel("Sync Out mode :", tab);
-      lbSyncOutMode->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbSyncOutMode, rowId, 0);
-
-      QComboBox * comSyncOut = new QComboBox(tab);
-      boardLayout->addWidget(comSyncOut, rowId, 1, 1, 2);
-      comSyncOut->addItem("Disabled");
-      comSyncOut->addItem("SyncIn");
-      comSyncOut->addItem("TestPulse");
-      comSyncOut->addItem("Internal 62.5 MHz Clock");
-      comSyncOut->addItem("Run");
+      SetupComboBox(cbbSyncOut[iDigi], DIGIPARA::DIG::SyncOutMode, tab, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
 
       //-------------------------------------
       rowId ++;
-      QLabel * lbBoardVetoSource = new QLabel("Board Veto Source :", tab);
-      lbBoardVetoSource->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbBoardVetoSource, rowId, 0);
+      SetupComboBox(cbbBoardVetoSource[iDigi], DIGIPARA::DIG::BoardVetoSource, tab, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
 
-      QComboBox * comBoardVetoSource = new QComboBox(tab);
-      boardLayout->addWidget(comBoardVetoSource, rowId, 1, 1, 2);
-      comBoardVetoSource->addItem("Disabled");
-      comBoardVetoSource->addItem("S-In");
-      comBoardVetoSource->addItem("LVSD");
-      comBoardVetoSource->addItem("GPIO");
-
-      QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] : ", tab);
+      QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] :", tab);
       lbBdVetoWidth->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbBdVetoWidth, rowId, 3, 1, 2);
 
-      QSpinBox * sbBdVetoWidth = new QSpinBox(tab); // may be QDoubleSpinBox
-      sbBdVetoWidth->setMinimum(0);
-      sbBdVetoWidth->setSingleStep(20);
-      boardLayout->addWidget(sbBdVetoWidth, rowId, 5);
+      spbBdVetoWidth[iDigi] = new QSpinBox(tab); // may be QDoubleSpinBox
+      spbBdVetoWidth[iDigi]->setMinimum(0);
+      spbBdVetoWidth[iDigi]->setMaximum(38360);
+      spbBdVetoWidth[iDigi]->setSingleStep(20);
+      boardLayout->addWidget(spbBdVetoWidth[iDigi], rowId, 5);
 
-      QComboBox * comBdVetoPolarity = new QComboBox(tab);
-      boardLayout->addWidget(comBdVetoPolarity, rowId, 6);
-      comBdVetoPolarity->addItem("High");
-      comBdVetoPolarity->addItem("Low");
+      cbbBdVetoPolarity[iDigi] = new QComboBox(tab);
+      boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
+      SetupCombBox(cbbBdVetoPolarity[iDigi], DIGIPARA::DIG::BoardVetoPolarity);
       
       //-------------------------------------
       rowId ++;
@@ -327,36 +282,83 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbRunDelay->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbRunDelay, rowId, 0);
 
-      QSpinBox * sbRunDelay = new QSpinBox(tab);
-      sbRunDelay->setMinimum(0);
-      sbRunDelay->setMaximum(524280);
-      sbRunDelay->setSingleStep(20);
-      boardLayout->addWidget(sbRunDelay, rowId, 1);
+      spbRunDelay[iDigi] = new QSpinBox(tab);
+      spbRunDelay[iDigi]->setMinimum(0);
+      spbRunDelay[iDigi]->setMaximum(524280);
+      spbRunDelay[iDigi]->setSingleStep(20);
+      boardLayout->addWidget(spbRunDelay[iDigi], rowId, 1);
 
       //-------------------------------------
-      QLabel * lbClockOutDelay = new QLabel("Clock Out Delay [ps] :", tab);
+      QLabel * lbClockOutDelay = new QLabel("Temp. Clock Out Delay [ps] :", tab);
       lbClockOutDelay->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbClockOutDelay, rowId, 3, 1, 2);
 
-      QDoubleSpinBox * dsbClockOutDelay = new QDoubleSpinBox(tab);
-      dsbClockOutDelay->setMinimum(-1888.888);
-      dsbClockOutDelay->setMaximum(1888.888);
-      dsbClockOutDelay->setValue(0);
-      boardLayout->addWidget(dsbClockOutDelay, rowId, 5);
+      dsbVolatileClockOutDelay[iDigi] = new QDoubleSpinBox(tab);
+      dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
+      dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
+      dsbVolatileClockOutDelay[iDigi]->setValue(0);
+      boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
 
       //-------------------------------------
       rowId ++;
-      QLabel * lbIOLevel = new QLabel("IO Level :", tab);
-      lbIOLevel->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbIOLevel, rowId, 0);
+      SetupComboBox(cbbIOLevel[iDigi], DIGIPARA::DIG::IO_Level, tab, "IO Level :", boardLayout, rowId, 0, 1, 2);
 
-      QComboBox * comIOLevel = new QComboBox(tab);
-      boardLayout->addWidget(comIOLevel, rowId, 1, 1, 2);
-      comIOLevel->addItem("NIM (0 = 0V, 1 = -0.8V)");
-      comIOLevel->addItem("TTL (0 = 0V, 1 =  3.3V)");
+
+      QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", tab);
+      lbClockOutDelay2->setAlignment(Qt::AlignRight);
+      boardLayout->addWidget(lbClockOutDelay2, rowId, 3, 1, 2);
+
+      dsbClockOutDelay[iDigi] = new QDoubleSpinBox(tab);
+      dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
+      dsbClockOutDelay[iDigi]->setMaximum(18888.888);
+      dsbClockOutDelay[iDigi]->setValue(0);
+      boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
 
       //-------------------------------------- Test pulse
 
+    }
+
+    {//^====================== Test Pulse settings
+      testPulseBox = new QGroupBox("Test Pulse Settings", tab); 
+      tabLayout_V2->addWidget(testPulseBox);
+      QGridLayout * testPulseLayout = new QGridLayout(testPulseBox);
+
+      QLabel * lbtestPuslePeriod = new QLabel("Period [ns] :", tab);
+      lbtestPuslePeriod->setAlignment(Qt::AlignRight);
+      testPulseLayout->addWidget(lbtestPuslePeriod, 0, 0);
+
+      dsbTestPuslePeriod[iDigi] = new QDoubleSpinBox(tab);
+      dsbTestPuslePeriod[iDigi]->setMinimum(0);
+      dsbTestPuslePeriod[iDigi]->setMaximum(34359738360);
+      testPulseLayout->addWidget(dsbTestPuslePeriod[iDigi], 0, 1);
+
+      QLabel * lbtestPusleWidth = new QLabel("Width [ns] :", tab);
+      lbtestPusleWidth->setAlignment(Qt::AlignRight);
+      testPulseLayout->addWidget(lbtestPusleWidth, 0, 2);
+
+      dsbTestPusleWidth[iDigi] = new QDoubleSpinBox(tab);
+      dsbTestPusleWidth[iDigi]->setMinimum(0);
+      dsbTestPusleWidth[iDigi]->setMaximum(34359738360);
+      testPulseLayout->addWidget(dsbTestPusleWidth[iDigi], 0, 3);
+
+      //------------------------------
+      QLabel * lbtestPusleLow = new QLabel("Low Level [LSB] :", tab);
+      lbtestPusleLow->setAlignment(Qt::AlignRight);
+      testPulseLayout->addWidget(lbtestPusleLow, 1, 0);
+
+      spbTestPusleLowLevel[iDigi] = new QSpinBox(tab);
+      spbTestPusleLowLevel[iDigi]->setMinimum(0);
+      spbTestPusleLowLevel[iDigi]->setMaximum(65535);
+      testPulseLayout->addWidget(spbTestPusleLowLevel[iDigi], 1, 1);
+
+      QLabel * lbtestPusleHigh = new QLabel("High Level [LSB] :", tab);
+      lbtestPusleHigh->setAlignment(Qt::AlignRight);
+      testPulseLayout->addWidget(lbtestPusleHigh, 1, 2);
+
+      spbTestPusleHighLevel[iDigi] = new QSpinBox(tab);
+      spbTestPusleHighLevel[iDigi]->setMinimum(0);
+      spbTestPusleHighLevel[iDigi]->setMaximum(65535);
+      testPulseLayout->addWidget(spbTestPusleHighLevel[iDigi], 1, 3);
     }
 
 
@@ -365,34 +367,91 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       tabLayout_V2->addWidget(chBox);
       QGridLayout * chLayout = new QGridLayout(chBox); //chBox->setLayout(chLayout);
 
+      QTabWidget * chTabWidget = new QTabWidget(tab); chLayout->addWidget(chTabWidget);
 
       QSignalMapper * onOffMapper = new QSignalMapper(tab);
       connect(onOffMapper, &QSignalMapper::mappedInt, this, &DigiSettingsPanel::onChannelonOff); 
-      
-      QTabWidget * chTabWidget = new QTabWidget(tab); chLayout->addWidget(chTabWidget);
-      
+            
       {//.......... All Settings tab
         QWidget * tab_All = new QWidget(tab); 
         chTabWidget->addTab(tab_All, "All Settings");
-        tab_All->setStyleSheet("background-color: #EEEEEE");
+        //tab_All->setStyleSheet("background-color: #EEEEEE");
 
         QGridLayout * allLayout = new QGridLayout(tab_All);
-        allLayout->setHorizontalSpacing(0);
-        allLayout->setVerticalSpacing(0);
+        //allLayout->setHorizontalSpacing(0);
+        //allLayout->setVerticalSpacing(0);
+        //QSizePolicy sizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+        //sizePolicy.setHorizontalStretch(0);
+        //sizePolicy.setVerticalStretch(0);
+        //tab_All->setSizePolicy(sizePolicy);
+
 
         unsigned short ch = digi[iDigi]->GetNChannels();
 
-        cbCh[iDigi][ch] = new QCheckBox("On/Off", tab); allLayout->addWidget(cbCh[iDigi][ch], 0, 0);
-        onOffMapper->setMapping(cbCh[iDigi][ch], (iDigi << 12) + ch);
-        connect(cbCh[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
+        int rowID = 0;
 
-        QLabel * lbRL = new QLabel("Record Length [ns]", tab); allLayout->addWidget(lbRL, 1, 0);
-        lbRL->setAlignment(Qt::AlignRight);
-        sbRecordLength[ch] = new QSpinBox(tab); allLayout->addWidget(sbRecordLength[ch], 1, 1);
+        ckbChEnabled[iDigi][ch] = new QCheckBox("On/Off", tab); allLayout->addWidget(ckbChEnabled[iDigi][ch], rowID, 0);
+        onOffMapper->setMapping(ckbChEnabled[iDigi][ch], (iDigi << 12) + ch);
+        connect(ckbChEnabled[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
 
-        QLabel * lbPT = new QLabel("Pre Trigger [ns]", tab); allLayout->addWidget(lbPT, 1, 2);
-        lbPT->setAlignment(Qt::AlignRight);
-        sbPreTrigger[ch] = new QSpinBox(tab); allLayout->addWidget(sbPreTrigger[ch], 1, 3);
+        SetupComboBox(cbbParity[iDigi][ch], DIGIPARA::CH::Polarity, tab, "Parity", allLayout, rowID, 0);
+
+        QLabel * lbDCOffset = new QLabel("DC Offset [%]", tab); allLayout->addWidget(lbDCOffset, rowID, 3);
+        lbDCOffset->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+        spbDCOffset[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbDCOffset[iDigi][ch], rowID, 4);
+
+        QLabel * lbThreshold = new QLabel("Threshold [LSB]", tab); allLayout->addWidget(lbThreshold, rowID, 5);
+        lbThreshold->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+        spbThreshold[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbThreshold[iDigi][ch], rowID, 6);
+
+
+        //------------------------------
+        rowID ++;
+        SetupComboBox(cbbWaveSource[iDigi][ch], DIGIPARA::CH::WaveDataSource, tab, "Wave Data Source", allLayout, rowID, 0, 1, 2);
+        //------------------------------
+        rowID ++;
+        SetupComboBox(cbbWaveRes[iDigi][ch], DIGIPARA::CH::WaveResolution, tab, "Wave Resol.", allLayout, rowID, 0);
+
+        SetupComboBox(cbbWaveSave[iDigi][ch], DIGIPARA::CH::WaveSaving, tab, "Wave Save", allLayout, rowID, 2);
+        //------------------------------
+        rowID ++;
+        QLabel * lbRL = new QLabel("Record Length [ns]", tab); allLayout->addWidget(lbRL, rowID, 0);
+        lbRL->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbRecordLength[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbRecordLength[iDigi][ch], rowID, 1);
+
+        QLabel * lbPT = new QLabel("Pre Trigger [ns]", tab); allLayout->addWidget(lbPT, rowID, 2);
+        lbPT->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbPreTrigger[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbPreTrigger[iDigi][ch], rowID, 3);
+
+        //------------------------------
+        rowID ++;
+        QLabel * lbInputRiseTime = new QLabel("Input Rise Time [ns]", tab); allLayout->addWidget(lbInputRiseTime, rowID, 0);
+        lbInputRiseTime->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbInputRiseTime[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbInputRiseTime[iDigi][ch], rowID, 1);
+
+        QLabel * lbTriggerGuard = new QLabel("Trigger Guard [ns]", tab); allLayout->addWidget(lbTriggerGuard, rowID, 2);
+        lbTriggerGuard->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbTriggerGuard[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbTriggerGuard[iDigi][ch], rowID, 3);
+
+        //------------------------------
+        rowID ++;
+        
+        QLabel * lbTrapRiseTime = new QLabel("Trap. Rise Time [ns]", tab); allLayout->addWidget(lbTrapRiseTime, rowID, 0);
+        lbTrapRiseTime->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbTrapRiseTime[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbTrapRiseTime[iDigi][ch], rowID, 1);
+        
+        QLabel * lbTrapFlatTop = new QLabel("Trap. Flat Top [ns]", tab); allLayout->addWidget(lbTrapFlatTop, rowID, 2);
+        lbTrapFlatTop->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbTrapFlatTop[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbTrapFlatTop[iDigi][ch], rowID, 3);        
+
+        QLabel * lbTrapPoleZero = new QLabel("Trap. Pole Zero [ns]", tab); allLayout->addWidget(lbTrapPoleZero, rowID, 4);
+        lbTrapPoleZero->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+        spbTrapPoleZero[iDigi][ch] = new QSpinBox(tab); allLayout->addWidget(spbTrapPoleZero[iDigi][ch], rowID, 5);
+        
+        //------------------------------
+        rowID ++;
+        
+
 
       }
 
@@ -407,11 +466,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         
         for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
-          cbCh[iDigi][ch] = new QCheckBox(QString::number(ch)); allLayout->addWidget(cbCh[iDigi][ch], ch/8, ch%8);
-          cbCh[iDigi][ch]->setLayoutDirection(Qt::RightToLeft);
+          ckbChEnabled[iDigi][ch] = new QCheckBox(QString::number(ch)); allLayout->addWidget(ckbChEnabled[iDigi][ch], ch/8, ch%8);
+          ckbChEnabled[iDigi][ch]->setLayoutDirection(Qt::RightToLeft);
 
-          onOffMapper->setMapping(cbCh[iDigi][ch], (iDigi << 12) + ch);
-          connect(cbCh[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
+          onOffMapper->setMapping(ckbChEnabled[iDigi][ch], (iDigi << 12) + ch);
+          connect(ckbChEnabled[iDigi][ch], SIGNAL(clicked()), onOffMapper, SLOT(map()));
         }
 
       }
@@ -486,10 +545,28 @@ DigiSettingsPanel::~DigiSettingsPanel(){
   printf("%s\n", __func__);
 
   for( int iDig = 0; iDig < nDigi; iDig ++){
+
+/*
+    for( int i = 0; i < 12; i++) delete leInfo[iDig][i];
+    for( int i = 0; i < 19; i++) {
+      delete LEDStatus[iDig][i];
+      delete ACQStatus[iDig][i];
+    }
+
+    for( int i = 0; i < 8; i++) delete leTemp[iDig][i];
+    
+    delete cbbClockSource[iDig];
+
+    for( int i = 0; i < 5; i++) {
+      delete ckbStartSource[iDig][i];
+      delete ckbGlbTrgSource[iDig][i];
+    }
+*/
     for( int i =0 ; i < MaxNumberOfChannel; i++){
-      if( cbCh[iDig][i] != NULL) delete cbCh[iDig][i];
+      if( ckbChEnabled[iDig][i] != NULL) delete ckbChEnabled[iDig][i];
     }
   }
+
 }
 
 //^================================================================
@@ -513,43 +590,34 @@ void DigiSettingsPanel::onTriggerClick(int haha){
 void DigiSettingsPanel::onChannelonOff(int haha){
   
   unsigned short iDig = haha >> 12;
-  //qDebug()<< "nDigi-" << iDig << ", ch-" << (haha & 0xFF);
+  qDebug()<< "nDigi-" << iDig << ", ch-" << (haha & 0xFF);
   if( (haha & 0xFF) == 64){
 
-    if( cbCh[iDig][64]->isChecked() ){
+    if( ckbChEnabled[iDig][64]->isChecked() ){
       for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
-        cbCh[iDig][i]->setChecked(true);
+        ckbChEnabled[iDig][i]->setChecked(true);
       }
     }else{
       for( int i = 0 ; i < digi[iDig]->GetNChannels() ; i++){
-        cbCh[iDig][i]->setChecked(false);
+        ckbChEnabled[iDig][i]->setChecked(false);
       }
     }
   }else{
     unsigned int nOn = 0;
     for( int i = 0; i < digi[iDig]->GetNChannels(); i++){
-      nOn += (cbCh[iDig][i]->isChecked() ? 1 : 0);
+      nOn += (ckbChEnabled[iDig][i]->isChecked() ? 1 : 0);
     }
 
     if( nOn == 64){
-      cbCh[iDig][64]->setChecked(true);
+      ckbChEnabled[iDig][64]->setChecked(true);
     }else{
-      cbCh[iDig][64]->setChecked(false);
+      ckbChEnabled[iDig][64]->setChecked(false);
     }
 
   }
 }
 
 //^================================================================
-void DigiSettingsPanel::onReset(){
-  emit sendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
-  digi[ID]->Reset(); 
-}
-
-void DigiSettingsPanel::onDefault(){ 
-  emit sendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
-  digi[ID]->ProgramPHA();
-}
 
 void DigiSettingsPanel::RefreshSettings(){
   digi[ID]->ReadAllSettings();
@@ -621,24 +689,90 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
 
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::StartSource));
   QStringList resultList = result.remove(QChar(' ')).split("|");
-  qDebug() << resultList;
-  //for( int j = 0; j < 5; j++){
-  //  cbStartSource[ID][j]->setChecked(false);
-  //  for( int i = 0; resultList.count(); i++){
-  //    if( resultList[i] == cbStartSource[ID][j]->text()) cbStartSource[ID][j]->setChecked(true);
-  //  }
-  //}
+  //qDebug() << resultList << "," << resultList.count();
+  for( int j = 0; j < (int) DIGIPARA::DIG::StartSource.GetAnswers().size(); j++){
+    ckbStartSource[ID][j]->setChecked(false);
+    for( int i = 0; i < resultList.count(); i++){
+      //qDebug() << resultList[i] << ", " << QString::fromStdString((DIGIPARA::DIG::StartSource.GetAnswers())[j].first);
+      if( resultList[i] == QString::fromStdString((DIGIPARA::DIG::StartSource.GetAnswers())[j].first) ) ckbStartSource[ID][j]->setChecked(true);
+    }
+  }
 
 
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::GlobalTriggerSource));
+  resultList = result.remove(QChar(' ')).split("|");
+  for( int j = 0; j < (int) DIGIPARA::DIG::StartSource.GetAnswers().size(); j++){
+    ckbGlbTrgSource[ID][j]->setChecked(false);
+    for( int i = 0; i < resultList.count(); i++){
+      if( resultList[i] == QString::fromStdString((DIGIPARA::DIG::GlobalTriggerSource.GetAnswers())[j].first) ) ckbGlbTrgSource[ID][j]->setChecked(true);
+    }
+  }
+
+  ReadCombBoxValue(cbbTrgOut[ID], TYPE::DIG, DIGIPARA::DIG::TrgOutMode);
+  ReadCombBoxValue(cbbGPIO[ID], TYPE::DIG, DIGIPARA::DIG::GPIOMode);
+  ReadCombBoxValue(cbbBusyIn[ID], TYPE::DIG, DIGIPARA::DIG::BusyInSource);
+  ReadCombBoxValue(cbbSyncOut[ID], TYPE::DIG, DIGIPARA::DIG::SyncOutMode);
+  ReadCombBoxValue(cbbAutoDisarmAcq[ID], TYPE::DIG, DIGIPARA::DIG::EnableAutoDisarmACQ);
+  ReadCombBoxValue(cbbStatEvents[ID], TYPE::DIG, DIGIPARA::DIG::EnableStatisticEvents);
+  ReadCombBoxValue(cbbBdVetoPolarity[ID], TYPE::DIG, DIGIPARA::DIG::BoardVetoPolarity);
+  ReadCombBoxValue(cbbBoardVetoSource[ID], TYPE::DIG, DIGIPARA::DIG::BoardVetoSource);
+  ReadCombBoxValue(cbbIOLevel[ID], TYPE::DIG, DIGIPARA::DIG::IO_Level);
+
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::BoardVetoWidth));
+  spbBdVetoWidth[ID]->setValue(result.toInt());
+  
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::RunDelay));
+  spbRunDelay[ID]->setValue(result.toInt());
+  
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::VolatileClockOutDelay));
+  dsbVolatileClockOutDelay[ID]->setValue(result.toDouble());
+  
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::PermanentClockOutDelay));
+  dsbClockOutDelay[ID]->setValue(result.toDouble());
+
+  //------------- test pulse
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::TestPulsePeriod));
+  dsbTestPuslePeriod[ID]->setValue(result.toDouble());
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::TestPulseWidth));
+  dsbTestPusleWidth[ID]->setValue(result.toDouble());
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::TestPulseLowLevel));
+  spbTestPusleLowLevel[ID]->setValue(result.toInt());
+  result = QString::fromStdString(digi[ID]->GetSettingValue(TYPE::DIG, DIGIPARA::DIG::TestPulseHighLevel));
+  spbTestPusleHighLevel[ID]->setValue(result.toInt());
+
+
+  
+  
   enableSignalSlot = true;
 
 }
 
-void DigiSettingsPanel::ReadCombBoxValue(QComboBox *cb, TYPE type, Reg para){
+void DigiSettingsPanel::SetupCombBox(QComboBox *cbb, Reg para){
+  for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
+    cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
+                QString::fromStdString((para.GetAnswers())[i].first));
+  }
+}
+
+void DigiSettingsPanel::SetupComboBox(QComboBox *cbb, Reg para, QWidget * parent, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
+  QLabel * lb = new QLabel(labelTxt, parent); 
+  layout->addWidget(lb, row, col);
+  lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  cbb = new QComboBox(parent); 
+  layout->addWidget(cbb, row, col+1, srow, scol);
+  for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
+    cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
+                QString::fromStdString((para.GetAnswers())[i].first));
+  }
+
+}
+
+void DigiSettingsPanel::ReadCombBoxValue(QComboBox *cbb, TYPE type, Reg para)
+{
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(type, para));
-  int index = cb->findData(result);
-  if( index >= 0 && index < cb->count()) {
-    cb->setCurrentIndex(index);
+  int index = cbb->findData(result);
+  if( index >= 0 && index < cbb->count()) {
+    cbb->setCurrentIndex(index);
   }else{
     qDebug() << result;
   }

@@ -170,25 +170,23 @@ namespace DIGIPARA{
   
     ///============= read write
     const Reg ClockSource              ("ClockSource", RW::ReadWrite, TYPE::DIG, {{"Internal", "Internal Clock 62.5 MHz"},
-                                                                                  {"FPClkIn", "Front Plane Clock Input"}});
+                                                                                  {"FPClkIn", "Front Panel Clock Input"}});
     const Reg IO_Level                 ("IOlevel", RW::ReadWrite, TYPE::DIG, {{"NIM", "NIM (0=0V, 1=-0.8V) "}, {"TTL", "TTL (0=0V, 1=3.3V)"}});
-    const Reg StartSource              ("StartSource", RW::ReadWrite, TYPE::DIG, {{"EncodedClkIn", "font panel CLK-IN/SYNC"},
+    const Reg StartSource              ("StartSource", RW::ReadWrite, TYPE::DIG, {{"EncodedClkIn", "CLK-IN/SYNC"},
                                                                                   {"SINlevel", "S-IN Level"},
                                                                                   {"SINedge", "S-IN Edge"},
                                                                                   {"SWcmd", "Software"},
-                                                                                  {"LVDS", "LVDS"},
-                                                                                  {"PO", "Backplane"}}); 
+                                                                                  {"LVDS", "LVDS"}}); 
     const Reg GlobalTriggerSource      ("GlobalTriggerSource", RW::ReadWrite, TYPE::DIG,{{"TrgIn",      "TRG-IN" },    
-                                                                                         {"P0",         "Back Plane" },
-                                                                                         {"SwTrg",      "Software Trigger" },
+                                                                                         {"SwTrg",      "Software" },
                                                                                          {"GPIO",       "GPIO" },
                                                                                          {"TestPulse",  "Test Pulse" },
                                                                                          {"LVDS",       "LVDS"}});
 
-    const Reg BusyInSource             ("BusyInSource", RW::ReadWrite, TYPE::DIG, {{"SIN", "SIN"},
+    const Reg BusyInSource             ("BusyInSource", RW::ReadWrite, TYPE::DIG, {{"Disabled","Disabled"},
+                                                                                   {"SIN", "SIN"},
                                                                                    {"GPIO", "GPIO"},
-                                                                                   {"LVDS", "LVDS"},
-                                                                                   {"Disabled","Disabled"}});
+                                                                                   {"LVDS", "LVDS"}});
     //const Reg EnableClockOutBackplane  ("EnClockOutP0", RW::ReadWrite, TYPE::DIG);
     const Reg EnableClockOutFrontPanel ("EnClockOutFP", RW::ReadWrite, TYPE::DIG, {{"True", "Enable"}, {"False", "Disabled"}});
     const Reg TrgOutMode               ("TrgOutMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
@@ -223,15 +221,15 @@ namespace DIGIPARA{
                                                                                   {"TestPulse", "Test Pulse"}, 
                                                                                   {"IntClk",    "Internal Clock 62.5MHz"}, 
                                                                                   {"Run",       "Run Signal"} });
-    const Reg BoardVetoSource          ("BoardVetoSource", RW::ReadWrite, TYPE::DIG, {{"SIN",      "S-IN"}, 
+    const Reg BoardVetoSource          ("BoardVetoSource", RW::ReadWrite, TYPE::DIG, {{"Disabled", "Disabled"},
+                                                                                      {"SIN",      "S-IN"}, 
                                                                                       {"LVDS",     "LVDS"}, 
                                                                                       {"GPIO",     "GPIO"}, 
-                                                                                      {"P0",       "Back Plane"}, 
-                                                                                      {"Disabled", "Disabled"}  });
+                                                                                      {"P0",       "Back Plane"}});
     const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}}, ANSTYPE::NUM, "ns");
-    const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "Active when high"}, {"ActiveLow", "Active when low"}});
+    const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "High"}, {"ActiveLow", "Low"}});
     const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}},  ANSTYPE::NUM, "ns");
-    const Reg EnableAutoDisarmACQ      ("EnAutoDisarmAcq", RW::ReadWrite, TYPE::DIG, {{"True", "Auto disarmed"}, {"False", "Disabled"}});
+    const Reg EnableAutoDisarmACQ      ("EnAutoDisarmAcq", RW::ReadWrite, TYPE::DIG, {{"True", "Enabled"}, {"False", "Disabled"}});
     const Reg EnableDataReduction      ("EnDataReduction", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
     const Reg EnableStatisticEvents    ("EnStatEvents", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
     const Reg VolatileClockOutDelay    ("VolatileClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}}, ANSTYPE::NUM, "ps");
