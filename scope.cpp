@@ -80,8 +80,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "false");
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::ChannelEnable, "true");
+    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "false", -1);
+    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", ch);
     ReadScopeSettings(iDigi, ch);
     digiMTX.unlock();
   });
@@ -141,7 +141,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   
@@ -150,7 +150,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
 
@@ -195,7 +195,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
@@ -203,7 +203,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ 
@@ -211,7 +211,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ 
@@ -219,7 +219,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString());
+    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
 
@@ -432,8 +432,8 @@ void Scope::StartScope(){
 
   ReadScopeSettings(iDigi, ch);
 
-  digi[iDigi]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "false");
-  digi[iDigi]->WriteChValue(std::to_string(ch), DIGIPARA::CH::ChannelEnable, "true");
+  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "false", -1);
+  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", ch);
   digi[iDigi]->SetPHADataFormat(0);
 
   digi[iDigi]->StartACQ();
@@ -461,7 +461,7 @@ void Scope::StopScope(){
       if( digi[i]->IsDummy() ) continue;
       digiMTX.lock();
       digi[i]->StopACQ();
-      digi[i]->WriteChValue("0..63", DIGIPARA::CH::ChannelEnable, "true");
+      digi[i]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", -1);
       digiMTX.unlock();
 
       readDataThread[i]->quit();
@@ -488,8 +488,8 @@ void Scope::UpdateScope(){
     for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
 
     digiMTX.lock();    
-    std::string time = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::ChannelRealtime); // for refreashing SelfTrgRate and SavedCount
-    std::string haha = digi[iDigi]->ReadChValue(std::to_string(ch), DIGIPARA::CH::SelfTrgRate);
+    std::string time = digi[iDigi]->ReadValue(DIGIPARA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
+    std::string haha = digi[iDigi]->ReadValue(DIGIPARA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
     if( atoi(haha.c_str()) == 0 ) {
       digiMTX.unlock();
@@ -569,13 +569,13 @@ void Scope::ScopeControlOnOff(bool on){
   cbLowFreqFilter->setEnabled(on);
 }
 
-void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara){
-  std::string ans = digi[iDigi]->ReadChValue(std::to_string(ch), digPara);
+void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, const Reg digPara){
+  std::string ans = digi[iDigi]->ReadValue(digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
-void Scope::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string digPara){
-  std::string ans = digi[iDigi]->ReadChValue(std::to_string(ch), digPara);
+void Scope::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, const Reg digPara){
+  std::string ans = digi[iDigi]->ReadValue(digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
     cb->setCurrentIndex(index);
@@ -584,7 +584,7 @@ void Scope::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string
   }
 }
 
-void Scope::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int row, int col, int min, int max, int step, std::string digPara){
+void Scope::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int row, int col, int min, int max, int step, const Reg digPara){
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
@@ -597,15 +597,13 @@ void Scope::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int
     int iDigi = cbScopeDigi->currentIndex();
     if( step > 1 ) sb->setValue(step*((sb->value() +  step - 1)/step));
     digiMTX.lock();
-    //TODO change to use Reg
-    digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, std::to_string(sb->value()));
-    digi[iDigi]->ReadChValue(std::to_string(cbScopeCh->currentIndex()), digPara);
+    digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), cbScopeCh->currentIndex() );
     digiMTX.unlock();
   });
   //TODO digiSettingPanel update setting
 }
 
-void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, int row, int col, std::string digPara){
+void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
@@ -614,9 +612,7 @@ void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, in
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     digiMTX.lock();
-    //TODO change to use Reg
-    digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, cb->currentData().toString().toStdString());
-    digi[iDigi]->ReadChValue(std::to_string(cbScopeCh->currentIndex()), digPara);
+    digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), cbScopeCh->currentIndex());
     digiMTX.unlock();
   });
   //TODO digiSettingPanel update setting

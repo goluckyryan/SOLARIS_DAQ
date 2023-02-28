@@ -113,10 +113,10 @@ private slots:
   void StopScope();
   void UpdateScope();
   void ScopeControlOnOff(bool on);
-  void ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, std::string digPara);
-  void ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, std::string digPara);
-  void ScopeMakeSpinBox(QSpinBox * sb, QString str,  QGridLayout* layout, int row, int col, int min, int max, int step, std::string digPara);
-  void ScopeMakeComoBox(QComboBox * cb, QString str, QGridLayout* layout, int row, int col, std::string digPara);
+  void ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, const Reg digPara);
+  void ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, const Reg digPara);
+  void ScopeMakeSpinBox(QSpinBox * sb, QString str,  QGridLayout* layout, int row, int col, int min, int max, int step, const Reg digPara);
+  void ScopeMakeComoBox(QComboBox * cb, QString str, QGridLayout* layout, int row, int col, const Reg digPara);
   void ProbeChange(QComboBox * cb[], const int size);
 
   void closeEvent(QCloseEvent * event){

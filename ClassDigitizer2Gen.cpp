@@ -101,16 +101,13 @@ std::string Digitizer2Gen::GetPath(uint64_t handle){
 //########################################### Read Write
 
 int Digitizer2Gen::FindIndex(const Reg para){
-
   switch (para.GetType() ){
     case TYPE::CH: return chMap[para.GetPara()];
     case TYPE::DIG: return boardMap[para.GetPara()];
     case TYPE::VGA: return 0;
     case TYPE::LVDS: return -1;
   }
-
   return -1;
-
 }
 
 std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
@@ -140,29 +137,6 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
   return ans;
 }
 
-std::string Digitizer2Gen::ReadDigValue(std::string shortPara, bool verbose){
-  std::string haha = "/par/" + shortPara;
-  std::string ans = ReadValue(haha.c_str(), verbose);
-
-  for( int i = 0; i < (int) boardSettings.size(); i++){
-    if( boardSettings[i].GetPara() == shortPara ) boardSettings[i].SetValue(ans);
-  }
-
-  return ans;
-}
-
-std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bool verbose){
-  std::string haha = "/ch/" + ch + "/par/" + shortPara;
-  std::string ans = ReadValue(haha.c_str(), verbose);
-
-  const int index = atoi(ch.c_str());
-  for( int i = 0; i < (int) chSettings[index].size(); i++){
-    if( chSettings[index][i].GetPara() == shortPara ) chSettings[index][i].SetValue(ans);
-  }
-
-  return ans;
-}
-
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   if( !isConnected ) return false;
   printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
@@ -180,7 +154,13 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
     int index = FindIndex(para);
     if( index != -1 ){    
       switch(para.GetType()){
-        case TYPE::CH : chSettings[ch_index][index].SetValue(value); break;
+        case TYPE::CH :{
+          if( ch_index >= 0 ){
+            chSettings[ch_index][index].SetValue(value);
+          }else{
+            for( int ch = 0; ch < nChannels; ch++ ) chSettings[ch][index].SetValue(value);
+          }
+        }break;
         case TYPE::VGA : VGASetting[ch_index].SetValue(value); break;
         case TYPE::DIG : boardSettings[index].SetValue(value); break;
         case TYPE::LVDS : break;
@@ -190,16 +170,6 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
   }else{
     return false;
   }
-}
-
-bool Digitizer2Gen::WriteDigValue(std::string shortPara, std::string value){
-  std::string haha = "/par/" + shortPara;
-  return WriteValue(haha.c_str(), value);
-}
-
-bool Digitizer2Gen::WriteChValue(std::string ch, std::string shortPara, std::string value){
-  std::string haha = "/ch/" + ch + "/par/" + shortPara;
-  return WriteValue(haha.c_str(), value);
 }
 
 void Digitizer2Gen::SendCommand(const char * parameter){

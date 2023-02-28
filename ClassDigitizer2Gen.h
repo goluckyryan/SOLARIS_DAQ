@@ -91,12 +91,8 @@ class Digitizer2Gen {
 
     std::string  ReadValue(const char * parameter, bool verbose = false);
     std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false);
-    std::string  ReadDigValue(std::string shortPara, bool verbose = false);
-    std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
     bool         WriteValue(const char * parameter, std::string value);
     bool         WriteValue(const Reg para, std::string value, int ch_index = -1);
-    bool         WriteDigValue(std::string shortPara, std::string value);
-    bool         WriteChValue(std::string ch, std::string shortPara, std::string value);
     void         SendCommand(const char * parameter);
     void         SendCommand(std::string shortPara);
 
@@ -111,10 +107,10 @@ class Digitizer2Gen {
     bool IsAcqOn() const {return acqON;}
     
     void SetPHADataFormat(unsigned short dataFormat); // 0 = all data, 
-                                                // 1 = analog trace-0 only + flags
-                                                // 2 = no trace, only ch, energy, timestamp, fine_timestamp + flags
-                                                // 3 = only ch, energy, timestamp, minimum
-                                                // 15 = raw data
+                                                      // 1 = analog trace-0 only + flags
+                                                      // 2 = no trace, only ch, energy, timestamp, fine_timestamp + flags
+                                                      // 3 = only ch, energy, timestamp, minimum
+                                                      // 15 = raw data
     int  ReadData();
     int  ReadStat(); // digitizer update it every 500 msec
     void PrintStat();
