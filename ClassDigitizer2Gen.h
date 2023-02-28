@@ -5,6 +5,7 @@
 #include <CAEN_FELib.h>
 #include <cstdlib>
 #include <string>
+#include <map>
 
 #include "Event.h"
 
@@ -68,6 +69,9 @@ class Digitizer2Gen {
     std::vector<Reg> chSettings[MaxNumberOfChannel];
     Reg VGASetting[4]; 
 
+    std::map<std::string, int> boardMap;
+    std::map<std::string, int> chMap;
+
   public:
     Digitizer2Gen();
     ~Digitizer2Gen();
@@ -82,14 +86,15 @@ class Digitizer2Gen {
     int CloseDigitizer();
 
     int GetRet() const {return ret;};
-  
+
+    int FindIndex(const Reg para); // get index from DIGIPARA
+
     std::string  ReadValue(const char * parameter, bool verbose = false);
-    std::string  ReadValue(Reg &para, int ch_index = -1, bool verbose = false);
-    std::string  ReadValue(TYPE type, unsigned short index, int ch_index = -1, bool verbose = false);
+    std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false);
     std::string  ReadDigValue(std::string shortPara, bool verbose = false);
     std::string  ReadChValue(std::string ch, std::string shortPara, bool verbose = false);
     bool         WriteValue(const char * parameter, std::string value);
-    bool         WriteValue(Reg &para, std::string value, int ch_index = -1);
+    bool         WriteValue(const Reg para, std::string value, int ch_index = -1);
     bool         WriteDigValue(std::string shortPara, std::string value);
     bool         WriteChValue(std::string ch, std::string shortPara, std::string value);
     void         SendCommand(const char * parameter);
@@ -135,39 +140,8 @@ class Digitizer2Gen {
     void ReadAllSettings(); // read settings from digitier and save to memory
     bool SaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
     bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
-    std::string GetSettingValue(TYPE type, unsigned short index, unsigned int ch_index = 0) const {
-      switch(type){
-        case TYPE::DIG: return boardSettings[index].GetValue();
-        case TYPE::CH:  return chSettings[ch_index][index].GetValue();
-        case TYPE::VGA: return VGASetting[ch_index].GetValue();
-        case TYPE::LVDS: return "not defined";
-      }
-      return "invalid";
-    }
-    std::string GetSettingValue(TYPE type, const Reg para, unsigned int ch_index = 0) const{
-      switch(type){
-        case TYPE::DIG:{
-          for( int i = 0; i < (int) boardSettings.size(); i++){
-            if( para.GetPara() == boardSettings[i].GetPara()){
-              return boardSettings[i].GetValue();
-            }
-          }
-        };break;
-        case TYPE::CH:{
-          for( int i = 0; i < (int) chSettings[ch_index].size(); i++){
-            if( para.GetPara() == chSettings[ch_index][i].GetPara()){
-              return chSettings[ch_index][i].GetValue();
-            }
-          }
-        };break;
-        case TYPE::VGA:  return VGASetting[ch_index].GetValue();
-        case TYPE::LVDS: return "not defined";
-        default : return "invalid";
-      }
 
-      return "no such parameter";
-
-    }
+    std::string GetSettingValue(const Reg para, unsigned int ch_index = 0); // read from memory
 };
 
 #endif

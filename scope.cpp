@@ -597,9 +597,12 @@ void Scope::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int
     int iDigi = cbScopeDigi->currentIndex();
     if( step > 1 ) sb->setValue(step*((sb->value() +  step - 1)/step));
     digiMTX.lock();
+    //TODO change to use Reg
     digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, std::to_string(sb->value()));
+    digi[iDigi]->ReadChValue(std::to_string(cbScopeCh->currentIndex()), digPara);
     digiMTX.unlock();
   });
+  //TODO digiSettingPanel update setting
 }
 
 void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, int row, int col, std::string digPara){
@@ -610,10 +613,13 @@ void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, in
   connect(cb, &QComboBox::currentIndexChanged, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-     digiMTX.lock();
+    digiMTX.lock();
+    //TODO change to use Reg
     digi[iDigi]->WriteChValue(std::to_string(cbScopeCh->currentIndex()), digPara, cb->currentData().toString().toStdString());
+    digi[iDigi]->ReadChValue(std::to_string(cbScopeCh->currentIndex()), digPara);
     digiMTX.unlock();
   });
+  //TODO digiSettingPanel update setting
 }
 
 

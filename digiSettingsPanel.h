@@ -154,7 +154,7 @@ private:
   void SetupSpinBoxTab(QSpinBox *spb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
   void SetupComboBoxTab(QComboBox *cbb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
 
-  void ReadCombBoxValue(QComboBox * cbb, TYPE type, Reg para );
+  void ReadCombBoxValue(QComboBox * cbb, const Reg para );
 
 
 

@@ -50,6 +50,10 @@ void Digitizer2Gen::Initialization(){
   for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = DIGIPARA::CH::AllSettings;
   for( int index = 0 ; index < 4; index ++) VGASetting[index] = DIGIPARA::VGA::VGAGain;
 
+  //build map
+  for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++) boardMap[DIGIPARA::DIG::AllSettings[i].GetPara()] = i;
+  for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++) chMap[DIGIPARA::CH::AllSettings[i].GetPara()] = i;
+  
 }
 
 void Digitizer2Gen::SetDummy(unsigned short sn){
@@ -95,6 +99,20 @@ std::string Digitizer2Gen::GetPath(uint64_t handle){
 }
 
 //########################################### Read Write
+
+int Digitizer2Gen::FindIndex(const Reg para){
+
+  switch (para.GetType() ){
+    case TYPE::CH: return chMap[para.GetPara()];
+    case TYPE::DIG: return boardMap[para.GetPara()];
+    case TYPE::VGA: return 0;
+    case TYPE::LVDS: return -1;
+  }
+
+  return -1;
+
+}
+
 std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   if( !isConnected ) return "not connected";
   //printf(" %s|%s \n", __func__, parameter);
@@ -108,31 +126,41 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   return retValue;
 }
 
-std::string Digitizer2Gen::ReadValue(Reg &para, int ch_index,  bool verbose){
-  para.SetValue( ReadValue(para.GetFullPara(ch_index).c_str(), verbose)  );
-  return para.GetValue();
-}
+std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose){
+  std:: string ans = ReadValue(para.GetFullPara(ch_index).c_str(), verbose); 
 
-std::string Digitizer2Gen::ReadValue(TYPE type, unsigned short index, int ch_index, bool verbose){
-  if( !isConnected ) return "not connected";
-  switch (type){
-    case TYPE::DIG: return ReadValue( boardSettings[index], ch_index, verbose );
-    case TYPE::CH:  return ReadValue( chSettings[ch_index][index], ch_index, verbose );
-    case TYPE::VGA: return ReadValue( VGASetting[index], ch_index, verbose);
-    case TYPE::LVDS: return "no defined";
+  int index = FindIndex(para);
+  switch( para.GetType()){
+    case TYPE::CH  : chSettings[ch_index][index].SetValue(ans); break;
+    case TYPE::DIG : boardSettings[index].SetValue(ans); break;
+    case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
+    case TYPE::LVDS: return "LVDS not implemented.";
   }
 
-  return "invalid";
+  return ans;
 }
 
 std::string Digitizer2Gen::ReadDigValue(std::string shortPara, bool verbose){
   std::string haha = "/par/" + shortPara;
-  return ReadValue(haha.c_str(), verbose);
+  std::string ans = ReadValue(haha.c_str(), verbose);
+
+  for( int i = 0; i < (int) boardSettings.size(); i++){
+    if( boardSettings[i].GetPara() == shortPara ) boardSettings[i].SetValue(ans);
+  }
+
+  return ans;
 }
 
 std::string Digitizer2Gen::ReadChValue(std::string ch, std::string shortPara, bool verbose){
   std::string haha = "/ch/" + ch + "/par/" + shortPara;
-  return ReadValue(haha.c_str(), verbose);
+  std::string ans = ReadValue(haha.c_str(), verbose);
+
+  const int index = atoi(ch.c_str());
+  for( int i = 0; i < (int) chSettings[index].size(); i++){
+    if( chSettings[index][i].GetPara() == shortPara ) chSettings[index][i].SetValue(ans);
+  }
+
+  return ans;
 }
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
@@ -147,10 +175,17 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   return true;
 }
 
-bool Digitizer2Gen::WriteValue(Reg &para, std::string value, int ch_index){
-
+bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
   if( WriteValue(para.GetFullPara(ch_index).c_str(), value)){
-    para.SetValue(value);
+    int index = FindIndex(para);
+    if( index != -1 ){    
+      switch(para.GetType()){
+        case TYPE::CH : chSettings[ch_index][index].SetValue(value); break;
+        case TYPE::VGA : VGASetting[ch_index].SetValue(value); break;
+        case TYPE::DIG : boardSettings[index].SetValue(value); break;
+        case TYPE::LVDS : break;
+      }
+    }
     return true;
   }else{
     return false;
@@ -860,7 +895,6 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value);
     }
 
-
     delete [] para;
     delete [] readWrite;
     delete [] idStr;
@@ -873,4 +907,16 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
   return false;
   
+}
+
+std::string Digitizer2Gen::GetSettingValue(const Reg para, unsigned int ch_index) {
+  int index = FindIndex(para);
+  switch (para.GetType()){
+    case TYPE::DIG:  return boardSettings[index].GetValue();
+    case TYPE::CH:   return chSettings[ch_index][index].GetValue();
+    case TYPE::VGA:  return VGASetting[ch_index].GetValue();
+    case TYPE::LVDS: return "not defined";
+    default : return "invalid";
+  }
+  return "no such parameter";
 }
