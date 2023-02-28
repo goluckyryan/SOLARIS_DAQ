@@ -51,7 +51,7 @@ class InfluxDB{
     void ClearDataPointsBuffer();
     void PrintDataPoints();
     void WriteData(std::string databaseName);
-    bool IsWriteOK() const {return (respondCode == CURLE_OK) ? true: false;}
+    bool IsWriteOK() const {return (respond == CURLE_OK) ? true: false;}
 
 };
 

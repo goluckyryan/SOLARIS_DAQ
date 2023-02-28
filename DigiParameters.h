@@ -390,16 +390,16 @@ namespace DIGIPARA{
     const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}}, ANSTYPE::NUM, "ns");
     const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}}, ANSTYPE::NUM, "ns");
     const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}}, ANSTYPE::NUM, "%");
-    const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   " 1 sample"},
-                                                                                               {"LowAVG",    " 4 samples"},
+    const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   "1 sample"},
+                                                                                               {"LowAVG",    "4 samples"},
                                                                                                {"MediumAVG", "16 samples"},
                                                                                                {"HighAVG",   "64 samples"}});
-    const Reg EnergyFilterBaselineAvg     ("EnergyFilterBaselineAvg", RW::ReadWrite, TYPE::CH, {{"Fixed",    "    0 sample"},
-                                                                                               {"VeryLow",   "   16 samples"},
-                                                                                               {"Low",       "   64 samples"},
-                                                                                               {"MediumLow", "  256 samples"},
-                                                                                               {"Medium",    " 1024 samples"},
-                                                                                               {"MediumHigh"," 4096 samples"},
+    const Reg EnergyFilterBaselineAvg     ("EnergyFilterBaselineAvg", RW::ReadWrite, TYPE::CH, {{"Fixed",    "0 sample"},
+                                                                                               {"VeryLow",   "16 samples"},
+                                                                                               {"Low",       "64 samples"},
+                                                                                               {"MediumLow", "256 samples"},
+                                                                                               {"Medium",    "1024 samples"},
+                                                                                               {"MediumHigh","4096 samples"},
                                                                                                {"High",      "16384 samples"}});
     const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}}, ANSTYPE::NUM, "ns");
     const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}}, ANSTYPE::NUM);

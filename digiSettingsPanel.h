@@ -108,6 +108,15 @@ private:
   QSpinBox  * spbTrapFlatTop[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QSpinBox  * spbTrapPoleZero[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
+  QSpinBox  * spbPeaking[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QSpinBox  * spbBaselineGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QSpinBox  * spbPileupGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QComboBox * cbbPeakingAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QComboBox * cbbBaselineAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QSpinBox  * spbFineGain[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QComboBox * cbbLowFilter[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
   QComboBox * cbbAnaProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbAnaProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbDigProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -117,17 +126,33 @@ private:
   
   QComboBox * cbbEvtTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbWaveTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  
   QComboBox * cbbChVetoSrc[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  QSpinBox  * sbChADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QLineEdit * leTriggerMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QComboBox * cbbEventSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QComboBox * cbbWaveSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QComboBox * cbbCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QComboBox * cbbAntiCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QSpinBox  * spbCoinLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QSpinBox  * spbADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QSpinBox  * spbEnergySkimLow[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  QSpinBox  * spbEnergySkimHigh[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
 
-
+  //-------------------------
   QLineEdit * leSettingFile[MaxNumberOfDigitizer];
   
-  void SetupCombBox(QComboBox * cbb, Reg para);
+  void SetupShortComboBox(QComboBox * cbb, Reg para);
 
-  void SetupComboBox(QComboBox * cbb, Reg para, QWidget * parent, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupComboBox(QComboBox * cbb, Reg para, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupSpinBox(QSpinBox *spb, Reg para, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+
+  void SetupSpinBoxTab(QSpinBox *spb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
+  void SetupComboBoxTab(QComboBox *cbb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
 
   void ReadCombBoxValue(QComboBox * cbb, TYPE type, Reg para );
 

@@ -975,9 +975,9 @@ void MainWindow::SetupInflux(){
         influx->WriteData(DatabaseName.toStdString());
         influx->ClearDataPointsBuffer();
         if( influx->IsWriteOK() ){
-          LogMsg("test write OK.");
+          LogMsg("<font style=\"color : green;\">test write database OK.</font>");
         }else{
-          LogMsg("test write FAIL.");
+          LogMsg("<font style=\"color : red;\">test write database FAIL.</font>");
         }
 
       }else{
