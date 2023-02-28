@@ -31,19 +31,9 @@ class Digitizer2Gen {
 
     char retValue[256];
 
-    std::string modelName;
-    std::string cupVersion;
-    std::string DPPVersion;
-    std::string DPPType;
     unsigned short serialNumber;
-    unsigned short adcBits;
     unsigned short nChannels;
-    unsigned short adcRate;
     unsigned short ch2ns;
-
-    std::string IPAddress;
-    std::string netMask;
-    std::string gateway;
 
     void Initialization();
 

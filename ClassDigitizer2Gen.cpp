@@ -20,20 +20,10 @@ void Digitizer2Gen::Initialization(){
   ret = 0;
   isConnected = false;
   isDummy = false;
-  
-  modelName = "";
-  cupVersion = "";
-  DPPVersion = "";
-  DPPType = "";
-  serialNumber = 0;
-  adcBits = 0;
-  nChannels = 0;
-  adcRate = 0;
-  ch2ns = 0;
 
-  IPAddress = "";
-  netMask = "";
-  gateway = "";
+  serialNumber = 0;
+  nChannels = 0;
+  ch2ns = 0;
 
   outFileIndex = 0;
   FinishedOutFilesSize = 0;
@@ -203,41 +193,29 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   
   isConnected = true;
 
-  modelName  = ReadValue("/par/ModelName");
-  
-  cupVersion = ReadValue("/par/cupver");  
-  DPPVersion = ReadValue("/par/FPGA_FwVer");
-  DPPType    = ReadValue("/par/FwType");
+  ReadAllSettings();
 
   serialNumber = atoi(ReadValue("/par/SerialNum").c_str());
   nChannels    = atoi(ReadValue("/par/NumCh").c_str());
-  adcBits      = atoi(ReadValue("/par/ADC_Nbit").c_str());  
-  adcRate      = atoi(ReadValue("/par/ADC_SamplRate").c_str());
+  int adcRate = atoi(GetSettingValue(DIGIPARA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
   
-  IPAddress   = ReadValue("/par/IPAddress");
-  netMask     = ReadValue("/par/Netmask");
-  gateway     = ReadValue("/par/Gateway");
-
-  printf("   IP address : %s\n", IPAddress.c_str());
-  printf("     Net Mask : %s\n", netMask.c_str());
-  printf("      Gateway : %s\n", gateway.c_str());
+  printf("   IP address : %s\n", GetSettingValue(DIGIPARA::DIG::IPAddress).c_str());
+  printf("     Net Mask : %s\n", GetSettingValue(DIGIPARA::DIG::NetMask).c_str());
+  printf("      Gateway : %s\n", GetSettingValue(DIGIPARA::DIG::Gateway).c_str());
   
-  printf("   Model name : %s\n", modelName.c_str());
-  printf("  CUP version : %s\n", cupVersion.c_str());
-  printf("     DPP Type : %s\n", DPPType.c_str());
-  printf("  DPP Version : %s\n", DPPVersion.c_str());
+  printf("   Model name : %s\n", GetSettingValue(DIGIPARA::DIG::ModelName).c_str());
+  printf("  CUP version : %s\n", GetSettingValue(DIGIPARA::DIG::CupVer).c_str());
+  printf("     DPP Type : %s\n", GetSettingValue(DIGIPARA::DIG::FirmwareType).c_str());
+  printf("  DPP Version : %s\n", GetSettingValue(DIGIPARA::DIG::FPGA_firmwareVersion).c_str());
   printf("Serial number : %d\n", serialNumber);
-  printf("     ADC bits : %d\n", adcBits);
+  printf("     ADC bits : %s\n", GetSettingValue(DIGIPARA::DIG::ADC_bit).c_str());
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
   printf("     Channels : %d\n", nChannels);
 
   //------ set default setting file name
   settingFileName = "settings_"+ std::to_string(serialNumber) + ".dat";
 
-  //ReadValue("/par/InputRange", true);
-  //ReadValue("/par/InputType", true);
-  //ReadValue("/par/Zin", true);
   printf("====================== \n");
 
   return 0;
