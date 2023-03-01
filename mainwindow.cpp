@@ -28,7 +28,7 @@ Digitizer2Gen ** MainWindow::digi = NULL;
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
-  setWindowTitle("SOLARIS DAQ");
+  setWindowTitle("FSU SOLARIS DAQ");
   setGeometry(500, 100, 1000, 500);
   QIcon icon("SOLARIS_favicon.png");
   setWindowIcon(icon);
@@ -528,6 +528,10 @@ void MainWindow::CloseDigitizers(){
   scalar->close();
   DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
   
+  digiSetting->close();
+  delete digiSetting;
+  digiSetting = NULL;
+
   for( int i = 0; i < nDigi; i++){    
     if( digi[i] == NULL) return;
     digi[i]->CloseDigitizer();

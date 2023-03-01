@@ -32,7 +32,6 @@ private slots:
 
   
   void onTriggerClick(int haha);
-  void onChannelonOff(int haha);
 
   void RefreshSettings();
   void SaveSettings();
@@ -89,7 +88,7 @@ private:
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
   //--------------- Channel settings
-  QCheckBox *** ckbChEnabled;
+  QComboBox * cbbOnOff[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   QSpinBox  * spbRecordLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QSpinBox  * spbPreTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -119,6 +118,7 @@ private:
 
   QComboBox * cbbAnaProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbAnaProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
   QComboBox * cbbDigProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbDigProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QComboBox * cbbDigProbe2[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -149,11 +149,13 @@ private:
   void SetStartSource();
   void SetGlobalTriggerSource();
 
-
   void SetupShortComboBox(QComboBox * cbb, Reg para);
 
-  void SetupComboBox(QComboBox * &cbb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupComboBox(QComboBox * &cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
   void SetupSpinBox(QSpinBox * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+
+  void SyncComboBox(QComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);
+  void SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch);
 
   void SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
   void SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
