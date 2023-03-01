@@ -89,7 +89,7 @@ private:
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
   //--------------- Channel settings
-  QCheckBox * ckbChEnabled[MaxNumberOfDigitizer][MaxNumberOfChannel + 1]; // index = 64 is for all channels
+  QCheckBox *** ckbChEnabled;
 
   QSpinBox  * spbRecordLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   QSpinBox  * spbPreTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -146,13 +146,17 @@ private:
   //-------------------------
   QLineEdit * leSettingFile[MaxNumberOfDigitizer];
   
+  void SetStartSource();
+  void SetGlobalTriggerSource();
+
+
   void SetupShortComboBox(QComboBox * cbb, Reg para);
 
-  void SetupComboBox(QComboBox * cbb, Reg para, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
-  void SetupSpinBox(QSpinBox *spb, Reg para, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupComboBox(QComboBox * &cbb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupSpinBox(QSpinBox * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
 
-  void SetupSpinBoxTab(QSpinBox *spb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
-  void SetupComboBoxTab(QComboBox *cbb[][MaxNumberOfChannel+1], Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
+  void SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
+  void SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
 
   void ReadCombBoxValue(QComboBox * cbb, const Reg para );
 

@@ -80,9 +80,9 @@ class Digitizer2Gen {
     int FindIndex(const Reg para); // get index from DIGIPARA
 
     std::string  ReadValue(const char * parameter, bool verbose = false);
-    std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false);
+    std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
     bool         WriteValue(const char * parameter, std::string value);
-    bool         WriteValue(const Reg para, std::string value, int ch_index = -1);
+    bool         WriteValue(const Reg para, std::string value, int ch_index = -1); // write digituzer and save to memory
     void         SendCommand(const char * parameter);
     void         SendCommand(std::string shortPara);
 

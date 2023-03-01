@@ -91,6 +91,25 @@ std::string Digitizer2Gen::GetPath(uint64_t handle){
 //########################################### Read Write
 
 int Digitizer2Gen::FindIndex(const Reg para){
+  /*
+  printf("%s  %s || ", __func__, para.GetPara().c_str());
+  int index = -1;
+
+  switch (para.GetType() ){
+    case TYPE::CH: {
+      index = chMap[para.GetPara()]; 
+      printf("%s \n", DIGIPARA::CH::AllSettings[index].GetPara().c_str());
+      } break;
+    case TYPE::DIG: {
+      index = boardMap[para.GetPara()]; 
+      printf("%s \n", DIGIPARA::DIG::AllSettings[index].GetPara().c_str());
+      }break;
+    case TYPE::VGA: return 0;
+    case TYPE::LVDS: return -1;
+  }
+  return index;
+  */
+  
   switch (para.GetType() ){
     case TYPE::CH: return chMap[para.GetPara()];
     case TYPE::DIG: return boardMap[para.GetPara()];
@@ -128,7 +147,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
 }
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
-  if( !isConnected ) return false;
+  if( !isConnected ) return false; 
   printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
@@ -140,7 +159,7 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
 }
 
 bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
-  if( WriteValue(para.GetFullPara(ch_index).c_str(), value)){
+  if( WriteValue(para.GetFullPara(ch_index).c_str(), value) || isDummy){
     int index = FindIndex(para);
     if( index != -1 ){    
       switch(para.GetType()){
@@ -150,9 +169,25 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
           }else{
             for( int ch = 0; ch < nChannels; ch++ ) chSettings[ch][index].SetValue(value);
           }
+
+          //if( ch_index < 0 ) ch_index = 0;
+          //printf("%s %s %s |%s|\n", __func__, para.GetPara().c_str(),
+          //                     chSettings[ch_index][index].GetFullPara(ch_index).c_str(), 
+          //                     chSettings[ch_index][index].GetValue().c_str());
         }break;
-        case TYPE::VGA : VGASetting[ch_index].SetValue(value); break;
-        case TYPE::DIG : boardSettings[index].SetValue(value); break;
+        case TYPE::VGA : {
+          VGASetting[ch_index].SetValue(value); 
+
+          //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
+          //                      VGASetting[ch_index].GetFullPara(ch_index).c_str(), 
+          //                      VGASetting[ch_index].GetValue().c_str());
+        }break;
+        case TYPE::DIG : {
+          boardSettings[index].SetValue(value);
+          //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
+          //                     boardSettings[index].GetFullPara(ch_index).c_str(), 
+          //                     boardSettings[index].GetValue().c_str()); 
+        }break;
         case TYPE::LVDS : break;
       }
     }
