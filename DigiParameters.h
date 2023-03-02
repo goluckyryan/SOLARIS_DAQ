@@ -481,7 +481,8 @@ namespace DIGIPARA{
     const Reg ChannelsTriggerMask     ("ChannelsTriggerMask", RW::ReadWrite, TYPE::CH, {},  ANSTYPE::STR, "64-bit" );
     const Reg ChannelVetoSource       ("ChannelVetoSource", RW::ReadWrite, TYPE::CH, {{"BoardVeto", "Board Veto"},
                                                                                       {"ADCOverSaturation", "ADC Over Saturation"},
-                                                                                      {"ADCUnderSaturation", "ADC Under Saturation"}});
+                                                                                      {"ADCUnderSaturation", "ADC Under Saturation"},
+                                                                                      {"Disabled", "Disabled"}});
     const Reg WaveTriggerSource       ("WaveTriggerSource", RW::ReadWrite, TYPE::CH, {{"GlobalTriggerSource",  "Global Trigger Source"}, 
                                                                                       {"TRGIN",                "TRG-IN"}, 
                                                                                       {"ExternalInhibit",      "External Inhibit"}, 
@@ -498,13 +499,13 @@ namespace DIGIPARA{
     const Reg WaveSelector            ("WaveSelector", RW::ReadWrite, TYPE::CH, {{"All", "All wave"},
                                                                                   {"Pileup", "Only Pile up"},
                                                                                   {"EnergySkim", "Only in Energy Skim Range"}});
-    const Reg CoincidenceMask         ("CoincidenceMask", RW::ReadWrite, TYPE::CH, {{"Disable", "Disabled"},
+    const Reg CoincidenceMask         ("CoincidenceMask", RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},
                                                                                     {"Ch64Trigger", "Channel 64-Trigger"},
                                                                                     {"TRGIN", "TRG-IN"},
                                                                                     {"GlobalTriggerSource", "Global Trigger"},
                                                                                     {"ITLA", "ITLA"},
                                                                                     {"ITLB", "ITLB"}});
-    const Reg AntiCoincidenceMask     ("AntiCoincidenceMask", RW::ReadWrite, TYPE::CH,{{"Disable", "Disabled"},
+    const Reg AntiCoincidenceMask     ("AntiCoincidenceMask", RW::ReadWrite, TYPE::CH,{{"Disabled", "Disabled"},
                                                                                        {"Ch64Trigger", "Channel 64-Trigger"},
                                                                                        {"TRGIN", "TRG-IN"},
                                                                                        {"GlobalTriggerSource", "Global Trigger"},

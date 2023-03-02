@@ -22,6 +22,7 @@ void Digitizer2Gen::Initialization(){
   isDummy = false;
 
   serialNumber = 0;
+  FPGAType = "";
   nChannels = 0;
   ch2ns = 0;
 
@@ -51,6 +52,7 @@ void Digitizer2Gen::SetDummy(unsigned short sn){
   isDummy = true;
   serialNumber = sn;
   nChannels = 64;
+  FPGAType = "DPP_PHA";
 
 }
 
@@ -90,26 +92,7 @@ std::string Digitizer2Gen::GetPath(uint64_t handle){
 
 //########################################### Read Write
 
-int Digitizer2Gen::FindIndex(const Reg para){
-  /*
-  printf("%s  %s || ", __func__, para.GetPara().c_str());
-  int index = -1;
-
-  switch (para.GetType() ){
-    case TYPE::CH: {
-      index = chMap[para.GetPara()]; 
-      printf("%s \n", DIGIPARA::CH::AllSettings[index].GetPara().c_str());
-      } break;
-    case TYPE::DIG: {
-      index = boardMap[para.GetPara()]; 
-      printf("%s \n", DIGIPARA::DIG::AllSettings[index].GetPara().c_str());
-      }break;
-    case TYPE::VGA: return 0;
-    case TYPE::LVDS: return -1;
-  }
-  return index;
-  */
-  
+int Digitizer2Gen::FindIndex(const Reg para){  
   switch (para.GetType() ){
     case TYPE::CH: return chMap[para.GetPara()];
     case TYPE::DIG: return boardMap[para.GetPara()];
@@ -231,6 +214,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   ReadAllSettings();
 
   serialNumber = atoi(ReadValue("/par/SerialNum").c_str());
+  FPGAType = GetSettingValue(DIGIPARA::DIG::FPGA_firmwareVersion);
   nChannels    = atoi(ReadValue("/par/NumCh").c_str());
   int adcRate = atoi(GetSettingValue(DIGIPARA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
@@ -242,7 +226,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("   Model name : %s\n", GetSettingValue(DIGIPARA::DIG::ModelName).c_str());
   printf("  CUP version : %s\n", GetSettingValue(DIGIPARA::DIG::CupVer).c_str());
   printf("     DPP Type : %s\n", GetSettingValue(DIGIPARA::DIG::FirmwareType).c_str());
-  printf("  DPP Version : %s\n", GetSettingValue(DIGIPARA::DIG::FPGA_firmwareVersion).c_str());
+  printf("  DPP Version : %s\n", FPGAType.c_str());
   printf("Serial number : %d\n", serialNumber);
   printf("     ADC bits : %s\n", GetSettingValue(DIGIPARA::DIG::ADC_bit).c_str());
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
@@ -813,7 +797,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
       }
     }    
     fclose(saveFile);
-    
+
     if( count != totCount ) {
       remove(saveFileName);
       return -1;

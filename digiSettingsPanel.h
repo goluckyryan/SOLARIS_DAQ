@@ -68,7 +68,7 @@ private:
   QComboBox * cbbStatEvents[MaxNumberOfDigitizer];
   QComboBox * cbbSyncOut[MaxNumberOfDigitizer];
   QComboBox * cbbBoardVetoSource[MaxNumberOfDigitizer];
-  QSpinBox  * spbBdVetoWidth[MaxNumberOfDigitizer];
+  QDoubleSpinBox  * dsbBdVetoWidth[MaxNumberOfDigitizer];
   QComboBox * cbbBdVetoPolarity[MaxNumberOfDigitizer];
   QComboBox * cbbIOLevel[MaxNumberOfDigitizer];
   QSpinBox  * spbRunDelay[MaxNumberOfDigitizer];
@@ -82,8 +82,11 @@ private:
   QSpinBox * spbTestPusleLowLevel[MaxNumberOfDigitizer];
   QSpinBox * spbTestPusleHighLevel[MaxNumberOfDigitizer];
 
-  //---------------
+  //-------------- VGA
+  QGroupBox * VGABox;
+  QDoubleSpinBox * VGA[MaxNumberOfDigitizer][4];
 
+  //---------------
   QPushButton *bn[MaxNumberOfChannel][MaxNumberOfChannel];
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
@@ -152,7 +155,7 @@ private:
   void SetupShortComboBox(QComboBox * cbb, Reg para);
 
   void SetupComboBox(QComboBox * &cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
-  void SetupSpinBox(QSpinBox * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  template<typename T> void SetupSpinBox(T * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
 
   void SyncComboBox(QComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);
   void SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch);
