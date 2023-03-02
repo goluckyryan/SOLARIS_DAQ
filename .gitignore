@@ -8,6 +8,7 @@ windowID
 screenshot.*
 *settings*.txt
 *settings*.dat
+*.dat
 
 *~
 *.autosave

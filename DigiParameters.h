@@ -380,10 +380,10 @@ namespace DIGIPARA{
     const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}}, ANSTYPE::NUM, "ns");
     const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}}, ANSTYPE::NUM, "ns");
     const Reg WaveSaving                  ("WaveSaving", RW::ReadWrite, TYPE::CH, {{"Always", "Always"}, {"OnRequest", "On Request"}});
-    const Reg WaveResolution              ("WaveResolution", RW::ReadWrite, TYPE::CH, {{"Res8", " 8 ns"}, 
-                                                                                       {"Res16","16 ns"},
-                                                                                       {"Res32","32 ns"},
-                                                                                       {"Res64","64 ns"}});
+    const Reg WaveResolution              ("WaveResolution", RW::ReadWrite, TYPE::CH, {{"RES8", " 8 ns"}, 
+                                                                                       {"RES16","16 ns"},
+                                                                                       {"RES32","32 ns"},
+                                                                                       {"RES64","64 ns"}});
     const Reg TimeFilterRiseTime          ("TimeFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"2000", ""}}, ANSTYPE::NUM, "ns");
     const Reg TimeFilterRetriggerGuard    ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}}, ANSTYPE::NUM, "ns");
     const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}}, ANSTYPE::NUM, "ns");
@@ -404,7 +404,7 @@ namespace DIGIPARA{
     const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}}, ANSTYPE::NUM, "ns");
     const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}}, ANSTYPE::NUM);
     const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"64000", ""}}, ANSTYPE::NUM);
-    const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite, TYPE::CH, {{"0", "Disabled"}, {"1", "Enabled"}});
+    const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite, TYPE::CH, {{"Off", "Disabled"}, {"On", "Enabled"}});
     const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
                                                                                          {"TimeFilter",                 "Time Filter"}, 
                                                                                          {"EnergyFilter",               "Trapazoid"}, 

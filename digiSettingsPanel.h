@@ -157,10 +157,11 @@ private:
   void SyncComboBox(QComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);
   void SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch);
 
-  void SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
   void SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
+  void SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
 
-  void ReadCombBoxValue(QComboBox * cbb, const Reg para );
+  void FillComboBoxValueFromMemory(QComboBox * &cbb, const Reg para, int ch_index = -1);
+  template<typename T> void FillSpinBoxValueFromMemory(T * &spb, const Reg para, int ch_index = -1 );
 
 
 

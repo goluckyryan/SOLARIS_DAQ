@@ -637,7 +637,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         connect(spbBaselineGuard[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbBaselineGuard, ch);});
         connect(spbPileupGuard[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbPileupGuard, ch);});
         
-        
         connect(cbbAnaProbe0[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe0, ch);});
         connect(cbbAnaProbe1[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe1, ch);});
         connect(cbbDigProbe0[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe0, ch);});
@@ -757,6 +756,33 @@ void DigiSettingsPanel::RefreshSettings(){
 
 void DigiSettingsPanel::SaveSettings(){
 
+  QString filePath = QFileDialog::getSaveFileName(this, "Save Settings File", "", "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
+
+  if (!filePath.isEmpty()) {
+
+    QFileInfo  fileInfo(filePath);
+    QString ext = fileInfo.suffix();
+    if( ext == "") filePath += ".dat";
+
+    int flag = digi[ID]->SaveSettingsToFile(filePath.toStdString().c_str());
+
+    switch (flag) {
+      case 1 : {
+        leSettingFile[ID]->setText(filePath);
+        sendLogMsg("Saved setting file <b>" +  filePath + "</b>.");
+      }; break;
+      case 0 : {
+        leSettingFile[ID]->setText("fail to write setting file.");
+        sendLogMsg("<font style=\"color:red;\"> Fail to write setting file.</font>");
+      }; break;
+
+      case -1 : {
+        leSettingFile[ID]->setText("fail to save setting file, same settings are empty.");
+        sendLogMsg("<font style=\"color:red;\"> Fail to save setting file, same settings are empty.</font>");
+      }; break;
+    };
+
+  }
 
 }
 
@@ -772,9 +798,9 @@ void DigiSettingsPanel::LoadSettings(){
   //TODO ==== check is the file valid;
 
   if( digi[ID]->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
-    emit sendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+    sendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }else{
-    emit sendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+    sendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }
 
   //TODO ==== show result
@@ -815,7 +841,7 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   }
 
   //-------- board settings
-  ReadCombBoxValue(cbbClockSource[ID], DIGIPARA::DIG::ClockSource);
+  FillComboBoxValueFromMemory(cbbClockSource[ID], DIGIPARA::DIG::ClockSource);
 
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::StartSource));
   QStringList resultList = result.remove(QChar(' ')).split("|");
@@ -838,40 +864,117 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
     }
   }
 
-  ReadCombBoxValue(cbbTrgOut[ID], DIGIPARA::DIG::TrgOutMode);
-  ReadCombBoxValue(cbbGPIO[ID], DIGIPARA::DIG::GPIOMode);
-  ReadCombBoxValue(cbbBusyIn[ID], DIGIPARA::DIG::BusyInSource);
-  ReadCombBoxValue(cbbSyncOut[ID], DIGIPARA::DIG::SyncOutMode);
-  ReadCombBoxValue(cbbAutoDisarmAcq[ID], DIGIPARA::DIG::EnableAutoDisarmACQ);
-  ReadCombBoxValue(cbbStatEvents[ID], DIGIPARA::DIG::EnableStatisticEvents);
-  ReadCombBoxValue(cbbBdVetoPolarity[ID], DIGIPARA::DIG::BoardVetoPolarity);
-  ReadCombBoxValue(cbbBoardVetoSource[ID], DIGIPARA::DIG::BoardVetoSource);
-  ReadCombBoxValue(cbbIOLevel[ID], DIGIPARA::DIG::IO_Level);
+  FillComboBoxValueFromMemory(cbbTrgOut[ID], DIGIPARA::DIG::TrgOutMode);
+  FillComboBoxValueFromMemory(cbbGPIO[ID], DIGIPARA::DIG::GPIOMode);
+  FillComboBoxValueFromMemory(cbbBusyIn[ID], DIGIPARA::DIG::BusyInSource);
+  FillComboBoxValueFromMemory(cbbSyncOut[ID], DIGIPARA::DIG::SyncOutMode);
+  FillComboBoxValueFromMemory(cbbAutoDisarmAcq[ID], DIGIPARA::DIG::EnableAutoDisarmACQ);
+  FillComboBoxValueFromMemory(cbbStatEvents[ID], DIGIPARA::DIG::EnableStatisticEvents);
+  FillComboBoxValueFromMemory(cbbBdVetoPolarity[ID], DIGIPARA::DIG::BoardVetoPolarity);
+  FillComboBoxValueFromMemory(cbbBoardVetoSource[ID], DIGIPARA::DIG::BoardVetoSource);
+  FillComboBoxValueFromMemory(cbbIOLevel[ID], DIGIPARA::DIG::IO_Level);
 
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::BoardVetoWidth));
-  spbBdVetoWidth[ID]->setValue(result.toInt());
-  
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::RunDelay));
-  spbRunDelay[ID]->setValue(result.toInt());
-  
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::VolatileClockOutDelay));
-  dsbVolatileClockOutDelay[ID]->setValue(result.toDouble());
-  
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::PermanentClockOutDelay));
-  dsbClockOutDelay[ID]->setValue(result.toDouble());
+  FillSpinBoxValueFromMemory(spbBdVetoWidth[ID], DIGIPARA::DIG::BoardVetoWidth);
+  FillSpinBoxValueFromMemory(spbRunDelay[ID], DIGIPARA::DIG::RunDelay);
+  FillSpinBoxValueFromMemory(dsbVolatileClockOutDelay[ID], DIGIPARA::DIG::VolatileClockOutDelay);
+  FillSpinBoxValueFromMemory(dsbClockOutDelay[ID], DIGIPARA::DIG::PermanentClockOutDelay);
 
   //------------- test pulse
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::TestPulsePeriod));
-  dsbTestPuslePeriod[ID]->setValue(result.toDouble());
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::TestPulseWidth));
-  dsbTestPusleWidth[ID]->setValue(result.toDouble());
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::TestPulseLowLevel));
-  spbTestPusleLowLevel[ID]->setValue(result.toInt());
-  result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::TestPulseHighLevel));
-  spbTestPusleHighLevel[ID]->setValue(result.toInt());
+  FillSpinBoxValueFromMemory(dsbTestPuslePeriod[ID], DIGIPARA::DIG::TestPulsePeriod);
+  FillSpinBoxValueFromMemory(dsbTestPusleWidth[ID], DIGIPARA::DIG::TestPulseWidth);
+  FillSpinBoxValueFromMemory(spbTestPusleLowLevel[ID], DIGIPARA::DIG::TestPulseLowLevel);
+  FillSpinBoxValueFromMemory(spbTestPusleHighLevel[ID], DIGIPARA::DIG::TestPulseHighLevel);
 
-  
+  //@============================== Channel setting
+  for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
+
+    FillComboBoxValueFromMemory(cbbOnOff[ID][ch], DIGIPARA::CH::ChannelEnable, ch);
+    FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], DIGIPARA::CH::DC_Offset, ch);
+    FillSpinBoxValueFromMemory(spbThreshold[ID][ch], DIGIPARA::CH::TriggerThreshold, ch);
+    FillComboBoxValueFromMemory(cbbParity[ID][ch], DIGIPARA::CH::Polarity, ch);
+    FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], DIGIPARA::CH::RecordLength, ch);
+    FillSpinBoxValueFromMemory(spbPreTrigger[ID][ch], DIGIPARA::CH::PreTrigger, ch);
+    FillSpinBoxValueFromMemory(spbInputRiseTime[ID][ch], DIGIPARA::CH::TimeFilterRiseTime, ch);
+    FillSpinBoxValueFromMemory(spbTriggerGuard[ID][ch], DIGIPARA::CH::TimeFilterRetriggerGuard, ch);
+    FillComboBoxValueFromMemory(cbbLowFilter[ID][ch], DIGIPARA::CH::EnergyFilterLowFreqFilter, ch);
+    FillComboBoxValueFromMemory(cbbWaveSource[ID][ch], DIGIPARA::CH::WaveDataSource, ch);
+    FillComboBoxValueFromMemory(cbbWaveRes[ID][ch], DIGIPARA::CH::WaveResolution, ch);
+    FillComboBoxValueFromMemory(cbbWaveSave[ID][ch], DIGIPARA::CH::WaveSaving, ch);
+
+    FillSpinBoxValueFromMemory(spbTrapRiseTime[ID][ch], DIGIPARA::CH::EnergyFilterRiseTime, ch);
+    FillSpinBoxValueFromMemory(spbTrapFlatTop[ID][ch], DIGIPARA::CH::EnergyFilterFlatTop, ch);
+    FillSpinBoxValueFromMemory(spbTrapPoleZero[ID][ch], DIGIPARA::CH::EnergyFilterPoleZero, ch);
+    FillSpinBoxValueFromMemory(spbPeaking[ID][ch], DIGIPARA::CH::EnergyFilterPeakingPosition, ch);
+    FillComboBoxValueFromMemory(cbbPeakingAvg[ID][ch], DIGIPARA::CH::EnergyFilterPeakingAvg, ch);
+    FillComboBoxValueFromMemory(cbbBaselineAvg[ID][ch], DIGIPARA::CH::EnergyFilterBaselineAvg, ch);
+    FillSpinBoxValueFromMemory(spbFineGain[ID][ch], DIGIPARA::CH::EnergyFilterFineGain, ch);
+    FillSpinBoxValueFromMemory(spbBaselineGuard[ID][ch], DIGIPARA::CH::EnergyFilterBaselineGuard, ch);
+    FillSpinBoxValueFromMemory(spbPileupGuard[ID][ch], DIGIPARA::CH::EnergyFilterPileUpGuard, ch);
+
+    FillComboBoxValueFromMemory(cbbAnaProbe0[ID][ch], DIGIPARA::CH::WaveAnalogProbe0, ch);
+    FillComboBoxValueFromMemory(cbbAnaProbe1[ID][ch], DIGIPARA::CH::WaveAnalogProbe1, ch);
+    FillComboBoxValueFromMemory(cbbDigProbe0[ID][ch], DIGIPARA::CH::WaveDigitalProbe0, ch);
+    FillComboBoxValueFromMemory(cbbDigProbe1[ID][ch], DIGIPARA::CH::WaveDigitalProbe1, ch);
+    FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], DIGIPARA::CH::WaveDigitalProbe2, ch);
+    FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], DIGIPARA::CH::WaveDigitalProbe3, ch);
+
+    FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], DIGIPARA::CH::EventSelector, ch);
+    FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], DIGIPARA::CH::WaveSelector, ch);
+    FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][ch], DIGIPARA::CH::EnergySkimLowDiscriminator, ch);
+    FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][ch], DIGIPARA::CH::EnergySkimHighDiscriminator, ch);
+
+    FillComboBoxValueFromMemory(cbbEvtTrigger[ID][ch], DIGIPARA::CH::EventTriggerSource, ch);
+    FillComboBoxValueFromMemory(cbbWaveTrigger[ID][ch], DIGIPARA::CH::WaveTriggerSource, ch);
+    FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], DIGIPARA::CH::ChannelVetoSource, ch);
+    FillComboBoxValueFromMemory(cbbCoinMask[ID][ch], DIGIPARA::CH::CoincidenceMask, ch);
+    FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], DIGIPARA::CH::AntiCoincidenceMask, ch);
+    FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], DIGIPARA::CH::CoincidenceLength, ch);
+    FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], DIGIPARA::CH::ADCVetoWidth, ch);
+
+  }
+
   enableSignalSlot = true;
+  
+  SyncComboBox(cbbOnOff, -1);
+  SyncComboBox(cbbParity, -1);
+  SyncComboBox(cbbLowFilter, -1);
+  SyncComboBox(cbbWaveSource, -1);
+  SyncComboBox(cbbWaveRes, -1);
+  SyncComboBox(cbbWaveSave, -1);
+  SyncComboBox(cbbPeakingAvg, -1);
+  SyncComboBox(cbbBaselineAvg, -1);
+  SyncComboBox(cbbAnaProbe0, -1);
+  SyncComboBox(cbbAnaProbe1, -1);
+  SyncComboBox(cbbDigProbe0, -1);
+  SyncComboBox(cbbDigProbe1, -1);
+  SyncComboBox(cbbDigProbe2, -1);
+  SyncComboBox(cbbDigProbe3, -1);
+  SyncComboBox(cbbEventSelector, -1);
+  SyncComboBox(cbbWaveSelector , -1);
+  SyncComboBox(cbbEvtTrigger   , -1);
+  SyncComboBox(cbbWaveTrigger  , -1);
+  SyncComboBox(cbbChVetoSrc    , -1);
+  SyncComboBox(cbbCoinMask     , -1);
+  SyncComboBox(cbbAntiCoinMask , -1);
+
+  SyncSpinBox(spbDCOffset      , -1);
+  SyncSpinBox(spbThreshold     , -1);
+  SyncSpinBox(spbRecordLength  , -1);
+  SyncSpinBox(spbPreTrigger    , -1);
+  SyncSpinBox(spbInputRiseTime , -1);
+  SyncSpinBox(spbTriggerGuard  , -1);
+  SyncSpinBox(spbTrapRiseTime  , -1);
+  SyncSpinBox(spbTrapFlatTop   , -1);
+  SyncSpinBox(spbTrapPoleZero  , -1);
+  SyncSpinBox(spbPeaking       , -1);
+  SyncSpinBox(spbFineGain      , -1);
+  SyncSpinBox(spbBaselineGuard , -1);
+  SyncSpinBox(spbPileupGuard   , -1);
+  SyncSpinBox(spbEnergySkimHigh, -1);
+  SyncSpinBox(spbEnergySkimLow , -1);
+  SyncSpinBox(spbCoinLength    , -1);
+  SyncSpinBox(spbADCVetoWidth  , -1);
+  
 
 }
 //^###########################################################################
@@ -935,12 +1038,13 @@ void DigiSettingsPanel::SetupComboBox(QComboBox *&cbb, const Reg para, int ch_in
   });
 }
 
+//TODO ==== spin Box step
 void DigiSettingsPanel::SetupSpinBox(QSpinBox *&spb, const Reg para, int ch_index, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
   spb = new QSpinBox(this);
-  spb->setMinimum(atoi( para.GetAnswers()[0].first.c_str()));
+  spb->setMinimum(std::min(-1, atoi( para.GetAnswers()[0].first.c_str())));
   spb->setMaximum(atoi( para.GetAnswers()[1].first.c_str()));
   layout->addWidget(spb, row, col + 1, srow, scol);
   connect(spb, &QSpinBox::valueChanged, this, [=](){
@@ -998,9 +1102,11 @@ void DigiSettingsPanel::SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], in
       if( spb[ID][i]->value() == value ) count++;
     }
 
+    //printf("%d =? %d \n", count, nCh);
+
     enableSignalSlot = false;
     if( count != nCh ){
-       spb[ID][nCh]->setValue(-999);
+       spb[ID][nCh]->setValue(-1);
     }else{
        spb[ID][nCh]->setValue(value);
     }
@@ -1032,13 +1138,19 @@ void DigiSettingsPanel::SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel 
   }
 }
 
-void DigiSettingsPanel::ReadCombBoxValue(QComboBox *cbb, const Reg para){
-  QString result = QString::fromStdString(digi[ID]->GetSettingValue(para));
+void DigiSettingsPanel::FillComboBoxValueFromMemory(QComboBox *&cbb, const Reg para, int ch_index){
+  QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, cbb);
   int index = cbb->findData(result);
   if( index >= 0 && index < cbb->count()) {
     cbb->setCurrentIndex(index);
   }else{
-    qDebug() << result;
+    printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
   }
+}
+
+template<typename T> void DigiSettingsPanel::FillSpinBoxValueFromMemory(T *&spb, const Reg para, int ch_index){
+  QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
+  //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
+  spb->setValue(result.toDouble());
 }

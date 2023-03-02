@@ -773,49 +773,65 @@ void Digitizer2Gen::ReadAllSettings(){
   }
 }
 
-bool Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
-  if( !isConnected ) return false;
+int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
   if( saveFileName != NULL) settingFileName = saveFileName;
 
+  int totCount = 0;
+  int count = 0;
   FILE * saveFile = fopen(settingFileName.c_str(), "w");
   if( saveFile ){
     for(int i = 0; i < (int) boardSettings.size(); i++){
       if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
-      ReadValue(boardSettings[i]);
+      totCount ++;
+      if( boardSettings[i].GetValue() == "" && boardSettings[i].GetPara() != "Gateway") break;
       fprintf(saveFile, "%-45s|%d|%4d|%s\n", boardSettings[i].GetFullPara().c_str(),  
                                              boardSettings[i].ReadWrite(),
                                              8000 + i, 
                                              boardSettings[i].GetValue().c_str());
+      count ++;
     }
 
     for(int i = 0; i < 4 ; i ++){
-      ReadValue(VGASetting[i], i);
+      totCount ++;
+      if( VGASetting[i].GetValue() == "" ) break;
       fprintf(saveFile, "%-45s|%d|%4d|%s\n", VGASetting[i].GetFullPara(i).c_str(), 
                                              VGASetting[i].ReadWrite(), 
                                              9000 + i,
                                              VGASetting[i].GetValue().c_str());
+      count ++;
     }
     for(int ch = 0; ch < nChannels ; ch++ ){
       for( int i = 0; i < (int) chSettings[ch].size(); i++){
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
-        ReadValue(chSettings[ch][i], i);
+        totCount ++;
+        if( chSettings[ch][i].GetValue() == "") break;
         fprintf(saveFile, "%-45s|%d|%4d|%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
                                                chSettings[ch][i].ReadWrite(),
                                                ch*100 + i,
                                                chSettings[ch][i].GetValue().c_str());
+        count ++;
       }
-    }
-    
+    }    
     fclose(saveFile);
+    
+    if( count != totCount ) {
+      remove(saveFileName);
+      return -1;
+    }
 
     //printf("Saved setting files to %s\n", saveFileName);
-    return true;
+    return 1;
 
   }else{
     //printf("Save file accessing error.");
   }
 
-  return false;
+  return 0;
+}
+
+int Digitizer2Gen::ReadAndSaveSettingsToFile(const char *saveFileName){
+  ReadAllSettings();
+  return SaveSettingsToFile(saveFileName);
 }
 
 bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
