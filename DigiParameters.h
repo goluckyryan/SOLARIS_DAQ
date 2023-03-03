@@ -226,18 +226,18 @@ namespace DIGIPARA{
                                                                                       {"LVDS",     "LVDS"}, 
                                                                                       {"GPIO",     "GPIO"}, 
                                                                                       {"P0",       "Back Plane"}});
-    const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}}, ANSTYPE::NUM, "ns");
+    const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
     const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "High"}, {"ActiveLow", "Low"}});
-    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}},  ANSTYPE::NUM, "ns");
+    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::NUM, "ns");
     const Reg EnableAutoDisarmACQ      ("EnAutoDisarmAcq", RW::ReadWrite, TYPE::DIG, {{"True", "Enabled"}, {"False", "Disabled"}});
     const Reg EnableDataReduction      ("EnDataReduction", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
     const Reg EnableStatisticEvents    ("EnStatEvents", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
-    const Reg VolatileClockOutDelay    ("VolatileClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}}, ANSTYPE::NUM, "ps");
-    const Reg PermanentClockOutDelay   ("PermanentClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}},  ANSTYPE::NUM, "ps");
-    const Reg TestPulsePeriod          ("TestPulsePeriod", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"34359738360", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}}, ANSTYPE::NUM, "ns");
+    const Reg VolatileClockOutDelay    ("VolatileClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}}, ANSTYPE::NUM, "ps");
+    const Reg PermanentClockOutDelay   ("PermanentClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}},  ANSTYPE::NUM, "ps");
+    const Reg TestPulsePeriod          ("TestPulsePeriod", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
+    const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
+    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
+    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
     const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG);
     const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG);
     const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static", "DAC fixed level"},
@@ -247,8 +247,8 @@ namespace DIGIPARA{
                                                                                  {"Ramp", "14-bit counter"},
                                                                                  {"Sin5MHz", "5 MHz Sin wave"},
                                                                                  {"Square", "Test Pulse"}});
-    const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}}, ANSTYPE::NUM, "units");
-    const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}}, ANSTYPE::NUM);
+    const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::NUM, "units");
+    const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::NUM);
     const Reg EnableOffsetCalibration  ("EnOffsetCalibration", RW::ReadWrite, TYPE::DIG, {{"True", "Applied Cali."}, {"False", "No Cali."}});
 
     /// ========== command
@@ -348,7 +348,7 @@ namespace DIGIPARA{
   }
 
   namespace VGA{
-    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}}, ANSTYPE::NUM, "dB"); // VX2745 only
+    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::NUM, "dB"); // VX2745 only
   }
 
   namespace CH{
@@ -367,8 +367,8 @@ namespace DIGIPARA{
 
     /// ======= read write
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite, TYPE::CH, {{"True", "Enabled"}, {"False", "Disabled"}});
-    const Reg DC_Offset        ("DCOffset", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"100", ""}}, ANSTYPE::NUM, "%"); 
-    const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}}, ANSTYPE::NUM);
+    const Reg DC_Offset        ("DCOffset", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"100", ""}, {"1",""}}, ANSTYPE::NUM, "%"); 
+    const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}, {"1",""}}, ANSTYPE::NUM);
     const Reg Polarity         ("PulsePolarity", RW::ReadWrite, TYPE::CH, {{"Positive", "Pos. +"},{"Negative", "Neg. -"}});
 
     const Reg WaveDataSource              ("WaveDataSource", RW::ReadWrite, TYPE::CH, {{"ADC_DATA",         "Input ADC"}, 
@@ -377,19 +377,19 @@ namespace DIGIPARA{
                                                                                        {"ADC_TEST_SIN",     "ADC produce SIN signal"}, 
                                                                                        {"Ramp",             "Ramp generator"}, 
                                                                                        {"SquareWave",       "Test Pusle (Square Wave)"}  });
-    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}}, ANSTYPE::NUM, "ns");
-    const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}}, ANSTYPE::NUM, "ns");
+    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
     const Reg WaveSaving                  ("WaveSaving", RW::ReadWrite, TYPE::CH, {{"Always", "Always"}, {"OnRequest", "On Request"}});
     const Reg WaveResolution              ("WaveResolution", RW::ReadWrite, TYPE::CH, {{"RES8", " 8 ns"}, 
                                                                                        {"RES16","16 ns"},
                                                                                        {"RES32","32 ns"},
                                                                                        {"RES64","64 ns"}});
-    const Reg TimeFilterRiseTime          ("TimeFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"2000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TimeFilterRetriggerGuard    ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}}, ANSTYPE::NUM, "%");
+    const Reg TimeFilterRiseTime          ("TimeFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"2000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg TimeFilterRetriggerGuard    ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}, {"1",""}}, ANSTYPE::NUM, "%");
     const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   "1 sample"},
                                                                                                {"LowAVG",    "4 samples"},
                                                                                                {"MediumAVG", "16 samples"},
@@ -401,9 +401,9 @@ namespace DIGIPARA{
                                                                                                {"Medium",    "1024 samples"},
                                                                                                {"MediumHigh","4096 samples"},
                                                                                                {"High",      "16384 samples"}});
-    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}}, ANSTYPE::NUM);
-    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"64000", ""}}, ANSTYPE::NUM);
+    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}, {"0.001",""}}, ANSTYPE::NUM);
+    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"64000", ""}, {"8",""}}, ANSTYPE::NUM);
     const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite, TYPE::CH, {{"Off", "Disabled"}, {"On", "Enabled"}});
     const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
                                                                                          {"TimeFilter",                 "Time Filter"}, 
@@ -511,13 +511,13 @@ namespace DIGIPARA{
                                                                                        {"GlobalTriggerSource", "Global Trigger"},
                                                                                        {"ITLA", "ITLA"},
                                                                                        {"ITLB", "ITLB"}});
-    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"524280", ""}}, ANSTYPE::NUM, "ns");
+    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
     const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite);
 
-    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}},  ANSTYPE::NONE, "ns");
+    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::NONE, "ns");
 
-    const Reg EnergySkimLowDiscriminator  ("EnergySkimLowDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}}, ANSTYPE::NUM);
-    const Reg EnergySkimHighDiscriminator ("EnergySkimHighDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}}, ANSTYPE::NUM);
+    const Reg EnergySkimLowDiscriminator  ("EnergySkimLowDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::NUM);
+    const Reg EnergySkimHighDiscriminator ("EnergySkimHighDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::NUM);
 
     const Reg RecordLengthSample              ("ChRecordLengthS", RW::ReadWrite);
     const Reg PreTriggerSample                ("ChPreTriggerS", RW::ReadWrite);

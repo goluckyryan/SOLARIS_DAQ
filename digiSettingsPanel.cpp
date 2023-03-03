@@ -23,7 +23,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   qDebug() << "DigiSettingsPanel constructor";
 
   setWindowTitle("Digitizers Settings");
-  setGeometry(0, 0, 1850, 900);
+  setGeometry(0, 0, 1850, 1000);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
 
@@ -254,7 +254,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbAutoDisarmAcq->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbAutoDisarmAcq, rowId, 4, 1, 2);
 
-      cbbAutoDisarmAcq[iDigi] = new QComboBox(tab);
+      cbbAutoDisarmAcq[iDigi] = new RComboBox(tab);
       boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
       SetupShortComboBox(cbbAutoDisarmAcq[iDigi], DIGIPARA::DIG::EnableAutoDisarmACQ);
 
@@ -266,10 +266,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbStatEvents->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbStatEvents, rowId, 4, 1, 2);
 
-      cbbStatEvents[iDigi] = new QComboBox(tab);
+      cbbStatEvents[iDigi] = new RComboBox(tab);
       boardLayout->addWidget(cbbStatEvents[iDigi], rowId, 6);
       SetupShortComboBox(cbbStatEvents[iDigi], DIGIPARA::DIG::EnableStatisticEvents);
-      connect(cbbStatEvents[iDigi], &QComboBox::currentIndexChanged, this, [=](){
+      connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
         if( !enableSignalSlot ) return;
         digi[ID]->WriteValue(DIGIPARA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString());
       });
@@ -286,19 +286,18 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbBdVetoWidth->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbBdVetoWidth, rowId, 3, 1, 2);
 
-      dsbBdVetoWidth[iDigi] = new QDoubleSpinBox(tab); // may be QDoubleSpinBox
+      dsbBdVetoWidth[iDigi] = new RSpinBox(tab, 0); // may be QDoubleSpinBox
       dsbBdVetoWidth[iDigi]->setMinimum(0);
       dsbBdVetoWidth[iDigi]->setMaximum(34359738360);
-      dsbBdVetoWidth[iDigi]->setDecimals(0);
       dsbBdVetoWidth[iDigi]->setSingleStep(20);
       boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
-      connect(dsbBdVetoWidth[iDigi], &QDoubleSpinBox::valueChanged, this, [=](){
+      connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
         if( !enableSignalSlot ) return;
         //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
         digi[ID]->WriteValue(DIGIPARA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1);
       });
 
-      cbbBdVetoPolarity[iDigi] = new QComboBox(tab);
+      cbbBdVetoPolarity[iDigi] = new RComboBox(tab);
       boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
       SetupShortComboBox(cbbBdVetoPolarity[iDigi], DIGIPARA::DIG::BoardVetoPolarity);
       
@@ -311,7 +310,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbClockOutDelay->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbClockOutDelay, rowId, 3, 1, 2);
 
-      dsbVolatileClockOutDelay[iDigi] = new QDoubleSpinBox(tab);
+      dsbVolatileClockOutDelay[iDigi] = new RSpinBox(tab, 3);
       dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
       dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
       dsbVolatileClockOutDelay[iDigi]->setValue(0);
@@ -330,7 +329,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       lbClockOutDelay2->setAlignment(Qt::AlignRight);
       boardLayout->addWidget(lbClockOutDelay2, rowId, 3, 1, 2);
 
-      dsbClockOutDelay[iDigi] = new QDoubleSpinBox(tab);
+      dsbClockOutDelay[iDigi] = new RSpinBox(tab, 3);
       dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
       dsbClockOutDelay[iDigi]->setMaximum(18888.888);
       dsbClockOutDelay[iDigi]->setValue(0);
@@ -374,7 +373,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
         vgaLayout->addWidget(lb, 0, 2*k);
 
-        VGA[iDigi][k] = new QDoubleSpinBox(tab);
+        VGA[iDigi][k] = new RSpinBox(tab, 1);
         VGA[iDigi][k]->setMinimum(0);
         VGA[iDigi][k]->setMaximum(40);
         VGA[iDigi][k]->setSingleStep(0.5);
@@ -410,9 +409,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
           rowID = 0;
           SetupComboBox(cbbOnOff[iDigi][ch], DIGIPARA::CH::ChannelEnable, -1, true, "On/Off", layout1, rowID, 0);
-
-          rowID ++;
-          SetupComboBox(cbbWaveSource[iDigi][ch], DIGIPARA::CH::WaveDataSource, -1, true, "Wave Data Source", layout1, rowID, 0, 1, 2);
+          SetupComboBox(cbbWaveSource[iDigi][ch], DIGIPARA::CH::WaveDataSource, -1, true, "Wave Data Source", layout1, rowID, 2);
 
           rowID ++;
           SetupComboBox(cbbWaveRes[iDigi][ch], DIGIPARA::CH::WaveResolution, -1, true,  "Wave Resol.", layout1, rowID, 0);
@@ -497,13 +494,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           rowID ++;
           SetupComboBox(cbbChVetoSrc[iDigi][ch], DIGIPARA::CH::ChannelVetoSource, -1, true, "Veto Source", layout5, rowID, 0);
 
-          QLabel * lbTriggerMask = new QLabel("Trigger Mask", tab);
-          lbTriggerMask->setAlignment(Qt::AlignCenter | Qt::AlignRight);
-          layout5->addWidget(lbTriggerMask, rowID, 2);
-
-          leTriggerMask[iDigi][ch] = new QLineEdit(tab);
-          layout5->addWidget(leTriggerMask[iDigi][ch], rowID, 3);
-
           //------------------------------
           rowID ++;
           SetupComboBox(cbbCoinMask[iDigi][ch], DIGIPARA::CH::CoincidenceMask, -1, true, "Coin. Mask", layout5, rowID, 0);
@@ -562,11 +552,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
           cbbOnOff[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbOnOff[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
+          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
           cbbParity[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbParity[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
+          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
           cbbLowFilter[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbLowFilter[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : blue;" : "");});
+          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : blue;" : "");});
         }
 
       }
@@ -623,52 +613,57 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
 
       for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
-        connect(cbbOnOff[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
-        connect(spbDCOffset[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
-        connect(spbThreshold[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbThreshold, ch);});
-        connect(cbbParity[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbParity, ch);});
-        connect(spbRecordLength[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbRecordLength, ch);});
-        connect(spbPreTrigger[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbPreTrigger, ch);});
-        connect(spbInputRiseTime[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbInputRiseTime, ch);});
-        connect(spbTriggerGuard[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbTriggerGuard, ch);});
-        connect(cbbLowFilter[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbLowFilter, ch);});
-        connect(cbbWaveSource[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSource, ch);});
-        connect(cbbWaveRes[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveRes, ch);});
-        connect(cbbWaveSave[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSave, ch);});
+        connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
+        connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
+        connect(spbThreshold[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbThreshold, ch);});
+        connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbParity, ch);});
+        connect(spbRecordLength[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbRecordLength, ch);});
+        connect(spbPreTrigger[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPreTrigger, ch);});
+        connect(spbInputRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbInputRiseTime, ch);});
+        connect(spbTriggerGuard[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTriggerGuard, ch);});
+        connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbLowFilter, ch);});
+        connect(cbbWaveSource[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSource, ch);});
+        connect(cbbWaveRes[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveRes, ch);});
+        connect(cbbWaveSave[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSave, ch);});
 
-        connect(spbTrapRiseTime[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbTrapRiseTime, ch);});
-        connect(spbTrapFlatTop[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbTrapFlatTop, ch);});
-        connect(spbTrapPoleZero[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbTrapPoleZero, ch);});
-        connect(spbPeaking[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbPeaking, ch);});
-        connect(cbbPeakingAvg[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbPeakingAvg, ch);});
-        connect(cbbBaselineAvg[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbBaselineAvg, ch);});
-        connect(spbFineGain[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbFineGain, ch);});
-        connect(spbBaselineGuard[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbBaselineGuard, ch);});
-        connect(spbPileupGuard[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbPileupGuard, ch);});
+        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapRiseTime, ch);});
+        connect(spbTrapFlatTop[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapFlatTop, ch);});
+        connect(spbTrapPoleZero[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapPoleZero, ch);});
+        connect(spbPeaking[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPeaking, ch);});
+        connect(cbbPeakingAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbPeakingAvg, ch);});
+        connect(cbbBaselineAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbBaselineAvg, ch);});
+        connect(spbFineGain[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbFineGain, ch);});
+        spbFineGain[iDigi][ch]->setSingleStep(0.001);
+        spbFineGain[iDigi][ch]->setDecimals(3);
+
+        connect(spbBaselineGuard[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbBaselineGuard, ch);});
+        connect(spbPileupGuard[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPileupGuard, ch);});
         
-        connect(cbbAnaProbe0[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe0, ch);});
-        connect(cbbAnaProbe1[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe1, ch);});
-        connect(cbbDigProbe0[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe0, ch);});
-        connect(cbbDigProbe1[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe1, ch);});
-        connect(cbbDigProbe2[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe2, ch);});
-        connect(cbbDigProbe3[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe3, ch);});
+        connect(cbbAnaProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe0, ch);});
+        connect(cbbAnaProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe1, ch);});
+        connect(cbbDigProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe0, ch);});
+        connect(cbbDigProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe1, ch);});
+        connect(cbbDigProbe2[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe2, ch);});
+        connect(cbbDigProbe3[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe3, ch);});
 
-        connect(cbbEventSelector[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEventSelector, ch);});
-        connect(cbbWaveSelector[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSelector, ch);});
-        connect(spbEnergySkimLow[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbEnergySkimLow, ch);});
-        connect(spbEnergySkimHigh[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbEnergySkimHigh, ch);});
+        connect(cbbEventSelector[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEventSelector, ch);});
+        connect(cbbWaveSelector[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSelector, ch);});
+        connect(spbEnergySkimLow[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimLow, ch);});
+        connect(spbEnergySkimHigh[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimHigh, ch);});
 
-        connect(cbbEvtTrigger[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEvtTrigger, ch);});
-        connect(cbbWaveTrigger[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveTrigger, ch);});
-        connect(cbbChVetoSrc[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbChVetoSrc, ch);});
-        connect(cbbCoinMask[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbCoinMask, ch);});
-        connect(cbbAntiCoinMask[iDigi][ch], &QComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
-        connect(spbCoinLength[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
-        connect(spbADCVetoWidth[iDigi][ch], &QSpinBox::valueChanged, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
+        connect(cbbEvtTrigger[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEvtTrigger, ch);});
+        connect(cbbWaveTrigger[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveTrigger, ch);});
+        connect(cbbChVetoSrc[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbChVetoSrc, ch);});
+        connect(cbbCoinMask[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbCoinMask, ch);});
+        connect(cbbAntiCoinMask[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
+        connect(spbCoinLength[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
+        connect(spbADCVetoWidth[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
       }
 
       
-      {//@============== Trigger Map  tab
+      {//@============== Trigger Mask/Map  tab
+
+        //TODO==========================
         QTabWidget * triggerMapTab = new QTabWidget(tab);
         chTabWidget->addTab(triggerMapTab, "Trigger Map");
 
@@ -1028,51 +1023,66 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
 }
 
 //^###########################################################################
-void DigiSettingsPanel::SetupShortComboBox(QComboBox *cbb, Reg para){
+void DigiSettingsPanel::SetupShortComboBox(RComboBox *cbb, Reg para){
+  cbb->setFocusPolicy(Qt::StrongFocus);
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
                 QString::fromStdString((para.GetAnswers())[i].first));
   }
 }
 
-void DigiSettingsPanel::SetupComboBox(QComboBox *&cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
+void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-  cbb = new QComboBox(this);
+  cbb = new RComboBox(this);
   layout->addWidget(cbb, row, col+1, srow, scol);
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), QString::fromStdString((para.GetAnswers())[i].first));
   }
   if( isMaster && para.GetType() == TYPE::CH ) cbb->addItem("");
-  connect(cbb, &QComboBox::currentIndexChanged, this, [=](){
+  connect(cbb, &RComboBox::currentIndexChanged, this, [=](){
     if( !enableSignalSlot ) return;
     //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
     digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), ch_index);
   });
 }
 
-//TODO ==== spin Box step
-template<typename T> void DigiSettingsPanel::SetupSpinBox(T *&spb, const Reg para, int ch_index, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
+void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_index, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
-  spb = new T(this);
+  spb = new RSpinBox(this);
   if( para.GetType() == TYPE::DIG || ch_index >= 0 ){
     spb->setMinimum(atof( para.GetAnswers()[0].first.c_str()));
   }else{
     spb->setMinimum(qMin(-1.0, atof( para.GetAnswers()[0].first.c_str())));
   }
   spb->setMaximum(atof( para.GetAnswers()[1].first.c_str()));
+  if( para.GetAnswers().size()  >= 3 ) {
+    spb->setSingleStep(atof(para.GetAnswers()[2].first.c_str()));
+  }else{
+    printf("--- missed. %s\n", para.GetPara().c_str());
+  }
   layout->addWidget(spb, row, col + 1, srow, scol);
-  connect(spb, &T::valueChanged, this, [=](){
+  connect(spb, &RSpinBox::valueChanged, this, [=](){ 
+    if( !enableSignalSlot ) return; 
+    spb->setStyleSheet("color:blue;");
+  });
+  connect(spb, &RSpinBox::returnPressed, this, [=](){
     if( !enableSignalSlot ) return;
     //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+    if( spb->decimals() == 0 && spb->singleStep() != 1) {
+      double step = spb->singleStep();
+      double value = spb->value();
+      spb->setValue( (std::round(value/step) * step) );
+    }
+    spb->setStyleSheet("");
     digi[ID]->WriteValue(para, std::to_string(spb->value()), ch_index);
   });
 }
 
-void DigiSettingsPanel::SyncComboBox(QComboBox *(&cbb)[][MaxNumberOfChannel + 1], int ch){
+void DigiSettingsPanel::SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], int ch){
   if( !enableSignalSlot ) return;
 
   const int nCh = digi[ID]->GetNChannels();
@@ -1101,7 +1111,7 @@ void DigiSettingsPanel::SyncComboBox(QComboBox *(&cbb)[][MaxNumberOfChannel + 1]
   }
 }
 
-void DigiSettingsPanel::SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch){
+void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch){
   if( !enableSignalSlot ) return;
 
   const int nCh = digi[ID]->GetNChannels();
@@ -1132,7 +1142,7 @@ void DigiSettingsPanel::SyncSpinBox(QSpinBox *(&spb)[][MaxNumberOfChannel+1], in
   }
 }
 
-void DigiSettingsPanel::SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel){
+void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
@@ -1144,7 +1154,7 @@ void DigiSettingsPanel::SetupSpinBoxTab(QSpinBox *(&spb)[][MaxNumberOfChannel+1]
   }
 }
 
-void DigiSettingsPanel::SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel + 1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel, int nCol){
+void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel, int nCol){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
@@ -1156,7 +1166,7 @@ void DigiSettingsPanel::SetupComboBoxTab(QComboBox *(&cbb)[][MaxNumberOfChannel 
   }
 }
 
-void DigiSettingsPanel::FillComboBoxValueFromMemory(QComboBox *&cbb, const Reg para, int ch_index){
+void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg para, int ch_index){
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, cbb);
   int index = cbb->findData(result);
@@ -1167,7 +1177,7 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(QComboBox *&cbb, const Reg p
   }
 }
 
-template<typename T> void DigiSettingsPanel::FillSpinBoxValueFromMemory(T *&spb, const Reg para, int ch_index){
+void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
   spb->setValue(result.toDouble());
