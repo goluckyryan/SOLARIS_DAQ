@@ -119,9 +119,14 @@ private:
   QGroupBox * VGABox;
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 
-  //---------------
+  //--------------- trigger map
   QPushButton *bn[MaxNumberOfChannel][MaxNumberOfChannel];
   bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
+
+  //--------------- Channel status
+  QPushButton * chStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][9];
+  QLineEdit   * chGainFactor[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  QLineEdit   * chADCToVolts[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //--------------- Channel settings
   RComboBox * cbbOnOff[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -183,7 +188,7 @@ private:
   void SetStartSource();
   void SetGlobalTriggerSource();
 
-  void SetupShortComboBox(RComboBox * cbb, Reg para);
+  void SetupShortComboBox(RComboBox * &cbb, Reg para);
 
   void SetupComboBox(RComboBox * &cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
   void SetupSpinBox(RSpinBox * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);

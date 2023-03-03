@@ -257,6 +257,20 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       cbbAutoDisarmAcq[iDigi] = new RComboBox(tab);
       boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
       SetupShortComboBox(cbbAutoDisarmAcq[iDigi], DIGIPARA::DIG::EnableAutoDisarmACQ);
+      connect(cbbAutoDisarmAcq[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
+        QString msg;
+        msg = QString::fromStdString(DIGIPARA::DIG::EnableAutoDisarmACQ.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
+        if( digi[ID]->WriteValue(DIGIPARA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
+          sendLogMsg(msg + "|OK.");
+          cbbAutoDisarmAcq[ID]->setStyleSheet("");
+        }else{
+          sendLogMsg(msg + "|Fail.");
+          cbbAutoDisarmAcq[ID]->setStyleSheet("color:red;");
+        }
+      });
 
       //-------------------------------------
       rowId ++;
@@ -271,7 +285,16 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       SetupShortComboBox(cbbStatEvents[iDigi], DIGIPARA::DIG::EnableStatisticEvents);
       connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
         if( !enableSignalSlot ) return;
-        digi[ID]->WriteValue(DIGIPARA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString());
+        QString msg;
+        msg = QString::fromStdString(DIGIPARA::DIG::EnableStatisticEvents.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + cbbStatEvents[ID]->currentData().toString();
+        if( digi[ID]->WriteValue(DIGIPARA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
+          sendLogMsg(msg + "|OK.");
+          cbbStatEvents[ID]->setStyleSheet("");
+        }else{
+          sendLogMsg(msg + "|Fail.");
+          cbbStatEvents[ID]->setStyleSheet("color:red");
+        }
       });
 
       //-------------------------------------
@@ -293,8 +316,21 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
       connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
         if( !enableSignalSlot ) return;
+        dsbBdVetoWidth[ID]->setStyleSheet("color:blue;");
+      });
+      connect(dsbBdVetoWidth[iDigi], &RSpinBox::returnPressed, this, [=](){
+        if( !enableSignalSlot ) return;
         //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        digi[ID]->WriteValue(DIGIPARA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1);
+        QString msg;
+        msg = QString::fromStdString(DIGIPARA::DIG::BoardVetoWidth.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
+        if( digi[ID]->WriteValue(DIGIPARA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
+          dsbBdVetoWidth[ID]->setStyleSheet("");
+          sendLogMsg(msg + "|OK.");
+        }else{
+          dsbBdVetoWidth[ID]->setStyleSheet("color:red;");
+          sendLogMsg(msg + "|Fail.");
+        }
       });
 
       cbbBdVetoPolarity[iDigi] = new RComboBox(tab);
@@ -313,12 +349,29 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       dsbVolatileClockOutDelay[iDigi] = new RSpinBox(tab, 3);
       dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
       dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
+      dsbVolatileClockOutDelay[iDigi]->setSingleStep(74.074);
       dsbVolatileClockOutDelay[iDigi]->setValue(0);
       boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
-      connect(dsbVolatileClockOutDelay[iDigi], &QDoubleSpinBox::valueChanged, this, [=](){
+      connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        dsbVolatileClockOutDelay[ID]->setStyleSheet("color:blue;");
+      });
+      connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        digi[ID]->WriteValue(DIGIPARA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[iDigi]->value()), -1);
+        double step = dsbVolatileClockOutDelay[ID]->singleStep();
+        double value = dsbVolatileClockOutDelay[ID]->value();
+        dsbVolatileClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
+        QString msg;
+        msg = QString::fromStdString(DIGIPARA::DIG::VolatileClockOutDelay.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
+        if( digi[ID]->WriteValue(DIGIPARA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
+          dsbVolatileClockOutDelay[ID]->setStyleSheet("");
+          sendLogMsg(msg + "|OK.");
+        }else{
+          dsbVolatileClockOutDelay[ID]->setStyleSheet("color:red;");
+          sendLogMsg(msg + "|Fail.");
+        }
       });
 
       //-------------------------------------
@@ -333,11 +386,28 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
       dsbClockOutDelay[iDigi]->setMaximum(18888.888);
       dsbClockOutDelay[iDigi]->setValue(0);
+      dsbClockOutDelay[iDigi]->setSingleStep(74.074);
       boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
-      connect(dsbClockOutDelay[iDigi], &QDoubleSpinBox::valueChanged, this, [=](){
+      connect(dsbClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        dsbClockOutDelay[ID]->setStyleSheet("color:blue;");
+      });
+      connect(dsbClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        digi[ID]->WriteValue(DIGIPARA::DIG::VolatileClockOutDelay, std::to_string(dsbClockOutDelay[iDigi]->value()), -1);
+        double step = dsbClockOutDelay[ID]->singleStep();
+        double value = dsbClockOutDelay[ID]->value();
+        dsbClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
+        QString msg;
+        msg = QString::fromStdString(DIGIPARA::DIG::PermanentClockOutDelay.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
+        if( digi[ID]->WriteValue(DIGIPARA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
+          dsbClockOutDelay[ID]->setStyleSheet("");
+          sendLogMsg(msg + "|OK.");
+        }else{
+          dsbClockOutDelay[ID]->setStyleSheet("color:red;");
+          sendLogMsg(msg + "|Fail.");
+        }
       });
     }
     
@@ -378,6 +448,28 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         VGA[iDigi][k]->setMaximum(40);
         VGA[iDigi][k]->setSingleStep(0.5);
         vgaLayout->addWidget(VGA[iDigi][k], 0, 2*k+1);
+        connect(VGA[iDigi][k], &RSpinBox::valueChanged, this, [=](){ 
+          if( !enableSignalSlot ) return; 
+          VGA[ID][k]->setStyleSheet("color:blue;");
+        });
+        connect(VGA[iDigi][k], &RSpinBox::returnPressed, this, [=](){
+          if( !enableSignalSlot ) return;
+          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+          double step = VGA[ID][k]->singleStep();
+          double value = VGA[ID][k]->value();
+          VGA[ID][k]->setValue( (std::round(value/step) * step) );
+          QString msg;
+          msg = QString::fromStdString(DIGIPARA::VGA::VGAGain.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+          if( DIGIPARA::VGA::VGAGain.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(k);
+          msg += " = " + QString::number(VGA[ID][k]->value());
+          if( digi[ID]->WriteValue(DIGIPARA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
+            VGA[ID][k]->setStyleSheet("");
+            sendLogMsg(msg + "|OK.");
+          }else{
+            VGA[ID][k]->setStyleSheet("color:red;");
+            sendLogMsg(msg + "|Fail.");
+          }
+        });
       }
     }
 
@@ -551,12 +643,12 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBoxTab(cbbWaveSave, DIGIPARA::CH::WaveSaving, "Wave Save", inputTab, iDigi, digi[iDigi]->GetNChannels());
 
         for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
-          cbbOnOff[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
-          cbbParity[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "color : red;" : "");});
-          cbbLowFilter[iDigi][ch]->setItemData(1, QBrush(Qt::red), Qt::ForegroundRole);
-          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : blue;" : "");});
+          cbbOnOff[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
+          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
+          cbbParity[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
+          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
+          cbbLowFilter[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
+          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
         }
 
       }
@@ -999,8 +1091,12 @@ void DigiSettingsPanel::SetStartSource(){
   }
 
   //printf("================ %s\n", value.c_str());
-  digi[ID]->WriteValue(DIGIPARA::DIG::StartSource, value);
+  QString msg;
+  msg = QString::fromStdString(DIGIPARA::DIG::StartSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+  msg += " = " + QString::fromStdString(value);
+  sendLogMsg(msg);
 
+  digi[ID]->WriteValue(DIGIPARA::DIG::StartSource, value);
 }
 
 void DigiSettingsPanel::SetGlobalTriggerSource(){
@@ -1018,13 +1114,17 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   }
 
   //printf("================ %s\n", value.c_str());
+  QString msg;
+  msg = QString::fromStdString(DIGIPARA::DIG::GlobalTriggerSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+  msg += " = " + QString::fromStdString(value);
+  sendLogMsg(msg);
+
   digi[ID]->WriteValue(DIGIPARA::DIG::GlobalTriggerSource, value);
 
 }
 
 //^###########################################################################
-void DigiSettingsPanel::SetupShortComboBox(RComboBox *cbb, Reg para){
-  cbb->setFocusPolicy(Qt::StrongFocus);
+void DigiSettingsPanel::SetupShortComboBox(RComboBox *&cbb, Reg para){
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
                 QString::fromStdString((para.GetAnswers())[i].first));
@@ -1044,7 +1144,18 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
   connect(cbb, &RComboBox::currentIndexChanged, this, [=](){
     if( !enableSignalSlot ) return;
     //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
-    digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), ch_index);
+    QString msg;
+    msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+    if( para.GetType() == TYPE::CH ) msg += ",CH:" + QString::number(ch_index);
+    if( para.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(ch_index);
+    msg += " = " + cbb->currentData().toString();
+    if( digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), ch_index)){
+      sendLogMsg(msg + "|OK.");
+      cbb->setStyleSheet("");
+    }else{
+      sendLogMsg(msg + "|Fail.");
+      cbb->setStyleSheet("color:red;");
+    }
   });
 }
 
@@ -1077,8 +1188,17 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
       double value = spb->value();
       spb->setValue( (std::round(value/step) * step) );
     }
-    spb->setStyleSheet("");
-    digi[ID]->WriteValue(para, std::to_string(spb->value()), ch_index);
+    QString msg;
+    msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+    if( para.GetType() == TYPE::CH ) msg += ",CH:" + (ch_index == -1 ? "All" : QString::number(ch_index));
+    msg += " = " + QString::number(spb->value());
+    if( digi[ID]->WriteValue(para, std::to_string(spb->value()), ch_index)){
+      sendLogMsg(msg + "|OK.");
+      spb->setStyleSheet("");
+    }else{
+      sendLogMsg(msg + "|Fail.");
+      spb->setStyleSheet("color:red;");
+    }
   });
 }
 
