@@ -505,6 +505,8 @@ void MainWindow::OpenDigitizers(){
         digi[i]->ProgramPHA(false);
       }
 
+      digi[i]->ReadAllSettings();
+
       SetUpScalar();
       bnOpenScalar->setEnabled(true);
 

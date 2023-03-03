@@ -3,6 +3,8 @@
 #include <QLabel>
 #include <QFileDialog>
 #include <QStyledItemDelegate>
+#include <QToolTip>
+#include <QPoint>
 
 std::vector<std::pair<std::string, Reg>> infoIndex = {{"Serial Num : ",            DIGIPARA::DIG::SerialNumber},
                                                       {"IP : ",                    DIGIPARA::DIG::IPAddress},
@@ -17,6 +19,44 @@ std::vector<std::pair<std::string, Reg>> infoIndex = {{"Serial Num : ",         
                                                       {"Input Type : ",            DIGIPARA::DIG::InputType},
                                                       {"Input Impedance [Ohm] : ", DIGIPARA::DIG::InputImpedance}
                                                     };
+
+QStringList LEDToolTip = { "LED_JESD_Y_PASS" ,
+                        "LED_JESD_H_PASS" ,
+                        "LED_DDR4_0_PASS" ,
+                        "LED_DDR4_1_PASS" ,
+                        "LED_DDR4_2_PASS" ,
+                        "LEDFP_FAIL"     ,
+                        "LEDFP_NIM"     ,
+                        "LEDFP_TTL"     ,
+                        "LEDFP_DTLOSS"    ,
+                        "LEDFP_DTRDY"     ,
+                        "LEDFP_TRG"       ,
+                        "LEDFP_RUN"       ,
+                        "LEDFP_PLL_LOCK"  ,
+                        "LEDFP_CLKOUT"   ,
+                        "LEDFP_CLKIN"    ,
+                        "LEDFP_USB"      ,
+                        "LEDFP_SFP_SD"   ,
+                        "LEDFP_SFP_ACT"  ,
+                        "LEDFP_ACT"     } ;
+
+QStringList ACQToolTip = {"Armed",
+                       "Run",
+                       "Run_mw",
+                       "Jesd_Clk_Valid",
+                       "Busy",
+                       "PreTriggerReady",
+                       "LicenceFail" };
+
+QStringList chToolTip = { "Channel signal delay initialization status (1 = initial delay done)",
+                       "Channel time filter initialization status (1 = time filter initialization done)",
+                       "Channel energy filter initialization status (1 = energy filter initialization done)",
+                       "Channel full initialization status (1 = initialization done)",
+                       "Reserved",
+                       "Channel enable acquisition status (1 = acq enabled)",
+                       "Channel inner run status (1 = run active)",
+                       "Time-energy event free space status (1 = time-energy can be written)",
+                       "Waveform event free space status (1 = waveform can be written)"};
 
 DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
 
@@ -93,7 +133,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         LEDStatus[iDigi][i] = new QPushButton(tab);
         LEDStatus[iDigi][i]->setEnabled(false);
         LEDStatus[iDigi][i]->setFixedSize(QSize(30,30));
-        statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + i);
+        LEDStatus[iDigi][i]->setToolTip(LEDToolTip[i]);
+        LEDStatus[iDigi][i]->setToolTipDuration(-1);
+        statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + 19 - i);
+      
       }
 
       //------- ACD Status
@@ -105,7 +148,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ACQStatus[iDigi][i] = new QPushButton(tab);
         ACQStatus[iDigi][i]->setEnabled(false);
         ACQStatus[iDigi][i]->setFixedSize(QSize(30,30));
-        statusLayout->addWidget(ACQStatus[iDigi][i], 1, 1 + i);
+        ACQStatus[iDigi][i]->setToolTip(ACQToolTip[i]);
+        ACQStatus[iDigi][i]->setToolTipDuration(-1);
+        statusLayout->addWidget(ACQStatus[iDigi][i], 1, 1 + 7 - i);
       }
 
       //------- Temperatures
@@ -135,6 +180,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       leSettingFile[iDigi] = new QLineEdit(tab);
       leSettingFile[iDigi]->setReadOnly(true);
+      leSettingFile[iDigi]->setText(QString::fromStdString(digi[iDigi]->GetSettingFileName()));
       bnLayout->addWidget(leSettingFile[iDigi], rowId, 1, 1, 9);
       
       //-------------------------------------
@@ -621,6 +667,42 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         QTabWidget * statusTab = new QTabWidget(tab);
         chTabWidget->addTab(statusTab, "Status");
 
+        QGridLayout * layout = new QGridLayout(statusTab);
+        layout->setAlignment(Qt::AlignTop);
+        layout->setSpacing(0);
+
+        QLabel* lb0x = new QLabel("9-bit status", statusTab); lb0x->setAlignment(Qt::AlignHCenter); layout->addWidget(lb0x, 0, 1, 1, 9);
+        QLabel* lb0a = new QLabel("Gain Fact.", statusTab); lb0a->setAlignment(Qt::AlignHCenter); layout->addWidget(lb0a, 0, 10);
+        QLabel* lb1a = new QLabel("ADC->Volt", statusTab); lb1a->setAlignment(Qt::AlignHCenter); layout->addWidget(lb1a, 0, 11);
+
+        QLabel* lb1x = new QLabel("9-bit status", statusTab); lb1x->setAlignment(Qt::AlignHCenter); layout->addWidget(lb1x, 0, 13, 1, 9);
+        QLabel* lb0b = new QLabel("Gain Fact.", statusTab); lb0b->setAlignment(Qt::AlignHCenter); layout->addWidget(lb0b, 0, 22);
+        QLabel* lb1b = new QLabel("ADC->Volt", statusTab); lb1b->setAlignment(Qt::AlignHCenter); layout->addWidget(lb1b, 0, 23);
+        
+        for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
+          QLabel * lb = new QLabel("  ch-" + QString::number(ch) + "  ", statusTab);
+          lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+          layout->addWidget(lb, 1 + ch/2, ch%2 * 12);
+
+          for( int k = 0 ; k < 9; k++){
+            chStatus[iDigi][ch][k] = new QPushButton(statusTab);
+            chStatus[iDigi][ch][k]->setEnabled(false);
+            chStatus[iDigi][ch][k]->setFixedSize(QSize(10,25));
+            chStatus[iDigi][ch][k]->setToolTip(chToolTip[k]);
+            chStatus[iDigi][ch][k]->setToolTipDuration(-1);
+            layout->addWidget(chStatus[iDigi][ch][k], 1 + ch/2, ch%2 * 12 + 9 - k); // arrange backward, so that it is like a bit-wise
+          }
+
+          chGainFactor[iDigi][ch] = new QLineEdit(statusTab);
+          chGainFactor[iDigi][ch]->setFixedWidth(100);
+          layout->addWidget(chGainFactor[iDigi][ch], 1 + ch/2, ch%2*12 + 10);
+
+          chADCToVolts[iDigi][ch] = new QLineEdit(statusTab);
+          chADCToVolts[iDigi][ch]->setFixedWidth(100);
+          layout->addWidget(chADCToVolts[iDigi][ch], 1 + ch/2, ch%2*12 + 11);
+
+        }
+
 
       }
       
@@ -815,6 +897,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   } //=== end of tab
 
+  ShowSettingsToPanel();
+
   enableSignalSlot = true;
 
 }
@@ -852,6 +936,7 @@ void DigiSettingsPanel::RefreshSettings(){
 
 void DigiSettingsPanel::SaveSettings(){
 
+  //TODO default file Path
   QString filePath = QFileDialog::getSaveFileName(this, "Save Settings File", "", "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
 
   if (!filePath.isEmpty()) {
@@ -984,8 +1069,20 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   FillSpinBoxValueFromMemory(spbTestPusleLowLevel[ID], DIGIPARA::DIG::TestPulseLowLevel);
   FillSpinBoxValueFromMemory(spbTestPusleHighLevel[ID], DIGIPARA::DIG::TestPulseHighLevel);
 
-  //@============================== Channel setting
+  //@============================== Channel setting/ status
   for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
+
+    unsigned int status = atoi(digi[ID]->GetSettingValue(DIGIPARA::CH::ChannelStatus).c_str());
+    for( int i = 0; i < 9; i++){
+      if( (status >> i) & 0x1 ) {
+        chStatus[ID][ch][i]->setStyleSheet("background-color:green;");
+      }else{
+        chStatus[ID][ch][i]->setStyleSheet("");
+      }
+    }
+
+    chGainFactor[ID][ch]->setText(QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::CH::GainFactor, ch)));
+    chADCToVolts[ID][ch]->setText(QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::CH::ADCToVolts, ch)));
 
     FillComboBoxValueFromMemory(cbbOnOff[ID][ch], DIGIPARA::CH::ChannelEnable, ch);
     FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], DIGIPARA::CH::DC_Offset, ch);

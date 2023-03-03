@@ -107,7 +107,7 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   //printf(" %s|%s \n", __func__, parameter);
   ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
-    printf("%-45s\n", parameter);
+    printf("%-45s | read fail\n", parameter);
     return ErrorMsg(__func__);
   }else{
     if( verbose ) printf("%-45s : %s\n", parameter, retValue);
@@ -117,6 +117,7 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
 
 std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose){
   std:: string ans = ReadValue(para.GetFullPara(ch_index).c_str(), verbose); 
+  //printf("%s | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str());
 
   int index = FindIndex(para);
   switch( para.GetType()){
@@ -214,7 +215,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   ReadAllSettings();
 
   serialNumber = atoi(ReadValue("/par/SerialNum").c_str());
-  FPGAType = GetSettingValue(DIGIPARA::DIG::FPGA_firmwareVersion);
+  FPGAType = GetSettingValue(DIGIPARA::DIG::FirmwareType);
   nChannels    = atoi(ReadValue("/par/NumCh").c_str());
   int adcRate = atoi(GetSettingValue(DIGIPARA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
@@ -752,7 +753,7 @@ void Digitizer2Gen::ReadAllSettings(){
   for(int ch = 0; ch < nChannels ; ch++ ){
     for( int i = 0; i < (int) chSettings[ch].size(); i++){
       if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
-      ReadValue(chSettings[ch][i], i);
+      ReadValue(chSettings[ch][i], ch);
     }
   }
 }
