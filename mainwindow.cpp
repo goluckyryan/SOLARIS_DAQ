@@ -249,6 +249,7 @@ MainWindow::~MainWindow(){
   if( digi ){
     for( int i = 0; i < nDigi ; i++){
       if( digi[i]->IsDummy()) continue;
+      //printf("=== %d %p\n", i, readDataThread[i]);
       if( readDataThread[i]->isRunning()) StopACQ();
     }
   }
@@ -478,14 +479,6 @@ void MainWindow::OpenDigitizers(){
     if(digi[i]->IsConnected()){
 
       LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
-      bnStartACQ->setEnabled(true);
-      bnStopACQ->setEnabled(false);
-      bnOpenScope->setEnabled(true);
-      chkSaveRun->setEnabled(true);
-      bnOpenDigitizers->setEnabled(false);
-      bnOpenDigitizers->setStyleSheet("");
-      //cbAutoRun->setEnabled(true);
-      cbAutoRun->setEnabled(false);
 
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
@@ -495,19 +488,31 @@ void MainWindow::OpenDigitizers(){
       //*------ search for settings_XXXX.dat
       QString settingFile = analysisPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
-        LogMsg("Found setting file <b>" + settingFile + "</b> and loaded.");
+        LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());
+        LogMsg("done settings.");
       }else{
         LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
         digi[i]->SetSettingFileName("");
-        LogMsg("Reset digitizer and use deault setting");
+        LogMsg("Reset digitizer.");
         digi[i]->Reset();
-        digi[i]->ProgramPHA(false);
+
+        digi[i]->WriteValue(DIGIPARA::CH::RecordLength, "4000");
+        digi[i]->WriteValue(DIGIPARA::CH::PreTrigger, "1000");
+        //digi[i]->ProgramPHA(false);
       }
 
       digi[i]->ReadAllSettings();
 
       SetUpScalar();
+      bnStartACQ->setEnabled(true);
+      bnStopACQ->setEnabled(false);
+      bnOpenScope->setEnabled(true);
+      chkSaveRun->setEnabled(true);
+      bnOpenDigitizers->setEnabled(false);
+      bnOpenDigitizers->setStyleSheet("");
+      //cbAutoRun->setEnabled(true);
+      cbAutoRun->setEnabled(false);
       bnOpenScalar->setEnabled(true);
 
     }else{
@@ -529,10 +534,18 @@ void MainWindow::CloseDigitizers(){
 
   scalar->close();
   DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
+
+  if( scope != NULL ){
+    scope->close();
+    delete scope;
+    scope = NULL;
+  }
   
-  digiSetting->close();
-  delete digiSetting;
-  digiSetting = NULL;
+  if( digiSetting != NULL ){
+    digiSetting->close();
+    delete digiSetting;
+    digiSetting = NULL;
+  }
 
   for( int i = 0; i < nDigi; i++){    
     if( digi[i] == NULL) return;
@@ -968,10 +981,12 @@ void MainWindow::SetupInflux(){
       LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid </font>");
 
       //==== chck database exist
+      LogMsg("List of database:");
       std::vector<std::string> databaseList = influx->GetDatabaseList();
       bool foundDatabase = false;
       for( int i = 0; i < (int) databaseList.size(); i++){
         if( databaseList[i] == DatabaseName.toStdString() ) foundDatabase = true;
+        LogMsg(QString::number(i) + "|" + QString::fromStdString(databaseList[i]));
       }
 
       if( foundDatabase ){
@@ -1496,15 +1511,18 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
   if( elogID < 0 ) return;
   if( expName == "" ) return;
 
+  //TODO ===== Rethink the elog process, becasue the grafana screenshot most probably obtained from screenshot, unless there is an API for that
+  //TODO ===== user name and pwd load from a file.
+
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" 
-      << "-a" << "Author=GeneralFSU" ;
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" 
+      << "-a" << "Author=\'General SOLARIS\'" ;
   if( runNumber > 0 ) arg << "-a" << "Run=" + QString::number(runNumber);
   if( category != "" ) arg << "-a" << "Category=" + category;
 
   arg << "-a" << "Subject=" + subject 
       << "-n " << "2" <<  htmlText  ;
-
+      
   QProcess elogBash(this);
   elogBash.start("elog", arg); 
   elogBash.waitForFinished();
@@ -1527,7 +1545,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
   QProcess elogBash(this);
 
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" << "-w" << QString::number(elogID);
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" << "-w" << QString::number(elogID);
 
   //retrevie the elog
   elogBash.start("elog", arg); 
@@ -1544,7 +1562,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
     QString originalHtml = output.mid(index + separator.length());
 
     arg.clear();
-    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralFSU" << "fsuphysics-888" << "-e" << QString::number(elogID)
+    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" << "-e" << QString::number(elogID)
         << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
 
     if( screenID >= 0) {

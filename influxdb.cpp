@@ -32,7 +32,7 @@ bool InfluxDB::TestingConnection(){
 std::string InfluxDB::CheckDatabases(){
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
-  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP   + "/query").c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP   + "query").c_str());
   
   std::string postFields="q=Show databases";
   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(postFields.length()));
@@ -88,7 +88,7 @@ std::string InfluxDB::Query(std::string databaseName, std::string query){
   
   curl_easy_setopt(curl, CURLOPT_POST, 1);
 
-  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP   + "/query?db=" + databaseName).c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP   + "query?db=" + databaseName).c_str());
 
   std::string postFields = "q=" + query;
   curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, static_cast<long>(postFields.length()));
@@ -106,7 +106,7 @@ std::string InfluxDB::Query(std::string databaseName, std::string query){
 }
 
 void InfluxDB::CreateDatabase(std::string databaseName){
-  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP + "/query").c_str());
+  curl_easy_setopt(curl, CURLOPT_URL, (databaseIP + "query").c_str());
   curl_easy_setopt(curl, CURLOPT_POST, 1);
   
   std::string postFields = "q=CREATE DATABASE " + databaseName;
@@ -143,7 +143,7 @@ void InfluxDB::Execute(){
   try{
     respond = curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respondCode);
-    //printf("==== respond code %ld (OK = %d)\n", respond, CURLE_OK);
+    //printf("==== respond %d (OK = %d)\n", respond, CURLE_OK);
     if( respond != CURLE_OK) printf("############# InfluxDB::Execute fail\n");
   } catch (std::exception& e){ // in case of unexpected error
     printf("%s\n", e.what());

@@ -6,6 +6,8 @@
 #include <QStandardItemModel>
 #include <QLabel>
 
+#define MaxDisplayTraceDataLength 2000 //data point, 
+
 Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow *parent) : QMainWindow(parent){
   this->digi = digi;
   this->nDigi = nDigi;
@@ -333,6 +335,11 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   lbinfo->setAlignment(Qt::AlignRight);
   layout->addWidget(lbinfo, rowID, 5);
 
+  rowID ++;
+  QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * 8) + " ns due to processing speed.", this);
+  layout->addWidget(lbinfo2, rowID, 0, 1, 5);
+
+
   //------------ close button
   rowID ++;
   bnScopeStart = new QPushButton("Start", this);
@@ -483,9 +490,6 @@ void Scope::UpdateScope(){
   emit UpdateScalar();
 
   if( digi ){
-    //---- remove all points
-    unsigned int dataLength = dataTrace[0]->count();
-    for( int j = 0; j < 6; j++ ) dataTrace[j]->removePoints(0, dataLength);
 
     digiMTX.lock();    
     std::string time = digi[iDigi]->ReadValue(DIGIPARA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
@@ -496,16 +500,21 @@ void Scope::UpdateScope(){
       return;
     }
     
-    unsigned int traceLength = digi[iDigi]->evt->traceLenght;
+    unsigned int traceLength = qMin((int) digi[iDigi]->evt->traceLenght, MaxDisplayTraceDataLength);
 
-    for( unsigned int i = 0 ; i < traceLength; i++){ 
-      for( int j = 0; j < 2; j++) dataTrace[j]->append(sample2ns * i, digi[iDigi]->evt->analog_probes[j][i]);
-      for( int j = 2; j < 6; j++) dataTrace[j]->append(sample2ns * i, (j-1)*1000 + 4000 * digi[iDigi]->evt->digital_probes[j-2][i]);
+    for( int j = 0; j < 2; j++) {
+      QVector<QPointF> points;
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->evt->analog_probes[j][i]));
+      dataTrace[j]->replace(points);
     }
-
+    for( int j = 0; j < 4; j++) {
+      QVector<QPointF> points;
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*1000 + 4000*digi[iDigi]->evt->digital_probes[j][i]));
+      dataTrace[j+2]->replace(points);
+    }
     digiMTX.unlock();
-
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
+
   }
 
 }

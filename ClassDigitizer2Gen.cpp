@@ -521,7 +521,7 @@ int Digitizer2Gen::ReadData(){
     return CAEN_FELib_UNKNOWN;
   }
 
-  evt->traceZero = false;
+  evt->isTraceAllZero = false;
 
   if( ret != CAEN_FELib_Success) {
     //ErrorMsg("ReadData()");

@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <stdint.h>
 
-#define MaxTraceLenght 2048
+#define MaxTraceLenght 8100
 
 class Event {
   public:
@@ -36,7 +36,7 @@ class Event {
     size_t  dataSize;  /// number of byte of the data, size/8 = word [64 bits]
     uint32_t n_events;
 
-    bool traceZero;
+    bool isTraceAllZero;
 
     Event(){
       Init();
@@ -74,7 +74,7 @@ class Event {
       digital_probes_type[3] = 0xFF;
       data = NULL;
 
-      traceZero = true; // indicate trace are all zero
+      isTraceAllZero = true; // indicate trace are all zero
     }
 
     void ClearMemory(){
@@ -88,7 +88,7 @@ class Event {
       if( digital_probes[2] != NULL) delete digital_probes[2];
       if( digital_probes[3] != NULL) delete digital_probes[3];
 
-      traceZero = true;
+      isTraceAllZero = true;
     }
 
     void SetDataType(unsigned int type){
@@ -106,13 +106,13 @@ class Event {
         digital_probes[2] = new uint8_t[MaxTraceLenght];
         digital_probes[3] = new uint8_t[MaxTraceLenght];
 
-        traceZero = true;
+        isTraceAllZero = true;
 
       }
     }
 
     void ClearTrace(){
-      if( traceZero ) return; // no need to clear again
+      if( isTraceAllZero ) return; // no need to clear again
 
       for( int i = 0; i < MaxTraceLenght; i++){
         analog_probes[0][i] = 0;
@@ -123,7 +123,7 @@ class Event {
         digital_probes[2][i] = 0;
         digital_probes[3][i] = 0;
       }
-      traceZero = true;
+      isTraceAllZero = true;
     }
 
     void PrintEnergyTimeStamp(){

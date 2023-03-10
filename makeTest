@@ -6,9 +6,9 @@ CURLLIBS = -lcurl
 OBJS= ClassDigitizer2Gen.o influxdb.o
 
 #
-ALL = test windowID
 #
 ################################################################
+all : test windowID
 
 #
 test : test.cpp ClassDigitizer2Gen.o influxdb.o
