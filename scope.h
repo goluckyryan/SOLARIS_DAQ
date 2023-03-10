@@ -18,6 +18,7 @@
 
 #include "ClassDigitizer2Gen.h"
 #include "manyThread.h"
+#include "CustomWidgets.h"
 
 class Trace : public QChart{
 public:
@@ -97,7 +98,7 @@ private:
   bool m_isTouching;
 };
 
-
+//^=======================================
 class Scope : public QMainWindow{
   Q_OBJECT
 
@@ -105,19 +106,19 @@ public:
   Scope(Digitizer2Gen ** digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow * parent = nullptr);
   ~Scope();
 
+public slots:
+  void ReadScopeSettings(); // read from digitizer and show;
 
 private slots:
-
-  void ReadScopeSettings(int iDigi, int ch);
   void StartScope();
   void StopScope();
   void UpdateScope();
   void ScopeControlOnOff(bool on);
-  void ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, const Reg digPara);
-  void ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, const Reg digPara);
-  void ScopeMakeSpinBox(QSpinBox * sb, QString str,  QGridLayout* layout, int row, int col, int min, int max, int step, const Reg digPara);
-  void ScopeMakeComoBox(QComboBox * cb, QString str, QGridLayout* layout, int row, int col, const Reg digPara);
-  void ProbeChange(QComboBox * cb[], const int size);
+  void ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara);
+  void ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara);
+  void ScopeMakeSpinBox(RSpinBox * &sb, QString str,  QGridLayout* layout, int row, int col, const Reg digPara);
+  void ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout* layout, int row, int col, const Reg digPara);
+  void ProbeChange(RComboBox * cb[], const int size);
 
   void closeEvent(QCloseEvent * event){
     StopScope();  
@@ -130,6 +131,8 @@ signals:
   void CloseWindow();
   void SendLogMsg(const QString &msg);
   void UpdateScalar();
+  void UpdateSettingsPanel();
+  void TellSettingsPanelControlOnOff();
 
 private:
 
@@ -141,8 +144,8 @@ private:
 
   QChart      * plot;
   QLineSeries * dataTrace[6];
-  QComboBox   * cbScopeDigi;
-  QComboBox   * cbScopeCh;
+  RComboBox   * cbScopeDigi;
+  RComboBox   * cbScopeCh;
   QPushButton * bnScopeReset;
   QPushButton * bnScopeReadSettings;
   
@@ -150,29 +153,29 @@ private:
   QPushButton * bnScopeStart;
   QPushButton * bnScopeStop;
   
-  QComboBox   * cbAnaProbe[2];
-  QComboBox   * cbDigProbe[4];
-  QSpinBox * sbRL; // record length
-  QSpinBox * sbPT; // pre trigger
-  QSpinBox * sbDCOffset;
-  QSpinBox * sbThreshold;
-  QSpinBox * sbTimeRiseTime;
-  QSpinBox * sbTimeGuard;
-  QSpinBox * sbTrapRiseTime;
-  QSpinBox * sbTrapFlatTop;
-  QSpinBox * sbTrapPoleZero;
-  QSpinBox * sbEnergyFineGain;
-  QSpinBox * sbTrapPeaking;
-  QComboBox * cbPolarity;
-  QComboBox * cbWaveRes;
-  QComboBox * cbTrapPeakAvg;
+  RComboBox   * cbAnaProbe[2];
+  RComboBox   * cbDigProbe[4];
+  RSpinBox * sbRL; // record length
+  RSpinBox * sbPT; // pre trigger
+  RSpinBox * sbDCOffset;
+  RSpinBox * sbThreshold;
+  RSpinBox * sbTimeRiseTime;
+  RSpinBox * sbTimeGuard;
+  RSpinBox * sbTrapRiseTime;
+  RSpinBox * sbTrapFlatTop;
+  RSpinBox * sbTrapPoleZero;
+  RSpinBox * sbEnergyFineGain;
+  RSpinBox * sbTrapPeaking;
+  RComboBox * cbPolarity;
+  RComboBox * cbWaveRes;
+  RComboBox * cbTrapPeakAvg;
 
   QLineEdit * leTriggerRate;
 
-  QSpinBox * sbBaselineGuard;
-  QSpinBox * sbPileUpGuard;
-  QComboBox * cbBaselineAvg;
-  QComboBox * cbLowFreqFilter;
+  RSpinBox * sbBaselineGuard;
+  RSpinBox * sbPileUpGuard;
+  RComboBox * cbBaselineAvg;
+  RComboBox * cbLowFreqFilter;
 
   bool allowChange;
 

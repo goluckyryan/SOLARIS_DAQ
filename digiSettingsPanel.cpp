@@ -185,76 +185,71 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       
       //-------------------------------------
       rowId ++;
-      QPushButton * bnReadSettngs = new QPushButton("Refresh Settings", tab);
-      bnLayout->addWidget(bnReadSettngs, rowId, 0, 1, 2);
-      connect(bnReadSettngs, &QPushButton::clicked, this, &DigiSettingsPanel::RefreshSettings);
+      bnReadSettngs[iDigi] = new QPushButton("Refresh Settings", tab);
+      bnLayout->addWidget(bnReadSettngs[iDigi], rowId, 0, 1, 2);
+      connect(bnReadSettngs[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::RefreshSettings);
       
-      QPushButton * bnResetBd = new QPushButton("Reset Board", tab);
-      bnLayout->addWidget(bnResetBd, rowId, 2, 1, 2);
-      connect(bnResetBd, &QPushButton::clicked, this, [=](){
-         sendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
+      bnResetBd[iDigi] = new QPushButton("Reset Board", tab);
+      bnLayout->addWidget(bnResetBd[iDigi], rowId, 2, 1, 2);
+      connect(bnResetBd[iDigi], &QPushButton::clicked, this, [=](){
+         SendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
          digi[ID]->Reset();    
       });
       
-      QPushButton * bnDefaultSetting = new QPushButton("Set Default Settings", tab);
-      bnLayout->addWidget(bnDefaultSetting, rowId, 4, 1, 2);
-      connect(bnDefaultSetting, &QPushButton::clicked, this, [=](){
-        sendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
+      bnDefaultSetting[iDigi] = new QPushButton("Set Default Settings", tab);
+      bnLayout->addWidget(bnDefaultSetting[iDigi], rowId, 4, 1, 2);
+      connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, [=](){
+        SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
         digi[ID]->ProgramPHA();
       });
 
-      QPushButton * bnSaveSettings = new QPushButton("Save Settings", tab);
-      bnLayout->addWidget(bnSaveSettings, rowId, 6, 1, 2);
-      connect(bnSaveSettings, &QPushButton::clicked, this, &DigiSettingsPanel::SaveSettings);
+      bnSaveSettings[iDigi] = new QPushButton("Save Settings", tab);
+      bnLayout->addWidget(bnSaveSettings[iDigi], rowId, 6, 1, 2);
+      connect(bnSaveSettings[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::SaveSettings);
 
-      QPushButton * bnLoadSettings = new QPushButton("Load Settings", tab);
-      bnLayout->addWidget(bnLoadSettings, rowId, 8, 1, 2);
-      connect(bnLoadSettings, &QPushButton::clicked, this, &DigiSettingsPanel::LoadSettings);
+      bnLoadSettings[iDigi] = new QPushButton("Load Settings", tab);
+      bnLayout->addWidget(bnLoadSettings[iDigi], rowId, 8, 1, 2);
+      connect(bnLoadSettings[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::LoadSettings);
 
       //---------------------------------------
       rowId ++;
-      QPushButton * bnClearData = new QPushButton("Clear Data", tab);
-      bnLayout->addWidget(bnClearData, rowId, 0, 1, 2);
-      connect(bnClearData, &QPushButton::clicked, this, [=](){ 
-          digi[ID]->SendCommand(DIGIPARA::DIG::ClearData); });
+      bnClearData[iDigi] = new QPushButton("Clear Data", tab);
+      bnLayout->addWidget(bnClearData[iDigi], rowId, 0, 1, 2);
+      connect(bnClearData[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(DIGIPARA::DIG::ClearData); });
       
-      QPushButton * bnArmACQ = new QPushButton("Arm ACQ", tab);
-      bnLayout->addWidget(bnArmACQ, rowId, 2, 1, 2);
-      connect(bnArmACQ, &QPushButton::clicked, this, [=](){ 
-          digi[ID]->SendCommand(DIGIPARA::DIG::ArmACQ); });
+      bnArmACQ[iDigi] = new QPushButton("Arm ACQ", tab);
+      bnLayout->addWidget(bnArmACQ[iDigi], rowId, 2, 1, 2);
+      connect(bnArmACQ[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(DIGIPARA::DIG::ArmACQ); });
       
-      QPushButton * bnDisarmACQ = new QPushButton("Disarm ACQ", tab);
-      bnLayout->addWidget(bnDisarmACQ, rowId, 4, 1, 2);
-      connect(bnDisarmACQ, &QPushButton::clicked, this, [=](){ 
-          digi[ID]->SendCommand(DIGIPARA::DIG::DisarmACQ); });
+      bnDisarmACQ[iDigi] = new QPushButton("Disarm ACQ", tab);
+      bnLayout->addWidget(bnDisarmACQ[iDigi], rowId, 4, 1, 2);
+      connect(bnDisarmACQ[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(DIGIPARA::DIG::DisarmACQ); });
 
-      QPushButton * bnSoftwareStart= new QPushButton("Software Start ACQ", tab);
-      bnLayout->addWidget(bnSoftwareStart, rowId, 6, 1, 2);
-      connect(bnSoftwareStart, &QPushButton::clicked, this, [=](){ 
-          digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStartACQ); });
+      bnSoftwareStart[iDigi] = new QPushButton("Software Start ACQ", tab);
+      bnLayout->addWidget(bnSoftwareStart[iDigi], rowId, 6, 1, 2);
+      connect(bnSoftwareStart[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStartACQ); });
 
-      QPushButton * bnSoftwareStop= new QPushButton("Software Stop ACQ", tab);
-      bnLayout->addWidget(bnSoftwareStop, rowId, 8, 1, 2);
-      connect(bnSoftwareStop, &QPushButton::clicked, this, [=](){ 
-          digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStopACQ); });
+      bnSoftwareStop[iDigi] = new QPushButton("Software Stop ACQ", tab);
+      bnLayout->addWidget(bnSoftwareStop[iDigi], rowId, 8, 1, 2);
+      connect(bnSoftwareStop[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(DIGIPARA::DIG::SoftwareStopACQ); });
 
 
       //--------------- 
       if( digi[iDigi]->IsDummy() ){
-        bnReadSettngs->setEnabled(false);
-        bnResetBd->setEnabled(false);
-        bnDefaultSetting->setEnabled(false);
-        bnClearData->setEnabled(false);
-        bnArmACQ->setEnabled(false);
-        bnDisarmACQ->setEnabled(false);
-        bnSoftwareStart->setEnabled(false);
-        bnSoftwareStop->setEnabled(false);
+        bnReadSettngs[iDigi]->setEnabled(false);
+        bnResetBd[iDigi]->setEnabled(false);
+        bnDefaultSetting[iDigi]->setEnabled(false);
+        bnClearData[iDigi]->setEnabled(false);
+        bnArmACQ[iDigi]->setEnabled(false);
+        bnDisarmACQ[iDigi]->setEnabled(false);
+        bnSoftwareStart[iDigi]->setEnabled(false);
+        bnSoftwareStop[iDigi]->setEnabled(false);
       }
 
     }
 
     {//^====================== Group Board settings
-      QGroupBox * digiBox = new QGroupBox("Board Settings", tab);
+      digiBox = new QGroupBox("Board Settings", tab);
       //digiBox->setSizePolicy(sizePolicy);
       QGridLayout * boardLayout = new QGridLayout(digiBox);
       tabLayout_V1->addWidget(digiBox);
@@ -310,10 +305,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg = QString::fromStdString(DIGIPARA::DIG::EnableAutoDisarmACQ.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
         msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
         if( digi[ID]->WriteValue(DIGIPARA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
-          sendLogMsg(msg + "|OK.");
+          SendLogMsg(msg + "|OK.");
           cbbAutoDisarmAcq[ID]->setStyleSheet("");
         }else{
-          sendLogMsg(msg + "|Fail.");
+          SendLogMsg(msg + "|Fail.");
           cbbAutoDisarmAcq[ID]->setStyleSheet("color:red;");
         }
       });
@@ -335,10 +330,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg = QString::fromStdString(DIGIPARA::DIG::EnableStatisticEvents.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
         msg += " = " + cbbStatEvents[ID]->currentData().toString();
         if( digi[ID]->WriteValue(DIGIPARA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
-          sendLogMsg(msg + "|OK.");
+          SendLogMsg(msg + "|OK.");
           cbbStatEvents[ID]->setStyleSheet("");
         }else{
-          sendLogMsg(msg + "|Fail.");
+          SendLogMsg(msg + "|Fail.");
           cbbStatEvents[ID]->setStyleSheet("color:red");
         }
       });
@@ -372,10 +367,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
         if( digi[ID]->WriteValue(DIGIPARA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
           dsbBdVetoWidth[ID]->setStyleSheet("");
-          sendLogMsg(msg + "|OK.");
+          SendLogMsg(msg + "|OK.");
         }else{
           dsbBdVetoWidth[ID]->setStyleSheet("color:red;");
-          sendLogMsg(msg + "|Fail.");
+          SendLogMsg(msg + "|Fail.");
         }
       });
 
@@ -413,10 +408,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
         if( digi[ID]->WriteValue(DIGIPARA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
           dsbVolatileClockOutDelay[ID]->setStyleSheet("");
-          sendLogMsg(msg + "|OK.");
+          SendLogMsg(msg + "|OK.");
         }else{
           dsbVolatileClockOutDelay[ID]->setStyleSheet("color:red;");
-          sendLogMsg(msg + "|Fail.");
+          SendLogMsg(msg + "|Fail.");
         }
       });
 
@@ -449,10 +444,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
         if( digi[ID]->WriteValue(DIGIPARA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
           dsbClockOutDelay[ID]->setStyleSheet("");
-          sendLogMsg(msg + "|OK.");
+          SendLogMsg(msg + "|OK.");
         }else{
           dsbClockOutDelay[ID]->setStyleSheet("color:red;");
-          sendLogMsg(msg + "|Fail.");
+          SendLogMsg(msg + "|Fail.");
         }
       });
     }
@@ -510,10 +505,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           msg += " = " + QString::number(VGA[ID][k]->value());
           if( digi[ID]->WriteValue(DIGIPARA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
             VGA[ID][k]->setStyleSheet("");
-            sendLogMsg(msg + "|OK.");
+            SendLogMsg(msg + "|OK.");
           }else{
             VGA[ID][k]->setStyleSheet("color:red;");
-            sendLogMsg(msg + "|Fail.");
+            SendLogMsg(msg + "|Fail.");
           }
         });
       }
@@ -541,7 +536,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         int rowID = 0;
         {//*--------- Group 1
-          QGroupBox * box1 = new QGroupBox("Input Settings", tab);
+          box1 = new QGroupBox("Input Settings", tab);
           allLayout->addWidget(box1);
           QGridLayout * layout1 = new QGridLayout(box1);
 
@@ -572,7 +567,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
 
         {//*--------- Group 3
-          QGroupBox * box3 = new QGroupBox("Trap. Settings", tab);
+          box3 = new QGroupBox("Trap. Settings", tab);
           allLayout->addWidget(box3);
           QGridLayout * layout3 = new QGridLayout(box3);
 
@@ -597,7 +592,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
 
         {//*--------- Group 4
-          QGroupBox * box4 = new QGroupBox("Probe Settings", tab);
+          box4 = new QGroupBox("Probe Settings", tab);
           allLayout->addWidget(box4);
           QGridLayout * layout4 = new QGridLayout(box4);
 
@@ -619,7 +614,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
 
         {//*--------- Group 5
-          QGroupBox * box5 = new QGroupBox("Trigger Settings", tab);
+          box5 = new QGroupBox("Trigger Settings", tab);
           allLayout->addWidget(box5);
           QGridLayout * layout5 = new QGridLayout(box5);
 
@@ -647,7 +642,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
 
         {//*--------- Group 6
-          QGroupBox * box6 = new QGroupBox("Other Settings", tab);
+          box6 = new QGroupBox("Other Settings", tab);
           allLayout->addWidget(box6);
           QGridLayout * layout6 = new QGridLayout(box6);
 
@@ -708,7 +703,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       
       
       {//@============== input  tab
-        QTabWidget * inputTab = new QTabWidget(tab);
+        inputTab = new QTabWidget(tab);
         chTabWidget->addTab(inputTab, "Input");
 
         SetupComboBoxTab(cbbOnOff, DIGIPARA::CH::ChannelEnable, "On/Off", inputTab, iDigi, digi[iDigi]->GetNChannels());
@@ -725,18 +720,19 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBoxTab(cbbWaveSave, DIGIPARA::CH::WaveSaving, "Wave Save", inputTab, iDigi, digi[iDigi]->GetNChannels());
 
         for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
+          //Set color of some combox
           cbbOnOff[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
+          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
           cbbParity[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
+          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
           cbbLowFilter[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
+          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
         }
 
       }
       
       {//@============== Trap  tab
-        QTabWidget * trapTab = new QTabWidget(tab);
+        trapTab = new QTabWidget(tab);
         chTabWidget->addTab(trapTab, "Trapezoid");
 
         SetupSpinBoxTab(spbTrapRiseTime, DIGIPARA::CH::EnergyFilterRiseTime, "Trap. Rise Time [ns]", trapTab, iDigi, digi[iDigi]->GetNChannels());
@@ -751,7 +747,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
 
       {//@============== Probe  tab
-        QTabWidget * probeTab = new QTabWidget(tab);
+        probeTab = new QTabWidget(tab);
         chTabWidget->addTab(probeTab, "Probe");
 
         SetupComboBoxTab(cbbAnaProbe0, DIGIPARA::CH::WaveAnalogProbe0, "Analog Prob. 0", probeTab, iDigi, digi[iDigi]->GetNChannels(), 4);
@@ -763,7 +759,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
 
       {//@============== Other  tab
-        QTabWidget * otherTab = new QTabWidget(tab);
+        otherTab = new QTabWidget(tab);
         chTabWidget->addTab(otherTab, "Others");
 
         SetupComboBoxTab(cbbEventSelector, DIGIPARA::CH::EventSelector, "Event Selector", otherTab, iDigi, digi[iDigi]->GetNChannels());
@@ -774,7 +770,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
 
       {//@============== Trigger  tab
-        QTabWidget * triggerTab = new QTabWidget(tab);
+        triggerTab = new QTabWidget(tab);
         chTabWidget->addTab(triggerTab, "Trigger");
 
         SetupComboBoxTab(cbbEvtTrigger, DIGIPARA::CH::EventTriggerSource, "Event Trig. Source", triggerTab, iDigi, digi[iDigi]->GetNChannels(), 2);
@@ -786,7 +782,36 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupSpinBoxTab(spbADCVetoWidth, DIGIPARA::CH::ADCVetoWidth, "ADC Veto Length [ns]", triggerTab, iDigi, digi[iDigi]->GetNChannels());
       }
 
+
       for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
+        //send UpdateScopeSetting signal
+        connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbRecordLength[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbPreTrigger[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbThreshold[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbTrapFlatTop[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbTrapPoleZero[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbPeaking[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbTriggerGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbFineGain[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbBaselineGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(spbPileupGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbWaveRes[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbPeakingAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbBaselineAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+
+        connect(cbbAnaProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbAnaProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbDigProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbDigProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbDigProbe2[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbDigProbe3[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        
+        //----- SyncBox
         connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
         connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
         connect(spbThreshold[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbThreshold, ch);});
@@ -838,7 +863,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       {//@============== Trigger Mask/Map  tab
 
         //TODO==========================
-        QTabWidget * triggerMapTab = new QTabWidget(tab);
+        triggerMapTab = new QTabWidget(tab);
         chTabWidget->addTab(triggerMapTab, "Trigger Map");
 
         QGridLayout * triggerLayout = new QGridLayout(triggerMapTab);
@@ -901,6 +926,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   enableSignalSlot = true;
 
+  show();
+
+  EnableControl();
+
 }
 
 DigiSettingsPanel::~DigiSettingsPanel(){
@@ -934,6 +963,49 @@ void DigiSettingsPanel::RefreshSettings(){
   ShowSettingsToPanel();
 }
 
+void DigiSettingsPanel::EnableControl(){
+
+  bool enable = !digi[ID]->IsAcqOn();
+
+  digiBox->setEnabled(enable);
+  if( digi[ID]->GetFPGATyep() == "DPP_PHA") VGABox->setEnabled(enable);
+  if( ckbGlbTrgSource[ID][3]->isChecked() ) testPulseBox->setEnabled(enable);
+  box1->setEnabled(enable);
+  box3->setEnabled(enable);
+  box4->setEnabled(enable);
+  box5->setEnabled(enable);
+  box6->setEnabled(enable);
+
+  for( int i = 0; i < nDigi; i++){
+    bnReadSettngs[i]->setEnabled(enable);
+    bnResetBd[i]->setEnabled(enable);
+    bnDefaultSetting[i]->setEnabled(enable);
+    bnSaveSettings[i]->setEnabled(enable);
+    bnLoadSettings[i]->setEnabled(enable);
+    bnClearData[i]->setEnabled(enable);
+    bnArmACQ[i]->setEnabled(enable);
+    bnDisarmACQ[i]->setEnabled(enable);
+    bnSoftwareStart[i]->setEnabled(enable);
+    bnSoftwareStop[i]->setEnabled(enable);
+  }
+
+  QVector<QTabWidget*> tempArray = {inputTab, trapTab, probeTab, otherTab, triggerTab };
+
+  for( int k = 0; k < tempArray.size(); k++){
+    for( int i = 0; i < tempArray[k]->count(); i++) {
+      QWidget* currentTab = tempArray[k]->widget(i);
+      if( currentTab ){
+        QList<QWidget*> childWidgets = currentTab->findChildren<QWidget*>();
+        for(int j=0; j<childWidgets.count(); j++) {
+            childWidgets[j]->setEnabled(enable);
+        }
+      }
+    }
+  }
+  triggerMapTab->setEnabled(enable);
+
+}
+
 void DigiSettingsPanel::SaveSettings(){
 
   //TODO default file Path
@@ -950,16 +1022,16 @@ void DigiSettingsPanel::SaveSettings(){
     switch (flag) {
       case 1 : {
         leSettingFile[ID]->setText(filePath);
-        sendLogMsg("Saved setting file <b>" +  filePath + "</b>.");
+        SendLogMsg("Saved setting file <b>" +  filePath + "</b>.");
       }; break;
       case 0 : {
         leSettingFile[ID]->setText("fail to write setting file.");
-        sendLogMsg("<font style=\"color:red;\"> Fail to write setting file.</font>");
+        SendLogMsg("<font style=\"color:red;\"> Fail to write setting file.</font>");
       }; break;
 
       case -1 : {
         leSettingFile[ID]->setText("fail to save setting file, same settings are empty.");
-        sendLogMsg("<font style=\"color:red;\"> Fail to save setting file, same settings are empty.</font>");
+        SendLogMsg("<font style=\"color:red;\"> Fail to save setting file, same settings are empty.</font>");
       }; break;
     };
 
@@ -979,9 +1051,9 @@ void DigiSettingsPanel::LoadSettings(){
   //TODO ==== check is the file valid;
 
   if( digi[ID]->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
-    sendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+    SendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }else{
-    sendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+    SendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }
 
   ShowSettingsToPanel();
@@ -990,6 +1062,8 @@ void DigiSettingsPanel::LoadSettings(){
 void DigiSettingsPanel::ShowSettingsToPanel(){
 
   enableSignalSlot = false;
+
+  printf("%s\n", __func__);
 
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
@@ -1170,7 +1244,6 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   SyncSpinBox(spbEnergySkimLow , -1);
   SyncSpinBox(spbCoinLength    , -1);
   SyncSpinBox(spbADCVetoWidth  , -1);
-  
 
 }
 //^###########################################################################
@@ -1191,7 +1264,7 @@ void DigiSettingsPanel::SetStartSource(){
   QString msg;
   msg = QString::fromStdString(DIGIPARA::DIG::StartSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
   msg += " = " + QString::fromStdString(value);
-  sendLogMsg(msg);
+  SendLogMsg(msg);
 
   digi[ID]->WriteValue(DIGIPARA::DIG::StartSource, value);
 }
@@ -1214,7 +1287,7 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   QString msg;
   msg = QString::fromStdString(DIGIPARA::DIG::GlobalTriggerSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
   msg += " = " + QString::fromStdString(value);
-  sendLogMsg(msg);
+  SendLogMsg(msg);
 
   digi[ID]->WriteValue(DIGIPARA::DIG::GlobalTriggerSource, value);
 
@@ -1247,10 +1320,10 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
     if( para.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(ch_index);
     msg += " = " + cbb->currentData().toString();
     if( digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), ch_index)){
-      sendLogMsg(msg + "|OK.");
+      SendLogMsg(msg + "|OK.");
       cbb->setStyleSheet("");
     }else{
-      sendLogMsg(msg + "|Fail.");
+      SendLogMsg(msg + "|Fail.");
       cbb->setStyleSheet("color:red;");
     }
   });
@@ -1290,10 +1363,10 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     if( para.GetType() == TYPE::CH ) msg += ",CH:" + (ch_index == -1 ? "All" : QString::number(ch_index));
     msg += " = " + QString::number(spb->value());
     if( digi[ID]->WriteValue(para, std::to_string(spb->value()), ch_index)){
-      sendLogMsg(msg + "|OK.");
+      SendLogMsg(msg + "|OK.");
       spb->setStyleSheet("");
     }else{
-      sendLogMsg(msg + "|Fail.");
+      SendLogMsg(msg + "|Fail.");
       spb->setStyleSheet("color:red;");
     }
   });

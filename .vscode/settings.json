@@ -69,7 +69,8 @@
     "variant": "cpp",
     "qdatetime": "cpp",
     "fstream": "cpp",
-    "allocator": "cpp"
+    "allocator": "cpp",
+    "qsignalmapper": "cpp"
   },
 
   "better-comments.multilineComments": true,

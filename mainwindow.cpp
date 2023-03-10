@@ -56,6 +56,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     scalarLayout = new QGridLayout(layoutWidget);
     scalarLayout->setSpacing(0);
+    scalarLayout->setAlignment(Qt::AlignTop);
 
     leTrigger = NULL;
     leAccept = NULL;
@@ -357,6 +358,8 @@ void MainWindow::StartACQ(){
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
 
+  if( digiSetting ) digiSetting->EnableControl();
+
   //TODO ======= Auto Run
   if( cbAutoRun->currentIndex() > 0 ){
     int timeMinite = cbAutoRun->currentData().toInt();
@@ -429,6 +432,8 @@ void MainWindow::StopACQ(){
   bnStopACQ->setEnabled(false);
   bnOpenScope->setEnabled(true);
   chkSaveRun->setEnabled(true);
+
+  if( digiSetting ) digiSetting->EnableControl();
 
   if( chkSaveRun->isChecked() ){
     //TODO ============= elog
@@ -590,6 +595,14 @@ void MainWindow::OpenScope(){
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
       connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
+      
+      if( digiSetting ) {
+        connect(scope, &Scope::UpdateSettingsPanel, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+        connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
+        connect(digiSetting, &DigiSettingsPanel::UpdateScopeSetting, scope, &Scope::ReadScopeSettings);
+        digiSetting->EnableControl();
+      }
+      
     }else{
       scope->show();
     }
@@ -604,8 +617,14 @@ void MainWindow::OpenDigitizersSettings(){
 
   if( digiSetting == NULL){
     digiSetting = new DigiSettingsPanel(digi, nDigi);
-    connect(digiSetting, &DigiSettingsPanel::sendLogMsg, this, &MainWindow::LogMsg);
-    digiSetting->show();
+    connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
+
+    if( scope ) {
+      connect(scope, &Scope::UpdateSettingsPanel, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+      connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
+      connect(digiSetting, &DigiSettingsPanel::UpdateScopeSetting, scope, &Scope::ReadScopeSettings);
+    }
+
   }else{
     digiSetting->show();
   }

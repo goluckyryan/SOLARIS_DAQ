@@ -62,12 +62,12 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //------------ Digitizer + channel selection
   rowID ++;
-  cbScopeDigi = new QComboBox(this);
-  cbScopeCh = new QComboBox(this);
+  cbScopeDigi = new RComboBox(this);
+  cbScopeCh = new RComboBox(this);
   layout->addWidget(cbScopeDigi, rowID, 0);
   layout->addWidget(cbScopeCh, rowID, 1);
 
-  connect(cbScopeDigi, &QComboBox::currentIndexChanged, this, [=](){
+  connect(cbScopeDigi, &RComboBox::currentIndexChanged, this, [=](){
     //if( allowChange ) StopScope();
     int index = cbScopeDigi->currentIndex();
     if( index == -1 ) return;
@@ -77,19 +77,20 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     //if( allowChange )StartScope(index);
   });
 
-  connect(cbScopeCh, &QComboBox::currentIndexChanged, this, [=](){
+  connect(cbScopeCh, &RComboBox::currentIndexChanged, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "false", -1);
-    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", ch);
-    ReadScopeSettings(iDigi, ch);
+    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "False", -1);
+    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", ch);
+    ReadScopeSettings();
+    UpdateSettingsPanel();
     digiMTX.unlock();
   });
 
   allowChange = false;
-  cbScopeDigi->clear(); ///this will also trigger QComboBox::currentIndexChanged
+  cbScopeDigi->clear(); ///this will also trigger RComboBox::currentIndexChanged
   cbScopeCh->clear();
   for( unsigned int i = 0 ; i < nDigi; i++) {
     cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
@@ -110,7 +111,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(bnScopeReadSettings, rowID, 3);
   connect(bnScopeReadSettings, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
-    ReadScopeSettings(cbScopeDigi->currentIndex(), cbScopeCh->currentIndex());
+    ReadScopeSettings();
   });
 
   //TODO----- add copy settings and paste settings
@@ -121,24 +122,24 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   //------------ Probe selection
   rowID ++;
   //TODO --- add None
-  cbAnaProbe[0] = new QComboBox(this);
+  cbAnaProbe[0] = new RComboBox(this);
   cbAnaProbe[0]->addItem("ADC Input",        "ADCInput");
   cbAnaProbe[0]->addItem("Time Filter",      "TimeFilter");
   cbAnaProbe[0]->addItem("Trapazoid",        "EnergyFilter");
   cbAnaProbe[0]->addItem("Trap. Baseline",   "EnergyFilterBaseline");
   cbAnaProbe[0]->addItem("Trap. - Baseline", "EnergyFilterMinusBaseline");
 
-  cbAnaProbe[1] = new QComboBox(this);
+  cbAnaProbe[1] = new RComboBox(this);
   for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
 
-  connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
-  connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
+  connect(cbAnaProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
+  connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
 
   cbAnaProbe[0]->setCurrentIndex(1); ///trigger the AnaProbeChange
   cbAnaProbe[0]->setCurrentIndex(0);
   cbAnaProbe[1]->setCurrentIndex(4);
 
-  connect(cbAnaProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbAnaProbe[0], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -147,7 +148,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digiMTX.unlock();
   });
   
-  connect(cbAnaProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -157,7 +158,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   });
 
   //TODO --- add None
-  cbDigProbe[0] = new QComboBox(this);
+  cbDigProbe[0] = new RComboBox(this);
   cbDigProbe[0]->addItem("Trigger",              "Trigger");
   cbDigProbe[0]->addItem("Time Filter Armed",    "TimeFilterArmed");
   cbDigProbe[0]->addItem("ReTrigger Guard",      "ReTriggerGuard");
@@ -172,19 +173,19 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   cbDigProbe[0]->addItem("Trap. Saturate",       "EnergylterSaturation");
   cbDigProbe[0]->addItem("ACQ Inhibit",          "AcquisitionInhibit");
 
-  cbDigProbe[1] = new QComboBox(this);
-  cbDigProbe[2] = new QComboBox(this);
-  cbDigProbe[3] = new QComboBox(this);
+  cbDigProbe[1] = new RComboBox(this);
+  cbDigProbe[2] = new RComboBox(this);
+  cbDigProbe[3] = new RComboBox(this);
   for( int i = 0; i < cbDigProbe[0]->count() ; i++) {
     cbDigProbe[1]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
     cbDigProbe[2]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
     cbDigProbe[3]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
   }
 
-  connect(cbDigProbe[0], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
-  connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
-  connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
-  connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
+  connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
 
   cbDigProbe[0]->setCurrentIndex(1); ///trigger the DigProbeChange
   cbDigProbe[0]->setCurrentIndex(0);
@@ -192,7 +193,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   cbDigProbe[2]->setCurrentIndex(5);
   cbDigProbe[3]->setCurrentIndex(6);
 
-  connect(cbDigProbe[0], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -200,7 +201,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
-  connect(cbDigProbe[1], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -208,7 +209,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
-  connect(cbDigProbe[2], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -216,7 +217,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
-  connect(cbDigProbe[3], &QComboBox::currentIndexChanged, this, [=](){ 
+  connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
@@ -233,6 +234,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(cbDigProbe[2], rowID, 4);
   layout->addWidget(cbDigProbe[3], rowID, 5);
 
+  for( int i = 0; i < 6; i++) layout->setColumnStretch(i, 1);
+
   rowID ++;
   {//------------ wave settings
     QGroupBox * box = new QGroupBox("Channel Settings (need ACQ stop)", this);
@@ -241,81 +244,29 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     QGridLayout * bLayout = new QGridLayout(box);
     bLayout->setSpacing(0);
 
-    sbRL = new QSpinBox(this);
-    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, 32, 648000, DIGIPARA::TraceStep, DIGIPARA::CH::RecordLength);
-
-    sbThreshold = new QSpinBox(this);
-    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, 0, 8191, -20, DIGIPARA::CH::TriggerThreshold);
-
-    cbPolarity = new QComboBox(this);
-    cbPolarity->addItem("Pos. +", "Positive");
-    cbPolarity->addItem("Neg. -", "Negative");
+    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, DIGIPARA::CH::RecordLength);
+    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, DIGIPARA::CH::TriggerThreshold);
     ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, DIGIPARA::CH::Polarity);
-
-    cbWaveRes = new QComboBox(this);
-    cbWaveRes->addItem(" 8 ns", "RES8");
-    cbWaveRes->addItem("16 ns", "RES16");
-    cbWaveRes->addItem("32 ns", "RES32");
-    cbWaveRes->addItem("64 ns", "RES64");
     ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, DIGIPARA::CH::WaveResolution);
 
     //------------------ next row
-    sbPT = new QSpinBox(this);
-    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, 32, 32000, DIGIPARA::TraceStep, DIGIPARA::CH::PreTrigger);
-
-    sbDCOffset = new QSpinBox(this);
-    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2, 0, 100, -10, DIGIPARA::CH::DC_Offset);
-
-    sbTimeRiseTime = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, 32, 2000, DIGIPARA::TraceStep, DIGIPARA::CH::TimeFilterRiseTime);
-
-    sbTimeGuard = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, 0, 8000, DIGIPARA::TraceStep, DIGIPARA::CH::TimeFilterRetriggerGuard);
+    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, DIGIPARA::CH::PreTrigger);
+    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  DIGIPARA::CH::DC_Offset);
+    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, DIGIPARA::CH::TimeFilterRiseTime);
+    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, DIGIPARA::CH::TimeFilterRetriggerGuard);
 
     //----------------- next row
-    sbTrapRiseTime = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, 32, 13000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterRiseTime);
-
-    sbTrapFlatTop = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, 32, 3000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterFlatTop);
-
-    sbTrapPoleZero = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, 32, 524000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterPoleZero);
-
-    sbEnergyFineGain = new QSpinBox(this);
-    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, 1, 10, -1, DIGIPARA::CH::EnergyFilterFineGain);
+    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, DIGIPARA::CH::EnergyFilterRiseTime);
+    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, DIGIPARA::CH::EnergyFilterFlatTop);
+    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, DIGIPARA::CH::EnergyFilterPoleZero);
+    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, DIGIPARA::CH::EnergyFilterFineGain);
 
     //----------------- next row
-    sbTrapPeaking = new QSpinBox(this);
-    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, 1, 100, -10, DIGIPARA::CH::EnergyFilterPeakingPosition);
-
-    cbTrapPeakAvg = new QComboBox(this);
-    cbTrapPeakAvg->addItem(" 1 sample", "OneShot");
-    cbTrapPeakAvg->addItem(" 4 sample", "LowAVG");
-    cbTrapPeakAvg->addItem("16 sample", "MediumAVG");
-    cbTrapPeakAvg->addItem("64 sample", "HighAVG");
+    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, DIGIPARA::CH::EnergyFilterPeakingPosition);
     ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, DIGIPARA::CH::EnergyFilterPeakingAvg);
-
-    sbBaselineGuard = new QSpinBox(this);
-    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, 0, 8000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterBaselineGuard);
-
-    cbBaselineAvg = new QComboBox(this);
-    cbBaselineAvg->addItem("    0 samp.", "Fixed");
-    cbBaselineAvg->addItem("   16 samp.", "VeryLow");
-    cbBaselineAvg->addItem("   64 samp.", "Low");
-    cbBaselineAvg->addItem("  256 samp.", "MediumLow");
-    cbBaselineAvg->addItem(" 1024 samp.", "Medium");
-    cbBaselineAvg->addItem(" 4096 samp.", "MediumHigh");
-    cbBaselineAvg->addItem("16384 samp.", "High");
+    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, DIGIPARA::CH::EnergyFilterBaselineGuard);
     ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, DIGIPARA::CH::EnergyFilterBaselineAvg);
-    //----------------
-
-    sbPileUpGuard = new QSpinBox(this);
-    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, 0, 64000, DIGIPARA::TraceStep, DIGIPARA::CH::EnergyFilterPileUpGuard);
-
-    cbLowFreqFilter = new QComboBox(this);
-    cbLowFreqFilter->addItem("Disabled", "Off");
-    cbLowFreqFilter->addItem("Enabled", "On");
+    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, DIGIPARA::CH::EnergyFilterPileUpGuard);
     ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, DIGIPARA::CH::EnergyFilterLowFreqFilter);
 
   }
@@ -336,7 +287,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(lbinfo, rowID, 5);
 
   rowID ++;
-  QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * 8) + " ns due to processing speed.", this);
+  QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * DIGIPARA::TraceStep) + " ns due to processing speed.", this);
   layout->addWidget(lbinfo2, rowID, 0, 1, 5);
 
 
@@ -384,7 +335,11 @@ Scope::~Scope(){
 
 }
 
-void Scope::ReadScopeSettings(int iDigi, int ch){
+void Scope::ReadScopeSettings(){
+
+  int iDigi = cbScopeDigi->currentIndex();
+  int ch = cbScopeCh->currentIndex();
+
   if( !digi[iDigi] && digi[iDigi]->IsDummy() ) return;
 
   printf("%s\n", __func__);
@@ -437,7 +392,7 @@ void Scope::StartScope(){
   //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
   //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
 
-  ReadScopeSettings(iDigi, ch);
+  ReadScopeSettings();
 
   digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "false", -1);
   digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", ch);
@@ -451,6 +406,7 @@ void Scope::StartScope(){
   updateTraceThread->start();
 
   ScopeControlOnOff(false);
+  emit TellSettingsPanelControlOnOff();
 
   allowChange = true;
 }
@@ -478,6 +434,8 @@ void Scope::StopScope(){
   }
 
   ScopeControlOnOff(true);
+  emit TellSettingsPanelControlOnOff();
+
   allowChange = true;
 }
 
@@ -497,6 +455,12 @@ void Scope::UpdateScope(){
     leTriggerRate->setText(QString::fromStdString(haha));
     if( atoi(haha.c_str()) == 0 ) {
       digiMTX.unlock();
+
+      for( int j = 0; j < 4; j++){
+        QVector<QPointF> points;
+        for( unsigned int i = 0 ; i < dataTrace[j]->count(); i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
+        dataTrace[j]->replace(points);
+      }
       return;
     }
     
@@ -519,7 +483,7 @@ void Scope::UpdateScope(){
 
 }
 
-void Scope::ProbeChange(QComboBox * cb[], const int size ){
+void Scope::ProbeChange(RComboBox * cb[], const int size ){
 
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
@@ -578,12 +542,12 @@ void Scope::ScopeControlOnOff(bool on){
   cbLowFreqFilter->setEnabled(on);
 }
 
-void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, QSpinBox *sb, const Reg digPara){
+void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
   std::string ans = digi[iDigi]->ReadValue(digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
-void Scope::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, const Reg digPara){
+void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
   std::string ans = digi[iDigi]->ReadValue(digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
@@ -593,38 +557,80 @@ void Scope::ScopeReadComboBoxValue(int iDigi, int ch, QComboBox *cb, const Reg d
   }
 }
 
-void Scope::ScopeMakeSpinBox(QSpinBox *sb, QString str, QGridLayout *layout, int row, int col, int min, int max, int step, const Reg digPara){
+void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
-  sb->setMinimum(min);
-  sb->setMaximum(max);
-  sb->setSingleStep(abs(step));
+  sb = new RSpinBox(this);
+  sb->setMinimum(atof(digPara.GetAnswers()[0].first.c_str()));
+  sb->setMaximum(atof(digPara.GetAnswers()[1].first.c_str()));
+  sb->setSingleStep(atof(digPara.GetAnswers()[2].first.c_str()));
   layout->addWidget(sb, row, col+1);
-  connect(sb, &QSpinBox::valueChanged, this, [=](){
+  connect(sb, &RSpinBox::valueChanged, this, [=](){
+    if( !allowChange ) return;
+    sb->setStyleSheet("color:blue");
+  });
+  connect(sb, &RSpinBox::returnPressed, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-    if( step > 1 ) sb->setValue(step*((sb->value() +  step - 1)/step));
-    digiMTX.lock();
-    digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), cbScopeCh->currentIndex() );
-    digiMTX.unlock();
+    if( sb->decimals() == 0 && sb->singleStep() != 1) {
+      double step = sb->singleStep();
+      double value = sb->value();
+      sb->setValue( (std::round(value/step)*step));
+    }
+
+    int ch = cbScopeCh->currentIndex();
+
+    QString msg;
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + QString::number(ch);
+    msg += " = " + QString::number(sb->value());
+    if( digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), ch)){
+      SendLogMsg(msg + "|OK.");
+      sb->setStyleSheet("");
+      
+      //TODO digiSettingPanel update setting
+      printf("UpdateSettingsPanel \n");
+      emit UpdateSettingsPanel();
+
+    }else{
+      SendLogMsg(msg + "|Fail.");
+      sb->setStyleSheet("color:red;");
+    }
+
   });
-  //TODO digiSettingPanel update setting
+
+
 }
 
-void Scope::ScopeMakeComoBox(QComboBox *cb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
+void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
+
+  cb = new RComboBox(this);
+  for( int i = 0 ; i < (int) digPara.GetAnswers().size(); i++){
+    cb->addItem(QString::fromStdString((digPara.GetAnswers())[i].second), QString::fromStdString((digPara.GetAnswers())[i].first));
+  }
   layout->addWidget(cb, row, col+1);
-  connect(cb, &QComboBox::currentIndexChanged, this, [=](){
+
+  connect(cb, &RComboBox::currentIndexChanged, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-    digiMTX.lock();
-    digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), cbScopeCh->currentIndex());
-    digiMTX.unlock();
+    int ch = cbScopeCh->currentIndex();
+    QString msg;
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + QString::number(ch);
+    msg += " = " + cb->currentData().toString();
+    if( digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), ch)){
+      SendLogMsg(msg + "|OK.");
+      cb->setStyleSheet("");
+      //TODO digiSettingPanel update setting
+      printf("UpdateSettingsPanel \n");
+      emit UpdateSettingsPanel();
+    }else{
+      SendLogMsg(msg + "|Fail.");
+      cb->setStyleSheet("color:red;");
+    }
   });
-  //TODO digiSettingPanel update setting
 }
 
 

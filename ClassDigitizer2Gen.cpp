@@ -135,7 +135,7 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
-    printf("|%s||%s|\n", parameter, value.c_str());
+    printf("WriteError|%s||%s|\n", parameter, value.c_str());
     ErrorMsg(__func__);
     return false;
   }

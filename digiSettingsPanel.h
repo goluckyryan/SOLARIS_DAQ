@@ -16,42 +16,12 @@
 #include <QPushButton>
 #include <QFrame>
 #include <QSignalMapper>
-#include <QWheelEvent>
+
 
 #include "ClassDigitizer2Gen.h"
+#include "CustomWidgets.h"
 
 #define MaxNumberOfDigitizer 20
-
-
-class RComboBox : public QComboBox{
-  public : 
-    RComboBox(QWidget * parent = nullptr): QComboBox(parent){
-      setFocusPolicy(Qt::StrongFocus);
-    }
-  protected:
-    void wheelEvent(QWheelEvent * event) override{ event->ignore(); }
-};
-
-class RSpinBox : public QDoubleSpinBox{
-  Q_OBJECT
-  public : 
-    RSpinBox(QWidget * parent = nullptr, int decimal = 0): QDoubleSpinBox(parent){
-      setFocusPolicy(Qt::StrongFocus);
-      setDecimals(decimal);
-    }
-  signals:
-    void returnPressed();
-  protected:
-    void wheelEvent(QWheelEvent * event) override{ event->ignore(); }
-
-    void keyPressEvent(QKeyEvent * event) override{
-      if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
-        emit returnPressed();
-      } else {
-        QDoubleSpinBox::keyPressEvent(event);
-      }
-    }
-};
 
 //^#######################################################
 class DigiSettingsPanel : public QWidget{
@@ -61,18 +31,21 @@ public:
   DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent = nullptr);
   ~DigiSettingsPanel();
 
-private slots:
-
-  
+private slots:  
   void onTriggerClick(int haha);
 
-  void RefreshSettings();
   void SaveSettings();
   void LoadSettings();
+  void RefreshSettings(); // this read digitizer and ShowSettingToPanel
+
+public slots:
+  void ShowSettingsToPanel();
+  void EnableControl();
 
 signals:
 
-  void sendLogMsg(const QString &msg);
+  void SendLogMsg(const QString &msg);
+  void UpdateScopeSetting();
 
 private:
   
@@ -80,7 +53,23 @@ private:
   unsigned short nDigi;
   unsigned short ID; // index for digitizer;
 
-  void ShowSettingsToPanel();
+  //------------ Layout/GroupBox
+  QGroupBox * digiBox;
+  QGroupBox * VGABox;
+  QGroupBox * testPulseBox;
+
+  QGroupBox * box1;
+  QGroupBox * box3;
+  QGroupBox * box4;
+  QGroupBox * box5;
+  QGroupBox * box6;
+
+  QTabWidget * inputTab;
+  QTabWidget * trapTab;
+  QTabWidget * probeTab;
+  QTabWidget * otherTab;
+  QTabWidget * triggerTab;
+  QTabWidget * triggerMapTab;
 
   bool enableSignalSlot;
 
@@ -89,6 +78,18 @@ private:
   QPushButton * LEDStatus[MaxNumberOfDigitizer][19];
   QPushButton * ACQStatus[MaxNumberOfDigitizer][19];
   QLineEdit * leTemp[MaxNumberOfDigitizer][8];
+
+  //------------- buttons
+  QPushButton * bnReadSettngs[MaxNumberOfChannel];
+  QPushButton * bnResetBd[MaxNumberOfChannel];
+  QPushButton * bnDefaultSetting[MaxNumberOfChannel];
+  QPushButton * bnSaveSettings[MaxNumberOfChannel];
+  QPushButton * bnLoadSettings[MaxNumberOfChannel];
+  QPushButton * bnClearData[MaxNumberOfChannel];
+  QPushButton * bnArmACQ[MaxNumberOfChannel];
+  QPushButton * bnDisarmACQ[MaxNumberOfChannel];
+  QPushButton * bnSoftwareStart[MaxNumberOfChannel];
+  QPushButton * bnSoftwareStop[MaxNumberOfChannel];
 
   //-------------- board settings
   RComboBox * cbbClockSource[MaxNumberOfDigitizer];
@@ -109,14 +110,12 @@ private:
   RSpinBox * dsbClockOutDelay[MaxNumberOfDigitizer];
 
   //-------------- Test pulse
-  QGroupBox * testPulseBox;
   RSpinBox * dsbTestPuslePeriod[MaxNumberOfDigitizer];
   RSpinBox * dsbTestPusleWidth[MaxNumberOfDigitizer];
   RSpinBox * spbTestPusleLowLevel[MaxNumberOfDigitizer];
   RSpinBox * spbTestPusleHighLevel[MaxNumberOfDigitizer];
 
   //-------------- VGA
-  QGroupBox * VGABox;
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 
   //--------------- trigger map
@@ -201,9 +200,6 @@ private:
 
   void FillComboBoxValueFromMemory(RComboBox * &cbb, const Reg para, int ch_index = -1);
   void FillSpinBoxValueFromMemory(RSpinBox * &spb, const Reg para, int ch_index = -1 );
-
-
-
 
 };
 
