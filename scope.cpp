@@ -105,6 +105,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     digi[iDigi]->Reset();
     digi[iDigi]->ProgramPHA(false);
+    SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
   });
 
   bnScopeReadSettings = new QPushButton("Read Ch. Settings", this);
@@ -115,19 +116,17 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   });
 
   //TODO----- add copy settings and paste settings
-  QCheckBox * chkSetAllChannel = new QCheckBox("apply to all channels", this);
+  chkSetAllChannel = new QCheckBox("apply to all channels", this);
   layout->addWidget(chkSetAllChannel, rowID, 4);
-  chkSetAllChannel->setEnabled(false);
 
   //------------ Probe selection
   rowID ++;
   //TODO --- add None
   cbAnaProbe[0] = new RComboBox(this);
-  cbAnaProbe[0]->addItem("ADC Input",        "ADCInput");
-  cbAnaProbe[0]->addItem("Time Filter",      "TimeFilter");
-  cbAnaProbe[0]->addItem("Trapazoid",        "EnergyFilter");
-  cbAnaProbe[0]->addItem("Trap. Baseline",   "EnergyFilterBaseline");
-  cbAnaProbe[0]->addItem("Trap. - Baseline", "EnergyFilterMinusBaseline");
+  for( int i = 0; i < (int) DIGIPARA::CH::WaveAnalogProbe0.GetAnswers().size(); i++ ) {
+    cbAnaProbe[0]->addItem(QString::fromStdString((DIGIPARA::CH::WaveAnalogProbe0.GetAnswers())[i].second), 
+                           QString::fromStdString((DIGIPARA::CH::WaveAnalogProbe0.GetAnswers())[i].first));
+  }
 
   cbAnaProbe[1] = new RComboBox(this);
   for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
@@ -143,6 +142,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -152,6 +152,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -159,19 +160,10 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //TODO --- add None
   cbDigProbe[0] = new RComboBox(this);
-  cbDigProbe[0]->addItem("Trigger",              "Trigger");
-  cbDigProbe[0]->addItem("Time Filter Armed",    "TimeFilterArmed");
-  cbDigProbe[0]->addItem("ReTrigger Guard",      "ReTriggerGuard");
-  cbDigProbe[0]->addItem("Trap. basline Freeze", "EnergyFilterBaselineFreeze");
-  cbDigProbe[0]->addItem("Peaking",              "EnergyFilterPeaking");
-  cbDigProbe[0]->addItem("Peak Ready",           "EnergyFilterPeakReady");
-  cbDigProbe[0]->addItem("Pile-up Guard",        "EnergyFilterPileUpGuard");
-  cbDigProbe[0]->addItem("Event Pile Up",        "EventPileUp");
-  cbDigProbe[0]->addItem("ADC Saturate",         "ADCSaturation");
-  cbDigProbe[0]->addItem("ADC Sat. Protection",  "ADCSaturationProtection");
-  cbDigProbe[0]->addItem("Post Sat. Event",      "PostSaturationEvent");
-  cbDigProbe[0]->addItem("Trap. Saturate",       "EnergylterSaturation");
-  cbDigProbe[0]->addItem("ACQ Inhibit",          "AcquisitionInhibit");
+  for( int i = 0; i < (int) DIGIPARA::CH::WaveDigitalProbe0.GetAnswers().size(); i++ ) {
+    cbDigProbe[0]->addItem(QString::fromStdString((DIGIPARA::CH::WaveDigitalProbe0.GetAnswers())[i].second), 
+                           QString::fromStdString((DIGIPARA::CH::WaveDigitalProbe0.GetAnswers())[i].first));
+  }
 
   cbDigProbe[1] = new RComboBox(this);
   cbDigProbe[2] = new RComboBox(this);
@@ -197,6 +189,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -205,6 +198,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -213,6 +207,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -221,6 +216,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
     digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
@@ -374,6 +370,19 @@ void Scope::ReadScopeSettings(){
   ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, DIGIPARA::CH::EnergyFilterBaselineGuard);
   ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, DIGIPARA::CH::EnergyFilterPileUpGuard);
 
+  sbRL->setStyleSheet("");
+  sbPT->setStyleSheet("");
+  sbThreshold->setStyleSheet("");
+  sbTimeRiseTime->setStyleSheet("");
+  sbTimeGuard->setStyleSheet("");
+  sbTrapRiseTime->setStyleSheet("");
+  sbTrapFlatTop->setStyleSheet("");
+  sbTrapPoleZero->setStyleSheet("");
+  sbEnergyFineGain->setStyleSheet("");
+  sbTrapPeaking->setStyleSheet("");
+  sbBaselineGuard->setStyleSheet("");
+  sbPileUpGuard->setStyleSheet("");
+
   allowChange = true;
 }
 
@@ -394,8 +403,8 @@ void Scope::StartScope(){
 
   ReadScopeSettings();
 
-  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "false", -1);
-  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", ch);
+  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "False", -1);
+  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", ch);
   digi[iDigi]->SetPHADataFormat(0);
 
   digi[iDigi]->StartACQ();
@@ -424,7 +433,7 @@ void Scope::StopScope(){
       if( digi[i]->IsDummy() ) continue;
       digiMTX.lock();
       digi[i]->StopACQ();
-      digi[i]->WriteValue(DIGIPARA::CH::ChannelEnable, "true", -1);
+      digi[i]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", -1);
       digiMTX.unlock();
 
       readDataThread[i]->quit();
@@ -458,7 +467,7 @@ void Scope::UpdateScope(){
 
       for( int j = 0; j < 4; j++){
         QVector<QPointF> points;
-        for( unsigned int i = 0 ; i < dataTrace[j]->count(); i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
+        for( int i = 0 ; i < dataTrace[j]->count(); i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
         dataTrace[j]->replace(points);
       }
       return;
@@ -580,9 +589,9 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
     }
 
     int ch = cbScopeCh->currentIndex();
-
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     QString msg;
-    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + QString::number(ch);
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + QString::number(sb->value());
     if( digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), ch)){
       SendLogMsg(msg + "|OK.");
@@ -617,8 +626,9 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
+    if( chkSetAllChannel->isChecked() ) ch = -1;
     QString msg;
-    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + QString::number(ch);
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + cb->currentData().toString();
     if( digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), ch)){
       SendLogMsg(msg + "|OK.");

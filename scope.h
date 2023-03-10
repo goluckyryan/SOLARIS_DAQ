@@ -149,7 +149,7 @@ private:
   QPushButton * bnScopeReset;
   QPushButton * bnScopeReadSettings;
   
-  
+  QCheckBox * chkSetAllChannel;
   QPushButton * bnScopeStart;
   QPushButton * bnScopeStop;
   

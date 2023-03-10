@@ -602,9 +602,10 @@ void MainWindow::OpenScope(){
         connect(digiSetting, &DigiSettingsPanel::UpdateScopeSetting, scope, &Scope::ReadScopeSettings);
         digiSetting->EnableControl();
       }
-      
+
     }else{
       scope->show();
+      digiSetting->EnableControl();
     }
   }
 

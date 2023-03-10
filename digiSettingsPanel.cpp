@@ -698,7 +698,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         }
 
-
       }
       
       
@@ -722,11 +721,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
           //Set color of some combox
           cbbOnOff[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
+          connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
           cbbParity[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
+          connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ?  "color : green;" : "");});
           cbbLowFilter[iDigi][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "" : "color : green;");});
+          connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : green;": "");});
         }
 
       }
@@ -922,14 +921,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   } //=== end of tab
 
-  ShowSettingsToPanel();
-
-  enableSignalSlot = true;
+  EnableControl();
 
   show();
 
-  EnableControl();
-
+  enableSignalSlot = true;
 }
 
 DigiSettingsPanel::~DigiSettingsPanel(){
@@ -964,6 +960,8 @@ void DigiSettingsPanel::RefreshSettings(){
 }
 
 void DigiSettingsPanel::EnableControl(){
+
+  ShowSettingsToPanel();
 
   bool enable = !digi[ID]->IsAcqOn();
 
@@ -1463,7 +1461,7 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg p
   if( index >= 0 && index < cbb->count()) {
     cbb->setCurrentIndex(index);
   }else{
-    printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
+    //printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
   }
 }
 
