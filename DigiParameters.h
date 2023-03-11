@@ -128,8 +128,8 @@ namespace DIGIPARA{
     const Reg DPP_License              ("License", RW::ReadOnly, TYPE::DIG);
     const Reg DPP_LicenseStatus        ("LicenseStatus", RW::ReadOnly, TYPE::DIG);
     const Reg DPP_LicenseRemainingTime ("LicenseRemainingTime", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg NumberOfChannel          ("NumCh", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "sec");
-    const Reg ADC_bit                  ("ADC_Nbit", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
+    const Reg NumberOfChannel          ("NumCh", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
+    const Reg ADC_bit                  ("ADC_Nbit", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "sec");
     const Reg ADC_SampleRate           ("ADC_SamplRate", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "MS/s");
     const Reg InputDynamicRange        ("InputRange", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "Vpp");
     const Reg InputType                ("InputType", RW::ReadOnly, TYPE::DIG, {{"0","Singled ended"}, {"1", "Differential"}});

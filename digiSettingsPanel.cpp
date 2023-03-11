@@ -135,6 +135,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         LEDStatus[iDigi][i]->setFixedSize(QSize(30,30));
         LEDStatus[iDigi][i]->setToolTip(LEDToolTip[i]);
         LEDStatus[iDigi][i]->setToolTipDuration(-1);
+        //TODO set tooltip position on top
         statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + 19 - i);
       
       }
@@ -196,12 +197,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
          digi[ID]->Reset();    
       });
       
-      bnDefaultSetting[iDigi] = new QPushButton("Set Default Settings", tab);
+      bnDefaultSetting[iDigi] = new QPushButton("Set Default PHA Settings", tab);
       bnLayout->addWidget(bnDefaultSetting[iDigi], rowId, 4, 1, 2);
-      connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, [=](){
-        SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
-        digi[ID]->ProgramPHA();
-      });
+      connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::SetDefaultPHASettigns);
 
       bnSaveSettings[iDigi] = new QPushButton("Save Settings", tab);
       bnLayout->addWidget(bnSaveSettings[iDigi], rowId, 6, 1, 2);
@@ -781,7 +779,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupSpinBoxTab(spbADCVetoWidth, DIGIPARA::CH::ADCVetoWidth, "ADC Veto Length [ns]", triggerTab, iDigi, digi[iDigi]->GetNChannels());
       }
 
-
       for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
         //send UpdateScopeSetting signal
         connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
@@ -916,10 +913,189 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         }
       }
-      
+
     } //=== end of channel group
 
   } //=== end of tab
+
+  //^============================================== 
+  {
+    ICTab = new QTabWidget(this);
+    tabWidget->addTab(ICTab, "Inquiry / Copy");
+
+    QVBoxLayout * layout1 = new QVBoxLayout(ICTab);
+    layout1->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+
+    {//@============== low level inquiry
+      QGroupBox * icBox1 = new QGroupBox("Low Level Settings", ICTab);
+      layout1->addWidget(icBox1);
+
+      QGridLayout * inquiryLayout = new QGridLayout(icBox1);
+      inquiryLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+      //inquiryLayout->setSpacing(0);    
+
+      int rowID = 0;
+      QLabel * info = new QLabel("This will read from the digitizer, save the setting to memory.", icBox1);
+      inquiryLayout->addWidget(info, rowID, 0, 1, 6);
+
+      ///=========== header
+      rowID ++;
+      QLabel * hd0 = new QLabel("Digi. Value", icBox1);
+      hd0->setAlignment(Qt::AlignCenter);
+      inquiryLayout->addWidget(hd0, rowID, 3);
+      
+      QLabel * hd1 = new QLabel("<----------- Set Value ---------->", icBox1);
+      hd1->setAlignment(Qt::AlignCenter);
+      inquiryLayout->addWidget(hd1, rowID, 5, 1, 2);
+
+      ///----------- board settings
+      rowID ++;
+      RComboBox * cbIQDigi = new RComboBox(ICTab);
+      for( int i = 0; i < nDigi; i++) cbIQDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+      inquiryLayout->addWidget(cbIQDigi, rowID, 0);
+
+      RComboBox * cbBdSettings = new RComboBox(ICTab);
+      for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++ ){
+        cbBdSettings->addItem( QString::fromStdString( DIGIPARA::DIG::AllSettings[i].GetPara() ), i);
+      }
+      inquiryLayout->addWidget(cbBdSettings, rowID, 1);
+      connect(cbBdSettings, &RComboBox::currentIndexChanged, this, [=](int index){
+        QString type;
+        switch (DIGIPARA::DIG::AllSettings[index].ReadWrite()) {
+          case RW::ReadOnly : type ="Read Only"; break;
+          case RW::WriteOnly : type ="Write Only"; break;
+          case RW::ReadWrite : type ="Read/Write"; break;
+        }
+        leBdSettingsType->setText(type);
+
+        if( DIGIPARA::DIG::AllSettings[index].ReadWrite() != RW::ReadOnly ){
+          switch (DIGIPARA::DIG::AllSettings[index].GetAnswerType()){
+            case ANSTYPE::STR : {
+              cbBdAns->setEnabled(true);
+              cbBdAns->clear();
+              for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings[index].GetAnswers().size(); i++){
+                cbBdAns->addItem(QString::fromStdString(DIGIPARA::DIG::AllSettings[index].GetAnswers()[i].second),
+                                QString::fromStdString(DIGIPARA::DIG::AllSettings[index].GetAnswers()[i].first));
+              }
+              sbBdSettingsWrite->setEnabled(false);
+            }; break;
+            case ANSTYPE::NUM : {
+              cbBdAns->clear();
+              cbBdAns->setEnabled(false);
+              sbBdSettingsWrite->setEnabled(true);
+              sbBdSettingsWrite->setMinimum(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[0].first.c_str()));
+              sbBdSettingsWrite->setMaximum(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[1].first.c_str()));
+              sbBdSettingsWrite->setSingleStep(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[2].first.c_str()));
+              sbBdSettingsWrite->setValue(0);
+            }; break;
+            case ANSTYPE::NONE: {
+              cbBdAns->clear();
+              cbBdAns->setEnabled(false);
+              sbBdSettingsWrite->setEnabled(false);
+              sbBdSettingsWrite->cleanText();
+            }
+          }
+        }
+      });
+      cbBdSettings->setCurrentIndex(0);
+
+      leBdSettingsType = new QLineEdit("Read Only",ICTab);
+      leBdSettingsType->setFixedWidth(150);
+      leBdSettingsType->setReadOnly(true);
+      inquiryLayout->addWidget(leBdSettingsType, rowID, 2);
+
+      leBdSettingsRead = new QLineEdit(ICTab);
+      leBdSettingsRead->setFixedWidth(200);
+      leBdSettingsRead->setReadOnly(true);
+      inquiryLayout->addWidget(leBdSettingsRead, rowID, 3);
+
+      QPushButton * pbRead = new QPushButton("Read", ICTab);
+      inquiryLayout->addWidget(pbRead, rowID, 4, 2, 1);
+
+      cbBdAns = new RComboBox(ICTab);
+      cbBdAns->setFixedWidth(200);
+      inquiryLayout->addWidget(cbBdAns, rowID, 5);
+
+      sbBdSettingsWrite = new RSpinBox(ICTab);
+      sbBdSettingsWrite->setFixedWidth(200);
+      inquiryLayout->addWidget(sbBdSettingsWrite, rowID, 6);
+
+      QPushButton * pbWrite = new QPushButton("Write", ICTab);
+      inquiryLayout->addWidget(pbWrite, rowID, 7, 2, 1);
+
+      ///----------- Channels settings
+      rowID ++;
+      RComboBox * cbIQCh = new RComboBox(ICTab);
+      for( int i = 0; i < digi[0]->GetNChannels() ; i++) cbIQCh->addItem("Ch-" + QString::number(i), i);
+      inquiryLayout->addWidget(cbIQCh, rowID, 0);
+
+      RComboBox * cbChSettings = new RComboBox(ICTab);
+      for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++ ){
+        cbChSettings->addItem( QString::fromStdString( DIGIPARA::CH::AllSettings[i].GetPara() ), i);
+      }
+      inquiryLayout->addWidget(cbChSettings, rowID, 1);
+
+      QLineEdit * leChSettingsType = new QLineEdit("Read Only", ICTab);
+      leChSettingsType->setFixedWidth(150);
+      leChSettingsType->setReadOnly(true);
+      inquiryLayout->addWidget(leChSettingsType, rowID, 2);
+
+      QLineEdit * leChSettingsRead = new QLineEdit(ICTab);
+      leChSettingsRead->setFixedWidth(100);
+      leChSettingsRead->setReadOnly(true);
+      inquiryLayout->addWidget(leChSettingsRead, rowID, 3);
+
+      RComboBox * cbChAns = new RComboBox(ICTab);
+      cbChAns->setFixedWidth(200);
+      inquiryLayout->addWidget(cbChAns, rowID, 5);
+
+      QLineEdit * leChSettingsWrite = new QLineEdit(ICTab);
+      leChSettingsWrite->setFixedWidth(200);
+      inquiryLayout->addWidget(leChSettingsWrite, rowID, 6);
+
+      for( int i = 0 ; i < inquiryLayout->count(); i++) inquiryLayout->setColumnStretch(i, 2);
+
+    }
+
+    {//@============== Copy setting
+      QGroupBox * icBox2 = new QGroupBox("Copy Settings", ICTab);
+      layout1->addWidget(icBox2);
+
+      QHBoxLayout * cpLayout = new QHBoxLayout(icBox2);
+      cpLayout->setAlignment(Qt::AlignHCenter | Qt::AlignLeft);
+
+      ///================
+      QGroupBox * icBox2a = new QGroupBox("Copy From", icBox2);
+      cpLayout->addWidget(icBox2a, 0);
+
+      QGridLayout * lo1 = new QGridLayout(icBox2a);
+
+      RComboBox * cbCopyDigiFrom = new RComboBox(ICTab);
+      for( int i = 0; i < nDigi; i++) cbCopyDigiFrom->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+      lo1->addWidget(cbCopyDigiFrom, 0, 0);
+
+
+      ///================
+      QPushButton * pbCopy = new QPushButton("Copy", ICTab);
+      cpLayout->addWidget(pbCopy, 1);
+
+      ///================
+      QGroupBox * icBox2b = new QGroupBox("Copy To", icBox2);
+      cpLayout->addWidget(icBox2b, 2);
+
+      QGridLayout * lo2 = new QGridLayout(icBox2b);
+
+      RComboBox * cbCopyDigiTo = new RComboBox(ICTab);
+      for( int i = 0; i < nDigi; i++) cbCopyDigiTo->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+      lo2->addWidget(cbCopyDigiTo, 0, 0);
+
+
+      cpLayout->setStretch(0, 4);
+      cpLayout->setStretch(1, 1);
+      cpLayout->setStretch(2, 4);
+
+    }
+  }
 
   EnableControl();
 
@@ -1055,6 +1231,12 @@ void DigiSettingsPanel::LoadSettings(){
   }
 
   ShowSettingsToPanel();
+}
+
+void DigiSettingsPanel::SetDefaultPHASettigns(){
+  SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
+  digi[ID]->ProgramPHA();
+  RefreshSettings();
 }
 
 void DigiSettingsPanel::ShowSettingsToPanel(){

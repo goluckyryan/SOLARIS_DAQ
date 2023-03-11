@@ -330,8 +330,8 @@ void MainWindow::StartACQ(){
   //============================= start digitizer
   for( int i =0 ; i < nDigi; i ++){
     if( digi[i]->IsDummy () ) continue;
-    digi[i]->Reset();
-    digi[i]->ProgramPHA(false);
+    //digi[i]->Reset();
+    //digi[i]->ProgramPHA(false);
     digi[i]->SetPHADataFormat(1);// only save 1 trace
 
     digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");

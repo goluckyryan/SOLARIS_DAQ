@@ -36,6 +36,7 @@ private slots:
 
   void SaveSettings();
   void LoadSettings();
+  void SetDefaultPHASettigns();
   void RefreshSettings(); // this read digitizer and ShowSettingToPanel
 
 public slots:
@@ -70,8 +71,15 @@ private:
   QTabWidget * otherTab;
   QTabWidget * triggerTab;
   QTabWidget * triggerMapTab;
+  QTabWidget * ICTab; // inquiry and copy
 
   bool enableSignalSlot;
+
+  //---------------- Inquiry and copy
+  QLineEdit * leBdSettingsType;
+  QLineEdit * leBdSettingsRead;
+  RComboBox * cbBdAns;
+  RSpinBox *  sbBdSettingsWrite;
 
   //------------ status
   QLineEdit * leInfo[MaxNumberOfChannel][12];
