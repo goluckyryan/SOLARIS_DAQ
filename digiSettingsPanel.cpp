@@ -525,12 +525,29 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       {//@.......... All Settings tab
         QWidget * tab_All = new QWidget(tab); 
         //tab_All->setStyleSheet("background-color: #EEEEEE");
-        chTabWidget->addTab(tab_All, "All Settings");
+        chTabWidget->addTab(tab_All, "All/Single Ch.");
 
         QGridLayout * allLayout = new QGridLayout(tab_All);
         allLayout->setAlignment(Qt::AlignTop);
 
         unsigned short ch = digi[iDigi]->GetNChannels();
+
+        {//*--------- Group 0
+          box0 = new QGroupBox("Channel Selection", tab);
+          allLayout->addWidget(box0);
+          QGridLayout * layout0 = new QGridLayout(box0);
+          layout0->setAlignment(Qt::AlignLeft);
+
+          QLabel * lbCh = new QLabel("Channel :", tab);
+          lbCh->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+          layout0->addWidget(lbCh, 0, 0);
+
+          cbChPick[iDigi] = new RComboBox(tab);
+          cbChPick[iDigi]->addItem("All", -1);
+          layout0->addWidget(cbChPick[iDigi], 0, 1);
+          //TODO================ 
+          cbChPick[iDigi]->setEnabled(false);
+        }
 
         int rowID = 0;
         {//*--------- Group 1
@@ -918,8 +935,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   } //=== end of tab
 
-  //^============================================== 
-  {
+  {//^============================================== Inquiry / Copy Tab
     ICTab = new QTabWidget(this);
     tabWidget->addTab(ICTab, "Inquiry / Copy");
 
@@ -935,8 +951,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       //inquiryLayout->setSpacing(0);    
 
       int rowID = 0;
-      QLabel * info = new QLabel("This will read from the digitizer, save the setting to memory.", icBox1);
-      inquiryLayout->addWidget(info, rowID, 0, 1, 6);
+      QLabel * info1 = new QLabel("This will read from the digitizer, save the setting to memory.", icBox1);
+      inquiryLayout->addWidget(info1, rowID, 0, 1, 6);
+      rowID ++;
+      QLabel * info2 = new QLabel("The settings from Digitizer Tab will not reflect immedinately in here.", icBox1);
+      inquiryLayout->addWidget(info2, rowID, 0, 1, 6);
 
       ///=========== header
       rowID ++;
@@ -944,116 +963,255 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       hd0->setAlignment(Qt::AlignCenter);
       inquiryLayout->addWidget(hd0, rowID, 3);
       
-      QLabel * hd1 = new QLabel("<----------- Set Value ---------->", icBox1);
+      QLabel * hd1 = new QLabel("Unit", icBox1);
       hd1->setAlignment(Qt::AlignCenter);
-      inquiryLayout->addWidget(hd1, rowID, 5, 1, 2);
+      inquiryLayout->addWidget(hd1, rowID, 4);
+      
+      QLabel * hd2 = new QLabel("<---------------------- Set Value ---------------------->", icBox1);
+      hd2->setAlignment(Qt::AlignCenter);
+      inquiryLayout->addWidget(hd2, rowID, 6, 1, 3);
 
-      ///----------- board settings
+      ///========================== board settings
       rowID ++;
-      RComboBox * cbIQDigi = new RComboBox(ICTab);
+      cbIQDigi = new RComboBox(ICTab);
       for( int i = 0; i < nDigi; i++) cbIQDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
       inquiryLayout->addWidget(cbIQDigi, rowID, 0);
+      connect( cbIQDigi, &RComboBox::currentIndexChanged, this, [=](int index){
+        enableSignalSlot = false;
+        ID = index;
+        cbIQCh->clear();
+        for( int i = 0; i < digi[index]->GetNChannels() ; i++ ) cbIQCh->addItem( "Ch-" + QString::number(i), i);
+        enableSignalSlot = true;
+      });
 
-      RComboBox * cbBdSettings = new RComboBox(ICTab);
+      cbBdSettings = new RComboBox(ICTab);
       for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++ ){
         cbBdSettings->addItem( QString::fromStdString( DIGIPARA::DIG::AllSettings[i].GetPara() ), i);
       }
       inquiryLayout->addWidget(cbBdSettings, rowID, 1);
-      connect(cbBdSettings, &RComboBox::currentIndexChanged, this, [=](int index){
-        QString type;
-        switch (DIGIPARA::DIG::AllSettings[index].ReadWrite()) {
-          case RW::ReadOnly : type ="Read Only"; break;
-          case RW::WriteOnly : type ="Write Only"; break;
-          case RW::ReadWrite : type ="Read/Write"; break;
-        }
-        leBdSettingsType->setText(type);
-
-        if( DIGIPARA::DIG::AllSettings[index].ReadWrite() != RW::ReadOnly ){
-          switch (DIGIPARA::DIG::AllSettings[index].GetAnswerType()){
-            case ANSTYPE::STR : {
-              cbBdAns->setEnabled(true);
-              cbBdAns->clear();
-              for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings[index].GetAnswers().size(); i++){
-                cbBdAns->addItem(QString::fromStdString(DIGIPARA::DIG::AllSettings[index].GetAnswers()[i].second),
-                                QString::fromStdString(DIGIPARA::DIG::AllSettings[index].GetAnswers()[i].first));
-              }
-              sbBdSettingsWrite->setEnabled(false);
-            }; break;
-            case ANSTYPE::NUM : {
-              cbBdAns->clear();
-              cbBdAns->setEnabled(false);
-              sbBdSettingsWrite->setEnabled(true);
-              sbBdSettingsWrite->setMinimum(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[0].first.c_str()));
-              sbBdSettingsWrite->setMaximum(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[1].first.c_str()));
-              sbBdSettingsWrite->setSingleStep(atof(DIGIPARA::DIG::AllSettings[index].GetAnswers()[2].first.c_str()));
-              sbBdSettingsWrite->setValue(0);
-            }; break;
-            case ANSTYPE::NONE: {
-              cbBdAns->clear();
-              cbBdAns->setEnabled(false);
-              sbBdSettingsWrite->setEnabled(false);
-              sbBdSettingsWrite->cleanText();
-            }
-          }
-        }
-      });
-      cbBdSettings->setCurrentIndex(0);
+      connect(cbBdSettings, &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::ReadBoardSetting);
 
       leBdSettingsType = new QLineEdit("Read Only",ICTab);
+      leBdSettingsType->setAlignment(Qt::AlignHCenter);
       leBdSettingsType->setFixedWidth(150);
       leBdSettingsType->setReadOnly(true);
       inquiryLayout->addWidget(leBdSettingsType, rowID, 2);
 
       leBdSettingsRead = new QLineEdit(ICTab);
+      leBdSettingsRead->setAlignment(Qt::AlignRight);
       leBdSettingsRead->setFixedWidth(200);
       leBdSettingsRead->setReadOnly(true);
       inquiryLayout->addWidget(leBdSettingsRead, rowID, 3);
 
-      QPushButton * pbRead = new QPushButton("Read", ICTab);
-      inquiryLayout->addWidget(pbRead, rowID, 4, 2, 1);
+      leBdSettingsUnit = new QLineEdit("", ICTab);
+      leBdSettingsUnit->setAlignment(Qt::AlignHCenter);
+      leBdSettingsUnit->setFixedWidth(50);
+      leBdSettingsUnit->setReadOnly(true);
+      inquiryLayout->addWidget(leBdSettingsUnit, rowID, 4);
+
+      QPushButton * bnRead = new QPushButton("Read", ICTab);
+      inquiryLayout->addWidget(bnRead, rowID, 5, 2, 1);
+      connect(bnRead, &QPushButton::clicked, this, [=](){ ReadBoardSetting(cbBdSettings->currentIndex()); ReadChannelSetting(cbChSettings->currentIndex()); });
 
       cbBdAns = new RComboBox(ICTab);
       cbBdAns->setFixedWidth(200);
-      inquiryLayout->addWidget(cbBdAns, rowID, 5);
+      inquiryLayout->addWidget(cbBdAns, rowID, 6);
+      connect(cbBdAns, &RComboBox::currentIndexChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        std::string value = cbBdAns->currentData().toString().toStdString();
+        leBdSettingsWrite->setText(QString::fromStdString(value));
+        leBdSettingsWrite->setStyleSheet("");
+
+        Reg para = DIGIPARA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + cbBdAns->currentData().toString();
+        if( digi[ID]->WriteValue(para, value) ){
+          leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          cbBdAns->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leBdSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          cbBdAns->setStyleSheet("color:red;");
+        }
+      });
 
       sbBdSettingsWrite = new RSpinBox(ICTab);
       sbBdSettingsWrite->setFixedWidth(200);
-      inquiryLayout->addWidget(sbBdSettingsWrite, rowID, 6);
+      inquiryLayout->addWidget(sbBdSettingsWrite, rowID, 7);
+      connect(sbBdSettingsWrite, &RSpinBox::valueChanged, this, [=](){ sbBdSettingsWrite->setStyleSheet("color: green;");});
+      connect(sbBdSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
+        if( !enableSignalSlot ) return;
+        if( sbBdSettingsWrite->decimals() == 0 && sbBdSettingsWrite->singleStep() != 1) {
+          double step = sbBdSettingsWrite->singleStep();
+          double value = sbBdSettingsWrite->value();
+          sbBdSettingsWrite->setValue( (std::round(value/step) * step) );
+        }
 
-      QPushButton * pbWrite = new QPushButton("Write", ICTab);
-      inquiryLayout->addWidget(pbWrite, rowID, 7, 2, 1);
+        Reg para = DIGIPARA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(sbBdSettingsWrite->value());
+        if( digi[ID]->WriteValue(para, std::to_string(sbBdSettingsWrite->value()))){
+          leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          sbBdSettingsWrite->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leBdSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          sbBdSettingsWrite->setStyleSheet("color:red;");
+        }
+      });
+      
+      leBdSettingsWrite = new QLineEdit(ICTab);
+      leBdSettingsWrite->setAlignment(Qt::AlignRight);
+      leBdSettingsWrite->setFixedWidth(200);
+      inquiryLayout->addWidget(leBdSettingsWrite, rowID, 8);
+      connect(leBdSettingsWrite, &QLineEdit::textChanged, this, [=](){leBdSettingsWrite->setStyleSheet("color: green;");});
+      connect(leBdSettingsWrite, &QLineEdit::returnPressed, this, [=](){
+        if( !enableSignalSlot ) return;
+        std::string value = leBdSettingsWrite->text().toStdString();
+        Reg para = DIGIPARA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(sbBdSettingsWrite->value());
+        if( digi[ID]->WriteValue(para, value)){
+          leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          sbBdSettingsWrite->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leBdSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          sbBdSettingsWrite->setStyleSheet("color:red;");
+        }
+      });
 
-      ///----------- Channels settings
+
+      ///========================== Channels settings
       rowID ++;
-      RComboBox * cbIQCh = new RComboBox(ICTab);
+      cbIQCh = new RComboBox(ICTab);
+      cbIQCh->clear();
       for( int i = 0; i < digi[0]->GetNChannels() ; i++) cbIQCh->addItem("Ch-" + QString::number(i), i);
       inquiryLayout->addWidget(cbIQCh, rowID, 0);
+      connect(cbIQCh, &RComboBox::currentIndexChanged, this, [=](){ ReadChannelSetting(cbChSettings->currentIndex()); });
 
-      RComboBox * cbChSettings = new RComboBox(ICTab);
+      cbChSettings = new RComboBox(ICTab);
       for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++ ){
         cbChSettings->addItem( QString::fromStdString( DIGIPARA::CH::AllSettings[i].GetPara() ), i);
       }
       inquiryLayout->addWidget(cbChSettings, rowID, 1);
+      connect(cbChSettings, &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::ReadChannelSetting);
 
-      QLineEdit * leChSettingsType = new QLineEdit("Read Only", ICTab);
+      leChSettingsType = new QLineEdit("Read Only", ICTab);
+      leChSettingsType->setAlignment(Qt::AlignHCenter);
       leChSettingsType->setFixedWidth(150);
       leChSettingsType->setReadOnly(true);
       inquiryLayout->addWidget(leChSettingsType, rowID, 2);
 
-      QLineEdit * leChSettingsRead = new QLineEdit(ICTab);
-      leChSettingsRead->setFixedWidth(100);
+      leChSettingsRead = new QLineEdit(ICTab);
+      leChSettingsRead->setAlignment(Qt::AlignRight);
+      leChSettingsRead->setFixedWidth(200);
       leChSettingsRead->setReadOnly(true);
       inquiryLayout->addWidget(leChSettingsRead, rowID, 3);
+      
+      leChSettingsUnit = new QLineEdit(ICTab);
+      leChSettingsUnit->setAlignment(Qt::AlignHCenter);
+      leChSettingsUnit->setFixedWidth(50);
+      leChSettingsUnit->setReadOnly(true);
+      inquiryLayout->addWidget(leChSettingsUnit, rowID, 4);
 
-      RComboBox * cbChAns = new RComboBox(ICTab);
+      cbChAns = new RComboBox(ICTab);
       cbChAns->setFixedWidth(200);
-      inquiryLayout->addWidget(cbChAns, rowID, 5);
+      inquiryLayout->addWidget(cbChAns, rowID, 6);
+      connect(cbChAns, &RComboBox::currentIndexChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        std::string value = cbChAns->currentData().toString().toStdString();
+        leChSettingsWrite->setText(QString::fromStdString(value));
+        leChSettingsWrite->setStyleSheet("");
 
-      QLineEdit * leChSettingsWrite = new QLineEdit(ICTab);
+        Reg para = DIGIPARA::CH::AllSettings[cbChSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        int ch_index = cbIQCh->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += ",CH:" + QString::number(ch_index);
+        msg += " = " + cbChAns->currentData().toString();
+        if( digi[ID]->WriteValue(para, value, ch_index) ){
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          cbChAns->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leChSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          cbChAns->setStyleSheet("color:red;");
+        }
+      });
+
+      sbChSettingsWrite = new RSpinBox(ICTab);
+      sbChSettingsWrite->setFixedWidth(200);
+      inquiryLayout->addWidget(sbChSettingsWrite, rowID, 7);
+      connect(sbChSettingsWrite, &RSpinBox::valueChanged, this, [=](){ sbChSettingsWrite->setStyleSheet("color: green;");});
+      connect(sbChSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
+        if( !enableSignalSlot ) return;
+        if( sbChSettingsWrite->decimals() == 0 && sbChSettingsWrite->singleStep() != 1) {
+          double step = sbChSettingsWrite->singleStep();
+          double value = sbChSettingsWrite->value();
+          sbChSettingsWrite->setValue( (std::round(value/step) * step) );
+        }
+
+        Reg para = DIGIPARA::CH::AllSettings[cbBdSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        int ch_index = cbIQCh->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += ",CH:" + QString::number(ch_index);
+        msg += " = " + QString::number(sbChSettingsWrite->value());
+        if( digi[ID]->WriteValue(para, std::to_string(sbChSettingsWrite->value()), ch_index)){
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          sbChSettingsWrite->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leChSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          sbChSettingsWrite->setStyleSheet("color:red;");
+        }
+      });
+
+      leChSettingsWrite = new QLineEdit(ICTab);
       leChSettingsWrite->setFixedWidth(200);
-      inquiryLayout->addWidget(leChSettingsWrite, rowID, 6);
+      inquiryLayout->addWidget(leChSettingsWrite, rowID, 8);
+      connect(leChSettingsWrite, &QLineEdit::textChanged, this, [=](){leChSettingsWrite->setStyleSheet("color: green;");});
+      connect(leChSettingsWrite, &QLineEdit::returnPressed, this, [=](){
+        if( !enableSignalSlot ) return;
+        std::string value = leChSettingsWrite->text().toStdString();
+        Reg para = DIGIPARA::CH::AllSettings[cbChSettings->currentIndex()];
+        ID = cbIQDigi->currentIndex();
+        int ch_index = cbIQCh->currentIndex();
+        QString msg;
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg += " = " + QString::number(sbChSettingsWrite->value());
+        if( digi[ID]->WriteValue(para, value, ch_index)){
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
+          SendLogMsg(msg + "|OK.");
+          sbChSettingsWrite->setStyleSheet("");
+          ShowSettingsToPanel();
+        }else{
+          leChSettingsRead->setText("fail write value");
+          SendLogMsg(msg + "|Fail.");
+          sbChSettingsWrite->setStyleSheet("color:red;");
+        }
+      });
 
-      for( int i = 0 ; i < inquiryLayout->count(); i++) inquiryLayout->setColumnStretch(i, 2);
+      for( int i = 0 ; i < inquiryLayout->count(); i++) inquiryLayout->setColumnStretch(i, 1);
 
     }
 
@@ -1098,6 +1256,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   }
 
   EnableControl();
+
+  cbBdSettings->setCurrentText("ModelName");
+  cbChSettings->setCurrentIndex(10);
 
   show();
 
@@ -1288,7 +1449,6 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
     }
   }
 
-
   result = QString::fromStdString(digi[ID]->GetSettingValue(DIGIPARA::DIG::GlobalTriggerSource));
   resultList = result.remove(QChar(' ')).split("|");
   testPulseBox->setEnabled(false);
@@ -1384,7 +1544,7 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   }
 
   enableSignalSlot = true;
-  
+
   SyncComboBox(cbbOnOff, -1);
   SyncComboBox(cbbParity, -1);
   SyncComboBox(cbbLowFilter, -1);
@@ -1651,4 +1811,134 @@ void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg par
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
   spb->setValue(result.toDouble());
+}
+
+void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
+  enableSignalSlot = false;
+
+  QString type;
+  switch (DIGIPARA::DIG::AllSettings[cbIndex].ReadWrite()) {
+    case RW::ReadOnly : type ="Read Only"; break;
+    case RW::WriteOnly : type ="Write Only"; break;
+    case RW::ReadWrite : type ="Read/Write"; break;
+  }
+  leBdSettingsType->setText(type);
+  leBdSettingsRead->setText(QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(DIGIPARA::DIG::AllSettings[cbIndex])));
+  leBdSettingsUnit->setText(QString::fromStdString(DIGIPARA::DIG::AllSettings[cbIndex].GetUnit()));
+
+  ANSTYPE haha = DIGIPARA::DIG::AllSettings[cbIndex].GetAnswerType();
+  if( DIGIPARA::DIG::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
+
+    if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
+      cbBdAns->clear();
+      cbBdAns->setEnabled(false);
+      leBdSettingsWrite->setEnabled(false);
+      leBdSettingsWrite->clear();
+      sbBdSettingsWrite->setEnabled(true);
+      sbBdSettingsWrite->setMinimum(atof(DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers()[0].first.c_str()));
+      sbBdSettingsWrite->setMaximum(atof(DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers()[1].first.c_str()));
+      sbBdSettingsWrite->setSingleStep(atof(DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers()[2].first.c_str()));
+      sbBdSettingsWrite->setValue(00);
+      sbBdSettingsWrite->setDecimals(0);
+    }
+    if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
+    if( haha == ANSTYPE::LIST){
+      cbBdAns->setEnabled(true);
+      cbBdAns->clear();
+      for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers().size(); i++){
+        cbBdAns->addItem(QString::fromStdString(DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers()[i].second),
+                        QString::fromStdString(DIGIPARA::DIG::AllSettings[cbIndex].GetAnswers()[i].first));
+      }
+      sbBdSettingsWrite->setEnabled(false);
+      sbBdSettingsWrite->setValue(0);
+      leBdSettingsWrite->setEnabled(false);
+      leBdSettingsWrite->clear();
+    }
+    if( haha == ANSTYPE::STR){
+      cbBdAns->clear();
+      cbBdAns->setEnabled(false);
+      leBdSettingsWrite->setEnabled(true);
+      leBdSettingsWrite->clear();
+      sbBdSettingsWrite->setEnabled(false);
+      sbBdSettingsWrite->setValue(0);
+    }
+  }else{
+    cbBdAns->clear();
+    cbBdAns->setEnabled(false);
+    sbBdSettingsWrite->setEnabled(false);
+    sbBdSettingsWrite->cleanText();
+    leBdSettingsWrite->setEnabled(false);
+    leBdSettingsWrite->clear();
+  }
+
+  if(   DIGIPARA::DIG::AllSettings[cbIndex].GetPara() == DIGIPARA::DIG::StartSource.GetPara()
+     || DIGIPARA::DIG::AllSettings[cbIndex].GetPara() == DIGIPARA::DIG::GlobalTriggerSource.GetPara() ){
+
+    leBdSettingsWrite->setEnabled(true);
+    leBdSettingsWrite->clear();
+  }
+
+  enableSignalSlot = true;
+}
+
+void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
+  enableSignalSlot = false;
+
+  QString type;
+  switch (DIGIPARA::CH::AllSettings[cbIndex].ReadWrite()) {
+    case RW::ReadOnly : type ="Read Only"; break;
+    case RW::WriteOnly : type ="Write Only"; break;
+    case RW::ReadWrite : type ="Read/Write"; break;
+  }
+  leChSettingsType->setText(type);
+  leChSettingsRead->setText(QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(DIGIPARA::CH::AllSettings[cbIndex], cbIQCh->currentData().toInt())));
+  leChSettingsUnit->setText(QString::fromStdString(DIGIPARA::CH::AllSettings[cbIndex].GetUnit()));
+
+  ANSTYPE haha = DIGIPARA::CH::AllSettings[cbIndex].GetAnswerType();
+
+  if( DIGIPARA::CH::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
+
+    if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
+      cbChAns->clear();
+      cbChAns->setEnabled(false);
+      leChSettingsWrite->setEnabled(false);
+      leChSettingsWrite->clear();
+      sbChSettingsWrite->setEnabled(true);
+      sbChSettingsWrite->setMinimum(atof(DIGIPARA::CH::AllSettings[cbIndex].GetAnswers()[0].first.c_str()));
+      sbChSettingsWrite->setMaximum(atof(DIGIPARA::CH::AllSettings[cbIndex].GetAnswers()[1].first.c_str()));
+      sbChSettingsWrite->setSingleStep(atof(DIGIPARA::CH::AllSettings[cbIndex].GetAnswers()[2].first.c_str()));
+      sbChSettingsWrite->setValue(00);
+      sbChSettingsWrite->setDecimals(0);
+    }
+    if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
+    if( haha == ANSTYPE::LIST){
+      cbChAns->setEnabled(true);
+      cbChAns->clear();
+      for( int i = 0; i < (int) DIGIPARA::CH::AllSettings[cbIndex].GetAnswers().size(); i++){
+        cbChAns->addItem(QString::fromStdString(DIGIPARA::CH::AllSettings[cbIndex].GetAnswers()[i].second),
+                        QString::fromStdString(DIGIPARA::CH::AllSettings[cbIndex].GetAnswers()[i].first));
+      }
+      sbChSettingsWrite->setEnabled(false);
+      sbChSettingsWrite->setValue(0);
+      leChSettingsWrite->setEnabled(false);
+      leChSettingsWrite->clear();
+    }
+    if( haha == ANSTYPE::STR){
+      cbChAns->clear();
+      cbChAns->setEnabled(false);
+      leChSettingsWrite->setEnabled(true);
+      leChSettingsWrite->clear();
+      sbChSettingsWrite->setEnabled(false);
+      sbChSettingsWrite->setValue(0);
+    }
+  }else{
+    cbChAns->clear();
+    cbChAns->setEnabled(false);
+    sbChSettingsWrite->setEnabled(false);
+    sbChSettingsWrite->cleanText();
+    leChSettingsWrite->setEnabled(false);
+    leChSettingsWrite->clear();
+  }
+
+  enableSignalSlot = true;
 }

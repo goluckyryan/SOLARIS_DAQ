@@ -499,12 +499,9 @@ void MainWindow::OpenDigitizers(){
       }else{
         LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
         digi[i]->SetSettingFileName("");
-        LogMsg("Reset digitizer.");
+        LogMsg("Reset digitizer And set default PHA settings.");        
         digi[i]->Reset();
-
-        digi[i]->WriteValue(DIGIPARA::CH::RecordLength, "4000");
-        digi[i]->WriteValue(DIGIPARA::CH::PreTrigger, "1000");
-        //digi[i]->ProgramPHA(false);
+        digi[i]->ProgramPHA(false);
       }
 
       digi[i]->ReadAllSettings();
@@ -530,6 +527,9 @@ void MainWindow::OpenDigitizers(){
 
   bnDigiSettings->setEnabled(true);
   bnCloseDigitizers->setEnabled(true);
+
+  bnProgramSettings->setEnabled(false);
+  bnNewExp->setEnabled(false);
 
 }
 
@@ -583,6 +583,9 @@ void MainWindow::CloseDigitizers(){
   bnOpenScalar->setEnabled(false);
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
+
+  bnProgramSettings->setEnabled(true);
+  bnNewExp->setEnabled(true);
 
 }
 
@@ -1298,7 +1301,8 @@ void MainWindow::SetupNewExpPanel(){
   layout->addWidget(button1, rowID, 3);
   button1->setEnabled(false);
   
-  connect(newExp, &QLineEdit::returnPressed, this, [=](){ if( newExp->text() != "") button1->setEnabled(true);});
+  connect(newExp, &QLineEdit::textChanged, this, [=](){ newExp->setStyleSheet("color : green;");});
+  connect(newExp, &QLineEdit::returnPressed, this, [=](){ if( newExp->text() != "") { newExp->setStyleSheet(""); button1->setEnabled(true);}});
   connect(button1, &QPushButton::clicked, this, [=](){ this->CreateNewExperiment(newExp->text());});
   connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
 

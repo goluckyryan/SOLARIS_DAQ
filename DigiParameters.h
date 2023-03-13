@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-enum ANSTYPE {NUM, STR, NONE};
+enum ANSTYPE {INTEGER, FLOAT, LIST, STR, NONE};
 enum TYPE {CH, DIG, LVDS, VGA};
 enum RW { ReadOnly, WriteOnly, ReadWrite};
 
@@ -28,14 +28,14 @@ class Reg {
       type = TYPE::CH;
       isCmd = false;
       value = "";
-      ansType = ANSTYPE::STR;
+      ansType = ANSTYPE::LIST;
       answerUnit = "";
       answer.clear();
     }
     Reg(std::string para, RW readwrite, 
         TYPE type = TYPE::CH,
         std::vector<std::pair<std::string,std::string>> answer = {},
-        ANSTYPE ansType = ANSTYPE::STR,
+        ANSTYPE ansType = ANSTYPE::LIST,
         std::string ansUnit = "",
         bool isCmd = false){
       this->name = para;
@@ -114,58 +114,58 @@ namespace DIGIPARA{
   namespace DIG{
     
     ///============== read only
-    const Reg CupVer                   ("CupVer", RW::ReadOnly, TYPE::DIG);
-    const Reg FPGA_firmwareVersion     ("FPGA_FwVer", RW::ReadOnly, TYPE::DIG);
+    const Reg CupVer                   ("CupVer", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg FPGA_firmwareVersion     ("FPGA_FwVer", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
     const Reg FirmwareType             ("FwType", RW::ReadOnly, TYPE::DIG, {{"DPP_PHA", ""}, {"DPP_ZLE", ""}, {"DPP_PSD", ""}, {"DPP_DAW", ""}, {"DPP_OPEN", ""}, {"Scope", ""}});
-    const Reg ModelCode                ("ModelCode", RW::ReadOnly, TYPE::DIG);
-    const Reg PBCode                   ("PBCode", RW::ReadOnly, TYPE::DIG);
-    const Reg ModelName                ("ModelName", RW::ReadOnly, TYPE::DIG);
+    const Reg ModelCode                ("ModelCode", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg PBCode                   ("PBCode", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg ModelName                ("ModelName", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
     const Reg FromFactor               ("FormFactor", RW::ReadOnly, TYPE::DIG, {{"0", "VME"}, {"1", "VME64X"}, {"2", "DT"}});
-    const Reg FamilyCode               ("FamilyCode", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg SerialNumber             ("SerialNum", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg PCBrev_MB                ("PCBrev_MB", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg PCBrev_PB                ("PCBrev_PB", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg DPP_License              ("License", RW::ReadOnly, TYPE::DIG);
-    const Reg DPP_LicenseStatus        ("LicenseStatus", RW::ReadOnly, TYPE::DIG);
-    const Reg DPP_LicenseRemainingTime ("LicenseRemainingTime", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg NumberOfChannel          ("NumCh", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM);
-    const Reg ADC_bit                  ("ADC_Nbit", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "sec");
-    const Reg ADC_SampleRate           ("ADC_SamplRate", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "MS/s");
-    const Reg InputDynamicRange        ("InputRange", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "Vpp");
+    const Reg FamilyCode               ("FamilyCode", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg SerialNumber             ("SerialNum", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg PCBrev_MB                ("PCBrev_MB", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg PCBrev_PB                ("PCBrev_PB", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg DPP_License              ("License", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg DPP_LicenseStatus        ("LicenseStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg DPP_LicenseRemainingTime ("LicenseRemainingTime", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg NumberOfChannel          ("NumCh", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER);
+    const Reg ADC_bit                  ("ADC_Nbit", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "sec");
+    const Reg ADC_SampleRate           ("ADC_SamplRate", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "MS/s");
+    const Reg InputDynamicRange        ("InputRange", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "Vpp");
     const Reg InputType                ("InputType", RW::ReadOnly, TYPE::DIG, {{"0","Singled ended"}, {"1", "Differential"}});
-    const Reg InputImpedance           ("Zin", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "Ohm");
-    const Reg IPAddress                ("IPAddress", RW::ReadOnly, TYPE::DIG);
-    const Reg NetMask                  ("Netmask", RW::ReadOnly, TYPE::DIG);
-    const Reg Gateway                  ("Gateway", RW::ReadOnly, TYPE::DIG);
-    const Reg LED_status               ("LedStatus", RW::ReadOnly, TYPE::DIG);
-    const Reg ACQ_status               ("AcquisitionStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "byte");
-    const Reg MaxRawDataSize           ("MaxRawDataSize", RW::ReadOnly, TYPE::DIG);
-    const Reg TempSensAirIn            ("TempSensAirIn", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensAirOut           ("TempSensAirOut", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensCore             ("TempSensCore", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensFirstADC         ("TempSensFirstADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensLastADC          ("TempSensLastADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensHottestADC       ("TempSensHottestADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC0             ("TempSensADC0", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC1             ("TempSensADC1", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC2             ("TempSensADC2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC3             ("TempSensADC3", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC4             ("TempSensADC4", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC5             ("TempSensADC5", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC6             ("TempSensADC6", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg TempSensADC7             ("TempSensADC7", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
+    const Reg InputImpedance           ("Zin", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "Ohm");
+    const Reg IPAddress                ("IPAddress", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg NetMask                  ("Netmask", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg Gateway                  ("Gateway", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg LED_status               ("LedStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
+    const Reg ACQ_status               ("AcquisitionStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
+    const Reg MaxRawDataSize           ("MaxRawDataSize", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
+    const Reg TempSensAirIn            ("TempSensAirIn", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensAirOut           ("TempSensAirOut", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensCore             ("TempSensCore", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensFirstADC         ("TempSensFirstADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensLastADC          ("TempSensLastADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensHottestADC       ("TempSensHottestADC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC0             ("TempSensADC0", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC1             ("TempSensADC1", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC2             ("TempSensADC2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC3             ("TempSensADC3", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC4             ("TempSensADC4", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC5             ("TempSensADC5", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC6             ("TempSensADC6", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg TempSensADC7             ("TempSensADC7", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
 
     const std::vector<Reg> TempSensADC = {TempSensADC0,TempSensADC1,TempSensADC2,TempSensADC3,TempSensADC4,TempSensADC5,TempSensADC6,TempSensADC7};
 
-    const Reg TempSensDCDC             ("TempSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "C");
-    const Reg VInSensDCDC              ("VInSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "V");
-    const Reg VOutSensDCDC             ("VOutSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "V");
-    const Reg IOutSensDCDC             ("IOutSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "Amp");
-    const Reg FreqSensCore             ("FreqSensCore", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "Hz");
-    const Reg DutyCycleSensDCDC        ("DutyCycleSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "%");
-    const Reg SpeedSensFan1            ("SpeedSensFan1", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "rpm");
-    const Reg SpeedSensFan2            ("SpeedSensFan2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::NUM, "rpm");
-    const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG);
+    const Reg TempSensDCDC             ("TempSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
+    const Reg VInSensDCDC              ("VInSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "V");
+    const Reg VOutSensDCDC             ("VOutSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "V");
+    const Reg IOutSensDCDC             ("IOutSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "Amp");
+    const Reg FreqSensCore             ("FreqSensCore", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "Hz");
+    const Reg DutyCycleSensDCDC        ("DutyCycleSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "%");
+    const Reg SpeedSensFan1            ("SpeedSensFan1", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "rpm");
+    const Reg SpeedSensFan2            ("SpeedSensFan2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "rpm");
+    const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
     const Reg BoardReady               ("BoardReady", RW::ReadOnly, TYPE::DIG, {{"True", "No Error"}, {"False", "Error"}});
   
     ///============= read write
@@ -226,20 +226,20 @@ namespace DIGIPARA{
                                                                                       {"LVDS",     "LVDS"}, 
                                                                                       {"GPIO",     "GPIO"}, 
                                                                                       {"P0",       "Back Plane"}});
-    const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
+    const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "High"}, {"ActiveLow", "Low"}});
-    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::NUM, "ns");
+    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
     const Reg EnableAutoDisarmACQ      ("EnAutoDisarmAcq", RW::ReadWrite, TYPE::DIG, {{"True", "Enabled"}, {"False", "Disabled"}});
     const Reg EnableDataReduction      ("EnDataReduction", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
     const Reg EnableStatisticEvents    ("EnStatEvents", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
-    const Reg VolatileClockOutDelay    ("VolatileClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}}, ANSTYPE::NUM, "ps");
-    const Reg PermanentClockOutDelay   ("PermanentClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}},  ANSTYPE::NUM, "ps");
-    const Reg TestPulsePeriod          ("TestPulsePeriod", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
-    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::NUM, "ns");
-    const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG);
-    const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG);
+    const Reg VolatileClockOutDelay    ("VolatileClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}}, ANSTYPE::FLOAT, "ps");
+    const Reg PermanentClockOutDelay   ("PermanentClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}},  ANSTYPE::FLOAT, "ps");
+    const Reg TestPulsePeriod          ("TestPulsePeriod", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::STR);
     const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static", "DAC fixed level"},
                                                                                  {"ChInput", "From Channel"},
                                                                                  {"ChSum", "Sum of all Channels"},
@@ -247,8 +247,8 @@ namespace DIGIPARA{
                                                                                  {"Ramp", "14-bit counter"},
                                                                                  {"Sin5MHz", "5 MHz Sin wave"},
                                                                                  {"Square", "Test Pulse"}});
-    const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::NUM, "units");
-    const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::NUM);
+    const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::INTEGER, "units");
+    const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::INTEGER);
     const Reg EnableOffsetCalibration  ("EnOffsetCalibration", RW::ReadWrite, TYPE::DIG, {{"True", "Applied Cali."}, {"False", "No Cali."}});
 
     /// ========== command
@@ -348,27 +348,27 @@ namespace DIGIPARA{
   }
 
   namespace VGA{
-    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::NUM, "dB"); // VX2745 only
+    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::INTEGER, "dB"); // VX2745 only
   }
 
   namespace CH{
 
     /// ========= red only
-    const Reg SelfTrgRate          ("SelfTrgRate", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::NUM, "Hz");
-    const Reg ChannelStatus        ("ChStatus", RW::ReadOnly);
-    const Reg GainFactor           ("GainFactor", RW::ReadOnly);
-    const Reg ADCToVolts           ("ADCToVolts", RW::ReadOnly);
-    const Reg Energy_Nbit          ("Energy_Nbit", RW::ReadOnly);
-    const Reg ChannelRealtime      ("ChRealtimeMonitor", RW::ReadOnly); // when called, update DeadTime, TriggerCount, SaveCount, and WaveCount
-    const Reg ChannelDeadtime      ("ChDeadtimeMonitor", RW::ReadOnly);
-    const Reg ChannelTriggerCount  ("ChTriggerCnt", RW::ReadOnly);
-    const Reg ChannelSavedCount    ("ChSavedEventCnt", RW::ReadOnly);
-    const Reg ChannelWaveCount     ("ChWaveCnt", RW::ReadOnly);
+    const Reg SelfTrgRate          ("SelfTrgRate", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::INTEGER, "Hz");
+    const Reg ChannelStatus        ("ChStatus", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
+    const Reg GainFactor           ("GainFactor", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::FLOAT);
+    const Reg ADCToVolts           ("ADCToVolts", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::FLOAT);
+    const Reg Energy_Nbit          ("Energy_Nbit", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
+    const Reg ChannelRealtime      ("ChRealtimeMonitor", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR); // when called, update DeadTime, TriggerCount, SaveCount, and WaveCount
+    const Reg ChannelDeadtime      ("ChDeadtimeMonitor", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
+    const Reg ChannelTriggerCount  ("ChTriggerCnt", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
+    const Reg ChannelSavedCount    ("ChSavedEventCnt", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
+    const Reg ChannelWaveCount     ("ChWaveCnt", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
 
     /// ======= read write
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite, TYPE::CH, {{"True", "Enabled"}, {"False", "Disabled"}});
-    const Reg DC_Offset        ("DCOffset", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"100", ""}, {"1",""}}, ANSTYPE::NUM, "%"); 
-    const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}, {"1",""}}, ANSTYPE::NUM);
+    const Reg DC_Offset        ("DCOffset", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"100", ""}, {"1",""}}, ANSTYPE::INTEGER, "%"); 
+    const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}, {"1",""}}, ANSTYPE::INTEGER);
     const Reg Polarity         ("PulsePolarity", RW::ReadWrite, TYPE::CH, {{"Positive", "Pos. +"},{"Negative", "Neg. -"}});
 
     const Reg WaveDataSource              ("WaveDataSource", RW::ReadWrite, TYPE::CH, {{"ADC_DATA",         "Input ADC"}, 
@@ -377,19 +377,19 @@ namespace DIGIPARA{
                                                                                        {"ADC_TEST_SIN",     "ADC produce SIN signal"}, 
                                                                                        {"Ramp",             "Ramp generator"}, 
                                                                                        {"SquareWave",       "Test Pusle (Square Wave)"}  });
-    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
+    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg WaveSaving                  ("WaveSaving", RW::ReadWrite, TYPE::CH, {{"Always", "Always"}, {"OnRequest", "On Request"}});
     const Reg WaveResolution              ("WaveResolution", RW::ReadWrite, TYPE::CH, {{"RES8", " 8 ns"}, 
                                                                                        {"RES16","16 ns"},
                                                                                        {"RES32","32 ns"},
                                                                                        {"RES64","64 ns"}});
-    const Reg TimeFilterRiseTime          ("TimeFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"2000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg TimeFilterRetriggerGuard    ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}, {"1",""}}, ANSTYPE::NUM, "%");
+    const Reg TimeFilterRiseTime          ("TimeFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"2000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TimeFilterRetriggerGuard    ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}, {"1",""}}, ANSTYPE::INTEGER, "%");
     const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   "1 sample"},
                                                                                                {"LowAVG",    "4 samples"},
                                                                                                {"MediumAVG", "16 samples"},
@@ -401,9 +401,9 @@ namespace DIGIPARA{
                                                                                                {"Medium",    "1024 samples"},
                                                                                                {"MediumHigh","4096 samples"},
                                                                                                {"High",      "16384 samples"}});
-    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::NUM, "ns");
-    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}, {"0.001",""}}, ANSTYPE::NUM);
-    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"64000", ""}, {"8",""}}, ANSTYPE::NUM);
+    const Reg EnergyFilterBaselineGuard   ("EnergyFilterBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg EnergyFilterFineGain        ("EnergyFilterFineGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"10", ""}, {"0.001",""}}, ANSTYPE::FLOAT);
+    const Reg EnergyFilterPileUpGuard     ("EnergyFilterPileUpGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"64000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg EnergyFilterLowFreqFilter   ("EnergyFilterLFLimitation", RW::ReadWrite, TYPE::CH, {{"Off", "Disabled"}, {"On", "Enabled"}});
     const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
                                                                                          {"TimeFilter",                 "Time Filter"}, 
@@ -511,23 +511,23 @@ namespace DIGIPARA{
                                                                                        {"GlobalTriggerSource", "Global Trigger"},
                                                                                        {"ITLA", "ITLA"},
                                                                                        {"ITLB", "ITLB"}});
-    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::NUM, "ns");
-    const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite);
+    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite, TYPE::CH, {{"1", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
 
-    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::NONE, "ns");
+    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
 
-    const Reg EnergySkimLowDiscriminator  ("EnergySkimLowDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::NUM);
-    const Reg EnergySkimHighDiscriminator ("EnergySkimHighDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::NUM);
+    const Reg EnergySkimLowDiscriminator  ("EnergySkimLowDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::INTEGER);
+    const Reg EnergySkimHighDiscriminator ("EnergySkimHighDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::INTEGER);
 
-    const Reg RecordLengthSample              ("ChRecordLengthS", RW::ReadWrite);
-    const Reg PreTriggerSample                ("ChPreTriggerS", RW::ReadWrite);
-    const Reg TimeFilterRiseTimeSample        ("TimeFilterRiseTimeS", RW::ReadWrite);
-    const Reg TimeFilterRetriggerGuardSample  ("TimeFilterRetriggerGuardS", RW::ReadWrite);
-    const Reg EnergyFilterRiseTimeSample      ("EnergyFilterRiseTimeS", RW::ReadWrite);
-    const Reg EnergyFilterFlatTopSample       ("EnergyFilterFlatTopS", RW::ReadWrite);
-    const Reg EnergyFilterPoleZeroSample      ("EnergyFilterPoleZeroS", RW::ReadWrite);
-    const Reg EnergyFilterBaselineGuardSample ("EnergyFilterBaselineGuardS", RW::ReadWrite);
-    const Reg EnergyFilterPileUpGuardSample   ("EnergyFilterPileUpGuardS", RW::ReadWrite);
+    const Reg RecordLengthSample              ("ChRecordLengthS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"8100", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg PreTriggerSample                ("ChPreTriggerS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"4000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg TimeFilterRiseTimeSample        ("TimeFilterRiseTimeS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"250", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg TimeFilterRetriggerGuardSample  ("TimeFilterRetriggerGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg EnergyFilterRiseTimeSample      ("EnergyFilterRiseTimeS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"1625", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg EnergyFilterFlatTopSample       ("EnergyFilterFlatTopS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"375", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg EnergyFilterPoleZeroSample      ("EnergyFilterPoleZeroS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"65500", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg EnergyFilterBaselineGuardSample ("EnergyFilterBaselineGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg EnergyFilterPileUpGuardSample   ("EnergyFilterPileUpGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
 
     const std::vector<Reg> AllSettings = {
       SelfTrgRate                ,

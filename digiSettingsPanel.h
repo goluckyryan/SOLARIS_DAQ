@@ -59,6 +59,7 @@ private:
   QGroupBox * VGABox;
   QGroupBox * testPulseBox;
 
+  QGroupBox * box0;
   QGroupBox * box1;
   QGroupBox * box3;
   QGroupBox * box4;
@@ -73,13 +74,28 @@ private:
   QTabWidget * triggerMapTab;
   QTabWidget * ICTab; // inquiry and copy
 
+  RComboBox * cbIQDigi;
+  RComboBox * cbBdSettings;
+
+  RComboBox * cbIQCh;
+  RComboBox * cbChSettings;
+
   bool enableSignalSlot;
 
   //---------------- Inquiry and copy
   QLineEdit * leBdSettingsType;
   QLineEdit * leBdSettingsRead;
+  QLineEdit * leBdSettingsUnit;
   RComboBox * cbBdAns;
   RSpinBox *  sbBdSettingsWrite;
+  QLineEdit * leBdSettingsWrite;
+
+  QLineEdit * leChSettingsType;
+  QLineEdit * leChSettingsRead;
+  QLineEdit * leChSettingsUnit;
+  RComboBox * cbChAns;
+  RSpinBox *  sbChSettingsWrite;
+  QLineEdit * leChSettingsWrite;
 
   //------------ status
   QLineEdit * leInfo[MaxNumberOfChannel][12];
@@ -136,6 +152,7 @@ private:
   QLineEdit   * chADCToVolts[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //--------------- Channel settings
+  RComboBox * cbChPick[MaxNumberOfDigitizer];
   RComboBox * cbbOnOff[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   RSpinBox  * spbRecordLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -208,6 +225,9 @@ private:
 
   void FillComboBoxValueFromMemory(RComboBox * &cbb, const Reg para, int ch_index = -1);
   void FillSpinBoxValueFromMemory(RSpinBox * &spb, const Reg para, int ch_index = -1 );
+
+  void ReadBoardSetting(int cbIndex);
+  void ReadChannelSetting(int cbIndex);
 
 };
 
