@@ -9,6 +9,7 @@
 #include <QScrollArea>
 #include <QTabWidget>
 #include <QGroupBox>
+#include <QRadioButton>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QTableWidget>
@@ -74,15 +75,18 @@ private:
   QTabWidget * triggerMapTab;
   QTabWidget * ICTab; // inquiry and copy
 
-  RComboBox * cbIQDigi;
-  RComboBox * cbBdSettings;
+  QGroupBox * icBox1;
+  QGroupBox * icBox2;
 
-  RComboBox * cbIQCh;
-  RComboBox * cbChSettings;
 
   bool enableSignalSlot;
 
   //---------------- Inquiry and copy
+  RComboBox * cbIQDigi;
+  RComboBox * cbBdSettings;
+  RComboBox * cbIQCh;
+  RComboBox * cbChSettings;
+
   QLineEdit * leBdSettingsType;
   QLineEdit * leBdSettingsRead;
   QLineEdit * leBdSettingsUnit;
@@ -97,6 +101,15 @@ private:
   RSpinBox *  sbChSettingsWrite;
   QLineEdit * leChSettingsWrite;
 
+  RComboBox * cbCopyDigiFrom;
+  RComboBox * cbCopyDigiTo;
+  QRadioButton * rbCopyChFrom[MaxNumberOfChannel];
+  QCheckBox * chkChTo[MaxNumberOfChannel];
+
+  QPushButton * pbCopyChannel;
+  QPushButton * pbCopyBoard;
+  QPushButton * pbCopyDigi;
+  
   //------------ status
   QLineEdit * leInfo[MaxNumberOfChannel][12];
   QPushButton * LEDStatus[MaxNumberOfDigitizer][19];
@@ -228,6 +241,11 @@ private:
 
   void ReadBoardSetting(int cbIndex);
   void ReadChannelSetting(int cbIndex);
+
+  void CheckRadioAndCheckedButtons();
+  bool CopyChannelSettings();
+  bool CopyBoardSettings();
+  bool CopyWholeDigitizer();
 
 };
 

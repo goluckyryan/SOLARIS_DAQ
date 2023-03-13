@@ -1045,7 +1045,7 @@ void MainWindow::CheckElog(){
   WriteElog("Checking elog writing", "Testing communication", "checking");
 
   if( elogID > 0 ){
-    LogMsg("Ckecked Elog writing. OK.");
+    LogMsg("Checked Elog writing. OK.");
 
     //TODO =========== chrome windowID
     AppendElog("Check Elog append.", chromeWindowID);
@@ -1056,7 +1056,7 @@ void MainWindow::CheckElog(){
     }
 
   }else{
-    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) </font>");
+    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) (probably logbook <b>" + expName + "</b> does not exist) </font>");
   }
 
 }
@@ -1430,6 +1430,8 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
     LogMsg("Commit branch : <b>" + newExpName + "</b> as \"initial commit\"");
   }
+
+  CheckElog();
 
   leRawDataPath->setText(rawDataFolder);
   leExpName->setText(expName);

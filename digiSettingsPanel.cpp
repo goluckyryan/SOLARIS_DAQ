@@ -943,7 +943,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     layout1->setAlignment(Qt::AlignTop | Qt::AlignLeft);
 
     {//@============== low level inquiry
-      QGroupBox * icBox1 = new QGroupBox("Low Level Settings", ICTab);
+      icBox1 = new QGroupBox("Low Level Settings", ICTab);
       layout1->addWidget(icBox1);
 
       QGridLayout * inquiryLayout = new QGridLayout(icBox1);
@@ -1216,41 +1216,89 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     }
 
     {//@============== Copy setting
-      QGroupBox * icBox2 = new QGroupBox("Copy Settings", ICTab);
+      icBox2 = new QGroupBox("Copy Settings", ICTab);
       layout1->addWidget(icBox2);
 
-      QHBoxLayout * cpLayout = new QHBoxLayout(icBox2);
-      cpLayout->setAlignment(Qt::AlignHCenter | Qt::AlignLeft);
+      QGridLayout * cpLayout = new QGridLayout(icBox2);
+      cpLayout->setAlignment(Qt::AlignCenter | Qt::AlignLeft);
 
       ///================
       QGroupBox * icBox2a = new QGroupBox("Copy From", icBox2);
-      cpLayout->addWidget(icBox2a, 0);
+      cpLayout->addWidget(icBox2a, 0, 0, 5, 1);
 
       QGridLayout * lo1 = new QGridLayout(icBox2a);
 
-      RComboBox * cbCopyDigiFrom = new RComboBox(ICTab);
+      cbCopyDigiFrom = new RComboBox(ICTab);
       for( int i = 0; i < nDigi; i++) cbCopyDigiFrom->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
-      lo1->addWidget(cbCopyDigiFrom, 0, 0);
+      lo1->addWidget(cbCopyDigiFrom, 0, 0, 1, 8);
+      connect(cbCopyDigiFrom, &RComboBox::currentIndexChanged, this, [=](int index){
+        if( index == cbCopyDigiTo->currentIndex() ){
+          pbCopyBoard->setEnabled(false);
+          pbCopyDigi->setEnabled(false);
+        }else{
+          pbCopyBoard->setEnabled(true);
+          pbCopyDigi->setEnabled(true);
+        }
+      });
 
+      int rowID = 0;
+      for( int i = 0; i < digi[0]->GetNChannels(); i++) {
+        if( i % 8 == 0) rowID ++;
+        rbCopyChFrom[i] = new QRadioButton("Ch-" + QString::number(i), ICTab);
+        lo1->addWidget(rbCopyChFrom[i], rowID, i%8);
+        connect(rbCopyChFrom[i], &QRadioButton::clicked, this, &DigiSettingsPanel::CheckRadioAndCheckedButtons);
+      }
 
       ///================
-      QPushButton * pbCopy = new QPushButton("Copy", ICTab);
-      cpLayout->addWidget(pbCopy, 1);
+      pbCopyChannel = new QPushButton("Copy Ch. Setting", ICTab);
+      pbCopyChannel->setFixedSize(200, 50);
+      cpLayout->addWidget(pbCopyChannel, 1, 1);
+      pbCopyChannel->setEnabled(false);
+      connect(pbCopyChannel, &QPushButton::clicked, this, &DigiSettingsPanel::CopyChannelSettings);
 
+      pbCopyBoard = new QPushButton("Copy Board Settings", ICTab);
+      pbCopyBoard->setFixedSize(200, 50);
+      cpLayout->addWidget(pbCopyBoard, 2, 1);
+      pbCopyBoard->setEnabled(false);
+      connect(pbCopyBoard, &QPushButton::clicked, this,  &DigiSettingsPanel::CopyBoardSettings);
+
+      pbCopyDigi = new QPushButton("Copy Digitizer", ICTab);
+      pbCopyDigi->setFixedSize(200, 50);
+      cpLayout->addWidget(pbCopyDigi, 3, 1);
+      pbCopyDigi->setEnabled(false);
+      connect(pbCopyDigi, &QPushButton::clicked, this,  &DigiSettingsPanel::CopyWholeDigitizer);
+      
       ///================
       QGroupBox * icBox2b = new QGroupBox("Copy To", icBox2);
-      cpLayout->addWidget(icBox2b, 2);
+      cpLayout->addWidget(icBox2b, 0, 2, 5, 1);
 
       QGridLayout * lo2 = new QGridLayout(icBox2b);
 
-      RComboBox * cbCopyDigiTo = new RComboBox(ICTab);
+      cbCopyDigiTo = new RComboBox(ICTab);
       for( int i = 0; i < nDigi; i++) cbCopyDigiTo->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
-      lo2->addWidget(cbCopyDigiTo, 0, 0);
+      lo2->addWidget(cbCopyDigiTo, 0, 0, 1, 8);
+      connect(cbCopyDigiTo, &RComboBox::currentIndexChanged, this, [=](int index){
+        if( index == cbCopyDigiFrom->currentIndex() ){
+          pbCopyBoard->setEnabled(false);
+          pbCopyDigi->setEnabled(false);
+        }else{
+          pbCopyBoard->setEnabled(true);
+          pbCopyDigi->setEnabled(true);
+        }
+      });
 
+      rowID = 0;
+      
+      for( int i = 0; i < digi[0]->GetNChannels(); i++) {
+        if( i % 8 == 0) rowID ++;
+        chkChTo[i] = new QCheckBox("ch-" + QString::number(i), ICTab);
+        lo2->addWidget(chkChTo[i], rowID, i%8);
+        connect(chkChTo[i], &QCheckBox::clicked, this, &DigiSettingsPanel::CheckRadioAndCheckedButtons);
+      }
 
-      cpLayout->setStretch(0, 4);
-      cpLayout->setStretch(1, 1);
-      cpLayout->setStretch(2, 4);
+      cpLayout->setColumnStretch(0, 4);
+      cpLayout->setColumnStretch(1, 1);
+      cpLayout->setColumnStretch(2, 4);
 
     }
   }
@@ -1404,7 +1452,7 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
 
   enableSignalSlot = false;
 
-  printf("%s\n", __func__);
+  printf("%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
 
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
@@ -1941,4 +1989,94 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
   }
 
   enableSignalSlot = true;
+}
+
+void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
+
+
+  int chFromIndex = -1;
+  for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+    if( rbCopyChFrom[i]->isChecked() ){
+      chFromIndex = i;
+      break;
+    }
+  }
+
+  for( int i = 0 ; i < MaxNumberOfChannel ; i++) chkChTo[i]->setEnabled(true);
+  if( chFromIndex >= 0 ) chkChTo[chFromIndex]->setEnabled(false);
+
+  bool isToIndexCleicked = false;
+  for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+    if( i == chFromIndex ) continue;
+    if( chkChTo[i]->isChecked() ){
+      isToIndexCleicked = true;
+      break;
+    }
+  }
+
+  if( chFromIndex >= 0 && isToIndexCleicked ) pbCopyChannel->setEnabled(true);
+
+}
+
+bool DigiSettingsPanel::CopyChannelSettings()
+{
+  int digiFromIndex = cbCopyDigiFrom->currentIndex();
+  int digiToIndex = cbCopyDigiTo->currentIndex();
+
+  int chFromIndex = -1;
+  for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+    if( rbCopyChFrom[i]->isChecked() ){
+      chFromIndex = i;
+      break;
+    }
+  }
+  if( chFromIndex < 0 ) return false;
+
+  SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFromIndex]->GetSerialNumber()) + ", CH:" +  QString::number(chFromIndex) + " to ... ");
+  for( int i = 0; i < MaxNumberOfChannel; i++){
+    if( chkChTo[i]->isChecked() ){
+      //Copy setting
+      SendLogMsg("  ---> DIG:" + QString::number(digi[digiToIndex]->GetSerialNumber()) + ", CH:" +  QString::number(i));
+      for( int k = 0; k < (int) DIGIPARA::CH::AllSettings.size(); k ++){
+        if( DIGIPARA::CH::AllSettings[k].ReadWrite() != RW::ReadWrite ) continue;
+        if( !digi[digiToIndex]->WriteValue( DIGIPARA::CH::AllSettings[k],  digi[digiFromIndex]->GetSettingValue(DIGIPARA::CH::AllSettings[k], chFromIndex) , i ) ){
+          SendLogMsg("something wrong when copying setting : " + QString::fromStdString( DIGIPARA::CH::AllSettings[k].GetPara())) ;
+          return false;
+          break;
+        }
+      }
+    }
+  }
+  SendLogMsg("------ done");
+  ID = digiToIndex;
+  ShowSettingsToPanel();
+  return true;
+}
+
+bool DigiSettingsPanel::CopyBoardSettings(){
+  int digiFromIndex = cbCopyDigiFrom->currentIndex();
+  int digiToIndex = cbCopyDigiTo->currentIndex();
+
+  SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFromIndex]->GetSerialNumber()) + " to DIG:" +  QString::number(digi[digiToIndex]->GetSerialNumber()));
+  for( int i = 0; i < MaxNumberOfChannel; i++){
+  if( chkChTo[i]->isChecked() ){
+    //Copy setting
+    for( int k = 0; k < (int) DIGIPARA::DIG::AllSettings.size(); k ++){
+      if( DIGIPARA::DIG::AllSettings[k].ReadWrite() != RW::ReadWrite ) continue;
+        if( ! digi[digiToIndex]->WriteValue( DIGIPARA::DIG::AllSettings[k],  digi[digiFromIndex]->GetSettingValue(DIGIPARA::DIG::AllSettings[k])) ){
+          SendLogMsg("something wrong when copying setting : " + QString::fromStdString( DIGIPARA::DIG::AllSettings[k].GetPara())) ;
+          return false;
+          break;
+        }
+      }
+    }
+  }
+  SendLogMsg("------ done");
+  ID = digiToIndex;
+  ShowSettingsToPanel();
+  return true;
+}
+
+bool DigiSettingsPanel::CopyWholeDigitizer(){
+  return CopyChannelSettings() | CopyBoardSettings();
 }
