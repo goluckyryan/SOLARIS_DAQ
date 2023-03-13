@@ -166,8 +166,8 @@ private:
 
   //--------------- Channel settings
   RComboBox * cbChPick[MaxNumberOfDigitizer];
-  RComboBox * cbbOnOff[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
+  RComboBox * cbbOnOff[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbRecordLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbPreTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbDCOffset[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];

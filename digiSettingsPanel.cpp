@@ -544,9 +544,65 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
           cbChPick[iDigi] = new RComboBox(tab);
           cbChPick[iDigi]->addItem("All", -1);
+          for( int i = 0; i < ch; i++) cbChPick[iDigi]->addItem("Ch-" + QString::number(i), i);
           layout0->addWidget(cbChPick[iDigi], 0, 1);
           //TODO================ 
-          cbChPick[iDigi]->setEnabled(false);
+          connect(cbChPick[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+            int index = cbChPick[ID]->currentData().toInt();
+            if(index == -1) {
+              ShowSettingsToPanel();
+              return;
+            }else{
+              enableSignalSlot = false;
+              unsigned short ch = digi[iDigi]->GetNChannels();
+              printf("index = %d, ch = %d\n", index, ch);
+              FillComboBoxValueFromMemory(cbbOnOff[ID][ch], DIGIPARA::CH::ChannelEnable, index);
+              FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], DIGIPARA::CH::DC_Offset, index);
+              FillSpinBoxValueFromMemory(spbThreshold[ID][ch], DIGIPARA::CH::TriggerThreshold, index);
+              FillComboBoxValueFromMemory(cbbParity[ID][ch], DIGIPARA::CH::Polarity, index);
+              FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], DIGIPARA::CH::RecordLength, index);
+              FillSpinBoxValueFromMemory(spbPreTrigger[ID][ch], DIGIPARA::CH::PreTrigger, index);
+              FillSpinBoxValueFromMemory(spbInputRiseTime[ID][ch], DIGIPARA::CH::TimeFilterRiseTime, index);
+              FillSpinBoxValueFromMemory(spbTriggerGuard[ID][ch], DIGIPARA::CH::TimeFilterRetriggerGuard, index);
+              FillComboBoxValueFromMemory(cbbLowFilter[ID][ch], DIGIPARA::CH::EnergyFilterLowFreqFilter, index);
+              FillComboBoxValueFromMemory(cbbWaveSource[ID][ch], DIGIPARA::CH::WaveDataSource, index);
+              FillComboBoxValueFromMemory(cbbWaveRes[ID][ch], DIGIPARA::CH::WaveResolution, index);
+              FillComboBoxValueFromMemory(cbbWaveSave[ID][ch], DIGIPARA::CH::WaveSaving, index);
+
+              FillSpinBoxValueFromMemory(spbTrapRiseTime[ID][ch], DIGIPARA::CH::EnergyFilterRiseTime, index);
+              FillSpinBoxValueFromMemory(spbTrapFlatTop[ID][ch], DIGIPARA::CH::EnergyFilterFlatTop, index);
+              FillSpinBoxValueFromMemory(spbTrapPoleZero[ID][ch], DIGIPARA::CH::EnergyFilterPoleZero, index);
+              FillSpinBoxValueFromMemory(spbPeaking[ID][ch], DIGIPARA::CH::EnergyFilterPeakingPosition, index);
+              FillComboBoxValueFromMemory(cbbPeakingAvg[ID][ch], DIGIPARA::CH::EnergyFilterPeakingAvg, index);
+              FillComboBoxValueFromMemory(cbbBaselineAvg[ID][ch], DIGIPARA::CH::EnergyFilterBaselineAvg, index);
+              FillSpinBoxValueFromMemory(spbFineGain[ID][ch], DIGIPARA::CH::EnergyFilterFineGain, index);
+              FillSpinBoxValueFromMemory(spbBaselineGuard[ID][ch], DIGIPARA::CH::EnergyFilterBaselineGuard, index);
+              FillSpinBoxValueFromMemory(spbPileupGuard[ID][ch], DIGIPARA::CH::EnergyFilterPileUpGuard, index);
+
+              FillComboBoxValueFromMemory(cbbAnaProbe0[ID][ch], DIGIPARA::CH::WaveAnalogProbe0, index);
+              FillComboBoxValueFromMemory(cbbAnaProbe1[ID][ch], DIGIPARA::CH::WaveAnalogProbe1, index);
+              FillComboBoxValueFromMemory(cbbDigProbe0[ID][ch], DIGIPARA::CH::WaveDigitalProbe0, index);
+              FillComboBoxValueFromMemory(cbbDigProbe1[ID][ch], DIGIPARA::CH::WaveDigitalProbe1, index);
+              FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], DIGIPARA::CH::WaveDigitalProbe2, index);
+              FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], DIGIPARA::CH::WaveDigitalProbe3, index);
+
+              FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], DIGIPARA::CH::EventSelector, index);
+              FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], DIGIPARA::CH::WaveSelector, index);
+              FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][ch], DIGIPARA::CH::EnergySkimLowDiscriminator, index);
+              FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][ch], DIGIPARA::CH::EnergySkimHighDiscriminator, index);
+
+              FillComboBoxValueFromMemory(cbbEvtTrigger[ID][ch], DIGIPARA::CH::EventTriggerSource, index);
+              FillComboBoxValueFromMemory(cbbWaveTrigger[ID][ch], DIGIPARA::CH::WaveTriggerSource, index);
+              FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], DIGIPARA::CH::ChannelVetoSource, index);
+              FillComboBoxValueFromMemory(cbbCoinMask[ID][ch], DIGIPARA::CH::CoincidenceMask, index);
+              FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], DIGIPARA::CH::AntiCoincidenceMask, index);
+              FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], DIGIPARA::CH::CoincidenceLength, index);
+              FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], DIGIPARA::CH::ADCVetoWidth, index);
+    
+              enableSignalSlot = true;
+            }
+          });
+
         }
 
         int rowID = 0;
@@ -752,7 +808,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupSpinBoxTab(spbTrapRiseTime, DIGIPARA::CH::EnergyFilterRiseTime, "Trap. Rise Time [ns]", trapTab, iDigi, digi[iDigi]->GetNChannels());
         SetupSpinBoxTab(spbTrapFlatTop, DIGIPARA::CH::EnergyFilterFlatTop, "Trap. Flat Top [ns]", trapTab, iDigi, digi[iDigi]->GetNChannels());
         SetupSpinBoxTab(spbTrapPoleZero, DIGIPARA::CH::EnergyFilterPoleZero, "Trap. Pole Zero [ns]", trapTab, iDigi, digi[iDigi]->GetNChannels());
-        SetupSpinBoxTab(spbPeaking, DIGIPARA::CH::EnergyFilterPeakingAvg, "Peaking [%]", trapTab, iDigi, digi[iDigi]->GetNChannels());
+        SetupSpinBoxTab(spbPeaking, DIGIPARA::CH::EnergyFilterPeakingPosition, "Peaking [%]", trapTab, iDigi, digi[iDigi]->GetNChannels());
         SetupComboBoxTab(cbbPeakingAvg, DIGIPARA::CH::EnergyFilterPeakingAvg, "Peak Avg.", trapTab, iDigi, digi[iDigi]->GetNChannels());
         SetupComboBoxTab(cbbBaselineAvg, DIGIPARA::CH::EnergyFilterBaselineAvg, "Baseline Avg.", trapTab, iDigi, digi[iDigi]->GetNChannels());
         SetupSpinBoxTab(spbFineGain, DIGIPARA::CH::EnergyFilterFineGain, "Fine Gain", trapTab, iDigi, digi[iDigi]->GetNChannels());
@@ -1593,6 +1649,8 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
 
   enableSignalSlot = true;
 
+  if( cbChPick[ID]->currentData().toInt() >= 0 ) return;
+
   SyncComboBox(cbbOnOff, -1);
   SyncComboBox(cbbParity, -1);
   SyncComboBox(cbbLowFilter, -1);
@@ -1701,15 +1759,18 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
   if( isMaster && para.GetType() == TYPE::CH ) cbb->addItem("");
   connect(cbb, &RComboBox::currentIndexChanged, this, [=](){
     if( !enableSignalSlot ) return;
-    //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
+    int index = ( ch_index == -1 ?  cbChPick[ID]->currentData().toInt() : ch_index);
+    //int index = ch_index;
+    //printf("%s %d  %s \n", para.GetPara().c_str(), index, cbb->currentData().toString().toStdString().c_str());
     QString msg;
     msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
-    if( para.GetType() == TYPE::CH ) msg += ",CH:" + QString::number(ch_index);
-    if( para.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(ch_index);
+    if( para.GetType() == TYPE::CH ) msg += ",CH:" + QString::number(index);
+    if( para.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(index);
     msg += " = " + cbb->currentData().toString();
-    if( digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), ch_index)){
+    if( digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), index)){
       SendLogMsg(msg + "|OK.");
       cbb->setStyleSheet("");
+      ShowSettingsToPanel();
     }else{
       SendLogMsg(msg + "|Fail.");
       cbb->setStyleSheet("color:red;");
@@ -1721,7 +1782,7 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
-  spb = new RSpinBox(this);
+  spb = new RSpinBox(this);  
   if( para.GetType() == TYPE::DIG || ch_index >= 0 ){
     spb->setMinimum(atof( para.GetAnswers()[0].first.c_str()));
   }else{
@@ -1734,25 +1795,28 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     printf("--- missed. %s\n", para.GetPara().c_str());
   }
   layout->addWidget(spb, row, col + 1, srow, scol);
+
   connect(spb, &RSpinBox::valueChanged, this, [=](){ 
     if( !enableSignalSlot ) return; 
     spb->setStyleSheet("color:blue;");
   });
   connect(spb, &RSpinBox::returnPressed, this, [=](){
     if( !enableSignalSlot ) return;
-    //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+    //printf("%s %d  %d \n", para.GetPara().c_str(), index, spb->value());
     if( spb->decimals() == 0 && spb->singleStep() != 1) {
       double step = spb->singleStep();
       double value = spb->value();
       spb->setValue( (std::round(value/step) * step) );
     }
+    int index = ( ch_index == -1 ?  cbChPick[ID]->currentData().toInt() : ch_index);
     QString msg;
     msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
-    if( para.GetType() == TYPE::CH ) msg += ",CH:" + (ch_index == -1 ? "All" : QString::number(ch_index));
+    if( para.GetType() == TYPE::CH ) msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
     msg += " = " + QString::number(spb->value());
-    if( digi[ID]->WriteValue(para, std::to_string(spb->value()), ch_index)){
+    if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){
       SendLogMsg(msg + "|OK.");
       spb->setStyleSheet("");
+      ShowSettingsToPanel();
     }else{
       SendLogMsg(msg + "|Fail.");
       spb->setStyleSheet("color:red;");
@@ -1762,6 +1826,7 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
 
 void DigiSettingsPanel::SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], int ch){
   if( !enableSignalSlot ) return;
+  if( cbChPick[ID]->currentData().toInt() >= 0 ) return;
 
   const int nCh = digi[ID]->GetNChannels();
 

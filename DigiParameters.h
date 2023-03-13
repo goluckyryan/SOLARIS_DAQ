@@ -389,7 +389,7 @@ namespace DIGIPARA{
     const Reg EnergyFilterRiseTime        ("EnergyFilterRiseTimeT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"13000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg EnergyFilterFlatTop         ("EnergyFilterFlatTopT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"3000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg EnergyFilterPoleZero        ("EnergyFilterPoleZeroT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"524000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
-    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"0", ""},{"100", ""}, {"1",""}}, ANSTYPE::INTEGER, "%");
+    const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"10", ""},{"90", ""}, {"1",""}}, ANSTYPE::INTEGER, "%");
     const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   "1 sample"},
                                                                                                {"LowAVG",    "4 samples"},
                                                                                                {"MediumAVG", "16 samples"},
