@@ -172,12 +172,12 @@ namespace PHA{
                                                                                   {"SINlevel", "S-IN Level"},
                                                                                   {"SINedge", "S-IN Edge"},
                                                                                   {"SWcmd", "Software"},
-                                                                                  {"LVDS", "LVDS"}}); 
+                                                                                  {"LVDS", "LVDS"}}, ANSTYPE::STR); 
     const Reg GlobalTriggerSource      ("GlobalTriggerSource", RW::ReadWrite, TYPE::DIG,{{"TrgIn",      "TRG-IN" },    
                                                                                          {"SwTrg",      "Software" },
                                                                                          {"GPIO",       "GPIO" },
                                                                                          {"TestPulse",  "Test Pulse" },
-                                                                                         {"LVDS",       "LVDS"}});
+                                                                                         {"LVDS",       "LVDS"}}, ANSTYPE::STR);
 
     const Reg BusyInSource             ("BusyInSource", RW::ReadWrite, TYPE::DIG, {{"Disabled","Disabled"},
                                                                                    {"SIN", "SIN"},
@@ -507,8 +507,8 @@ namespace PHA{
                                                                                        {"GlobalTriggerSource", "Global Trigger"},
                                                                                        {"ITLA", "ITLA"},
                                                                                        {"ITLB", "ITLB"}});
-    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
-    const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite, TYPE::CH, {{"1", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
 
     const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
 

@@ -554,7 +554,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             }else{
               enableSignalSlot = false;
               unsigned short ch = digi[iDigi]->GetNChannels();
-              printf("index = %d, ch = %d\n", index, ch);
+              //printf("index = %d, ch = %d\n", index, ch);
               FillComboBoxValueFromMemory(cbbOnOff[ID][ch], PHA::CH::ChannelEnable, index);
               FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], PHA::CH::DC_Offset, index);
               FillSpinBoxValueFromMemory(spbThreshold[ID][ch], PHA::CH::TriggerThreshold, index);
@@ -945,7 +945,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         rowID ++;
         SetupComboBox( cbAllCoinMask, PHA::CH::CoincidenceMask, -1, false, "Coincident Mask (all ch.)", triggerLayout, rowID, 0);
         SetupSpinBox( sbAllCoinLength, PHA::CH::CoincidenceLength, -1, false, "Coincident Length [ns] (all ch.)", triggerLayout, rowID, 2);
-
+        
+        //----------------------------
+        rowID ++;
+        SetupComboBox( cbAllAntiCoinMask, PHA::CH::AntiCoincidenceMask, -1, false, "Anti-Coincident Mask (all ch.)", triggerLayout, rowID, 0);
 
         QSignalMapper * triggerMapper = new QSignalMapper(tab);
         connect(triggerMapper, &QSignalMapper::mappedInt, this, &DigiSettingsPanel::onTriggerClick);
@@ -1084,7 +1087,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       leBdSettingsRead = new QLineEdit(ICTab);
       leBdSettingsRead->setAlignment(Qt::AlignRight);
-      leBdSettingsRead->setFixedWidth(200);
+      leBdSettingsRead->setFixedWidth(250);
       leBdSettingsRead->setReadOnly(true);
       inquiryLayout->addWidget(leBdSettingsRead, rowID, 3);
 
@@ -1202,7 +1205,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       leChSettingsRead = new QLineEdit(ICTab);
       leChSettingsRead->setAlignment(Qt::AlignRight);
-      leChSettingsRead->setFixedWidth(200);
+      leChSettingsRead->setFixedWidth(250);
       leChSettingsRead->setReadOnly(true);
       inquiryLayout->addWidget(leChSettingsRead, rowID, 3);
       
@@ -1429,7 +1432,7 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   unsigned short ch = (haha >> 8 ) & 0xFF;
   unsigned short ch2 = haha & 0xFF;
 
-  qDebug() << "Digi-" << iDig << ", Ch-" << ch << ", " << ch2; 
+  //qDebug() << "Digi-" << iDig << ", Ch-" << ch << ", " << ch2; 
 
   if(trgMapClickStatus[ch][ch2]){
     trgMap[ch][ch2]->setStyleSheet(""); 
@@ -1467,6 +1470,7 @@ void DigiSettingsPanel::ReadTriggerMap(){
     cbAllEvtTrigger->setCurrentIndex(cbbEvtTrigger[ID][MaxNumberOfChannel]->currentIndex());
     cbAllWaveTrigger->setCurrentIndex(cbbWaveTrigger[ID][MaxNumberOfChannel]->currentIndex());
     cbAllCoinMask->setCurrentIndex(cbbCoinMask[ID][MaxNumberOfChannel]->currentIndex());
+    cbAllAntiCoinMask->setCurrentIndex(cbbAntiCoinMask[ID][MaxNumberOfChannel]->currentIndex());
     sbAllCoinLength->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
 
     for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
@@ -2063,14 +2067,24 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
     if( haha == ANSTYPE::LIST){
       cbBdAns->setEnabled(true);
       cbBdAns->clear();
+      int ansIndex = -1;
+      QString ans2 = "";
       for( int i = 0; i < (int) PHA::DIG::AllSettings[cbIndex].GetAnswers().size(); i++){
         cbBdAns->addItem(QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].second),
                         QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].first));
+
+        if( ans == QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].first)) {
+          ansIndex = i;
+          ans2 = QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].second);
+        }
       }
+      cbBdAns->setCurrentIndex(ansIndex);
+      leBdSettingsRead->setText( ans  + " [ " + ans2 + " ]");
       sbBdSettingsWrite->setEnabled(false);
+      sbBdSettingsWrite->setStyleSheet("");
       sbBdSettingsWrite->setValue(0);
       leBdSettingsWrite->setEnabled(false);
-      leBdSettingsWrite->clear();
+      leBdSettingsWrite->setText(ans);
     }
     //===== lineEdit
     if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
@@ -2079,12 +2093,14 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
       leBdSettingsWrite->setEnabled(true);
       leBdSettingsWrite->clear();
       sbBdSettingsWrite->setEnabled(false);
+      sbBdSettingsWrite->setStyleSheet("");
       sbBdSettingsWrite->setValue(0);
     }
   }else{
     cbBdAns->clear();
     cbBdAns->setEnabled(false);
     sbBdSettingsWrite->setEnabled(false);
+  sbBdSettingsWrite->setStyleSheet("");
     sbBdSettingsWrite->cleanText();
     leBdSettingsWrite->setEnabled(false);
     leBdSettingsWrite->clear();
@@ -2143,14 +2159,24 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
     if( haha == ANSTYPE::LIST){
       cbChAns->setEnabled(true);
       cbChAns->clear();
+      int ansIndex = -1;
+      QString ans2 = "";
       for( int i = 0; i < (int) PHA::CH::AllSettings[cbIndex].GetAnswers().size(); i++){
         cbChAns->addItem(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second),
                         QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first));
+        
+        if( ans == QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first)) {
+          ansIndex = i;
+          ans2 = QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second);
+        }      
       }
+      cbChAns->setCurrentIndex(ansIndex);
+      leChSettingsRead->setText( ans  + " [ " + ans2 + " ]");
       sbChSettingsWrite->setEnabled(false);
+      sbChSettingsWrite->setStyleSheet("");
       sbChSettingsWrite->setValue(0);
       leChSettingsWrite->setEnabled(false);
-      leChSettingsWrite->clear();
+      leChSettingsWrite->setText(ans2);
     }
     if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
       cbChAns->clear();
@@ -2158,12 +2184,14 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       leChSettingsWrite->setEnabled(true);
       leChSettingsWrite->clear();
       sbChSettingsWrite->setEnabled(false);
+      sbChSettingsWrite->setStyleSheet("");
       sbChSettingsWrite->setValue(0);
     }
   }else{
     cbChAns->clear();
     cbChAns->setEnabled(false);
     sbChSettingsWrite->setEnabled(false);
+    sbChSettingsWrite->setStyleSheet("");
     sbChSettingsWrite->cleanText();
     leChSettingsWrite->setEnabled(false);
     leChSettingsWrite->clear();

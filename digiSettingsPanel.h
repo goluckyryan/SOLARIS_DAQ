@@ -160,6 +160,7 @@ private:
   RComboBox * cbAllEvtTrigger;
   RComboBox * cbAllWaveTrigger;
   RComboBox * cbAllCoinMask;
+  RComboBox * cbAllAntiCoinMask;
   RSpinBox  * sbAllCoinLength;
   QPushButton * trgMap[MaxNumberOfChannel][MaxNumberOfChannel];
   bool trgMapClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
