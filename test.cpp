@@ -98,7 +98,7 @@ int main(int argc, char* argv[]){
 
   //printf("===================================\n");
 
-  printf("======== index : %d \n", digi->FindIndex(DIGIPARA::CH::ChannelEnable));
+  printf("======== index : %d \n", digi->FindIndex(PHA::CH::ChannelEnable));
 
   //digi->LoadSettingsFromFile("settings_21245.dat");
   //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());

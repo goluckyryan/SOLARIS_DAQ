@@ -82,8 +82,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "False", -1);
-    digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", ch);
+    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     ReadScopeSettings();
     UpdateSettingsPanel();
     digiMTX.unlock();
@@ -123,9 +123,9 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   rowID ++;
   //TODO --- add None
   cbAnaProbe[0] = new RComboBox(this);
-  for( int i = 0; i < (int) DIGIPARA::CH::WaveAnalogProbe0.GetAnswers().size(); i++ ) {
-    cbAnaProbe[0]->addItem(QString::fromStdString((DIGIPARA::CH::WaveAnalogProbe0.GetAnswers())[i].second), 
-                           QString::fromStdString((DIGIPARA::CH::WaveAnalogProbe0.GetAnswers())[i].first));
+  for( int i = 0; i < (int) PHA::CH::WaveAnalogProbe0.GetAnswers().size(); i++ ) {
+    cbAnaProbe[0]->addItem(QString::fromStdString((PHA::CH::WaveAnalogProbe0.GetAnswers())[i].second), 
+                           QString::fromStdString((PHA::CH::WaveAnalogProbe0.GetAnswers())[i].first));
   }
 
   cbAnaProbe[1] = new RComboBox(this);
@@ -144,7 +144,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   
@@ -154,15 +154,15 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
 
   //TODO --- add None
   cbDigProbe[0] = new RComboBox(this);
-  for( int i = 0; i < (int) DIGIPARA::CH::WaveDigitalProbe0.GetAnswers().size(); i++ ) {
-    cbDigProbe[0]->addItem(QString::fromStdString((DIGIPARA::CH::WaveDigitalProbe0.GetAnswers())[i].second), 
-                           QString::fromStdString((DIGIPARA::CH::WaveDigitalProbe0.GetAnswers())[i].first));
+  for( int i = 0; i < (int) PHA::CH::WaveDigitalProbe0.GetAnswers().size(); i++ ) {
+    cbDigProbe[0]->addItem(QString::fromStdString((PHA::CH::WaveDigitalProbe0.GetAnswers())[i].second), 
+                           QString::fromStdString((PHA::CH::WaveDigitalProbe0.GetAnswers())[i].first));
   }
 
   cbDigProbe[1] = new RComboBox(this);
@@ -191,7 +191,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -200,7 +200,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -209,7 +209,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -218,7 +218,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX.lock();
-    digi[iDigi]->WriteValue(DIGIPARA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
     digiMTX.unlock();
   });
 
@@ -240,30 +240,30 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     QGridLayout * bLayout = new QGridLayout(box);
     bLayout->setSpacing(0);
 
-    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, DIGIPARA::CH::RecordLength);
-    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, DIGIPARA::CH::TriggerThreshold);
-    ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, DIGIPARA::CH::Polarity);
-    ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, DIGIPARA::CH::WaveResolution);
+    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, PHA::CH::RecordLength);
+    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, PHA::CH::TriggerThreshold);
+    ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, PHA::CH::Polarity);
+    ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, PHA::CH::WaveResolution);
 
     //------------------ next row
-    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, DIGIPARA::CH::PreTrigger);
-    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  DIGIPARA::CH::DC_Offset);
-    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, DIGIPARA::CH::TimeFilterRiseTime);
-    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, DIGIPARA::CH::TimeFilterRetriggerGuard);
+    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, PHA::CH::PreTrigger);
+    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  PHA::CH::DC_Offset);
+    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, PHA::CH::TimeFilterRiseTime);
+    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, PHA::CH::TimeFilterRetriggerGuard);
 
     //----------------- next row
-    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, DIGIPARA::CH::EnergyFilterRiseTime);
-    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, DIGIPARA::CH::EnergyFilterFlatTop);
-    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, DIGIPARA::CH::EnergyFilterPoleZero);
-    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, DIGIPARA::CH::EnergyFilterFineGain);
+    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, PHA::CH::EnergyFilterRiseTime);
+    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, PHA::CH::EnergyFilterFlatTop);
+    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, PHA::CH::EnergyFilterPoleZero);
+    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, PHA::CH::EnergyFilterFineGain);
 
     //----------------- next row
-    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, DIGIPARA::CH::EnergyFilterPeakingPosition);
-    ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, DIGIPARA::CH::EnergyFilterPeakingAvg);
-    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, DIGIPARA::CH::EnergyFilterBaselineGuard);
-    ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, DIGIPARA::CH::EnergyFilterBaselineAvg);
-    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, DIGIPARA::CH::EnergyFilterPileUpGuard);
-    ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, DIGIPARA::CH::EnergyFilterLowFreqFilter);
+    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, PHA::CH::EnergyFilterPeakingPosition);
+    ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, PHA::CH::EnergyFilterPeakingAvg);
+    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, PHA::CH::EnergyFilterBaselineGuard);
+    ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, PHA::CH::EnergyFilterBaselineAvg);
+    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, PHA::CH::EnergyFilterPileUpGuard);
+    ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, PHA::CH::EnergyFilterLowFreqFilter);
 
   }
 
@@ -283,7 +283,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(lbinfo, rowID, 5);
 
   rowID ++;
-  QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * DIGIPARA::TraceStep) + " ns due to processing speed.", this);
+  QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * PHA::TraceStep) + " ns due to processing speed.", this);
   layout->addWidget(lbinfo2, rowID, 0, 1, 5);
 
 
@@ -343,32 +343,32 @@ void Scope::ReadScopeSettings(){
   allowChange = false;
 
   for( int i = 0 ; i < 2; i++){
-    ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], DIGIPARA::CH::AnalogProbe[i]);
+    ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
   }
 
   for( int i = 0 ; i < 4; i++){
-    ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], DIGIPARA::CH::DigitalProbe[i]);
+    ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PHA::CH::DigitalProbe[i]);
   }
 
-  ScopeReadComboBoxValue(iDigi, ch, cbPolarity, DIGIPARA::CH::Polarity);
-  ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, DIGIPARA::CH::WaveResolution);
-  ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, DIGIPARA::CH::EnergyFilterPeakingAvg);
-  ScopeReadComboBoxValue(iDigi, ch, cbBaselineAvg, DIGIPARA::CH::EnergyFilterBaselineAvg);
-  ScopeReadComboBoxValue(iDigi, ch, cbLowFreqFilter, DIGIPARA::CH::EnergyFilterLowFreqFilter);
+  ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PHA::CH::Polarity);
+  ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PHA::CH::WaveResolution);
+  ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, PHA::CH::EnergyFilterPeakingAvg);
+  ScopeReadComboBoxValue(iDigi, ch, cbBaselineAvg, PHA::CH::EnergyFilterBaselineAvg);
+  ScopeReadComboBoxValue(iDigi, ch, cbLowFreqFilter, PHA::CH::EnergyFilterLowFreqFilter);
 
-  ScopeReadSpinBoxValue(iDigi, ch, sbRL, DIGIPARA::CH::RecordLength);
-  ScopeReadSpinBoxValue(iDigi, ch, sbPT, DIGIPARA::CH::PreTrigger);
-  ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset, DIGIPARA::CH::DC_Offset);
-  ScopeReadSpinBoxValue(iDigi, ch, sbThreshold, DIGIPARA::CH::TriggerThreshold);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTimeRiseTime, DIGIPARA::CH::TimeFilterRiseTime);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTimeGuard, DIGIPARA::CH::TimeFilterRetriggerGuard);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapRiseTime, DIGIPARA::CH::EnergyFilterRiseTime);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapFlatTop, DIGIPARA::CH::EnergyFilterFlatTop);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, DIGIPARA::CH::EnergyFilterPoleZero);
-  ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, DIGIPARA::CH::EnergyFilterFineGain);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, DIGIPARA::CH::EnergyFilterPeakingPosition);
-  ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, DIGIPARA::CH::EnergyFilterBaselineGuard);
-  ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, DIGIPARA::CH::EnergyFilterPileUpGuard);
+  ScopeReadSpinBoxValue(iDigi, ch, sbRL, PHA::CH::RecordLength);
+  ScopeReadSpinBoxValue(iDigi, ch, sbPT, PHA::CH::PreTrigger);
+  ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset, PHA::CH::DC_Offset);
+  ScopeReadSpinBoxValue(iDigi, ch, sbThreshold, PHA::CH::TriggerThreshold);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTimeRiseTime, PHA::CH::TimeFilterRiseTime);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTimeGuard, PHA::CH::TimeFilterRetriggerGuard);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapRiseTime, PHA::CH::EnergyFilterRiseTime);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapFlatTop, PHA::CH::EnergyFilterFlatTop);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, PHA::CH::EnergyFilterPoleZero);
+  ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, PHA::CH::EnergyFilterFineGain);
+  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, PHA::CH::EnergyFilterPeakingPosition);
+  ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, PHA::CH::EnergyFilterBaselineGuard);
+  ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, PHA::CH::EnergyFilterPileUpGuard);
 
   sbRL->setStyleSheet("");
   sbPT->setStyleSheet("");
@@ -403,8 +403,8 @@ void Scope::StartScope(){
 
   ReadScopeSettings();
 
-  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "False", -1);
-  digi[iDigi]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", ch);
+  digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+  digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
   digi[iDigi]->SetPHADataFormat(0);
 
   digi[iDigi]->StartACQ();
@@ -433,7 +433,7 @@ void Scope::StopScope(){
       if( digi[i]->IsDummy() ) continue;
       digiMTX.lock();
       digi[i]->StopACQ();
-      digi[i]->WriteValue(DIGIPARA::CH::ChannelEnable, "True", -1);
+      digi[i]->WriteValue(PHA::CH::ChannelEnable, "True", -1);
       digiMTX.unlock();
 
       readDataThread[i]->quit();
@@ -452,15 +452,15 @@ void Scope::UpdateScope(){
 
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
-  int sample2ns = DIGIPARA::TraceStep * (1 << cbWaveRes->currentIndex());
+  int sample2ns = PHA::TraceStep * (1 << cbWaveRes->currentIndex());
 
   emit UpdateScalar();
 
   if( digi ){
 
     digiMTX.lock();    
-    std::string time = digi[iDigi]->ReadValue(DIGIPARA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
-    std::string haha = digi[iDigi]->ReadValue(DIGIPARA::CH::SelfTrgRate, ch);
+    std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
+    std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
     if( atoi(haha.c_str()) == 0 ) {
       digiMTX.unlock();

@@ -748,10 +748,10 @@ void MainWindow::UpdateScalar(){
     //=========== another method, directly readValue
     digiMTX.lock();
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
-      std::string time = digi[iDigi]->ReadValue(DIGIPARA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
-      haha[ch] = digi[iDigi]->ReadValue(DIGIPARA::CH::SelfTrgRate, ch);
+      std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
+      haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
-      std::string kaka = digi[iDigi]->ReadValue(DIGIPARA::CH::ChannelSavedCount, ch);
+      std::string kaka = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
       acceptRate[ch] = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));

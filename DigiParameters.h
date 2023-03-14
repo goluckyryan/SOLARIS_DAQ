@@ -104,13 +104,9 @@ class Reg {
 
 
 //^==================== Some digitizer parameters
-
-// To avoid typo
-
-namespace DIGIPARA{
+namespace PHA{
 
   const unsigned short TraceStep = 8;
-
   namespace DIG{
     
     ///============== read only

@@ -34,6 +34,7 @@ public:
 
 private slots:  
   void onTriggerClick(int haha);
+  void ReadTriggerMap();
 
   void SaveSettings();
   void LoadSettings();
@@ -156,8 +157,12 @@ private:
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 
   //--------------- trigger map
-  QPushButton *bn[MaxNumberOfChannel][MaxNumberOfChannel];
-  bool bnClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
+  RComboBox * cbAllEvtTrigger;
+  RComboBox * cbAllWaveTrigger;
+  RComboBox * cbAllCoinMask;
+  RSpinBox  * sbAllCoinLength;
+  QPushButton * trgMap[MaxNumberOfChannel][MaxNumberOfChannel];
+  bool trgMapClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
 
   //--------------- Channel status
   QPushButton * chStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][9];
@@ -221,6 +226,7 @@ private:
 
   //-------------------------
   QLineEdit * leSettingFile[MaxNumberOfDigitizer];
+
   
   void SetStartSource();
   void SetGlobalTriggerSource();
@@ -228,7 +234,7 @@ private:
   void SetupShortComboBox(RComboBox * &cbb, Reg para);
 
   void SetupComboBox(RComboBox * &cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
-  void SetupSpinBox(RSpinBox * &spb, const Reg para, int ch_index, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupSpinBox(RSpinBox * &spb, const Reg para, int ch_index, bool isMaster,  QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
 
   void SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);
   void SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch);
@@ -243,7 +249,7 @@ private:
   void ReadChannelSetting(int cbIndex);
 
   void CheckRadioAndCheckedButtons();
-  bool CopyChannelSettings();
+  bool CopyChannelSettings(int digiFrom, int chFrom, int digiTo, int chTo);
   bool CopyBoardSettings();
   bool CopyWholeDigitizer();
 

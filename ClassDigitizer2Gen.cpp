@@ -37,13 +37,13 @@ void Digitizer2Gen::Initialization(){
   acqON = false;
 
   settingFileName = "";
-  boardSettings = DIGIPARA::DIG::AllSettings;
-  for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = DIGIPARA::CH::AllSettings;
-  for( int index = 0 ; index < 4; index ++) VGASetting[index] = DIGIPARA::VGA::VGAGain;
+  boardSettings = PHA::DIG::AllSettings;
+  for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
+  for( int index = 0 ; index < 4; index ++) VGASetting[index] = PHA::VGA::VGAGain;
 
   //build map
-  for( int i = 0; i < (int) DIGIPARA::DIG::AllSettings.size(); i++) boardMap[DIGIPARA::DIG::AllSettings[i].GetPara()] = i;
-  for( int i = 0; i < (int) DIGIPARA::CH::AllSettings.size(); i++) chMap[DIGIPARA::CH::AllSettings[i].GetPara()] = i;
+  for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
+  for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
   
 }
 
@@ -215,21 +215,21 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   ReadAllSettings();
 
   serialNumber = atoi(ReadValue("/par/SerialNum").c_str());
-  FPGAType = GetSettingValue(DIGIPARA::DIG::FirmwareType);
+  FPGAType = GetSettingValue(PHA::DIG::FirmwareType);
   nChannels    = atoi(ReadValue("/par/NumCh").c_str());
-  int adcRate = atoi(GetSettingValue(DIGIPARA::DIG::ADC_SampleRate).c_str());
+  int adcRate = atoi(GetSettingValue(PHA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
   
-  printf("   IP address : %s\n", GetSettingValue(DIGIPARA::DIG::IPAddress).c_str());
-  printf("     Net Mask : %s\n", GetSettingValue(DIGIPARA::DIG::NetMask).c_str());
-  printf("      Gateway : %s\n", GetSettingValue(DIGIPARA::DIG::Gateway).c_str());
+  printf("   IP address : %s\n", GetSettingValue(PHA::DIG::IPAddress).c_str());
+  printf("     Net Mask : %s\n", GetSettingValue(PHA::DIG::NetMask).c_str());
+  printf("      Gateway : %s\n", GetSettingValue(PHA::DIG::Gateway).c_str());
   
-  printf("   Model name : %s\n", GetSettingValue(DIGIPARA::DIG::ModelName).c_str());
-  printf("  CUP version : %s\n", GetSettingValue(DIGIPARA::DIG::CupVer).c_str());
-  printf("     DPP Type : %s\n", GetSettingValue(DIGIPARA::DIG::FirmwareType).c_str());
+  printf("   Model name : %s\n", GetSettingValue(PHA::DIG::ModelName).c_str());
+  printf("  CUP version : %s\n", GetSettingValue(PHA::DIG::CupVer).c_str());
+  printf("     DPP Type : %s\n", GetSettingValue(PHA::DIG::FirmwareType).c_str());
   printf("  DPP Version : %s\n", FPGAType.c_str());
   printf("Serial number : %d\n", serialNumber);
-  printf("     ADC bits : %s\n", GetSettingValue(DIGIPARA::DIG::ADC_bit).c_str());
+  printf("     ADC bits : %s\n", GetSettingValue(PHA::DIG::ADC_bit).c_str());
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
   printf("     Channels : %d\n", nChannels);
 
