@@ -133,7 +133,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         LEDStatus[iDigi][i] = new QPushButton(tab);
         LEDStatus[iDigi][i]->setEnabled(false);
         LEDStatus[iDigi][i]->setFixedSize(QSize(30,30));
-        LEDStatus[iDigi][i]->setToolTip(LEDToolTip[i]);
+        LEDStatus[iDigi][i]->setToolTip(QString::number(i) + " - " + LEDToolTip[i]);
         LEDStatus[iDigi][i]->setToolTipDuration(-1);
         //TODO set tooltip position on top
         statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + 19 - i);
@@ -149,7 +149,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ACQStatus[iDigi][i] = new QPushButton(tab);
         ACQStatus[iDigi][i]->setEnabled(false);
         ACQStatus[iDigi][i]->setFixedSize(QSize(30,30));
-        ACQStatus[iDigi][i]->setToolTip(ACQToolTip[i]);
+        ACQStatus[iDigi][i]->setToolTip(QString::number(i) + " - " + ACQToolTip[i]);
         ACQStatus[iDigi][i]->setToolTipDuration(-1);
         statusLayout->addWidget(ACQStatus[iDigi][i], 1, 1 + 7 - i);
       }
@@ -753,7 +753,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             chStatus[iDigi][ch][k] = new QPushButton(statusTab);
             chStatus[iDigi][ch][k]->setEnabled(false);
             chStatus[iDigi][ch][k]->setFixedSize(QSize(10,25));
-            chStatus[iDigi][ch][k]->setToolTip(chToolTip[k]);
+            chStatus[iDigi][ch][k]->setToolTip(QString::number(k) + " - " + chToolTip[k]);
             chStatus[iDigi][ch][k]->setToolTipDuration(-1);
             layout->addWidget(chStatus[iDigi][ch][k], 1 + ch/2, ch%2 * 12 + 9 - k); // arrange backward, so that it is like a bit-wise
           }
@@ -2030,12 +2030,22 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
     case RW::ReadWrite : type ="Read/Write"; break;
   }
   leBdSettingsType->setText(type);
-  leBdSettingsRead->setText(QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::DIG::AllSettings[cbIndex])));
+
+  QString ans = QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::DIG::AllSettings[cbIndex]));
+  ANSTYPE haha = PHA::DIG::AllSettings[cbIndex].GetAnswerType();
+
+  if( haha == ANSTYPE::BYTE){
+    leBdSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
+  }else if( haha == ANSTYPE::BINARY ){
+    leBdSettingsRead->setText( "0b" + QString::number(ans.toUInt(), 2).rightJustified(18, '0'));
+  }else{
+    leBdSettingsRead->setText(ans);
+  }
   leBdSettingsUnit->setText(QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetUnit()));
 
-  ANSTYPE haha = PHA::DIG::AllSettings[cbIndex].GetAnswerType();
   if( PHA::DIG::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
 
+    //===== spin box
     if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
       cbBdAns->clear();
       cbBdAns->setEnabled(false);
@@ -2049,6 +2059,7 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
       sbBdSettingsWrite->setDecimals(0);
     }
     if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
+    //===== combo Box
     if( haha == ANSTYPE::LIST){
       cbBdAns->setEnabled(true);
       cbBdAns->clear();
@@ -2061,7 +2072,8 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
       leBdSettingsWrite->setEnabled(false);
       leBdSettingsWrite->clear();
     }
-    if( haha == ANSTYPE::STR){
+    //===== lineEdit
+    if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
       cbBdAns->clear();
       cbBdAns->setEnabled(false);
       leBdSettingsWrite->setEnabled(true);
@@ -2098,10 +2110,20 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
     case RW::ReadWrite : type ="Read/Write"; break;
   }
   leChSettingsType->setText(type);
-  leChSettingsRead->setText(QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::CH::AllSettings[cbIndex], cbIQCh->currentData().toInt())));
+
+  QString ans = QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::CH::AllSettings[cbIndex], cbIQCh->currentData().toInt()));
+  ANSTYPE haha = PHA::CH::AllSettings[cbIndex].GetAnswerType();
+
+  if( haha == ANSTYPE::BYTE){
+    leChSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
+  }else if( haha == ANSTYPE::BINARY ){
+    leChSettingsRead->setText( "0b" + QString::number(ans.toUInt(), 2).rightJustified(18, '0'));
+  }else{
+    leChSettingsRead->setText(ans);
+  }
+
   leChSettingsUnit->setText(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetUnit()));
 
-  ANSTYPE haha = PHA::CH::AllSettings[cbIndex].GetAnswerType();
 
   if( PHA::CH::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
 
@@ -2130,7 +2152,7 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       leChSettingsWrite->setEnabled(false);
       leChSettingsWrite->clear();
     }
-    if( haha == ANSTYPE::STR){
+    if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
       cbChAns->clear();
       cbChAns->setEnabled(false);
       leChSettingsWrite->setEnabled(true);

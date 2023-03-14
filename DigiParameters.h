@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-enum ANSTYPE {INTEGER, FLOAT, LIST, STR, NONE};
+enum ANSTYPE {INTEGER, FLOAT, LIST, STR, BYTE, BINARY, NONE};
 enum TYPE {CH, DIG, LVDS, VGA};
 enum RW { ReadOnly, WriteOnly, ReadWrite};
 
@@ -133,8 +133,8 @@ namespace PHA{
     const Reg IPAddress                ("IPAddress", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
     const Reg NetMask                  ("Netmask", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
     const Reg Gateway                  ("Gateway", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR);
-    const Reg LED_status               ("LedStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
-    const Reg ACQ_status               ("AcquisitionStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
+    const Reg LED_status               ("LedStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::BINARY, "byte");
+    const Reg ACQ_status               ("AcquisitionStatus", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::BINARY, "byte");
     const Reg MaxRawDataSize           ("MaxRawDataSize", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
     const Reg TempSensAirIn            ("TempSensAirIn", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
     const Reg TempSensAirOut           ("TempSensAirOut", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
@@ -161,7 +161,7 @@ namespace PHA{
     const Reg DutyCycleSensDCDC        ("DutyCycleSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "%");
     const Reg SpeedSensFan1            ("SpeedSensFan1", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "rpm");
     const Reg SpeedSensFan2            ("SpeedSensFan2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "rpm");
-    const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::STR, "byte");
+    const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::BINARY, "byte");
     const Reg BoardReady               ("BoardReady", RW::ReadOnly, TYPE::DIG, {{"True", "No Error"}, {"False", "Error"}});
   
     ///============= read write
@@ -234,8 +234,8 @@ namespace PHA{
     const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
-    const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::STR);
-    const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::STR);
+    const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
+    const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
     const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static", "DAC fixed level"},
                                                                                  {"ChInput", "From Channel"},
                                                                                  {"ChSum", "Sum of all Channels"},
@@ -474,7 +474,7 @@ namespace PHA{
                                                                                        {"ChSelfTrigger",         "Channel Self-Trigger"}, 
                                                                                        {"Ch64Trigger",           "Channel 64-Trigger"}, 
                                                                                        {"Disabled",              "Disabled"}});
-    const Reg ChannelsTriggerMask     ("ChannelsTriggerMask", RW::ReadWrite, TYPE::CH, {},  ANSTYPE::STR, "64-bit" );
+    const Reg ChannelsTriggerMask     ("ChannelsTriggerMask", RW::ReadWrite, TYPE::CH, {},  ANSTYPE::BYTE, "64-bit" );
     const Reg ChannelVetoSource       ("ChannelVetoSource", RW::ReadWrite, TYPE::CH, {{"BoardVeto", "Board Veto"},
                                                                                       {"ADCOverSaturation", "ADC Over Saturation"},
                                                                                       {"ADCUnderSaturation", "ADC Under Saturation"},
