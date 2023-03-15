@@ -79,7 +79,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
   QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
-  connect(tabWidget, &QTabWidget::currentChanged, this, [=](int index){ ID = index;});
+  connect(tabWidget, &QTabWidget::currentChanged, this, [=](int index){  ID = (index < nDigi ? index : 0); });
 
   //@========================== Tab for each digitizer
   for(unsigned short iDigi = 0; iDigi < this->nDigi; iDigi++){
@@ -1538,6 +1538,9 @@ void DigiSettingsPanel::EnableControl(){
     }
   }
   triggerMapTab->setEnabled(enable);
+
+  icBox1->setEnabled(enable);
+  icBox2->setEnabled(enable);
 
 }
 

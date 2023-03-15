@@ -27,7 +27,7 @@
 #include "digiSettingsPanel.h"
 #include "scope.h"
 
-const int chromeWindowID = 10485763;
+const int chromeWindowID = -1; // disable capture screenshot
 
 //^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
@@ -119,6 +119,8 @@ private:
   void StopACQ();
   QString startComment;
   QString stopComment;
+  bool needManualComment;
+  bool isRunning;
 
   DigiSettingsPanel * digiSetting;
 

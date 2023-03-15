@@ -39,7 +39,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   readDataThread = NULL;
   scope = NULL;
   runTimer = new QTimer();
-  connect(runTimer, &QTimer::timeout, this, &MainWindow::AutoRun);
+  needManualComment = true;
 
   {
     scalar = new QMainWindow(this);
@@ -107,9 +107,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
 
-    //QPushButton * bnCustomCommand = new QPushButton("Command line", this);
-
-
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -158,9 +155,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     chkSaveRun = new QCheckBox("Save Run", this);
     chkSaveRun->setChecked(true);
     chkSaveRun->setEnabled(false);
+    connect(chkSaveRun, &QCheckBox::clicked, this, [=]() { cbAutoRun->setEnabled(chkSaveRun->isChecked()); });
 
     cbAutoRun = new QComboBox(this);
-    cbAutoRun->addItem("Single infinte", -1);
+    cbAutoRun->addItem("Single infinte",  0);
     cbAutoRun->addItem("Single 30 mins", 30);
     cbAutoRun->addItem("Single 60 mins", 60);
     cbAutoRun->addItem("Single 2 hrs",  120);
@@ -175,11 +173,25 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
-    connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
+    //connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
+    connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::AutoRun);
     
     bnStopACQ = new QPushButton("Stop ACQ", this);
     bnStopACQ->setEnabled(false);
-    connect(bnStopACQ, &QPushButton::clicked, this, &MainWindow::StopACQ);
+    connect(bnStopACQ, &QPushButton::clicked, this, [=](){
+      needManualComment = true;
+      runTimer->stop();
+      StopACQ();
+
+      bnStartACQ->setEnabled(true);
+      bnStopACQ->setEnabled(false);
+      bnOpenScope->setEnabled(true);
+      chkSaveRun->setEnabled(true);
+      cbAutoRun->setEnabled(true);
+
+      if( digiSetting ) digiSetting->EnableControl();
+
+    });
 
     QLabel * lbRunComment = new QLabel("Run Comment : ", this);
     lbRunComment->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -282,8 +294,7 @@ void MainWindow::StartACQ(){
     runIDStr = QString::number(runID).rightJustified(3, '0');
     LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
 
-    //============ start comment
-    //if( cbAutoRun->currentData().toInt() > 0  ){
+    if( needManualComment  ){
       QDialog * dOpen = new QDialog(this);
       dOpen->setWindowTitle("Start Run Comment");
       dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
@@ -313,14 +324,18 @@ void MainWindow::StartACQ(){
         LogMsg("Start Run aborted. ");
         return;
       }
-    //}
-    //TODO ============ elog
+    }else{
+      //==========TODO auto run comment
+      startComment = "AutoRun for " + cbAutoRun->currentText();
+      leRunComment->setText(startComment);
+    }  
+    // ============ elog
     QString elogMsg = "=============== Run-" + runIDStr + "<br />"
                     +  QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />"
                     + "comment : " + startComment + "<br />" + 
                     + "----------------------------------------------";
     WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
-    //TODO ============ update expName.sh
+    // ============ update expName.sh
     WriteExpNameSh();
 
   }else{
@@ -352,59 +367,48 @@ void MainWindow::StartACQ(){
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   scalarThread->start();
 
-  bnStartACQ->setEnabled(false);
-  bnStopACQ->setEnabled(true);
-  bnOpenScope->setEnabled(false);
-  chkSaveRun->setEnabled(false);
-  cbAutoRun->setEnabled(false);
-
-  if( digiSetting ) digiSetting->EnableControl();
-
-  //TODO ======= Auto Run
-  if( cbAutoRun->currentIndex() > 0 ){
-    int timeMinite = cbAutoRun->currentData().toInt();
-    runTimer->start(timeMinite * 60 * 1000); // unit is msec
-  }
-
 }
 
 void MainWindow::StopACQ(){
 
   if( chkSaveRun->isChecked() ){
     //============ stop comment
-    QDialog * dOpen = new QDialog(this);
-    dOpen->setWindowTitle("Stop Run Comment");
-    dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-    dOpen->setMinimumWidth(600);
-    connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
+    if( needManualComment ){
+      QDialog * dOpen = new QDialog(this);
+      dOpen->setWindowTitle("Stop Run Comment");
+      dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+      dOpen->setMinimumWidth(600);
+      connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
 
-    QGridLayout * vlayout = new QGridLayout(dOpen);
-    QLabel *label = new QLabel("Enter Run comment for ending <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
-    QLineEdit *lineEdit = new QLineEdit(dOpen);
-    QPushButton *button1 = new QPushButton("OK", dOpen);
-    QPushButton *button2 = new QPushButton("Cancel", dOpen);
+      QGridLayout * vlayout = new QGridLayout(dOpen);
+      QLabel *label = new QLabel("Enter Run comment for ending <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
+      QLineEdit *lineEdit = new QLineEdit(dOpen);
+      QPushButton *button1 = new QPushButton("OK", dOpen);
+      QPushButton *button2 = new QPushButton("Cancel", dOpen);
 
-    vlayout->addWidget(label, 0, 0, 1, 2);
-    vlayout->addWidget(lineEdit, 1, 0, 1, 2);
-    vlayout->addWidget(button1, 2, 0);
-    vlayout->addWidget(button2, 2, 1);
+      vlayout->addWidget(label, 0, 0, 1, 2);
+      vlayout->addWidget(lineEdit, 1, 0, 1, 2);
+      vlayout->addWidget(button1, 2, 0);
+      vlayout->addWidget(button2, 2, 1);
 
-    connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
-    connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
-    int result = dOpen->exec();
+      connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
+      connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
+      int result = dOpen->exec();
 
-    if(result == QDialog::Accepted ){
-      stopComment = lineEdit->text();
-      if( stopComment == "") stopComment = "No commet was typed.";
-      leRunComment->setText(stopComment);
+      if(result == QDialog::Accepted ){
+        stopComment = lineEdit->text();
+        if( stopComment == "") stopComment = "No commet was typed.";
+        leRunComment->setText(stopComment);
+      }else{
+        LogMsg("Cancel Run aborted. ");
+        return;
+      }
     }else{
-      LogMsg("Cancel Run aborted. ");
-      return;
+      //TODO ============= 
+      stopComment = "End of AutoRun for " + cbAutoRun->currentText();
+      leRunComment->setText(stopComment);
     }
   }
-
-  //TODO ======= Stop the Auto Run
-  runTimer->stop();
 
   //=============== Stop digitizer
   for( int i = 0; i < nDigi; i++){
@@ -428,15 +432,9 @@ void MainWindow::StopACQ(){
   }else{
     LogMsg("===========================  no-Save Run stopped.");
   }
-  bnStartACQ->setEnabled(true);
-  bnStopACQ->setEnabled(false);
-  bnOpenScope->setEnabled(true);
-  chkSaveRun->setEnabled(true);
-
-  if( digiSetting ) digiSetting->EnableControl();
 
   if( chkSaveRun->isChecked() ){
-    //TODO ============= elog
+    // ============= elog
     QString msg = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />";
 
     for( int i = 0; i < nDigi; i++){
@@ -450,19 +448,59 @@ void MainWindow::StopACQ(){
 
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
-  //if( scalarThread->isRunning()) printf("Scalar Thread still running.\n");
-  //if( scalarThread->isFinished()) printf("Scalar Thread finsihed.\n");
-
 }
 
 void MainWindow::AutoRun(){
 
-  if( cbAutoRun->currentData().toInt() > 0  ){ 
-    //---- stop run
-
-  }else{
-    //----- stop run and start a new run
+  if( chkSaveRun->isChecked() == false){
+    StartACQ();
+    return;
   }
+
+  needManualComment = true;
+  isRunning = true;
+  ///=========== infinite single run
+  if( cbAutoRun->currentData().toInt() == 0 ){
+    StartACQ();
+  }else{
+    StartACQ();
+    connect(runTimer, &QTimer::timeout, this, [=](){
+      if( isRunning ){
+        StopACQ();
+        isRunning = false;
+        if( cbAutoRun->currentData().toInt() > 0 ) {
+          bnStartACQ->setEnabled(true);
+          bnStopACQ->setEnabled(false);
+        }
+      }else {
+        StartACQ();
+        isRunning = true;
+      }
+    });
+  }
+  
+  int timeMiliSec = cbAutoRun->currentData().toInt() * 60 * 1000;
+
+  ///=========== single timed run
+  if( cbAutoRun->currentData().toInt() > 0 ){
+    runTimer->setSingleShot(true);
+    runTimer->start(timeMiliSec);
+    needManualComment = false;
+  }
+
+  ///=========== infinite timed run
+  if( cbAutoRun->currentData().toInt() < 0 ){
+    runTimer->setSingleShot(false);
+    runTimer->start(timeMiliSec);
+    needManualComment = false;
+  }
+
+  bnStartACQ->setEnabled(false);
+  bnStopACQ->setEnabled(true);
+  bnOpenScope->setEnabled(false);
+  chkSaveRun->setEnabled(false);
+  cbAutoRun->setEnabled(false);
+  if( digiSetting ) digiSetting->EnableControl();
 
 }
 
@@ -513,8 +551,7 @@ void MainWindow::OpenDigitizers(){
       chkSaveRun->setEnabled(true);
       bnOpenDigitizers->setEnabled(false);
       bnOpenDigitizers->setStyleSheet("");
-      //cbAutoRun->setEnabled(true);
-      cbAutoRun->setEnabled(false);
+      cbAutoRun->setEnabled(true);
       bnOpenScalar->setEnabled(true);
 
     }else{
@@ -571,7 +608,6 @@ void MainWindow::CloseDigitizers(){
   delete [] readDataThread;
   digi = NULL;
   readDataThread = NULL;
-
 
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setFocus();
@@ -1047,8 +1083,7 @@ void MainWindow::CheckElog(){
   if( elogID > 0 ){
     LogMsg("Checked Elog writing. OK.");
 
-    //TODO =========== chrome windowID
-    AppendElog("Check Elog append.", chromeWindowID);
+    AppendElog("Check Elog append.", -1);
     if( elogID > 0 ){
       LogMsg("Checked Elog Append. OK.");
     }else{
@@ -1537,7 +1572,6 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
   if( elogID < 0 ) return;
   if( expName == "" ) return;
 
-  //TODO ===== Rethink the elog process, becasue the grafana screenshot most probably obtained from screenshot, unless there is an API for that
   //TODO ===== user name and pwd load from a file.
 
   QStringList arg;
