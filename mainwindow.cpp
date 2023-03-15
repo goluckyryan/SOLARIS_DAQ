@@ -63,6 +63,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     scalarThread = new ScalarThread();
     connect(scalarThread, &ScalarThread::updataScalar, this, &MainWindow::UpdateScalar);
+
   }
 
   QWidget * mainLayoutWidget = new QWidget(this);
@@ -118,7 +119,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnOpenScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
-
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -280,7 +280,12 @@ MainWindow::~MainWindow(){
   if( digiSetting != NULL ) delete digiSetting;
 
   printf("-------- delete influx\n");
-  if( influx != NULL ) delete influx;
+  if( influx != NULL ) {    
+    influx->ClearDataPointsBuffer();
+    influx->AddDataPoint("ProgramStart value=0");
+    influx->WriteData(DatabaseName.toStdString());
+    delete influx;
+  }
 
 }
 
@@ -338,17 +343,20 @@ void MainWindow::StartACQ(){
     // ============ update expName.sh
     WriteExpNameSh();
 
+    WriteRunTimeStampDat(true);
+
   }else{
     LogMsg("=========================== Start no-save Run");
   }
 
   //============================= start digitizer
-  for( int i =0 ; i < nDigi; i ++){
+  for( int i = 0 ; i < nDigi; i ++){
     if( digi[i]->IsDummy () ) continue;
-    //digi[i]->Reset();
-    //digi[i]->ProgramPHA(false);
+    for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch ++) oldTimeStamp[i][ch] = 0;
+
     digi[i]->SetPHADataFormat(1);// only save 1 trace
 
+    //Additional settings
     digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
 
     if( chkSaveRun->isChecked() ){
@@ -361,6 +369,16 @@ void MainWindow::StartACQ(){
     //TODO ========================== Sync start.
     readDataThread[i]->SetSaveData(chkSaveRun->isChecked());
     readDataThread[i]->start();
+
+  }
+
+  if( influx ){
+    influx->ClearDataPointsBuffer();
+    if( chkSaveRun->isChecked() ){
+      influx->AddDataPoint("RunID start=1,value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+    }
+    influx->AddDataPoint("StartStop value=1");
+    influx->WriteData(DatabaseName.toStdString());
   }
 
   if( !scalar->isVisible() ) scalar->show();
@@ -427,16 +445,22 @@ void MainWindow::StopACQ(){
     scalarThread->quit();
     scalarThread->wait();
   }
-  if( chkSaveRun->isChecked() ){
-    LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
-  }else{
-    LogMsg("===========================  no-Save Run stopped.");
+
+  if( influx ){
+    influx->ClearDataPointsBuffer();
+    if( chkSaveRun->isChecked() ){
+      influx->AddDataPoint("RunID start=0,value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + stopComment.replace(' ', '_').toStdString() + "\"");
+    }
+    influx->AddDataPoint("StartStop value=0");
+    influx->WriteData(DatabaseName.toStdString());
   }
 
-  if( chkSaveRun->isChecked() ){
+  if( chkSaveRun->isChecked() ){   
+    LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
+    WriteRunTimeStampDat(false);
+
     // ============= elog
     QString msg = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />";
-
     for( int i = 0; i < nDigi; i++){
       if( digi[i]->IsDummy () ) continue;
       msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
@@ -444,6 +468,10 @@ void MainWindow::StopACQ(){
     msg += "comment : " + stopComment + "<br />"
         + "======================";
     AppendElog(msg, chromeWindowID);
+
+
+  }else{
+    LogMsg("===========================  no-Save Run stopped.");
   }
 
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
@@ -454,6 +482,12 @@ void MainWindow::AutoRun(){
 
   if( chkSaveRun->isChecked() == false){
     StartACQ();
+    bnStartACQ->setEnabled(false);
+    bnStopACQ->setEnabled(true);
+    bnOpenScope->setEnabled(false);
+    chkSaveRun->setEnabled(false);
+    cbAutoRun->setEnabled(false);
+    if( digiSetting ) digiSetting->EnableControl();
     return;
   }
 
@@ -478,7 +512,7 @@ void MainWindow::AutoRun(){
       }
     });
   }
-  
+
   int timeMiliSec = cbAutoRun->currentData().toInt() * 60 * 1000;
 
   ///=========== single timed run
@@ -554,6 +588,10 @@ void MainWindow::OpenDigitizers(){
       cbAutoRun->setEnabled(true);
       bnOpenScalar->setEnabled(true);
 
+      for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch++) {
+        oldTimeStamp[i][ch] = 0;
+        oldSavedCount[i][ch] = 0;
+      }
     }else{
       digi[i]->SetDummy(i);
       LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digi[i]->GetNChannels()) + " ch.");
@@ -770,6 +808,7 @@ void MainWindow::UpdateScalar(){
   double acceptRate[MaxNumberOfChannel] = {0};
 
   ///===== Get trigger for all channel
+  unsigned long totalFileSize  = 0;
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
     if( digi[iDigi]->IsDummy() ) return;
     
@@ -782,28 +821,39 @@ void MainWindow::UpdateScalar(){
     //}
 
     //=========== another method, directly readValue
-    digiMTX.lock();
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
-      std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
+      digiMTX.lock();
+      std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
       haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
+      std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
+      digiMTX.unlock();
+      
+      unsigned long kaka = std::stoul(kakaStr.c_str()) ;
+      unsigned long time = std::stoul(timeStr.c_str()) ;
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
-      std::string kaka = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      acceptRate[ch] = atoi(kaka.c_str())*1e9*1.0 / atol(time.c_str());
+      if( oldTimeStamp[iDigi][ch] >  0 && time >  oldTimeStamp[iDigi][ch]){
+        acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
+      }else{
+        acceptRate[ch] = 0;
+      }
+      oldSavedCount[iDigi][ch] = kaka;
+      oldTimeStamp[iDigi][ch] = time; 
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
     }
-    digiMTX.unlock();
 
     ///============== push the trigger, acceptRate rate database
     if( influx ){
       for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
-        influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + haha[ch]);
-        if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + std::to_string(ch) + " value=" + std::to_string(acceptRate[ch]));
+        influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + haha[ch]);
+        if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(acceptRate[ch]));
       }
     }
+    totalFileSize +=  digi[iDigi]->GetTotalFilesSize();
   }
 
   if( influx && influx->GetDataLength() > 0 ){
+    if( chkSaveRun->isChecked() ) influx->AddDataPoint("FileSize value=" + std::to_string(totalFileSize));
     //influx->PrintDataPoints();
     influx->WriteData(DatabaseName.toStdString());
     influx->ClearDataPointsBuffer();
@@ -1051,7 +1101,7 @@ void MainWindow::SetupInflux(){
       if( foundDatabase ){
         LogMsg("<font style=\"color : green;\"> Database <b>" + DatabaseName + "</b> found.");
 
-        influx->AddDataPoint("Rate,Bd=0,Ch=0 value=1");
+        influx->AddDataPoint("ProgramStart value=1");
         influx->WriteData(DatabaseName.toStdString());
         influx->ClearDataPointsBuffer();
         if( influx->IsWriteOK() ){
@@ -1654,3 +1704,20 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
 }
 
+void MainWindow::WriteRunTimeStampDat(bool isStartRun){
+  
+  QFile file(dataPath + "/" + expName + "/RunTimeStampe.dat");
+  
+  file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append);
+
+  QString dateTime = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+
+  if( isStartRun ){
+    file.write(("Start Run | " + dateTime + " | " + startComment + "\n").toStdString().c_str());
+  }else{
+    file.write((" Stop Run | " + dateTime + " | " + stopComment + "\n").toStdString().c_str());
+  }
+  
+  file.close();
+
+}

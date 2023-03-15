@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <sys/stat.h>
 
 Digitizer2Gen::Digitizer2Gen(){  
   printf("======== %s \n",__func__);
@@ -543,14 +544,18 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
 }
 
 void Digitizer2Gen::CloseOutFile(){
-  if( outFile != NULL ) fclose(outFile);
+  if( outFile != NULL ) {
+    fclose(outFile);
+    int result = chmod(outFileName, S_IRUSR | S_IRGRP | S_IROTH);
+    if( result != 0 ) printf("somewrong when set file (%s) to read only.", outFileName);
+  }
 }
 
 void Digitizer2Gen::SaveDataToFile(){
 
   if( outFileSize > (unsigned int) MaxOutFileSize){
     FinishedOutFilesSize += ftell(outFile);
-    fclose(outFile);
+    CloseOutFile();
     outFileIndex ++;
     sprintf(outFileName, "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
     outFile = fopen(outFileName, "a+b");

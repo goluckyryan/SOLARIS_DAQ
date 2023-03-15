@@ -77,6 +77,8 @@ private slots:
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
 
+  void WriteRunTimeStampDat(bool isStartRun);
+
 signals :
 
 private:
@@ -162,6 +164,10 @@ private:
 
   QTimer * runTimer;
   unsigned int autoRunStartRunID;
+
+  //-------------- calculate instant accept Rate
+  unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
 
 };
