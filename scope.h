@@ -16,6 +16,7 @@
 #include <QMouseEvent>
 #include <QGestureEvent>
 
+#include "macro.h"
 #include "ClassDigitizer2Gen.h"
 #include "manyThread.h"
 #include "CustomWidgets.h"
@@ -133,6 +134,7 @@ signals:
   void UpdateScalar();
   void UpdateSettingsPanel();
   void TellSettingsPanelControlOnOff();
+  void TellACQOnOff(const bool onOff);
 
 private:
 

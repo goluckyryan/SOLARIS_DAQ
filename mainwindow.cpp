@@ -559,7 +559,7 @@ void MainWindow::OpenDigitizers(){
 
       LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
 
-      readDataThread[i] = new ReadDataThread(digi[i], this);
+      readDataThread[i] = new ReadDataThread(digi[i], i, this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
       //connect(readDataThread[i], &ReadDataThread::checkFileSize, this, &MainWindow::CheckOutFileSize);
       //connect(readDataThread[i], &ReadDataThread::endOfLastData, this, &MainWindow::CheckOutFileSize);
@@ -644,6 +644,7 @@ void MainWindow::CloseDigitizers(){
     if( digiSetting != NULL )  digiSetting->close(); 
 
     if( readDataThread[i] != NULL ){
+      LogMsg("Waiting for digitizer .....");
       readDataThread[i]->quit();
       readDataThread[i]->wait();
       delete readDataThread[i];
@@ -672,13 +673,25 @@ void MainWindow::CloseDigitizers(){
 
 //^###################################################################### Open Scope
 void MainWindow::OpenScope(){
-
   if( digi ){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
       connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
+      connect(scope, &Scope::TellACQOnOff, this, [=](const bool onOff){
+        if( influx ){
+          influx->ClearDataPointsBuffer();
+          influx->AddDataPoint(onOff ? "StartStop value=1" : "StartStop value=0");
+          influx->WriteData(DatabaseName.toStdString());
+        }
+      });
+
+      if( influx ){
+        influx->ClearDataPointsBuffer();
+        influx->AddDataPoint("StartStop value=1");
+        influx->WriteData(DatabaseName.toStdString());
+      }
       
       if( digiSetting ) {
         connect(scope, &Scope::UpdateSettingsPanel, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
@@ -689,7 +702,7 @@ void MainWindow::OpenScope(){
 
     }else{
       scope->show();
-      digiSetting->EnableControl();
+      if( digiSetting ) digiSetting->EnableControl();
     }
   }
 
@@ -829,11 +842,11 @@ void MainWindow::UpdateScalar(){
 
     //=========== another method, directly readValue
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
-      digiMTX.lock();
+      digiMTX[iDigi].lock();
       std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
       haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
       std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      digiMTX.unlock();
+      digiMTX[iDigi].unlock();
       
       unsigned long kaka = std::stoul(kakaStr.c_str()) ;
       unsigned long time = std::stoul(timeStr.c_str()) ;

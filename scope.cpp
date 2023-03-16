@@ -81,12 +81,12 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     ReadScopeSettings();
     UpdateSettingsPanel();
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
 
   allowChange = false;
@@ -143,9 +143,9 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
   
   connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -153,9 +153,9 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
 
   //TODO --- add None
@@ -190,36 +190,36 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX.lock();
+    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
   });
 
   layout->addWidget(cbAnaProbe[0], rowID, 0);
@@ -286,7 +286,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   QLabel * lbinfo2 = new QLabel("Maximum time range is " + QString::number(MaxDisplayTraceDataLength * PHA::TraceStep) + " ns due to processing speed.", this);
   layout->addWidget(lbinfo2, rowID, 0, 1, 5);
 
-
   //------------ close button
   rowID ++;
   bnScopeStart = new QPushButton("Start", this);
@@ -318,17 +317,12 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 }
 
 Scope::~Scope(){
-
   updateTraceThread->Stop();
   updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
-
-
   for( int i = 0; i < 6; i++) delete dataTrace[i];
-
   delete plot;
-
 }
 
 void Scope::ReadScopeSettings(){
@@ -337,8 +331,6 @@ void Scope::ReadScopeSettings(){
   int ch = cbScopeCh->currentIndex();
 
   if( !digi[iDigi] && digi[iDigi]->IsDummy() ) return;
-
-  printf("%s\n", __func__);
 
   allowChange = false;
 
@@ -389,34 +381,33 @@ void Scope::ReadScopeSettings(){
 void Scope::StartScope(){
 
   if( !digi ) return; 
-  
-  int iDigi = cbScopeDigi->currentIndex();
 
-  if( digi[iDigi]->IsDummy() ) return;
+  for( int iDigi = 0 ; iDigi < nDigi; iDigi ++ ){
 
-  printf("%s\n", __func__);
+    if( digi[iDigi]->IsDummy() ) return;
 
-  int ch = cbScopeCh->currentIndex();
+    int ch = cbScopeCh->currentIndex();
 
-  //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
-  //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
+    //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
+    //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
 
-  ReadScopeSettings();
+    ReadScopeSettings();
 
-  digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
-  digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-  digi[iDigi]->SetPHADataFormat(0);
+    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
+    digi[iDigi]->SetPHADataFormat(0);
 
-  digi[iDigi]->StartACQ();
+    digi[iDigi]->StartACQ();
 
-  readDataThread[iDigi]->SetSaveData(false);
-  readDataThread[iDigi]->start();
+    readDataThread[iDigi]->SetSaveData(false);
+    readDataThread[iDigi]->start();
 
-  updateTraceThread->start();
+    updateTraceThread->start();
 
-  ScopeControlOnOff(false);
-  emit TellSettingsPanelControlOnOff();
-
+    ScopeControlOnOff(false);
+    emit TellSettingsPanelControlOnOff();
+  }
+  emit TellACQOnOff(true);
   allowChange = true;
 }
 
@@ -431,15 +422,16 @@ void Scope::StopScope(){
   if(digi){
     for(int i = 0; i < nDigi; i++){
       if( digi[i]->IsDummy() ) continue;
-      digiMTX.lock();
+      digiMTX[i].lock();
       digi[i]->StopACQ();
       digi[i]->WriteValue(PHA::CH::ChannelEnable, "True", -1);
-      digiMTX.unlock();
+      digiMTX[i].unlock();
 
       readDataThread[i]->quit();
       readDataThread[i]->wait();
-
     }
+
+    emit TellACQOnOff(false);
   }
 
   ScopeControlOnOff(true);
@@ -458,23 +450,26 @@ void Scope::UpdateScope(){
 
   if( digi ){
 
-    digiMTX.lock();    
+    digiMTX[iDigi].lock();    
     std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
-    if( atoi(haha.c_str()) == 0 ) {
-      digiMTX.unlock();
 
-      for( int j = 0; j < 4; j++){
+    //unsigned int traceLength = qMin((int) digi[iDigi]->evt->traceLenght, MaxDisplayTraceDataLength);
+    unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValue(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
+
+    if( atoi(haha.c_str()) == 0 ) {
+      digiMTX[iDigi].unlock();
+
+      for( int j = 0; j < 6; j++){
         QVector<QPointF> points;
-        for( int i = 0 ; i < dataTrace[j]->count(); i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
+        for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
         dataTrace[j]->replace(points);
       }
+      plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
       return;
     }
     
-    unsigned int traceLength = qMin((int) digi[iDigi]->evt->traceLenght, MaxDisplayTraceDataLength);
-
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
       for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->evt->analog_probes[j][i]));
@@ -485,7 +480,7 @@ void Scope::UpdateScope(){
       for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*1000 + 4000*digi[iDigi]->evt->digital_probes[j][i]));
       dataTrace[j+2]->replace(points);
     }
-    digiMTX.unlock();
+    digiMTX[iDigi].unlock();
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 
   }
@@ -494,6 +489,7 @@ void Scope::UpdateScope(){
 
 void Scope::ProbeChange(RComboBox * cb[], const int size ){
 
+  printf("%s\n", __func__);
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
     model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
@@ -512,20 +508,21 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
     }
   }
 
-  digiMTX.lock();
+  int ID = cbScopeDigi->currentIndex();
+  digiMTX[ID].lock();
   if( size == 2) {// analog probes
     for( int j = 0; j < 2; j++ )dataTrace[j]->setName(cb[j]->currentText());
   }
   if( size == 4){ // digitial probes
     for( int j = 2; j < 6; j++ )dataTrace[j]->setName(cb[j-2]->currentText());
   }
-  digiMTX.unlock();
+  digiMTX[ID].unlock();
 
 }
 
 void Scope::ScopeControlOnOff(bool on){
-  bnScopeStop->setEnabled(!on);
 
+  bnScopeStop->setEnabled(!on);
   bnScopeStart->setEnabled(on);
   bnScopeReset->setEnabled(on);
   bnScopeReadSettings->setEnabled(on);
@@ -549,6 +546,7 @@ void Scope::ScopeControlOnOff(bool on){
   sbPileUpGuard->setEnabled(on);
   cbBaselineAvg->setEnabled(on);
   cbLowFreqFilter->setEnabled(on);
+
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
@@ -567,6 +565,7 @@ void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg d
 }
 
 void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
+  printf("%s\n", __func__);
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);

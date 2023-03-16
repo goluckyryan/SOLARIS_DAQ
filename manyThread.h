@@ -5,25 +5,28 @@
 #include <QThread>
 #include <QMutex>
 
+#include "macro.h"
 #include "ClassDigitizer2Gen.h"
+#include "macro.h"
 
-static QMutex digiMTX;
+static QMutex digiMTX[MaxNumberOfDigitizer];
 
 //^#===================================================== ReadData Thread
 class ReadDataThread : public QThread {
   Q_OBJECT
 public:
-  ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){ 
+  ReadDataThread(Digitizer2Gen * dig, int digiID, QObject * parent = 0) : QThread(parent){ 
     this->digi = dig;
+    this->ID = digiID;
     isSaveData = false;
   }
   void SetSaveData(bool onOff) {this->isSaveData = onOff;}
   void run(){
     clock_gettime(CLOCK_REALTIME, &ta);
     while(true){
-      digiMTX.lock();
+      digiMTX[ID].lock();
       int ret = digi->ReadData();
-      digiMTX.unlock();
+      digiMTX[ID].unlock();
 
       if( ret == CAEN_FELib_Success){
         if( isSaveData) digi->SaveDataToFile();
@@ -54,6 +57,7 @@ signals:
   //void checkFileSize();
 private:
   Digitizer2Gen * digi; 
+  int ID;
   timespec ta, tb;
   bool isSaveData;
 };

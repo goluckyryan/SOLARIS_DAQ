@@ -21,8 +21,7 @@
 
 #include "ClassDigitizer2Gen.h"
 #include "CustomWidgets.h"
-
-#define MaxNumberOfDigitizer 20
+#include "macro.h"
 
 //^#######################################################
 class DigiSettingsPanel : public QWidget{

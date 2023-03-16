@@ -19,6 +19,7 @@
 #include <vector>
 #include <time.h> // time in nano-sec
 
+#include "macro.h"
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
 
