@@ -33,8 +33,10 @@ class Digitizer2Gen {
 
     unsigned short serialNumber;
     std::string  FPGAType;
+    unsigned int FPGAVer;
     unsigned short nChannels;
     unsigned short ch2ns;
+    std::string ModelName;
 
     void Initialization();
 
@@ -68,7 +70,9 @@ class Digitizer2Gen {
     ~Digitizer2Gen();
 
     unsigned short GetSerialNumber() const{return serialNumber;}
-    std::string GetFPGATyep() const {return FPGAType;}
+    std::string GetFPGAType() const {return FPGAType;}
+    std::string GetModelName() const {return ModelName;}
+    unsigned int GetFPGAVersion() const {return FPGAVer;}
 
     void  SetDummy(unsigned short sn);
     bool  IsDummy() const {return isDummy;}

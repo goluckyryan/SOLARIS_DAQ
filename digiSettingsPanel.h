@@ -57,36 +57,36 @@ private:
   unsigned short ID; // index for digitizer;
 
   //------------ Layout/GroupBox
-  QGroupBox * digiBox;
-  QGroupBox * VGABox;
-  QGroupBox * testPulseBox;
+  QGroupBox * digiBox[MaxNumberOfDigitizer];
+  QGroupBox * VGABox[MaxNumberOfDigitizer];
+  QGroupBox * testPulseBox[MaxNumberOfDigitizer];
 
-  QGroupBox * box0;
-  QGroupBox * box1;
-  QGroupBox * box3;
-  QGroupBox * box4;
-  QGroupBox * box5;
-  QGroupBox * box6;
+  QGroupBox * box0[MaxNumberOfDigitizer];
+  QGroupBox * box1[MaxNumberOfDigitizer];
+  QGroupBox * box3[MaxNumberOfDigitizer];
+  QGroupBox * box4[MaxNumberOfDigitizer];
+  QGroupBox * box5[MaxNumberOfDigitizer];
+  QGroupBox * box6[MaxNumberOfDigitizer];
 
-  QTabWidget * inputTab;
-  QTabWidget * trapTab;
-  QTabWidget * probeTab;
-  QTabWidget * otherTab;
-  QTabWidget * triggerTab;
-  QTabWidget * triggerMapTab;
-  QTabWidget * ICTab; // inquiry and copy
-
-  QGroupBox * icBox1;
-  QGroupBox * icBox2;
-
+  QTabWidget * inputTab[MaxNumberOfDigitizer];
+  QTabWidget * trapTab[MaxNumberOfDigitizer];
+  QTabWidget * probeTab[MaxNumberOfDigitizer];
+  QTabWidget * otherTab[MaxNumberOfDigitizer];
+  QTabWidget * triggerTab[MaxNumberOfDigitizer];
+  QTabWidget * triggerMapTab[MaxNumberOfDigitizer];
 
   bool enableSignalSlot;
 
   //---------------- Inquiry and copy
+  QTabWidget * ICTab; // inquiry and copy
+
   RComboBox * cbIQDigi;
   RComboBox * cbBdSettings;
   RComboBox * cbIQCh;
   RComboBox * cbChSettings;
+
+  QGroupBox * icBox1;
+  QGroupBox * icBox2;
 
   QLineEdit * leBdSettingsType;
   QLineEdit * leBdSettingsRead;
@@ -157,13 +157,13 @@ private:
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 
   //--------------- trigger map
-  RComboBox * cbAllEvtTrigger;
-  RComboBox * cbAllWaveTrigger;
-  RComboBox * cbAllCoinMask;
-  RComboBox * cbAllAntiCoinMask;
-  RSpinBox  * sbAllCoinLength;
-  QPushButton * trgMap[MaxNumberOfChannel][MaxNumberOfChannel];
-  bool trgMapClickStatus[MaxNumberOfChannel][MaxNumberOfChannel];
+  RComboBox * cbAllEvtTrigger[MaxNumberOfDigitizer];
+  RComboBox * cbAllWaveTrigger[MaxNumberOfDigitizer];
+  RComboBox * cbAllCoinMask[MaxNumberOfDigitizer];
+  RComboBox * cbAllAntiCoinMask[MaxNumberOfDigitizer];
+  RSpinBox  * sbAllCoinLength[MaxNumberOfDigitizer];
+  QPushButton * trgMap[MaxNumberOfDigitizer][MaxNumberOfChannel][MaxNumberOfChannel];
+  bool trgMapClickStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][MaxNumberOfChannel];
 
   //--------------- Channel status
   QPushButton * chStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][9];
@@ -249,6 +249,7 @@ private:
   void ReadBoardSetting(int cbIndex);
   void ReadChannelSetting(int cbIndex);
 
+  bool CheckDigitizersCanCopy();
   void CheckRadioAndCheckedButtons();
   bool CopyChannelSettings(int digiFrom, int chFrom, int digiTo, int chTo);
   bool CopyBoardSettings();

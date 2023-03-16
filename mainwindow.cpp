@@ -375,7 +375,7 @@ void MainWindow::StartACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID start=1,value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=1");
     influx->WriteData(DatabaseName.toStdString());
@@ -449,7 +449,7 @@ void MainWindow::StopACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID start=0,value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + stopComment.replace(' ', '_').toStdString() + "\"");
+      influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + stopComment.replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=0");
     influx->WriteData(DatabaseName.toStdString());
@@ -546,6 +546,8 @@ void MainWindow::OpenDigitizers(){
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
 
+  int nDigiConnected = 0;
+
   for( int i = 0; i < nDigi; i++){
 
     LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
@@ -578,15 +580,7 @@ void MainWindow::OpenDigitizers(){
 
       digi[i]->ReadAllSettings();
 
-      SetUpScalar();
-      bnStartACQ->setEnabled(true);
-      bnStopACQ->setEnabled(false);
-      bnOpenScope->setEnabled(true);
-      chkSaveRun->setEnabled(true);
-      bnOpenDigitizers->setEnabled(false);
-      bnOpenDigitizers->setStyleSheet("");
-      cbAutoRun->setEnabled(true);
-      bnOpenScalar->setEnabled(true);
+      nDigiConnected ++;
 
       for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch++) {
         oldTimeStamp[i][ch] = 0;
@@ -598,6 +592,19 @@ void MainWindow::OpenDigitizers(){
 
       readDataThread[i] = NULL;
     }
+  }
+
+
+  if( nDigiConnected > 0 ){
+    SetUpScalar();
+    bnStartACQ->setEnabled(true);
+    bnStopACQ->setEnabled(false);
+    bnOpenScope->setEnabled(true);
+    chkSaveRun->setEnabled(true);
+    bnOpenDigitizers->setEnabled(false);
+    bnOpenDigitizers->setStyleSheet("");
+    cbAutoRun->setEnabled(true);
+    bnOpenScalar->setEnabled(true);
   }
 
   bnDigiSettings->setEnabled(true);
@@ -831,7 +838,7 @@ void MainWindow::UpdateScalar(){
       unsigned long kaka = std::stoul(kakaStr.c_str()) ;
       unsigned long time = std::stoul(timeStr.c_str()) ;
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
-      if( oldTimeStamp[iDigi][ch] >  0 && time >  oldTimeStamp[iDigi][ch]){
+      if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
         acceptRate[ch] = 0;

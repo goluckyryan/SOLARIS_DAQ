@@ -133,7 +133,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   if( !isConnected ) return false; 
-  printf(" %s|%-45s|%s|\n", __func__, parameter, value.c_str());
+  printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
     printf("WriteError|%s||%s|\n", parameter, value.c_str());
@@ -213,11 +213,14 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   
   isConnected = true;
 
+  printf("#################################################\n");
   ReadAllSettings();
 
-  serialNumber = atoi(ReadValue("/par/SerialNum").c_str());
+  serialNumber = atoi(GetSettingValue(PHA::DIG::SerialNumber).c_str());
   FPGAType = GetSettingValue(PHA::DIG::FirmwareType);
-  nChannels    = atoi(ReadValue("/par/NumCh").c_str());
+  FPGAVer = atoi(GetSettingValue(PHA::DIG::CupVer).c_str());
+  nChannels = atoi(GetSettingValue(PHA::DIG::NumberOfChannel).c_str());
+  ModelName = GetSettingValue(PHA::DIG::ModelName);
   int adcRate = atoi(GetSettingValue(PHA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
   
@@ -225,7 +228,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("     Net Mask : %s\n", GetSettingValue(PHA::DIG::NetMask).c_str());
   printf("      Gateway : %s\n", GetSettingValue(PHA::DIG::Gateway).c_str());
   
-  printf("   Model name : %s\n", GetSettingValue(PHA::DIG::ModelName).c_str());
+  printf("   Model name : %s\n", ModelName.c_str());
   printf("  CUP version : %s\n", GetSettingValue(PHA::DIG::CupVer).c_str());
   printf("     DPP Type : %s\n", GetSettingValue(PHA::DIG::FirmwareType).c_str());
   printf("  DPP Version : %s\n", FPGAType.c_str());
@@ -732,7 +735,7 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
 }
 
 std::string Digitizer2Gen::ErrorMsg(const char * funcName){
-  printf("======== %s | %s\n",__func__, funcName);
+  printf("======== %s | %5d | %s\n",__func__, serialNumber, funcName);
   char msg[1024];
   int ec = CAEN_FELib_GetErrorDescription((CAEN_FELib_ErrorCode) ret, msg);
   if (ec != CAEN_FELib_Success) {
