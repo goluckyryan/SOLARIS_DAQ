@@ -27,6 +27,7 @@
 
 #include "digiSettingsPanel.h"
 #include "scope.h"
+#include "SOLARISpanel.h"
 
 const int chromeWindowID = -1; // disable capture screenshot
 
@@ -47,6 +48,11 @@ private slots:
   void OpenScope();  
   void OpenDigitizersSettings();
 
+  void OpenSOLARISpanel();
+  bool CheckSOLARISpanelOK();
+
+  void StartACQ();
+  void StopACQ();
   void AutoRun();
 
   void OpenScaler();
@@ -70,8 +76,9 @@ private slots:
   void CreateRawDataFolderAndLink();
 
   void closeEvent(QCloseEvent * event){
-    if( digiSetting != NULL ) digiSetting->close();
-    if( scope != NULL ) scope->close();
+    if( digiSetting ) digiSetting->close();
+    if( scope ) scope->close();
+    if( solarisSetting ) solarisSetting->close();
     event->accept();
   }
 
@@ -83,7 +90,16 @@ private slots:
 signals :
 
 private:
+
+  static Digitizer2Gen ** digi; 
+  unsigned short nDigi;
+
+  //@----- log msg
+  QPlainTextEdit * logInfo;
+  void LogMsg(QString msg);
+  bool logMsgHTMLMode = true;
     
+  //@----- buttons
   QPushButton * bnProgramSettings;
   QPushButton * bnNewExp;
   QLineEdit   * leExpName;
@@ -94,7 +110,7 @@ private:
   QPushButton * bnDigiSettings;
   QPushButton * bnSOLSettings;
 
-  //@--- new scope
+  //@-----  scope
   Scope * scope;
   QPushButton * bnOpenScope;
 
@@ -118,24 +134,23 @@ private:
   QLineEdit   * leRawDataPath;
   QLineEdit   * leRunComment;
   ReadDataThread ** readDataThread;   
-  void StartACQ();
-  void StopACQ();
   QString startComment;
   QString stopComment;
   bool needManualComment;
   bool isRunning;
+  QTimer * runTimer;
+  unsigned int autoRunStartRunID;
 
+  //@----- digi Setting panel
   DigiSettingsPanel * digiSetting;
 
-  QPlainTextEdit * logInfo;
+  //@----- SOLARIS setting panel
+  SOLARISpanel * solarisSetting;
+  std::vector<std::vector<int>> mapping;
+  QStringList detType;
+  std::vector<int> detMaxID;
 
-  static Digitizer2Gen ** digi; 
-  unsigned short nDigi;
-
-  void LogMsg(QString msg);
-  bool logMsgHTMLMode = true;
-
-  //---------------- Program settings
+  //@----- Program settings
   QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
   QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
   QLineEdit * lDataPath; // only live in ProgramSettigns()
@@ -154,7 +169,7 @@ private:
   QString DatabaseName;
   QString ElogIP;
 
-  //------------- experiment settings
+  //@------ experiment settings
   bool isGitExist;
   bool useGit;
   QString expName;
@@ -163,10 +178,7 @@ private:
   QString runIDStr;
   int elogID;  // 0 = ready, -1 = disable, >1 = elogID
 
-  QTimer * runTimer;
-  unsigned int autoRunStartRunID;
-
-  //-------------- calculate instant accept Rate
+  //@------ calculate instant accept Rate
   unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 

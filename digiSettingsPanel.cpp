@@ -60,12 +60,9 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
 
 DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
 
-  qDebug() << "DigiSettingsPanel constructor";
-
   setWindowTitle("Digitizers Settings");
   setGeometry(0, 0, 1850, 1000);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-
 
   this->digi = digi;
   this->nDigi = nDigi;
@@ -1215,12 +1212,12 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       leChSettingsUnit->setReadOnly(true);
       inquiryLayout->addWidget(leChSettingsUnit, rowID, 4);
 
-      cbChAns = new RComboBox(ICTab);
-      cbChAns->setFixedWidth(200);
-      inquiryLayout->addWidget(cbChAns, rowID, 6);
-      connect(cbChAns, &RComboBox::currentIndexChanged, this, [=](){
+      cbChSettingsWrite = new RComboBox(ICTab);
+      cbChSettingsWrite->setFixedWidth(200);
+      inquiryLayout->addWidget(cbChSettingsWrite, rowID, 6);
+      connect(cbChSettingsWrite, &RComboBox::currentIndexChanged, this, [=](){
         if( !enableSignalSlot ) return;
-        std::string value = cbChAns->currentData().toString().toStdString();
+        std::string value = cbChSettingsWrite->currentData().toString().toStdString();
         leChSettingsWrite->setText(QString::fromStdString(value));
         leChSettingsWrite->setStyleSheet("");
 
@@ -1230,16 +1227,16 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         QString msg;
         msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
         msg += ",CH:" + QString::number(ch_index);
-        msg += " = " + cbChAns->currentData().toString();
+        msg += " = " + cbChSettingsWrite->currentData().toString();
         if( digi[ID]->WriteValue(para, value, ch_index) ){
           leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
-          cbChAns->setStyleSheet("");
+          cbChSettingsWrite->setStyleSheet("");
           ShowSettingsToPanel();
         }else{
           leChSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
-          cbChAns->setStyleSheet("color:red;");
+          cbChSettingsWrite->setStyleSheet("color:red;");
         }
       });
 
@@ -1255,7 +1252,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           sbChSettingsWrite->setValue( (std::round(value/step) * step) );
         }
 
-        Reg para = PHA::CH::AllSettings[cbBdSettings->currentIndex()];
+        Reg para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
@@ -1551,6 +1548,7 @@ void DigiSettingsPanel::EnableControl(){
 
   for( int k = 0; k < tempArray.size(); k++){
     for( int i = 0; i < tempArray[k]->count(); i++) {
+      if( k == 0 && (i == 0 || i == 1 || i == 2 ) ) continue;
       QWidget* currentTab = tempArray[k]->widget(i);
       if( currentTab ){
         QList<QWidget*> childWidgets = currentTab->findChildren<QWidget*>();
@@ -2170,25 +2168,25 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
   if( PHA::CH::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
 
     if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
-      cbChAns->clear();
-      cbChAns->setEnabled(false);
+      cbChSettingsWrite->clear();
+      cbChSettingsWrite->setEnabled(false);
       leChSettingsWrite->setEnabled(false);
       leChSettingsWrite->clear();
       sbChSettingsWrite->setEnabled(true);
       sbChSettingsWrite->setMinimum(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[0].first.c_str()));
       sbChSettingsWrite->setMaximum(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[1].first.c_str()));
       sbChSettingsWrite->setSingleStep(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[2].first.c_str()));
-      sbChSettingsWrite->setValue(00);
-      sbChSettingsWrite->setDecimals(0);
+      sbChSettingsWrite->setValue(ans.toFloat());
+      sbChSettingsWrite->setDecimals(3);
     }
-    if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
+    if( haha == ANSTYPE::INTEGER) sbBdSettingsWrite->setDecimals(0);
     if( haha == ANSTYPE::LIST){
-      cbChAns->setEnabled(true);
-      cbChAns->clear();
+      cbChSettingsWrite->setEnabled(true);
+      cbChSettingsWrite->clear();
       int ansIndex = -1;
       QString ans2 = "";
       for( int i = 0; i < (int) PHA::CH::AllSettings[cbIndex].GetAnswers().size(); i++){
-        cbChAns->addItem(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second),
+        cbChSettingsWrite->addItem(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second),
                         QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first));
         
         if( ans == QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first)) {
@@ -2196,7 +2194,7 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
           ans2 = QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second);
         }      
       }
-      cbChAns->setCurrentIndex(ansIndex);
+      cbChSettingsWrite->setCurrentIndex(ansIndex);
       leChSettingsRead->setText( ans  + " [ " + ans2 + " ]");
       sbChSettingsWrite->setEnabled(false);
       sbChSettingsWrite->setStyleSheet("");
@@ -2205,8 +2203,8 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       leChSettingsWrite->setText(ans2);
     }
     if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
-      cbChAns->clear();
-      cbChAns->setEnabled(false);
+      cbChSettingsWrite->clear();
+      cbChSettingsWrite->setEnabled(false);
       leChSettingsWrite->setEnabled(true);
       leChSettingsWrite->clear();
       sbChSettingsWrite->setEnabled(false);
@@ -2214,8 +2212,8 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       sbChSettingsWrite->setValue(0);
     }
   }else{
-    cbChAns->clear();
-    cbChAns->setEnabled(false);
+    cbChSettingsWrite->clear();
+    cbChSettingsWrite->setEnabled(false);
     sbChSettingsWrite->setEnabled(false);
     sbChSettingsWrite->setStyleSheet("");
     sbChSettingsWrite->cleanText();

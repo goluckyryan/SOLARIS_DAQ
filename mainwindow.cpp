@@ -107,6 +107,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
+    connect(bnSOLSettings, SIGNAL(clicked()), this, SLOT(OpenSOLARISpanel()));
 
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
@@ -126,7 +127,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->setColumnStretch(3, 1);
 
   }
-
 
   {//====================== ACD control
     QGroupBox * box2 = new QGroupBox("ACQ control", mainLayoutWidget);
@@ -279,6 +279,9 @@ MainWindow::~MainWindow(){
   printf("-------- delete digiSetting\n");
   if( digiSetting != NULL ) delete digiSetting;
 
+  printf("-------- delete Solaris panel\n");
+  if( solarisSetting != NULL ) delete solarisSetting;
+
   printf("-------- delete influx\n");
   if( influx != NULL ) {    
     influx->ClearDataPointsBuffer();
@@ -286,6 +289,7 @@ MainWindow::~MainWindow(){
     influx->WriteData(DatabaseName.toStdString());
     delete influx;
   }
+
 
 }
 
@@ -613,6 +617,8 @@ void MainWindow::OpenDigitizers(){
   bnProgramSettings->setEnabled(false);
   bnNewExp->setEnabled(false);
 
+  bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
+
 }
 
 void MainWindow::CloseDigitizers(){
@@ -644,7 +650,7 @@ void MainWindow::CloseDigitizers(){
     if( digiSetting != NULL )  digiSetting->close(); 
 
     if( readDataThread[i] != NULL ){
-      LogMsg("Waiting for digitizer .....");
+      LogMsg("Waiting for readData Thread .....");
       readDataThread[i]->quit();
       readDataThread[i]->wait();
       delete readDataThread[i];
@@ -655,10 +661,17 @@ void MainWindow::CloseDigitizers(){
   digi = NULL;
   readDataThread = NULL;
 
+  if( solarisSetting ){
+    solarisSetting->close();
+    delete solarisSetting;
+    solarisSetting = NULL;
+  }
+
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setFocus();
   bnCloseDigitizers->setEnabled(false);
   bnDigiSettings->setEnabled(false);
+  bnSOLSettings->setEnabled(false);
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(false);
   bnOpenScope->setEnabled(false);
@@ -668,6 +681,8 @@ void MainWindow::CloseDigitizers(){
 
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
+
+  LogMsg("Closed all digitizers and readData Threads.");
 
 }
 
@@ -728,6 +743,98 @@ void MainWindow::OpenDigitizersSettings(){
   }
 }
 
+//^###################################################################### Open SOLARIS setting panel
+void MainWindow::OpenSOLARISpanel(){
+  solarisSetting->show();
+}
+
+bool MainWindow::CheckSOLARISpanelOK(){
+
+  QFile file(analysisPath + "/Mapping.h");
+  if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    LogMsg("Fail to open <b>" + analysisPath + "/Mapping.h </b>. SOLARIS panel disabled.");
+
+    //TODO ----- Create a template of the mapping
+
+    return false;
+  }
+  mapping.clear();
+  std::vector<int> singleDigiMap;
+  detType.clear();
+  detMaxID.clear();
+
+  bool startRecord = false;
+  QTextStream in(&file);
+  while (!in.atEnd()) {
+    QString line = in.readLine();
+    if( line.contains("//*=")){
+      int in1 = line.indexOf("{");
+      int in2 = line.lastIndexOf("}");
+      if( in2 > in1){
+        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
+        detType = subLine.split(",");
+      }else{
+        LogMsg("Problem Found for the Mapping.h.");
+        return false;
+      }
+    }
+    if( line.contains("//*#")){
+      int in1 = line.indexOf("{");
+      int in2 = line.lastIndexOf("}");
+      if( in2 > in1){
+        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
+        QStringList haha = subLine.split(",");
+        for( int i = 0; i < haha.size(); i++) detMaxID.push_back(haha[i].toInt());
+      }else{
+        LogMsg("Problem Found for the Mapping.h.");
+        return false;
+      }
+    }
+    if( line.contains("//* ") ) {
+      startRecord = true;
+      singleDigiMap.clear();
+      continue;
+    }
+    if( startRecord && line.contains("//*----")){
+      startRecord = false;
+      mapping.push_back(singleDigiMap);
+      continue;
+    }
+    if( startRecord ){
+      int index = line.lastIndexOf("///");
+      if( index != -1 ) {
+        line = line.left(index).trimmed();
+        if( line.endsWith(",") ){
+          line.remove( line.length() -1, 1);
+        }
+      }
+      QStringList list = line.replace(' ', "").split(",");
+      for( int i = 0; i < list.size() ; i ++){
+        singleDigiMap.push_back(list[i].toInt());
+      }
+    }
+  }
+  file.close();
+
+  LogMsg("Mapping.h | Num. Digi : " + QString::number(mapping.size()));
+  for( int i = 0 ; i < (int) mapping.size(); i ++){
+    LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | Digi-" 
+               +  QString::number(digi[i]->GetSerialNumber()) + " : " 
+               + QString::number(digi[i]->GetNChannels()) + " Ch.");
+  }
+
+
+  if( (int) detMaxID.size() != detType.size() ){
+    LogMsg("Size of detector Name and detctor max ID does not match.");
+    return false;
+  }
+
+  //@============= Create SOLAIRS panel
+  solarisSetting = new SOLARISpanel(digi, nDigi, mapping, detType, detMaxID);
+
+  return true;
+}
+
 //^###################################################################### Open Scaler, when DAQ is running
 void MainWindow::OpenScaler(){
   scalar->show();
@@ -735,7 +842,7 @@ void MainWindow::OpenScaler(){
 
 void MainWindow::SetUpScalar(){
 
-  scalar->setGeometry(0, 0, 10 + nDigi * 230, 800);
+  scalar->setGeometry(0, 0, 10 + nDigi * 230, 1500);
 
   lbLastUpdateTime = new QLabel("Last update : ");
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
@@ -851,11 +958,15 @@ void MainWindow::UpdateScalar(){
       unsigned long kaka = std::stoul(kakaStr.c_str()) ;
       unsigned long time = std::stoul(timeStr.c_str()) ;
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
+
+
       if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
         acceptRate[ch] = 0;
       }
+      if( acceptRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
+
       oldSavedCount[iDigi][ch] = kaka;
       oldTimeStamp[iDigi][ch] = time; 
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
@@ -1082,7 +1193,7 @@ void MainWindow::DecodeIPList(){
   //------- decode IPListStr
   nDigi = 0;
   IPList.clear();
-  QStringList parts = IPListStr.split(".");
+  QStringList parts = IPListStr.replace(' ', "").split(".");
   QString IPDomain = parts[0] + "." + parts[1] + "." + parts[2] + ".";
   parts = parts[3].split(",");
   for(int i = 0; i < parts.size(); i++){
@@ -1623,6 +1734,7 @@ void MainWindow::CreateRawDataFolderAndLink(){
 }
 
 //^###################################################################### log msg
+
 void MainWindow::LogMsg(QString msg){
 
     QString outputStr = QStringLiteral("[%1] %2").arg(QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"), msg);
@@ -1639,7 +1751,7 @@ void MainWindow::LogMsg(QString msg){
 
 void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
   
-  if( elogID < 0 ) return;
+  //if( elogID < 0 ) return;
   if( expName == "" ) return;
 
   //TODO ===== user name and pwd load from a file.
@@ -1652,7 +1764,7 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
 
   arg << "-a" << "Subject=" + subject 
       << "-n " << "2" <<  htmlText  ;
-      
+
   QProcess elogBash(this);
   elogBash.start("elog", arg); 
   elogBash.waitForFinished();

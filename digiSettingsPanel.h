@@ -97,7 +97,7 @@ private:
   QLineEdit * leChSettingsType;
   QLineEdit * leChSettingsRead;
   QLineEdit * leChSettingsUnit;
-  RComboBox * cbChAns;
+  RComboBox * cbChSettingsWrite;
   RSpinBox *  sbChSettingsWrite;
   QLineEdit * leChSettingsWrite;
 

@@ -529,8 +529,6 @@ void Scope::ScopeControlOnOff(bool on){
 
   sbRL->setEnabled(on);
   sbPT->setEnabled(on);
-  sbDCOffset->setEnabled(on);
-  sbThreshold->setEnabled(on);
   sbTimeRiseTime->setEnabled(on);
   sbTimeGuard->setEnabled(on);
   sbTrapRiseTime->setEnabled(on);
@@ -541,11 +539,13 @@ void Scope::ScopeControlOnOff(bool on){
   cbPolarity->setEnabled(on);
   cbWaveRes->setEnabled(on);
   cbTrapPeakAvg->setEnabled(on);
-
-  sbBaselineGuard->setEnabled(on);
-  sbPileUpGuard->setEnabled(on);
   cbBaselineAvg->setEnabled(on);
-  cbLowFreqFilter->setEnabled(on);
+
+  //sbDCOffset->setEnabled(on);
+  //sbThreshold->setEnabled(on);
+  //sbBaselineGuard->setEnabled(on);
+  //sbPileUpGuard->setEnabled(on);
+  //cbLowFreqFilter->setEnabled(on);
 
 }
 
