@@ -816,11 +816,20 @@ bool MainWindow::CheckSOLARISpanelOK(){
   }
   file.close();
 
+  //if( (int) mapping.size() > nDigi){
+  //  LogMsg("Num. of Digitizer in the Mapping is more than Opened DIgitizer.");
+  //  return false;
+  //}  
+
   LogMsg("Mapping.h | Num. Digi : " + QString::number(mapping.size()));
   for( int i = 0 ; i < (int) mapping.size(); i ++){
-    LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | Digi-" 
+    if( i < nDigi ){
+      LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | Digi-" 
                +  QString::number(digi[i]->GetSerialNumber()) + " : " 
-               + QString::number(digi[i]->GetNChannels()) + " Ch.");
+                + QString::number(digi[i]->GetNChannels()) + " Ch.");
+    }else{
+      LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | No Conneted Digitizer" );
+    }
   }
 
 
