@@ -46,19 +46,29 @@ signals:
   void SendLogMsg(const QString str);
 
 private:
-  void CreateSpinBoxGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
+  void CreateDetGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
 
   Digitizer2Gen ** digi;
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detType;
   std::vector<int> detMaxID;
+  QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
+  std::vector<int> nDet;
 
-  int nDigiMapping;
-  std::vector<int> nChMapping;
+  int nDigiMapping; /// mapping.size()
+  std::vector<int> nChMapping; /// mapping[i].size(), NON -1 
+
+  QCheckBox * chkAll; // checkBox for all setting on that tab;
+  QCheckBox * chkAlle;
+  QCheckBox * chkAllxf;
+  QCheckBox * chkAllxn;
 
   QLineEdit **** leDisplay; // [SettingID][DigiID][ChID]
-  RSpinBox **** sbSetting;
+  RSpinBox  **** sbSetting;
+  QCheckBox **** chkOnOff;
+
+  RComboBox ** cbTrigger; //[detID] for array only
 
   bool enableSignalSlot;
 

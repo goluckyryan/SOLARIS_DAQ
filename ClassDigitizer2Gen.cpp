@@ -231,7 +231,6 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("   Model name : %s\n", ModelName.c_str());
   printf("  CUP version : %s\n", GetSettingValue(PHA::DIG::CupVer).c_str());
   printf("     DPP Type : %s\n", GetSettingValue(PHA::DIG::FirmwareType).c_str());
-  printf("  DPP Version : %s\n", FPGAType.c_str());
   printf("Serial number : %d\n", serialNumber);
   printf("     ADC bits : %s\n", GetSettingValue(PHA::DIG::ADC_bit).c_str());
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);

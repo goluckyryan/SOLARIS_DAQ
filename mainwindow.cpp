@@ -773,6 +773,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
   QTextStream in(&file);
   while (!in.atEnd()) {
     QString line = in.readLine();
+    if( line.contains("//^")) continue;
     if( line.contains("//*=")){
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
@@ -976,12 +977,12 @@ void MainWindow::UpdateScalar(){
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
 
 
-      if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9){
+      if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
         acceptRate[ch] = 0;
       }
-      if( acceptRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
+      //if( acceptRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
 
       oldSavedCount[iDigi][ch] = kaka;
       oldTimeStamp[iDigi][ch] = time; 
