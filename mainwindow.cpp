@@ -109,6 +109,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSOLSettings->setEnabled(false);
     connect(bnSOLSettings, SIGNAL(clicked()), this, SLOT(OpenSOLARISpanel()));
 
+    QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
+    bnEventBuilder->setEnabled(false);
+
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -120,6 +123,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnOpenScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
+
+    layout1->addWidget(bnEventBuilder, 3, 0);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -746,6 +751,7 @@ void MainWindow::OpenDigitizersSettings(){
 //^###################################################################### Open SOLARIS setting panel
 void MainWindow::OpenSOLARISpanel(){
   solarisSetting->show();
+  solarisSetting->UpdatePanel();
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
@@ -840,6 +846,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
 
   //@============= Create SOLAIRS panel
   solarisSetting = new SOLARISpanel(digi, nDigi, mapping, detType, detMaxID);
+  connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
 
   return true;
 }
@@ -998,6 +1005,9 @@ void MainWindow::UpdateScalar(){
     influx->WriteData(DatabaseName.toStdString());
     influx->ClearDataPointsBuffer();
   }
+
+  if( solarisSetting && solarisSetting->isVisible() ) solarisSetting->UpdateThreshold();
+
 }
 
 //^###################################################################### Program Settings

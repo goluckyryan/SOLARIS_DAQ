@@ -36,19 +36,32 @@ public:
 
 private slots:
 
-  void CreateSpinBoxGroup(const Reg para, int detID, QGridLayout * &layout, int row, int col);
-  void CreateTab(const Reg para);
+
+public slots:
+  void UpdatePanel();
+  void UpdateThreshold();
 
 signals:
 
+  void SendLogMsg(const QString str);
 
 private:
+  void CreateSpinBoxGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
 
   Digitizer2Gen ** digi;
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detType;
   std::vector<int> detMaxID;
+
+  int nDigiMapping;
+  std::vector<int> nChMapping;
+
+  QLineEdit **** leDisplay; // [SettingID][DigiID][ChID]
+  RSpinBox **** sbSetting;
+
+  bool enableSignalSlot;
+
 };
 
 #endif

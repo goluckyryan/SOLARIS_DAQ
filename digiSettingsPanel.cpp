@@ -1604,6 +1604,8 @@ void DigiSettingsPanel::LoadSettings(){
   fileDialog.setNameFilter("Data file (*.dat);;Text file (*.txt);;All file (*.*)");
   fileDialog.exec();
 
+  if( fileDialog.selectedFiles().size() == 0 ) return; // when no file selected.
+
   QString fileName = fileDialog.selectedFiles().at(0);
 
   leSettingFile[ID]->setText(fileName);
@@ -1611,11 +1613,11 @@ void DigiSettingsPanel::LoadSettings(){
 
   if( digi[ID]->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
     SendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
+    ShowSettingsToPanel();
   }else{
     SendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }
 
-  ShowSettingsToPanel();
 }
 
 void DigiSettingsPanel::SetDefaultPHASettigns(){

@@ -273,7 +273,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   plotView->setRenderHints(QPainter::Antialiasing);
   layout->addWidget(plotView, rowID, 0, 1, 6);
 
-  //------------- Ketbinding
+  //------------- Key binding
   rowID ++;
   QLabel * lbhints = new QLabel("Type 'r' to restore view.", this);
   layout->addWidget(lbhints, rowID, 0, 1, 3);
