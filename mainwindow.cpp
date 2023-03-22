@@ -295,6 +295,7 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
+  remove(DAQLockFile);
 
 }
 

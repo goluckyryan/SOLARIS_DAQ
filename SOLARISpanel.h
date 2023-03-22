@@ -52,9 +52,9 @@ private:
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detType;
+  std::vector<int> nDet; // number of disting detector
   std::vector<int> detMaxID;
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
-  std::vector<int> nDet;
 
   int nDigiMapping; /// mapping.size()
   std::vector<int> nChMapping; /// mapping[i].size(), NON -1 
@@ -68,7 +68,7 @@ private:
   RSpinBox  **** sbSetting;
   QCheckBox **** chkOnOff;
 
-  RComboBox ** cbTrigger; //[detID] for array only
+  RComboBox *** cbTrigger; //[detTypeID][detID] for array only
 
   bool enableSignalSlot;
 

@@ -4,6 +4,7 @@
 #include <QLabel>
 #include <QSet>
 #include <QList>
+#include <QFrame>
 
 #define NCOL 10 // number of column
 
@@ -47,10 +48,6 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       QList<int> haha ;
       haha << mapping[i][j] << ((i << 8 ) + j);
       if( mapping[i][j] >= 0 ) detIDListTemp <<  haha;
-      for( int k = 0 ; k < nDetType; k++){
-        int lowID = (k == 0 ? 0 : detMaxID[k-1]);     
-        if( lowID <= mapping[i][j] && mapping[i][j] < detMaxID[k] ) nDet[k] ++ ;
-      }
       if( j % 16 == 15 ) printf("\n");
     }
     printf("------------------ \n");
@@ -58,12 +55,18 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
 
   //----- consolidate detIDList;
   detIDList.clear();
-  QList<int> haha;
-  haha << detIDListTemp[0][0];
-  detIDList << haha;
   bool repeated = false;
   for( int i = 0; i < detIDListTemp.size(); i++ ){
     repeated = false;
+    if( detIDList.size() == 0 ){
+      detIDList << detIDListTemp[i];
+
+      for( int k = 0 ; k < nDetType; k++){
+        int lowID = (k == 0 ? 0 : detMaxID[k-1]);     
+        if( lowID <= detIDListTemp[i][0] && detIDListTemp[i][0] < detMaxID[k] ) nDet[k] ++ ;
+      }
+      continue;
+    }
     for( int j = 0; j < detIDList.size() ; j++){
       if( detIDList[j][0] == detIDListTemp[i][0] ) {
         repeated = true;
@@ -71,7 +74,13 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
         break;
       }
     }
-    if( !repeated ) detIDList << detIDListTemp[i];
+    if( !repeated ) {
+      detIDList << detIDListTemp[i];
+      for( int k = 0 ; k < nDetType; k++){
+        int lowID = (k == 0 ? 0 : detMaxID[k-1]);     
+        if( lowID <= detIDListTemp[i][0] && detIDListTemp[i][0] < detMaxID[k] ) nDet[k] ++ ;
+      }
+    }
   }
 
   //---- sort detIDList;
@@ -79,7 +88,14 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
     return a.at(0) < b.at(0);
   });
 
+
+
+  //------------- display detector summary
   //qDebug() << detIDList;
+  printf("---------- num. of det. Type : %d\n", nDetType);
+  for( int i =0; i < nDetType; i ++ ) {
+    printf(" Type-%d (%6s) : %3d det.  (%3d - %3d)\n", i, detType[i].toStdString().c_str(), nDet[i], (i==0 ? 0 : detMaxID[i-1]), detMaxID[i]-1);
+  }
 
   //------------ create Widgets
   leDisplay = new QLineEdit ***[(int) SettingItems.size()];
@@ -93,11 +109,21 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       leDisplay[k][i] = new QLineEdit *[(int) mapping[i].size()];
       sbSetting[k][i] = new RSpinBox  *[(int) mapping[i].size()];
       chkOnOff[k][i]  = new QCheckBox *[(int) mapping[i].size()];
+      for( int j = 0 ; j < (int) mapping[i].size() ; j++){
+        leDisplay[k][i][j] = nullptr;
+        sbSetting[k][i][j] = nullptr;
+        chkOnOff[k][i][j] = nullptr;
+      }
     }
   }
 
-  cbTrigger = new RComboBox *[nDet[0]]; /// nDet[0] store the number of det. for the Array 
-
+  cbTrigger = new RComboBox ** [nDetType];
+  for(int i = 0; i < nDetType; i++){
+    cbTrigger[i] = new RComboBox *[nDet[i]]; /// nDet[0] store the number of det. for the Array 
+    for( int j = 0; j < nDet[i]; j ++){
+      cbTrigger[i][j] = nullptr;
+    }
+  }
   //---------- Set Panel
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
   QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
@@ -137,12 +163,19 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
 
       }
 
+      QFrame *line = new QFrame(tab);
+      line->setFrameShape(QFrame::HLine);
+      line->setFrameShadow(QFrame::Sunken);
+      line->setFixedHeight(10);
+      layout->addWidget(line, 1, 0, 1, NCOL);
+
+
       //range of detID 
       int lowID = (detTypeID == 0 ? 0 : detMaxID[detTypeID-1]);
 
       for(int i = 0; i < detIDList.size(); i++){
         if( detIDList[i][0] >= detMaxID[detTypeID] || lowID > detIDList[i][0] ) continue;
-        CreateDetGroup(SettingID, detIDList[i], layout, i/NCOL +  1, i%NCOL);
+        CreateDetGroup(SettingID, detIDList[i], layout, i/NCOL +  2, i%NCOL);
       }
 
     }
@@ -155,6 +188,30 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
 }
 
 SOLARISpanel::~SOLARISpanel(){
+
+  printf("%s\n", __func__);
+
+  for( int k = 0; k < (int) SettingItems.size() ; k ++){
+    for( int i = 0; i < nDigiMapping; i++){
+      delete [] leDisplay[k][i] ;
+      delete [] sbSetting[k][i] ;
+      delete [] chkOnOff[k][i] ;
+    }
+    delete [] leDisplay[k];
+    delete [] sbSetting[k];
+    delete [] chkOnOff[k] ;
+  }
+
+  delete [] leDisplay;
+  delete [] sbSetting;
+  delete [] chkOnOff;
+
+  for( int k = 0; k < (int) detType.size() ; k++){
+    delete [] cbTrigger[k];
+  }
+  delete [] cbTrigger;
+
+  printf("end of %s\n", __func__);
 
 }
 
@@ -249,20 +306,28 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
 
   }
 
-  //TODO ==== detMaxID[0] should belong to Array
-  if( 0 <= detID[0] && detID[0] < detMaxID[0] && SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara()){
-    cbTrigger[detID[0]] = new RComboBox(this);
-    cbTrigger[detID[0]]->addItem("Non-Trigger", 0x0);
-    cbTrigger[detID[0]]->addItem("Self Trigger",  -1);
-    cbTrigger[detID[0]]->addItem("Trigger all", 0x7);
-    cbTrigger[detID[0]]->addItem("Trigger (e)", 0x1);
-    cbTrigger[detID[0]]->addItem("Trigger (xf)", 0x2);
-    cbTrigger[detID[0]]->addItem("Trigger (xn)", 0x4);
-    cbTrigger[detID[0]]->addItem("Trigger 011", 0x3);
-    cbTrigger[detID[0]]->addItem("Trigger 110", 0x6);
-    cbTrigger[detID[0]]->addItem("Trigger 101", 0x5);
-    cbTrigger[detID[0]]->addItem("Oops....", -999);
-    layout0->addWidget(cbTrigger[detID[0]], 8, 0, 1, 3);
+  int detTypeID = 0;
+  for( int i = 0; i < (int) detType.size(); i++){
+    int lowID = (i == 0) ? 0 : detMaxID[i-1];
+    if( lowID <= detID[0] && detID[0] < detMaxID[i]) {
+      detTypeID = i;
+      break;
+    }
+  }
+
+  if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara()){
+    cbTrigger[detTypeID][detID[0]] = new RComboBox(this);
+    cbTrigger[detTypeID][detID[0]]->addItem("Non-Trigger", 0x0);
+    cbTrigger[detTypeID][detID[0]]->addItem("Self Trigger",  -1);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger all", 0x7);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (e)", 0x1);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (xf)", 0x2);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (xn)", 0x4);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 011", 0x3);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 110", 0x6);
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 101", 0x5);
+    cbTrigger[detTypeID][detID[0]]->addItem("Oops....", -999);
+    layout0->addWidget(cbTrigger[detTypeID][detID[0]], 8, 0, 1, 3);
   }
 
   layout->addWidget(groupbox, row, col);
