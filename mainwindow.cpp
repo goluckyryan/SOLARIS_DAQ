@@ -64,6 +64,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     scalarThread = new ScalarThread();
     connect(scalarThread, &ScalarThread::updataScalar, this, &MainWindow::UpdateScalar);
 
+    solarisSetting = nullptr;
+
   }
 
   QWidget * mainLayoutWidget = new QWidget(this);
@@ -254,14 +256,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
 MainWindow::~MainWindow(){
 
-  //---- may be no need to delete as thay are child of this
-  //delete bnProgramSettings;
-  //delete bnOpenDigitizers;
-  //delete bnCloseDigitizers;
-  //delete bnDigiSettings;
-  //delete bnNewExp;
-  //delete logInfo;
   printf("- %s\n", __func__);
+
+  printf("-------- remove %s\n", DAQLockFile);
+  remove(DAQLockFile);
+
+  printf("-------- delete Solaris panel\n");
+  if( solarisSetting != NULL ) {
+    delete solarisSetting;
+    solarisSetting = nullptr;
+  }
+  printf("-------- delete scope\n");
+  if( scope != NULL ) {
+    delete scope;
+    scope = nullptr;
+  } 
+  printf("-------- delete digiSetting\n");
+  if( digiSetting != NULL ) {
+    delete digiSetting;
+    digiSetting = nullptr;
+  }
 
   printf("-------- Delete readData Thread\n");
   if( digi ){
@@ -271,22 +285,12 @@ MainWindow::~MainWindow(){
       if( readDataThread[i]->isRunning()) StopACQ();
     }
   }
-  CloseDigitizers();
+  CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
 
   printf("-------- Delete scalar Thread\n");
   DeleteTriggerLineEdit();
   delete scalarThread;
   
-  //---- need manually delete
-  printf("-------- delete scope\n");
-  if( scope != NULL ) delete scope;
-  
-  printf("-------- delete digiSetting\n");
-  if( digiSetting != NULL ) delete digiSetting;
-
-  printf("-------- delete Solaris panel\n");
-  if( solarisSetting != NULL ) delete solarisSetting;
-
   printf("-------- delete influx\n");
   if( influx != NULL ) {    
     influx->ClearDataPointsBuffer();
@@ -295,7 +299,7 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
-  remove(DAQLockFile);
+  printf("--- end of %s\n", __func__);
 
 }
 
@@ -646,6 +650,12 @@ void MainWindow::CloseDigitizers(){
     digiSetting = NULL;
   }
 
+  if( solarisSetting ){
+    solarisSetting->close();
+    delete solarisSetting;
+    solarisSetting = NULL;
+  }
+
   for( int i = 0; i < nDigi; i++){    
     if( digi[i] == NULL) return;
     digi[i]->CloseDigitizer();
@@ -667,11 +677,6 @@ void MainWindow::CloseDigitizers(){
   digi = NULL;
   readDataThread = NULL;
 
-  if( solarisSetting ){
-    solarisSetting->close();
-    delete solarisSetting;
-    solarisSetting = NULL;
-  }
 
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setFocus();

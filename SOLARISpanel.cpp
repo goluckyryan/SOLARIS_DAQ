@@ -125,9 +125,16 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
     }
   }
   //---------- Set Panel
-  QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
-  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
+  QGridLayout * mainLayout = new QGridLayout(this); this->setLayout(mainLayout);
 
+  QPushButton * bnRefresh = new QPushButton("Refresh Settings", this);
+  connect(bnRefresh, &QPushButton::clicked, this, &SOLARISpanel::UpdatePanel );
+  mainLayout->addWidget(bnRefresh, 0, 0);
+
+  QLabel * info = new QLabel("Only simple trigger is avalible. For complex trigger scheme, please use the setting panel.", this);
+  mainLayout->addWidget(info, 0, 1, 1, 4);
+
+  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, 1, 0, 1, 5);
   for( int detTypeID = 0; detTypeID < nDetType; detTypeID ++ ){
 
     QTabWidget * tab2 = new QTabWidget(tabWidget);
@@ -146,6 +153,8 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       QGridLayout * layout = new QGridLayout(tab);
       layout->setAlignment(Qt::AlignLeft|Qt::AlignTop);
       layout->setSpacing(0);
+
+      //TODO======= coincident Time window
 
       //TODO======= check all
       chkAll = new QCheckBox("Set for all", tab);
@@ -215,6 +224,16 @@ SOLARISpanel::~SOLARISpanel(){
 
 }
 
+int SOLARISpanel::FindDetTypID(QList<int> detIDListElement){
+  for( int i = 0; i < (int) detType.size(); i++){
+    int lowID = (i == 0) ? 0 : detMaxID[i-1];
+    if( lowID <= detIDListElement[0] && detIDListElement[0] < detMaxID[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col){
 
   QGroupBox * groupbox = new QGroupBox("Det-" + QString::number(detID[0]), this);
@@ -256,6 +275,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
       chkOnOff[SettingID][digiID][chID]->setEnabled(false);    
     }
 
+    ///========================= for SpinBox
     RSpinBox * spb = sbSetting[SettingID][digiID][chID];
     const Reg para = SettingItems[SettingID];
 
@@ -285,19 +305,20 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
       }
     });
     
-
-    connect(chkOnOff[SettingID][digiID][chID], &QCheckBox::stateChanged, this, [=](){
+    ///===================== for the OnOff CheckBox
+    connect(chkOnOff[SettingID][digiID][chID], &QCheckBox::stateChanged, this, [=](int state){
       if( !enableSignalSlot ) return; 
 
-      bool haha = chkOnOff[SettingID][digiID][chID]->isChecked();
+      digi[digiID]->WriteValue(PHA::CH::ChannelEnable, state ? "True" : "False", chID);
 
-      if( haha ) {
-        digi[digiID]->WriteValue(PHA::CH::ChannelEnable, "True", chID);
-      }else{
-        digi[digiID]->WriteValue(PHA::CH::ChannelEnable, "False", chID);
-      } 
-      leDisplay[SettingID][digiID][chID]->setEnabled(haha);
-      sbSetting[SettingID][digiID][chID]->setEnabled(haha);
+      enableSignalSlot = false;
+      for( int i = 0; i < (int) detType.size(); i++){
+        leDisplay[i][digiID][chID]->setEnabled(state);
+        sbSetting[i][digiID][chID]->setEnabled(state);
+        chkOnOff[i][digiID][chID]->setChecked(state);
+      }
+      enableSignalSlot = true;
+
     });
 
     layout0->setColumnStretch(0, 1);
@@ -306,32 +327,75 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
 
   }
 
-  int detTypeID = 0;
-  for( int i = 0; i < (int) detType.size(); i++){
-    int lowID = (i == 0) ? 0 : detMaxID[i-1];
-    if( lowID <= detID[0] && detID[0] < detMaxID[i]) {
-      detTypeID = i;
-      break;
-    }
-  }
+  //=================== The Trigger depnds on 5 settings (at least)
+  //   EventTriggerSource, WaveTriggerSource, CoincidentMask, AntiCoincidentMask
+  // 1,  EventTriggerSource has 8 settings, ITLA, ITLB, GlobalTriggerSource, TRGIN, SWTrigger, ChSelfTrigger, Ch64Trigger, Disabled 
+  // 2,  WaveTriggerSource  has 8 settings, always set to be equal EventTriggerSource
+  // 3,  CoincidentMak      has 6 Settings, Disabled, Ch64Trigger, TRGIN, GloableTriggerSource, ITLA, ITLB
+  // 4,  AntiCoincidentMask has 6 Settings, always disabled
+  // 5,  ChannelTriggerMask is a 64-bit
+  // 6,  CoincidenceLengthT in ns, set to be 100 ns. 
 
+  int detTypeID = FindDetTypID(detID);
   if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara()){
-    cbTrigger[detTypeID][detID[0]] = new RComboBox(this);
-    cbTrigger[detTypeID][detID[0]]->addItem("Non-Trigger", 0x0);
-    cbTrigger[detTypeID][detID[0]]->addItem("Self Trigger",  -1);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger all", 0x7);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (e)", 0x1);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (xf)", 0x2);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger (xn)", 0x4);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 011", 0x3);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 110", 0x6);
-    cbTrigger[detTypeID][detID[0]]->addItem("Trigger 101", 0x5);
-    cbTrigger[detTypeID][detID[0]]->addItem("Oops....", -999);
+    cbTrigger[detTypeID][detID[0]] = new RComboBox(this); 
+    cbTrigger[detTypeID][detID[0]]->addItem("Self Trigger", "ChSelfTrigger");    /// no coincident
+    cbTrigger[detTypeID][detID[0]]->addItem("Trigger e", 0x1); // Self-trigger and coincient Ch64Trigger
+    cbTrigger[detTypeID][detID[0]]->addItem("Ext. Trigger", "TRGIN");  // with coincident with TRGIN.
+    cbTrigger[detTypeID][detID[0]]->addItem("Disabled", "Disabled");  // no Trigger, no coincident, basically channel still alive, but no recording
+    cbTrigger[detTypeID][detID[0]]->addItem("Others", -999); // other settings
+    
     layout0->addWidget(cbTrigger[detTypeID][detID[0]], 8, 0, 1, 3);
+  
+    connect(cbTrigger[detTypeID][detID[0]], &RComboBox::currentIndexChanged, this , [=](int index){
+      if( !enableSignalSlot) return;
+
+      for( int i = 1; i < detID.size(); i++){
+
+        int digiID = (detID[i] >> 8 );
+        int chID = (detID[i] & 0xFF);
+
+        digi[digiID]->WriteValue(PHA::CH::AntiCoincidenceMask, "Disabled", chID);
+
+        switch(index){
+          case 0 : { /// Self Trigger
+            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
+            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
+            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+          }; break;
+          case 1 : { // trigger by energy
+            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
+            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
+
+            if( i > 1 ) {
+              digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Ch64Trigger", chID);
+              digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
+
+              //Form the trigger bit
+              unsigned long mask = 1 << (detID[1] & 0xFF ); // trigger by energy
+              QString maskStr = "0x"+QString::number(mask, 16);
+              digi[digiID]->WriteValue(PHA::CH::ChannelsTriggerMask, maskStr.toStdString() , chID);
+            }
+          }; break;
+          case 2 : { /// TRGIN, when the whole board is trigger by TRG-IN
+            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "TRGIN", chID);
+            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "TRGIN", chID);
+            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "TRGIN", chID);
+            
+            digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
+          }; break;
+          case 3 : { /// disbaled
+            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "Disabled", chID);
+            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "Disabled", chID);
+            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+          }; break;
+        }
+      }
+
+    });
+
   }
-
   layout->addWidget(groupbox, row, col);
-
 }
 
 
@@ -370,19 +434,73 @@ void SOLARISpanel::UpdatePanel(){
     //if( detIDList[k].size() <= 2) continue;
     std::vector<unsigned long> triggerMap;
     std::vector<std::string> coincidentMask;
+    std::vector<std::string> antiCoincidentMask;
     std::vector<std::string> eventTriggerSource;
+    std::vector<std::string> waveTriggerSource;
 
     for( int h = 1; h < detIDList[k].size(); h++){
       int digiID = detIDList[k][h] >> 8;
       int chID = (detIDList[k][h] & 0xFF);
-      triggerMap.push_back(std::stoul(digi[digiID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, chID).c_str()));
+      bool ok;
+      triggerMap.push_back( QString::fromStdString(digi[digiID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, chID)).toULong(&ok, 16));
       coincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::CoincidenceMask, chID));
+      antiCoincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::AntiCoincidenceMask, chID));
       eventTriggerSource.push_back(digi[digiID]->GetSettingValue(PHA::CH::EventTriggerSource, chID));
+      waveTriggerSource.push_back(digi[digiID]->GetSettingValue(PHA::CH::WaveTriggerSource, chID));
     }
 
     //====== only acceptable condition is eventTriggerSource are all ChSelfTrigger
     //       and coincidentMask for e, xf, xn, are at least one for Ch64Trigger
+    //       and waveTriggerSource are all ChSelfTrigger
 
+    int detTypeID = FindDetTypID(detIDList[k]);
+    //Check the 0-index
+    bool isAcceptableSetting = true;
+
+    if( eventTriggerSource[0] != waveTriggerSource[0] ||  coincidentMask[0] != antiCoincidentMask[0]  ) isAcceptableSetting = false;
+
+    //check 0-index settings
+    if( isAcceptableSetting ){
+      if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Disabled") {
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Self Trigger");
+      }else if( eventTriggerSource[0] == "Disabled" && coincidentMask[0] == "Disabled" ) {
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Disabled");
+      }else if( eventTriggerSource[0] == "TRGIN" && coincidentMask[0] == "TRGIN") {
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Ext. Trigger");
+      }else if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Ch64Trigger") {
+        //Check trigger map
+        //TODO;
+        for( int p = 0; p < (int) triggerMap.size(); p ++ ){
+          printf("ch-%d, trigger : 0x%s \n", detIDList[k][p+1] & 0xFF, QString::number(triggerMap[p], 16).toStdString().c_str() );
+        }
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
+      }else{
+        isAcceptableSetting = false;
+      }
+    }
+
+    if( isAcceptableSetting ){
+      //Check if eventTriggerSource or coincidentMask compare to the 0-index
+      for( int h = 2; h < detIDList[k].size(); h++){
+        if( eventTriggerSource[h-1] != eventTriggerSource[0]){
+          isAcceptableSetting = false;
+          break;
+        }
+        if( waveTriggerSource[h-1] != waveTriggerSource[0]){
+          isAcceptableSetting = false;
+          break;
+        }
+        if( coincidentMask[h-1] != coincidentMask[0]){
+          isAcceptableSetting = false;
+          break;
+        }
+        if( antiCoincidentMask[h-1] != antiCoincidentMask[0]){
+          isAcceptableSetting = false;
+          break;
+        }
+      }
+    }
+    if( !isAcceptableSetting ) cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Others");
   }
 
   enableSignalSlot = true;

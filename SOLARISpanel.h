@@ -42,7 +42,10 @@ public slots:
   void UpdateThreshold();
 
 signals:
-
+  
+  //TODO
+  void UpdateSettingsPanel();
+  void UpdateScopePanel();
   void SendLogMsg(const QString str);
 
 private:
@@ -55,6 +58,8 @@ private:
   std::vector<int> nDet; // number of disting detector
   std::vector<int> detMaxID;
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
+
+  int FindDetTypID(QList<int> detIDListElement);
 
   int nDigiMapping; /// mapping.size()
   std::vector<int> nChMapping; /// mapping[i].size(), NON -1 

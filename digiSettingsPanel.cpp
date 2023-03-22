@@ -761,9 +761,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           layout->addWidget(chADCToVolts[iDigi][ch], 1 + ch/2, ch%2*12 + 11);
 
         }
-
       }
-      
       
       {//@============== input  tab
         inputTab[iDigi] = new QTabWidget(tab);
