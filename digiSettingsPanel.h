@@ -47,7 +47,7 @@ public slots:
 signals:
 
   void SendLogMsg(const QString &msg);
-  void UpdateScopeSetting();
+  void UpdateOtherPanels();
 
 private:
   

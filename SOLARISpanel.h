@@ -22,6 +22,10 @@
 #include "CustomWidgets.h"
 #include "macro.h"
 
+#define MaxSettingItem  3
+#define MaxDetType 10
+#define MaxDetID 60
+
 class SOLARISpanel : public QWidget{
   Q_OBJECT
 
@@ -43,9 +47,7 @@ public slots:
 
 signals:
   
-  //TODO
-  void UpdateSettingsPanel();
-  void UpdateScopePanel();
+  void UpdateOtherPanels();
   void SendLogMsg(const QString str);
 
 private:
@@ -55,25 +57,22 @@ private:
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detType;
-  std::vector<int> nDet; // number of disting detector
+  std::vector<int> nDet; // number of distgish detector
   std::vector<int> detMaxID;
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
   int FindDetTypID(QList<int> detIDListElement);
-
-  int nDigiMapping; /// mapping.size()
-  std::vector<int> nChMapping; /// mapping[i].size(), NON -1 
 
   QCheckBox * chkAll; // checkBox for all setting on that tab;
   QCheckBox * chkAlle;
   QCheckBox * chkAllxf;
   QCheckBox * chkAllxn;
 
-  QLineEdit **** leDisplay; // [SettingID][DigiID][ChID]
-  RSpinBox  **** sbSetting;
-  QCheckBox **** chkOnOff;
+  QLineEdit * leDisplay[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel]; // [SettingID][DigiID][ChID]
+  RSpinBox  * sbSetting[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel];
+  QCheckBox * chkOnOff[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel];
 
-  RComboBox *** cbTrigger; //[detTypeID][detID] for array only
+  RComboBox * cbTrigger[MaxDetType][MaxDetID]; //[detTypeID][detID] for array only
 
   bool enableSignalSlot;
 

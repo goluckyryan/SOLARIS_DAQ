@@ -85,7 +85,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     ReadScopeSettings();
-    UpdateSettingsPanel();
+    UpdateOtherPanels();
     digiMTX[iDigi].unlock();
   });
 
@@ -597,8 +597,8 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
       sb->setStyleSheet("");
       
       //TODO digiSettingPanel update setting
-      printf("UpdateSettingsPanel \n");
-      emit UpdateSettingsPanel();
+      printf("UpdateOtherPanels \n");
+      emit UpdateOtherPanels();
 
     }else{
       SendLogMsg(msg + "|Fail.");
@@ -633,8 +633,8 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
       SendLogMsg(msg + "|OK.");
       cb->setStyleSheet("");
       //TODO digiSettingPanel update setting
-      printf("UpdateSettingsPanel \n");
-      emit UpdateSettingsPanel();
+      printf("UpdateOtherPanels \n");
+      emit UpdateOtherPanels();
     }else{
       SendLogMsg(msg + "|Fail.");
       cb->setStyleSheet("color:red;");

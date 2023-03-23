@@ -28,13 +28,6 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   this->detType = detType;
   this->detMaxID = detMaxID;
 
-  nDigiMapping = mapping.size();
-  for( int i = 0; i < nDigiMapping; i++) {
-    int count = 0;
-    for( int j = 0; j < (int )mapping[i].size(); j++) if( mapping[i][j] >= 0) count ++;
-    nChMapping.push_back(count);
-  }
-
   //Check number of detector type; Array 0-199, Recoil 200-299, other 300-
   int nDetType = detType.size();
   for( int k = 0 ; k < nDetType; k++) nDet.push_back(0);
@@ -42,7 +35,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   QList<QList<int>> detIDListTemp; // store { detID,  (Digi << 8 ) + ch}, making mapping into 1-D array to be consolidated
 
   printf("################################# \n");
-  for( int i = 0; i < nDigiMapping ; i++){
+  for( int i = 0; i < (int) mapping.size() ; i++){
     for( int j = 0; j < (int) mapping[i].size(); j++ ){
       printf("%3d,", mapping[i][j]);
       QList<int> haha ;
@@ -88,8 +81,6 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
     return a.at(0) < b.at(0);
   });
 
-
-
   //------------- display detector summary
   //qDebug() << detIDList;
   printf("---------- num. of det. Type : %d\n", nDetType);
@@ -97,33 +88,6 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
     printf(" Type-%d (%6s) : %3d det.  (%3d - %3d)\n", i, detType[i].toStdString().c_str(), nDet[i], (i==0 ? 0 : detMaxID[i-1]), detMaxID[i]-1);
   }
 
-  //------------ create Widgets
-  leDisplay = new QLineEdit ***[(int) SettingItems.size()];
-  sbSetting = new RSpinBox  ***[(int) SettingItems.size()];
-  chkOnOff  = new QCheckBox ***[(int) SettingItems.size()];
-  for( int k = 0; k < (int) SettingItems.size() ; k ++){
-    leDisplay[k] = new QLineEdit **[nDigiMapping];
-    sbSetting[k] = new RSpinBox  **[nDigiMapping];
-    chkOnOff[k]  = new QCheckBox **[nDigiMapping];
-    for( int i = 0; i < nDigiMapping; i++){
-      leDisplay[k][i] = new QLineEdit *[(int) mapping[i].size()];
-      sbSetting[k][i] = new RSpinBox  *[(int) mapping[i].size()];
-      chkOnOff[k][i]  = new QCheckBox *[(int) mapping[i].size()];
-      for( int j = 0 ; j < (int) mapping[i].size() ; j++){
-        leDisplay[k][i][j] = nullptr;
-        sbSetting[k][i][j] = nullptr;
-        chkOnOff[k][i][j] = nullptr;
-      }
-    }
-  }
-
-  cbTrigger = new RComboBox ** [nDetType];
-  for(int i = 0; i < nDetType; i++){
-    cbTrigger[i] = new RComboBox *[nDet[i]]; /// nDet[0] store the number of det. for the Array 
-    for( int j = 0; j < nDet[i]; j ++){
-      cbTrigger[i][j] = nullptr;
-    }
-  }
   //---------- Set Panel
   QGridLayout * mainLayout = new QGridLayout(this); this->setLayout(mainLayout);
 
@@ -137,17 +101,17 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, 1, 0, 1, 5);
   for( int detTypeID = 0; detTypeID < nDetType; detTypeID ++ ){
 
-    QTabWidget * tab2 = new QTabWidget(tabWidget);
-    tabWidget->addTab(tab2, detType[detTypeID]);
+    QTabWidget * tabSetting = new QTabWidget(tabWidget);
+    tabWidget->addTab(tabSetting, detType[detTypeID]);
 
     for( int SettingID = 0; SettingID < (int) SettingItems.size(); SettingID ++){
 
       QScrollArea * scrollArea = new QScrollArea(this);
       scrollArea->setWidgetResizable(true);
       scrollArea->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-      tab2->addTab(scrollArea,  QString::fromStdString(SettingItems[SettingID]));
+      tabSetting->addTab(scrollArea,  QString::fromStdString(SettingItems[SettingID]));
 
-      QWidget * tab = new QWidget(tab2);
+      QWidget * tab = new QWidget(tabSetting);
       scrollArea->setWidget(tab);
       
       QGridLayout * layout = new QGridLayout(tab);
@@ -183,44 +147,18 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       int lowID = (detTypeID == 0 ? 0 : detMaxID[detTypeID-1]);
 
       for(int i = 0; i < detIDList.size(); i++){
+
         if( detIDList[i][0] >= detMaxID[detTypeID] || lowID > detIDList[i][0] ) continue;
         CreateDetGroup(SettingID, detIDList[i], layout, i/NCOL +  2, i%NCOL);
+
       }
 
     }
   }
 
-  //TODO ========== when digiSettingPanel or Scope change setting, reflect in solarisPanel
-
-  //TODO ========== when tab change, update panel
-
 }
 
 SOLARISpanel::~SOLARISpanel(){
-
-  printf("%s\n", __func__);
-
-  for( int k = 0; k < (int) SettingItems.size() ; k ++){
-    for( int i = 0; i < nDigiMapping; i++){
-      delete [] leDisplay[k][i] ;
-      delete [] sbSetting[k][i] ;
-      delete [] chkOnOff[k][i] ;
-    }
-    delete [] leDisplay[k];
-    delete [] sbSetting[k];
-    delete [] chkOnOff[k] ;
-  }
-
-  delete [] leDisplay;
-  delete [] sbSetting;
-  delete [] chkOnOff;
-
-  for( int k = 0; k < (int) detType.size() ; k++){
-    delete [] cbTrigger[k];
-  }
-  delete [] cbTrigger;
-
-  printf("end of %s\n", __func__);
 
 }
 
@@ -305,6 +243,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
         SendLogMsg(msg + "|Fail.");
         spb->setStyleSheet("color:red;");
       }
+      emit UpdateOtherPanels();
     });
     
     ///===================== for the OnOff CheckBox
@@ -320,6 +259,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
         chkOnOff[i][digiID][chID]->setChecked(state);
       }
       enableSignalSlot = true;
+
+      emit UpdateOtherPanels();
 
     });
 
@@ -370,7 +311,9 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
             digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
             digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
 
-            if( i > 1 ) {
+            if( i == 1 ){
+              digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+            }else {
               digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Ch64Trigger", chID);
               digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
 
@@ -394,6 +337,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
           }; break;
         }
       }
+
+      UpdateOtherPanels();
 
     });
 
@@ -459,8 +404,12 @@ void SOLARISpanel::UpdatePanel(){
     int detTypeID = FindDetTypID(detIDList[k]);
     //Check the 0-index
     bool isAcceptableSetting = true;
+    bool isTriggerE = false;
 
     if( eventTriggerSource[0] != waveTriggerSource[0] ||  coincidentMask[0] != antiCoincidentMask[0]  ) isAcceptableSetting = false;
+    if( antiCoincidentMask[0] != "Disabled") isAcceptableSetting = false;
+
+    if( !(coincidentMask[0] == "Disabled" || coincidentMask[0] == "TRGIN") ) isAcceptableSetting = false;
 
     //check 0-index settings
     if( isAcceptableSetting ){
@@ -470,19 +419,24 @@ void SOLARISpanel::UpdatePanel(){
         cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Disabled");
       }else if( eventTriggerSource[0] == "TRGIN" && coincidentMask[0] == "TRGIN") {
         cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Ext. Trigger");
-      }else if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Ch64Trigger") {
-        //Check trigger map
-        //TODO;
-        for( int p = 0; p < (int) triggerMap.size(); p ++ ){
-          printf("ch-%d, trigger : 0x%s \n", detIDList[k][p+1] & 0xFF, QString::number(triggerMap[p], 16).toStdString().c_str() );
+      }else if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Disabled") {
+
+        unsigned long mask = 1ULL << (detIDList[k][1] & 0xFF);
+
+        for( int p = 1; p < (int) triggerMap.size(); p ++){
+          if( coincidentMask[p] != "Ch64Trigger") isAcceptableSetting = false;
+          if( triggerMap[p] != mask) isAcceptableSetting = false;
+        }  
+        if( isAcceptableSetting ) {
+          cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
+          isTriggerE = true;
         }
-        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
       }else{
         isAcceptableSetting = false;
       }
     }
 
-    if( isAcceptableSetting ){
+    if( isAcceptableSetting){
       //Check if eventTriggerSource or coincidentMask compare to the 0-index
       for( int h = 2; h < detIDList[k].size(); h++){
         if( eventTriggerSource[h-1] != eventTriggerSource[0]){
@@ -493,7 +447,7 @@ void SOLARISpanel::UpdatePanel(){
           isAcceptableSetting = false;
           break;
         }
-        if( coincidentMask[h-1] != coincidentMask[0]){
+        if( !isTriggerE && coincidentMask[h-1] != coincidentMask[0]){
           isAcceptableSetting = false;
           break;
         }

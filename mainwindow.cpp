@@ -24,7 +24,7 @@
 #include <unistd.h>
 
 //------ static memeber
-Digitizer2Gen ** MainWindow::digi = NULL;
+Digitizer2Gen ** MainWindow::digi = nullptr;
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
@@ -34,10 +34,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   setWindowIcon(icon);
 
   nDigi = 0;
-  digiSetting = NULL;
-  influx = NULL;
-  readDataThread = NULL;
-  scope = NULL;
+  digiSetting = nullptr;
+  influx = nullptr;
+  readDataThread = nullptr;
+
   runTimer = new QTimer();
   needManualComment = true;
 
@@ -58,15 +58,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     scalarLayout->setSpacing(0);
     scalarLayout->setAlignment(Qt::AlignTop);
 
-    leTrigger = NULL;
-    leAccept = NULL;
+    leTrigger = nullptr;
+    leAccept = nullptr;
 
     scalarThread = new ScalarThread();
     connect(scalarThread, &ScalarThread::updataScalar, this, &MainWindow::UpdateScalar);
 
-    solarisSetting = nullptr;
-
   }
+  
+  solarisSetting = nullptr;
+  scope = nullptr;
+  digiSetting = nullptr;
+
+  ConnectScopeAndSetting = false;
+  ConnectScopeAndSolaris = false;
+  ConnectSettingAndSolaris = false;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -262,17 +268,17 @@ MainWindow::~MainWindow(){
   remove(DAQLockFile);
 
   printf("-------- delete Solaris panel\n");
-  if( solarisSetting != NULL ) {
+  if( solarisSetting ) {
     delete solarisSetting;
     solarisSetting = nullptr;
   }
   printf("-------- delete scope\n");
-  if( scope != NULL ) {
+  if( scope ) {
     delete scope;
     scope = nullptr;
   } 
   printf("-------- delete digiSetting\n");
-  if( digiSetting != NULL ) {
+  if( digiSetting  ) {
     delete digiSetting;
     digiSetting = nullptr;
   }
@@ -635,16 +641,18 @@ void MainWindow::CloseDigitizers(){
 
   if( digi == NULL) return;
 
-  scalar->close();
-  DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
+  if(scalar ){ // scalar is child of this
+    scalar->close();
+    DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
+  }
 
-  if( scope != NULL ){
+  if( scope ){
     scope->close();
     delete scope;
     scope = NULL;
   }
   
-  if( digiSetting != NULL ){
+  if( digiSetting ){
     digiSetting->close();
     delete digiSetting;
     digiSetting = NULL;
@@ -719,11 +727,18 @@ void MainWindow::OpenScope(){
         influx->WriteData(DatabaseName.toStdString());
       }
       
-      if( digiSetting ) {
-        connect(scope, &Scope::UpdateSettingsPanel, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+      if( digiSetting &&  ConnectScopeAndSetting ) {
+        connect(scope, &Scope::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
         connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
-        connect(digiSetting, &DigiSettingsPanel::UpdateScopeSetting, scope, &Scope::ReadScopeSettings);
-        digiSetting->EnableControl();
+        connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
+        ConnectScopeAndSetting = true;
+      }
+      if( digiSetting)  digiSetting->EnableControl();
+
+      if( solarisSetting && !ConnectScopeAndSolaris ){
+        connect(scope, &Scope::UpdateOtherPanels, solarisSetting, &SOLARISpanel::UpdatePanel);
+        connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
+        ConnectScopeAndSolaris = true;
       }
 
     }else{
@@ -743,10 +758,17 @@ void MainWindow::OpenDigitizersSettings(){
     digiSetting = new DigiSettingsPanel(digi, nDigi);
     connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
 
-    if( scope ) {
-      connect(scope, &Scope::UpdateSettingsPanel, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+    if( scope && !ConnectScopeAndSetting) {
+      connect(scope, &Scope::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
       connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
-      connect(digiSetting, &DigiSettingsPanel::UpdateScopeSetting, scope, &Scope::ReadScopeSettings);
+      connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
+      ConnectScopeAndSetting = true;
+    }
+
+    if( solarisSetting && !ConnectSettingAndSolaris){
+      connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, solarisSetting,  &SOLARISpanel::UpdatePanel);
+      connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+      ConnectSettingAndSolaris = true;
     }
 
   }else{
@@ -758,6 +780,19 @@ void MainWindow::OpenDigitizersSettings(){
 void MainWindow::OpenSOLARISpanel(){
   solarisSetting->show();
   solarisSetting->UpdatePanel();
+
+  if( digiSetting && !ConnectSettingAndSolaris){
+    connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, solarisSetting,  &SOLARISpanel::UpdatePanel);
+    connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+    ConnectSettingAndSolaris = true;
+  }
+
+  if( scope && !ConnectScopeAndSolaris){
+    connect(scope, &Scope::UpdateOtherPanels, solarisSetting, &SOLARISpanel::UpdatePanel);
+    connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
+    ConnectScopeAndSolaris = true;
+  }
+
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
@@ -855,6 +890,8 @@ bool MainWindow::CheckSOLARISpanelOK(){
   solarisSetting = new SOLARISpanel(digi, nDigi, mapping, detType, detMaxID);
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
 
+  if( solarisSetting == nullptr) return false;
+
   return true;
 }
 
@@ -932,7 +969,7 @@ void MainWindow::SetUpScalar(){
 
 void MainWindow::DeleteTriggerLineEdit(){
 
-  if( leTrigger == NULL ) return;
+  if( leTrigger ) return;
 
   for( int i = 0; i < nDigi; i++){
     for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){

@@ -843,32 +843,32 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
 
       for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
-        //send UpdateScopeSetting signal
-        connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbRecordLength[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbPreTrigger[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbThreshold[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbTrapFlatTop[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbTrapPoleZero[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbPeaking[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbTriggerGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbFineGain[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbBaselineGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(spbPileupGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbWaveRes[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbPeakingAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbBaselineAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        //send UpdateOtherPanels signal
+        connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbRecordLength[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbPreTrigger[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbThreshold[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbTrapFlatTop[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbTrapPoleZero[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbPeaking[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbTriggerGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbTrapRiseTime[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbFineGain[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbBaselineGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(spbPileupGuard[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbParity[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbWaveRes[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbPeakingAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbLowFilter[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbBaselineAvg[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
 
-        connect(cbbAnaProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbAnaProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbDigProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbDigProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbDigProbe2[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
-        connect(cbbDigProbe3[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateScopeSetting);
+        connect(cbbAnaProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbAnaProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbDigProbe0[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbDigProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbDigProbe2[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
+        connect(cbbDigProbe3[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
         
         //----- SyncBox
         connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
@@ -1438,7 +1438,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
 DigiSettingsPanel::~DigiSettingsPanel(){
 
-  printf("%s\n", __func__);
+  //printf("%s\n", __func__);
 
 }
 
@@ -1547,7 +1547,7 @@ void DigiSettingsPanel::EnableControl(){
 
   if( digi[ID]->GetFPGAType() != "DPP_PHA" || digi[ID]->GetModelName() != "VX2745" ) VGABox[ID]->setEnabled(false);
 
-  QVector<QTabWidget*> tempArray = {inputTab[ID], trapTab[ID], probeTab[ID], otherTab[ID], triggerTab[ID] };
+  QVector<QTabWidget*> tempArray = {inputTab[ID], trapTab[ID], probeTab[ID], otherTab[ID] };
 
   for( int k = 0; k < tempArray.size(); k++){
     for( int i = 0; i < tempArray[k]->count(); i++) {
@@ -1561,7 +1561,8 @@ void DigiSettingsPanel::EnableControl(){
       }
     }
   }
-  triggerMapTab[ID]->setEnabled(enable);
+  
+  //triggerMapTab[ID]->setEnabled(enable);
 
   icBox1->setEnabled(enable);
   icBox2->setEnabled(enable);

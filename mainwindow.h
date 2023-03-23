@@ -182,6 +182,10 @@ private:
   unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
+  //@------ connection between pannels
+  bool ConnectScopeAndSetting;
+  bool ConnectScopeAndSolaris;
+  bool ConnectSettingAndSolaris;
 
 };
 

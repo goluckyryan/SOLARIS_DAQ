@@ -132,7 +132,7 @@ signals:
   void CloseWindow();
   void SendLogMsg(const QString &msg);
   void UpdateScalar();
-  void UpdateSettingsPanel();
+  void UpdateOtherPanels();
   void TellSettingsPanelControlOnOff();
   void TellACQOnOff(const bool onOff);
 
