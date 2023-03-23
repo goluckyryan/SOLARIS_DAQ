@@ -18,7 +18,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
                           QWidget *parent) : QWidget(parent){
 
   setWindowTitle("SOLARIS Settings");
-  setGeometry(0, 0, 1400, 800);
+  setGeometry(0, 0, 1350, 800);
 
   printf("%s\n", __func__);
 
@@ -91,14 +91,35 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   //---------- Set Panel
   QGridLayout * mainLayout = new QGridLayout(this); this->setLayout(mainLayout);
 
+  ///=================================
+  int rowIndex = 0;
   QPushButton * bnRefresh = new QPushButton("Refresh Settings", this);
-  connect(bnRefresh, &QPushButton::clicked, this, &SOLARISpanel::UpdatePanel );
-  mainLayout->addWidget(bnRefresh, 0, 0);
+  connect(bnRefresh, &QPushButton::clicked, this, &SOLARISpanel::RefreshSettings );
+  mainLayout->addWidget(bnRefresh, rowIndex, 0);
 
+  QPushButton * bnSaveSetting = new QPushButton("Save Settings", this);
+  connect(bnSaveSetting, &QPushButton::clicked, this, &SOLARISpanel::SaveSettings);
+  mainLayout->addWidget(bnSaveSetting, rowIndex, 1);  
+  
+  QPushButton * bnLoadSetting = new QPushButton("Load Settings", this);
+  connect(bnLoadSetting, &QPushButton::clicked, this, &SOLARISpanel::LoadSettings);
+  mainLayout->addWidget(bnLoadSetting, rowIndex, 2);
+
+  QLabel * lbCoinTime = new QLabel("Coin. Time [ns]", this);
+  lbCoinTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  mainLayout->addWidget(lbCoinTime, rowIndex, 3);
+
+  RSpinBox * sbCoinTime = new RSpinBox(this);
+  mainLayout->addWidget(sbCoinTime, rowIndex, 4);
+
+  ///=================================
+  rowIndex ++;
   QLabel * info = new QLabel("Only simple trigger is avalible. For complex trigger scheme, please use the setting panel.", this);
-  mainLayout->addWidget(info, 0, 1, 1, 4);
+  mainLayout->addWidget(info, rowIndex, 0, 1, 4);
 
-  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, 1, 0, 1, 5);
+  ///=================================
+  rowIndex ++;
+  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, rowIndex, 0, 1, 5);
   for( int detTypeID = 0; detTypeID < nDetType; detTypeID ++ ){
 
     QTabWidget * tabSetting = new QTabWidget(tabWidget);
@@ -183,7 +204,10 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
   layout0->setAlignment(Qt::AlignLeft);
 
   //@======================================== SpinBox and Display
+  bool isDisableDetector = false;
   for( int i = 1; i < (int) detID.size(); i ++){
+
+    isDisableDetector = false;
 
     QLabel * lb  = new QLabel(arrayLabel[i-1], this);  
     layout0->addWidget(lb, 2*i, 0, 2, 1);
@@ -212,7 +236,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
     if( digiID >= nDigi || chID >= digi[digiID]->GetNChannels() ) {
       leDisplay[SettingID][digiID][chID]->setEnabled(false);
       sbSetting[SettingID][digiID][chID]->setEnabled(false);    
-      chkOnOff[SettingID][digiID][chID]->setEnabled(false);    
+      chkOnOff[SettingID][digiID][chID]->setEnabled(false); 
+      isDisableDetector = true;   
     }
 
     ///========================= for SpinBox
@@ -290,6 +315,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
     cbTrigger[detTypeID][detID[0]]->addItem("Others", -999); // other settings
     
     layout0->addWidget(cbTrigger[detTypeID][detID[0]], 8, 0, 1, 3);
+
+    if( isDisableDetector ) cbTrigger[detTypeID][detID[0]]->setEnabled(false);
   
     connect(cbTrigger[detTypeID][detID[0]], &RComboBox::currentIndexChanged, this , [=](int index){
       if( !enableSignalSlot) return;
@@ -298,6 +325,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
 
         int digiID = (detID[i] >> 8 );
         int chID = (detID[i] & 0xFF);
+
+        if( digi[digiID]->IsDummy() || !digi[digiID]->IsConnected() ) continue;
 
         digi[digiID]->WriteValue(PHA::CH::AntiCoincidenceMask, "Disabled", chID);
 
@@ -346,9 +375,20 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
   layout->addWidget(groupbox, row, col);
 }
 
+//^##############################################################
+void SOLARISpanel::RefreshSettings(){
+  for( int i = 0 ; i < nDigi; i++){
+    if( digi[i]->IsDummy() || !digi[i]->IsConnected()){
+      digi[i]->ReadAllSettings();
+    }
+  }
+  UpdatePanel();
+}
 
 void SOLARISpanel::UpdatePanel(){
   enableSignalSlot = false;
+
+  printf("%s\n", __func__);
 
   for( int SettingID = 0; SettingID < (int) SettingItems.size() ; SettingID ++){
     for( int DigiID = 0; DigiID < (int) mapping.size(); DigiID ++){
@@ -389,8 +429,8 @@ void SOLARISpanel::UpdatePanel(){
     for( int h = 1; h < detIDList[k].size(); h++){
       int digiID = detIDList[k][h] >> 8;
       int chID = (detIDList[k][h] & 0xFF);
-      bool ok;
-      triggerMap.push_back( QString::fromStdString(digi[digiID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, chID)).toULong(&ok, 16));
+
+      triggerMap.push_back(Utility::TenBase(digi[digiID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, chID)));
       coincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::CoincidenceMask, chID));
       antiCoincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::AntiCoincidenceMask, chID));
       eventTriggerSource.push_back(digi[digiID]->GetSettingValue(PHA::CH::EventTriggerSource, chID));
@@ -414,12 +454,8 @@ void SOLARISpanel::UpdatePanel(){
     //check 0-index settings
     if( isAcceptableSetting ){
       if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Disabled") {
+        
         cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Self Trigger");
-      }else if( eventTriggerSource[0] == "Disabled" && coincidentMask[0] == "Disabled" ) {
-        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Disabled");
-      }else if( eventTriggerSource[0] == "TRGIN" && coincidentMask[0] == "TRGIN") {
-        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Ext. Trigger");
-      }else if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Disabled") {
 
         unsigned long mask = 1ULL << (detIDList[k][1] & 0xFF);
 
@@ -431,6 +467,12 @@ void SOLARISpanel::UpdatePanel(){
           cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
           isTriggerE = true;
         }
+
+
+      }else if( eventTriggerSource[0] == "Disabled" && coincidentMask[0] == "Disabled" ) {
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Disabled");
+      }else if( eventTriggerSource[0] == "TRGIN" && coincidentMask[0] == "TRGIN") {
+        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Ext. Trigger");
       }else{
         isAcceptableSetting = false;
       }
@@ -482,4 +524,15 @@ void SOLARISpanel::UpdateThreshold(){
       }
     }
   }
+}
+
+//^#########################################
+void SOLARISpanel::SaveSettings(){
+
+
+}
+
+void SOLARISpanel::LoadSettings(){
+
+
 }

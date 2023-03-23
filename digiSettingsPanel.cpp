@@ -591,7 +591,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
               FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, index);
               FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
               FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
-    
+
+              unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
+              leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16));
+
               enableSignalSlot = true;
             }
           });
@@ -690,6 +693,39 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           //------------------------------
           rowID ++;
           SetupComboBox(cbbChVetoSrc[iDigi][ch], PHA::CH::ChannelVetoSource, -1, true, "Veto Source", layout5, rowID, 0);
+
+          QLabel * lbTrgMsk = new QLabel("Trigger Mask :");
+          lbTrgMsk->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+          layout5->addWidget(lbTrgMsk, rowID, 2);
+          leTriggerMask[iDigi][ch] = new QLineEdit(this);
+          layout5->addWidget(leTriggerMask[iDigi][ch], rowID, 3); 
+
+          connect(leTriggerMask[iDigi][ch], &QLineEdit::textChanged, this, [=](){
+            if( !enableSignalSlot ) return; 
+            leTriggerMask[iDigi][ch]->setStyleSheet("color:blue;");
+          });
+
+          connect(leTriggerMask[iDigi][ch], &QLineEdit::returnPressed, this, [=](){
+            if( !enableSignalSlot ) return; 
+            int index = cbChPick[ID]->currentData().toInt();
+
+            QString SixteenBaseValue = "0x" + QString::number(Utility::TenBase(leTriggerMask[ID][ch]->text().toStdString()), 16);
+            leTriggerMask[ID][ch]->setText(SixteenBaseValue);
+
+            QString msg;
+            msg = QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+            msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
+            msg += " = " + SixteenBaseValue;
+
+            if( digi[ID]->WriteValue(PHA::CH::ChannelsTriggerMask, SixteenBaseValue.toStdString(), index)){
+              SendLogMsg(msg + "|OK.");
+              leTriggerMask[ID][ch]->setStyleSheet("");
+              ShowSettingsToPanel();
+            }else{
+              SendLogMsg(msg + "|Fail.");
+              leTriggerMask[ID][ch]->setStyleSheet("color:red;");
+            }
+          });
 
           //------------------------------
           rowID ++;
@@ -1494,9 +1530,7 @@ void DigiSettingsPanel::ReadTriggerMap(){
 
     for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
 
-      std::string ans = digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch);
-      bool ok;
-      unsigned long  mask = QString::fromStdString(ans).toULong(&ok, 10);
+      unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch));
       //printf("Trigger Mask of ch-%2d : 0x%s |%s| \n", ch, QString::number(mask, 16).toStdString().c_str(), ans.c_str());
 
       for( int k = 0; k < (int) digi[ID]->GetNChannels(); k ++ ){
@@ -1773,7 +1807,26 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
 
   }
 
+  //------ Trigger Mask
+  if( cbChPick[ID]->currentData().toInt() < 0 ) {
+    unsigned long mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, 0));
+    
+    bool isSame = true;
+    for(int ch = 1; ch < digi[ID]->GetNChannels() ; ch ++){
+      unsigned long haha = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch));
+      if( mask != haha) {
+        isSame = false;
+        leTriggerMask[ID][MaxNumberOfChannel]->setText("Diff. value");
+        break;
+      }
+    }
+
+    if( isSame ) leTriggerMask[ID][MaxNumberOfChannel]->setText("0x" + QString::number(mask, 16));
+  }
+
   enableSignalSlot = true;
+
+  ReadTriggerMap();
 
   if( cbChPick[ID]->currentData().toInt() >= 0 ) return;
 
@@ -1816,8 +1869,6 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
   SyncSpinBox(spbEnergySkimLow , -1);
   SyncSpinBox(spbCoinLength    , -1);
   SyncSpinBox(spbADCVetoWidth  , -1);
-
-  ReadTriggerMap();
 
 }
 //^###########################################################################

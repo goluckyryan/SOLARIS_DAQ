@@ -18,7 +18,6 @@
 #include <QFrame>
 #include <QSignalMapper>
 
-
 #include "ClassDigitizer2Gen.h"
 #include "CustomWidgets.h"
 #include "macro.h"
@@ -216,6 +215,8 @@ private:
 
   RComboBox * cbbCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RComboBox * cbbAntiCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QLineEdit * leTriggerMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   RSpinBox  * spbCoinLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];

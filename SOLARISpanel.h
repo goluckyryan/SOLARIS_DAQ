@@ -40,6 +40,9 @@ public:
 
 private slots:
 
+  void RefreshSettings();
+  void SaveSettings();
+  void LoadSettings();
 
 public slots:
   void UpdatePanel();

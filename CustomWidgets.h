@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QComboBox>
 #include <QWheelEvent>
+#include <QString>
 
 //^=======================================
 class RComboBox : public QComboBox{
