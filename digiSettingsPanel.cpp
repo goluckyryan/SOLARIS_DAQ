@@ -1449,7 +1449,7 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   unsigned short ch = (haha >> 8 ) & 0xFF;
   unsigned short ch2 = haha & 0xFF;
 
-  qDebug() << "Digi-" << iDig << ", Ch-" << ch << ", " << ch2; 
+  //qDebug() << "Digi-" << iDig << ", Ch-" << ch << ", " << ch2; 
 
   if(trgMapClickStatus[iDig][ch][ch2]){
     trgMap[iDig][ch][ch2]->setStyleSheet(""); 
@@ -1462,13 +1462,15 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   //format triggermask for ch;
   unsigned long mask = 0;
   for( int i = 0; i < digi[iDig]->GetNChannels(); i++){
-    if( trgMapClickStatus[iDig][ch][i] ) mask += (1 << i);
+    if( trgMapClickStatus[iDig][ch][i] ) {
+      mask += (1ULL << i);
+    }
   }
 
-  QString kaka = "0x"+QString::number(mask, 16);
+  QString kaka = QString::number(mask);
 
   QString msg;
-  msg = QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + "|DIG:" + QString::number(digi[iDig]->GetNChannels()) + ",CH:" + QString::number(ch) + " = " + kaka;
+  msg = QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + "|DIG:" + QString::number(digi[iDig]->GetNChannels()) + ",CH:" + QString::number(ch) + " = 0x" + QString::number(mask,16);
 
   if( digi[iDig]->WriteValue(PHA::CH::ChannelsTriggerMask, kaka.toStdString(), ch) ){
     SendLogMsg(msg + "|OK.");
@@ -1491,8 +1493,11 @@ void DigiSettingsPanel::ReadTriggerMap(){
     sbAllCoinLength[ID]->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
 
     for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
+
+      std::string ans = digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch);
       bool ok;
-      unsigned long  mask = QString::fromStdString(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch)).toULong(&ok, 16);
+      unsigned long  mask = QString::fromStdString(ans).toULong(&ok, 10);
+      //printf("Trigger Mask of ch-%2d : 0x%s |%s| \n", ch, QString::number(mask, 16).toStdString().c_str(), ans.c_str());
 
       for( int k = 0; k < (int) digi[ID]->GetNChannels(); k ++ ){
         trgMapClickStatus[ID][ch][k] = ( (mask >> k) & 0x1 );

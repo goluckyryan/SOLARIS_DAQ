@@ -224,6 +224,7 @@ SOLARISpanel::~SOLARISpanel(){
 
 }
 
+//^######################################################################
 int SOLARISpanel::FindDetTypID(QList<int> detIDListElement){
   for( int i = 0; i < (int) detType.size(); i++){
     int lowID = (i == 0) ? 0 : detMaxID[i-1];
@@ -243,6 +244,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
   layout0->setSpacing(0);
   layout0->setAlignment(Qt::AlignLeft);
 
+  //@======================================== SpinBox and Display
   for( int i = 1; i < (int) detID.size(); i ++){
 
     QLabel * lb  = new QLabel(arrayLabel[i-1], this);  
@@ -327,6 +329,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
 
   }
 
+  //@======================================== Trigger Combox
   //=================== The Trigger depnds on 5 settings (at least)
   //   EventTriggerSource, WaveTriggerSource, CoincidentMask, AntiCoincidentMask
   // 1,  EventTriggerSource has 8 settings, ITLA, ITLB, GlobalTriggerSource, TRGIN, SWTrigger, ChSelfTrigger, Ch64Trigger, Disabled 
@@ -372,8 +375,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
               digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
 
               //Form the trigger bit
-              unsigned long mask = 1 << (detID[1] & 0xFF ); // trigger by energy
-              QString maskStr = "0x"+QString::number(mask, 16);
+              unsigned long mask = 1ULL << (detID[1] & 0xFF ); // trigger by energy
+              QString maskStr = QString::number(mask);
               digi[digiID]->WriteValue(PHA::CH::ChannelsTriggerMask, maskStr.toStdString() , chID);
             }
           }; break;
