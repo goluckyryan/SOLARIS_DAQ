@@ -348,6 +348,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       dsbBdVetoWidth[iDigi]->setMinimum(0);
       dsbBdVetoWidth[iDigi]->setMaximum(34359738360);
       dsbBdVetoWidth[iDigi]->setSingleStep(20);
+      dsbBdVetoWidth[iDigi]->SetToolTip();
       boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
       connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
         if( !enableSignalSlot ) return;
@@ -386,6 +387,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
       dsbVolatileClockOutDelay[iDigi]->setSingleStep(74.074);
       dsbVolatileClockOutDelay[iDigi]->setValue(0);
+      dsbVolatileClockOutDelay[iDigi]->SetToolTip();
       boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
       connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
         if( !enableSignalSlot ) return;
@@ -422,6 +424,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       dsbClockOutDelay[iDigi]->setMaximum(18888.888);
       dsbClockOutDelay[iDigi]->setValue(0);
       dsbClockOutDelay[iDigi]->setSingleStep(74.074);
+      dsbClockOutDelay[iDigi]->SetToolTip();
       boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
       connect(dsbClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
         if( !enableSignalSlot ) return;
@@ -482,6 +485,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         VGA[iDigi][k]->setMinimum(0);
         VGA[iDigi][k]->setMaximum(40);
         VGA[iDigi][k]->setSingleStep(0.5);
+        VGA[iDigi][k]->SetToolTip();
+        
         vgaLayout->addWidget(VGA[iDigi][k], 0, 2*k+1);
         connect(VGA[iDigi][k], &RSpinBox::valueChanged, this, [=](){ 
           if( !enableSignalSlot ) return; 
@@ -543,7 +548,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           connect(cbChPick[iDigi], &RComboBox::currentIndexChanged, this, [=](){
             int index = cbChPick[ID]->currentData().toInt();
             if(index == -1) {
-              ShowSettingsToPanel();
+              UpdatePanelFromMemory();
               return;
             }else{
               enableSignalSlot = false;
@@ -593,7 +598,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
               FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
 
               unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
-              leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16));
+              leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
 
               enableSignalSlot = true;
             }
@@ -620,16 +625,16 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           SetupComboBox(cbbLowFilter[iDigi][ch], PHA::CH::EnergyFilterLowFreqFilter, -1, true, "Low Freq. Filter", layout1, rowID, 2);
 
           rowID ++;
-          SetupSpinBox(spbDCOffset[iDigi][ch], PHA::CH::DC_Offset, -1, false, "DC Offset [%]", layout1, rowID, 0);
-          SetupSpinBox(spbThreshold[iDigi][ch], PHA::CH::TriggerThreshold, -1, false, "Threshold [LSB]", layout1, rowID, 2);
+          SetupSpinBox(spbDCOffset[iDigi][ch], PHA::CH::DC_Offset, -1, true, "DC Offset [%]", layout1, rowID, 0);
+          SetupSpinBox(spbThreshold[iDigi][ch], PHA::CH::TriggerThreshold, -1, true, "Threshold [LSB]", layout1, rowID, 2);
 
           rowID ++;
-          SetupSpinBox(spbInputRiseTime[iDigi][ch], PHA::CH::TimeFilterRiseTime, -1, false, "Input Rise Time [ns]", layout1, rowID, 0);
-          SetupSpinBox(spbTriggerGuard[iDigi][ch], PHA::CH::TimeFilterRetriggerGuard, -1, false, "Trigger Guard [ns]", layout1, rowID, 2);
+          SetupSpinBox(spbInputRiseTime[iDigi][ch], PHA::CH::TimeFilterRiseTime, -1, true, "Input Rise Time [ns]", layout1, rowID, 0);
+          SetupSpinBox(spbTriggerGuard[iDigi][ch], PHA::CH::TimeFilterRetriggerGuard, -1, true, "Trigger Guard [ns]", layout1, rowID, 2);
 
           rowID ++;
-          SetupSpinBox(spbRecordLength[iDigi][ch], PHA::CH::RecordLength, -1, false, "Record Length [ns]", layout1, rowID, 0);
-          SetupSpinBox(spbPreTrigger[iDigi][ch], PHA::CH::PreTrigger, -1, false, "Pre Trigger [ns]", layout1, rowID, 2);
+          SetupSpinBox(spbRecordLength[iDigi][ch], PHA::CH::RecordLength, -1, true, "Record Length [ns]", layout1, rowID, 0);
+          SetupSpinBox(spbPreTrigger[iDigi][ch], PHA::CH::PreTrigger, -1, true, "Pre Trigger [ns]", layout1, rowID, 2);
 
         }
 
@@ -640,21 +645,21 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
           //------------------------------
           rowID = 0;    
-          SetupSpinBox(spbTrapRiseTime[iDigi][ch], PHA::CH::EnergyFilterRiseTime, -1, false, "Trap. Rise Time [ns]", layout3, rowID, 0);
-          SetupSpinBox(spbTrapFlatTop[iDigi][ch], PHA::CH::EnergyFilterFlatTop, -1, false, "Trap. Flat Top [ns]", layout3, rowID, 2);
-          SetupSpinBox(spbTrapPoleZero[iDigi][ch], PHA::CH::EnergyFilterPoleZero, -1, false, "Trap. Pole Zero [ns]", layout3, rowID, 4);
+          SetupSpinBox(spbTrapRiseTime[iDigi][ch], PHA::CH::EnergyFilterRiseTime, -1, true, "Trap. Rise Time [ns]", layout3, rowID, 0);
+          SetupSpinBox(spbTrapFlatTop[iDigi][ch], PHA::CH::EnergyFilterFlatTop, -1, true, "Trap. Flat Top [ns]", layout3, rowID, 2);
+          SetupSpinBox(spbTrapPoleZero[iDigi][ch], PHA::CH::EnergyFilterPoleZero, -1, true, "Trap. Pole Zero [ns]", layout3, rowID, 4);
           
           //------------------------------
           rowID ++;
-          SetupSpinBox(spbPeaking[iDigi][ch], PHA::CH::EnergyFilterPeakingPosition, -1, false, "Peaking [%]", layout3, rowID, 0);
-          SetupSpinBox(spbBaselineGuard[iDigi][ch], PHA::CH::EnergyFilterBaselineGuard, -1, false, "Baseline Guard [ns]", layout3, rowID, 2);
-          SetupSpinBox(spbPileupGuard[iDigi][ch], PHA::CH::EnergyFilterPileUpGuard, -1, false, "Pile-up Guard [ns]", layout3, rowID, 4);
+          SetupSpinBox(spbPeaking[iDigi][ch], PHA::CH::EnergyFilterPeakingPosition, -1, true, "Peaking [%]", layout3, rowID, 0);
+          SetupSpinBox(spbBaselineGuard[iDigi][ch], PHA::CH::EnergyFilterBaselineGuard, -1, true, "Baseline Guard [ns]", layout3, rowID, 2);
+          SetupSpinBox(spbPileupGuard[iDigi][ch], PHA::CH::EnergyFilterPileUpGuard, -1, true, "Pile-up Guard [ns]", layout3, rowID, 4);
           
           //------------------------------
           rowID ++;
           SetupComboBox(cbbPeakingAvg[iDigi][ch], PHA::CH::EnergyFilterPeakingAvg, -1, true, "Peak Avg", layout3, rowID, 0);
           SetupComboBox(cbbBaselineAvg[iDigi][ch], PHA::CH::EnergyFilterBaselineAvg, -1, true, "Baseline Avg", layout3, rowID, 2);
-          SetupSpinBox(spbFineGain[iDigi][ch], PHA::CH::EnergyFilterFineGain, -1, false, "Fine Gain", layout3, rowID, 4);
+          SetupSpinBox(spbFineGain[iDigi][ch], PHA::CH::EnergyFilterFineGain, -1, true, "Fine Gain", layout3, rowID, 4);
           
         }
 
@@ -694,10 +699,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           rowID ++;
           SetupComboBox(cbbChVetoSrc[iDigi][ch], PHA::CH::ChannelVetoSource, -1, true, "Veto Source", layout5, rowID, 0);
 
-          QLabel * lbTrgMsk = new QLabel("Trigger Mask :");
+          QLabel * lbTrgMsk = new QLabel("Trigger Mask");
           lbTrgMsk->setAlignment(Qt::AlignRight | Qt::AlignCenter);
           layout5->addWidget(lbTrgMsk, rowID, 2);
           leTriggerMask[iDigi][ch] = new QLineEdit(this);
+          leTriggerMask[iDigi][ch]->setToolTip("Both Hex or Dec is OK.");
           layout5->addWidget(leTriggerMask[iDigi][ch], rowID, 3); 
 
           connect(leTriggerMask[iDigi][ch], &QLineEdit::textChanged, this, [=](){
@@ -709,7 +715,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( !enableSignalSlot ) return; 
             int index = cbChPick[ID]->currentData().toInt();
 
-            QString SixteenBaseValue = "0x" + QString::number(Utility::TenBase(leTriggerMask[ID][ch]->text().toStdString()), 16);
+            QString SixteenBaseValue = "0x" + QString::number(Utility::TenBase(leTriggerMask[ID][ch]->text().toStdString()), 16).toUpper();
             leTriggerMask[ID][ch]->setText(SixteenBaseValue);
 
             QString msg;
@@ -720,7 +726,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( digi[ID]->WriteValue(PHA::CH::ChannelsTriggerMask, SixteenBaseValue.toStdString(), index)){
               SendLogMsg(msg + "|OK.");
               leTriggerMask[ID][ch]->setStyleSheet("");
-              ShowSettingsToPanel();
+              UpdatePanelFromMemory();
+              UpdateOtherPanels();
             }else{
               SendLogMsg(msg + "|Fail.");
               leTriggerMask[ID][ch]->setStyleSheet("color:red;");
@@ -734,8 +741,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
           //------------------------------
           rowID ++;
-          SetupSpinBox(spbCoinLength[iDigi][ch], PHA::CH::CoincidenceLength, -1, false, "Coin. Length [ns]", layout5, rowID, 0);
-          SetupSpinBox(spbADCVetoWidth[iDigi][ch], PHA::CH::ADCVetoWidth, -1, false, "ADC Veto Length [ns]", layout5, rowID, 2);
+          SetupSpinBox(spbCoinLength[iDigi][ch], PHA::CH::CoincidenceLength, -1, true, "Coin. Length [ns]", layout5, rowID, 0);
+          SetupSpinBox(spbADCVetoWidth[iDigi][ch], PHA::CH::ADCVetoWidth, -1, true, "ADC Veto Length [ns]", layout5, rowID, 2);
 
           for( int i = 0; i < layout5->columnCount(); i++) layout5->setColumnStretch(i, 1);
 
@@ -753,8 +760,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
           //------------------------------
           rowID ++;
-          SetupSpinBox(spbEnergySkimLow[iDigi][ch], PHA::CH::EnergySkimLowDiscriminator, -1, false, "Energy Skim Low", layout6, rowID, 0);
-          SetupSpinBox(spbEnergySkimHigh[iDigi][ch], PHA::CH::EnergySkimHighDiscriminator, -1, false, "Energy Skim High", layout6, rowID, 2);
+          SetupSpinBox(spbEnergySkimLow[iDigi][ch], PHA::CH::EnergySkimLowDiscriminator, -1, true, "Energy Skim Low", layout6, rowID, 0);
+          SetupSpinBox(spbEnergySkimHigh[iDigi][ch], PHA::CH::EnergySkimHighDiscriminator, -1, true, "Energy Skim High", layout6, rowID, 2);
         }
       }
 
@@ -880,6 +887,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
         //send UpdateOtherPanels signal
+        /*
         connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
         connect(spbRecordLength[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
         connect(spbPreTrigger[iDigi][ch], &RSpinBox::returnPressed, this, &DigiSettingsPanel::UpdateOtherPanels);
@@ -905,7 +913,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         connect(cbbDigProbe1[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
         connect(cbbDigProbe2[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
         connect(cbbDigProbe3[iDigi][ch], &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::UpdateOtherPanels);
-        
+        */
         //----- SyncBox
         connect(cbbOnOff[iDigi][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
         connect(spbDCOffset[iDigi][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
@@ -1150,7 +1158,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           cbBdAns->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leBdSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1179,7 +1188,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           sbBdSettingsWrite->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leBdSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1204,7 +1214,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           sbBdSettingsWrite->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leBdSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1266,7 +1277,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           cbChSettingsWrite->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leChSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1297,7 +1309,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           sbChSettingsWrite->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leChSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1322,7 +1335,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
           SendLogMsg(msg + "|OK.");
           sbChSettingsWrite->setStyleSheet("");
-          ShowSettingsToPanel();
+          UpdatePanelFromMemory();
+          UpdateOtherPanels();
         }else{
           leChSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
@@ -1454,7 +1468,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   connect(tabWidget, &QTabWidget::currentChanged, this, [=](int index){ 
     if( index < nDigi) {
       ID = index;
-      ShowSettingsToPanel(); 
+      UpdatePanelFromMemory(); 
     }else{
       ID = 0;
     }
@@ -1513,8 +1527,10 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   }else{
     SendLogMsg(msg + "|Fail.");
     digi[iDig]->ReadValue(PHA::CH::ChannelsTriggerMask, ch);
-    ShowSettingsToPanel();
   }
+
+  UpdatePanelFromMemory();
+  UpdateOtherPanels();
 
 }
 
@@ -1550,12 +1566,12 @@ void DigiSettingsPanel::ReadTriggerMap(){
 
 void DigiSettingsPanel::RefreshSettings(){
   digi[ID]->ReadAllSettings();
-  ShowSettingsToPanel();
+  UpdatePanelFromMemory();
 }
 
 void DigiSettingsPanel::EnableControl(){
 
-  ShowSettingsToPanel();
+  UpdatePanelFromMemory();
 
   bool enable = !digi[ID]->IsAcqOn();
 
@@ -1651,7 +1667,8 @@ void DigiSettingsPanel::LoadSettings(){
 
   if( digi[ID]->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
     SendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
-    ShowSettingsToPanel();
+    UpdatePanelFromMemory();
+    UpdateOtherPanels();
   }else{
     SendLogMsg("Fail to Loaded settings file " + fileName + " for Digi-" + QString::number(digi[ID]->GetSerialNumber()));
   }
@@ -1664,11 +1681,13 @@ void DigiSettingsPanel::SetDefaultPHASettigns(){
   RefreshSettings();
 }
 
-void DigiSettingsPanel::ShowSettingsToPanel(){
+void DigiSettingsPanel::UpdatePanelFromMemory(){
+
+  if( !isVisible() ) return;
 
   enableSignalSlot = false;
 
-  printf("%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
+  printf("DigiSettingsPanel::%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
 
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
@@ -1821,7 +1840,7 @@ void DigiSettingsPanel::ShowSettingsToPanel(){
       }
     }
 
-    if( isSame ) leTriggerMask[ID][MaxNumberOfChannel]->setText("0x" + QString::number(mask, 16));
+    if( isSame ) leTriggerMask[ID][MaxNumberOfChannel]->setText("0x" + QString::number(mask, 16).toUpper());
   }
 
   enableSignalSlot = true;
@@ -1949,7 +1968,8 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
     if( digi[ID]->WriteValue(para, cbb->currentData().toString().toStdString(), index)){
       SendLogMsg(msg + "|OK.");
       cbb->setStyleSheet("");
-      ShowSettingsToPanel();
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
     }else{
       SendLogMsg(msg + "|Fail.");
       cbb->setStyleSheet("color:red;");
@@ -1968,11 +1988,13 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     spb->setMinimum(atof( para.GetAnswers()[0].first.c_str()));
   }
   spb->setMaximum(atof( para.GetAnswers()[1].first.c_str()));
+
   if( para.GetAnswers().size()  >= 3 ) {
     spb->setSingleStep(atof(para.GetAnswers()[2].first.c_str()));
   }else{
     printf("--- missed. %s\n", para.GetPara().c_str());
   }
+  spb->SetToolTip( atof( para.GetAnswers()[0].first.c_str()));
   layout->addWidget(spb, row, col + 1, srow, scol);
 
   connect(spb, &RSpinBox::valueChanged, this, [=](){ 
@@ -1995,7 +2017,8 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){
       SendLogMsg(msg + "|OK.");
       spb->setStyleSheet("");
-      ShowSettingsToPanel();
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
     }else{
       SendLogMsg(msg + "|Fail.");
       spb->setStyleSheet("color:red;");
@@ -2053,7 +2076,6 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
     }
 
     //printf("%d =? %d \n", count, nCh);
-
     enableSignalSlot = false;
     if( count != nCh ){
        spb[ID][nCh]->setValue(-1);

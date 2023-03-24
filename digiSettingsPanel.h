@@ -40,13 +40,13 @@ private slots:
   void RefreshSettings(); // this read digitizer and ShowSettingToPanel
 
 public slots:
-  void ShowSettingsToPanel();
   void EnableControl();
+  void UpdatePanelFromMemory();
 
 signals:
 
-  void SendLogMsg(const QString &msg);
   void UpdateOtherPanels();
+  void SendLogMsg(const QString &msg);
 
 private:
   

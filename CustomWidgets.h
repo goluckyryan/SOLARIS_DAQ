@@ -28,6 +28,16 @@ class RSpinBox : public QDoubleSpinBox{
       setFocusPolicy(Qt::StrongFocus);
       setDecimals(decimal);
     }
+
+    void SetToolTip(double min = -1){
+      if( min == -1 ){
+        setToolTip("(" + QString::number(minimum()) + " - " + QString::number(maximum()) + ", " + QString::number(singleStep()) + ")");
+      }else{
+        setToolTip("(" + QString::number(min) + " - " + QString::number(maximum()) + ", " + QString::number(singleStep()) + ")");
+      }
+      setToolTipDuration(-1);
+    }
+
   signals:
     void returnPressed();
   protected:

@@ -39,7 +39,6 @@ public:
   MainWindow(QWidget *parent = nullptr);
   ~MainWindow();
 
-    
 private slots:
 
   void OpenDigitizers();
@@ -183,9 +182,7 @@ private:
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //@------ connection between pannels
-  bool ConnectScopeAndSetting;
-  bool ConnectScopeAndSolaris;
-  bool ConnectSettingAndSolaris;
+  void UpdateAllPanel(int panelID);
 
 };
 

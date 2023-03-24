@@ -20,8 +20,6 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   setWindowTitle("SOLARIS Settings");
   setGeometry(0, 0, 1350, 800);
 
-  printf("%s\n", __func__);
-
   this->digi = digi;
   this->nDigi = nDigi;
   this->mapping = mapping;
@@ -105,12 +103,47 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   connect(bnLoadSetting, &QPushButton::clicked, this, &SOLARISpanel::LoadSettings);
   mainLayout->addWidget(bnLoadSetting, rowIndex, 2);
 
-  QLabel * lbCoinTime = new QLabel("Coin. Time [ns]", this);
+  QLabel * lbCoinTime = new QLabel("Coin. Time (all ch.) [ns]", this);
   lbCoinTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   mainLayout->addWidget(lbCoinTime, rowIndex, 3);
 
-  RSpinBox * sbCoinTime = new RSpinBox(this);
+  sbCoinTime = new RSpinBox(this);
+  sbCoinTime->setMinimum(-1);
+  sbCoinTime->setMaximum(atof(PHA::CH::CoincidenceLength.GetAnswers()[1].first.c_str()));
+  sbCoinTime->setSingleStep(atof(PHA::CH::CoincidenceLength.GetAnswers()[2].first.c_str()));
+  sbCoinTime->setDecimals(0);
+  sbCoinTime->SetToolTip(atof(PHA::CH::CoincidenceLength.GetAnswers()[1].first.c_str()));
   mainLayout->addWidget(sbCoinTime, rowIndex, 4);
+
+  connect(sbCoinTime, &RSpinBox::valueChanged, this, [=](){
+    if( !enableSignalSlot ) return;
+    sbCoinTime->setStyleSheet("color:blue;");
+  });
+
+  connect(sbCoinTime, &RSpinBox::returnPressed, this, [=](){
+    if( !enableSignalSlot ) return;
+    //printf("%s %d  %d \n", para.GetPara().c_str(), index, spb->value());
+    if( sbCoinTime->decimals() == 0 && sbCoinTime->singleStep() != 1) {
+      double step = sbCoinTime->singleStep();
+      double value = sbCoinTime->value();
+      sbCoinTime->setValue( (std::round(value/step) * step) );
+    }
+
+    for(int i = 0; i < (int) mapping.size(); i ++){
+      if( i >= nDigi || digi[i]->IsDummy() || !digi[i]->IsConnected() ) return;
+      QString msg;
+      msg = QString::fromStdString(PHA::CH::CoincidenceLength.GetPara()) + "|DIG:"+ QString::number(digi[i]->GetSerialNumber());
+      msg += ",CH:All = " + QString::number(sbCoinTime->value());
+      if( digi[i]->WriteValue(PHA::CH::CoincidenceLength, std::to_string(sbCoinTime->value()))){
+        SendLogMsg(msg + "|OK.");
+        sbCoinTime->setStyleSheet("");
+      }else{
+        SendLogMsg(msg + "|Fail.");
+        sbCoinTime->setStyleSheet("color:red;");
+      }
+    }
+    UpdatePanelFromMemory();
+  });
 
   ///=================================
   rowIndex ++;
@@ -230,6 +263,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
     sbSetting[SettingID][digiID][chID]->setMinimum(atoi(SettingItems[SettingID].GetAnswers()[0].first.c_str()));
     sbSetting[SettingID][digiID][chID]->setMaximum(atoi(SettingItems[SettingID].GetAnswers()[1].first.c_str()));
     sbSetting[SettingID][digiID][chID]->setSingleStep(atoi(SettingItems[SettingID].GetAnswers()[2].first.c_str()));
+    sbSetting[SettingID][digiID][chID]->SetToolTip();
 
     layout0->addWidget(sbSetting[SettingID][digiID][chID], 2*i+1, 2);
 
@@ -268,7 +302,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
         SendLogMsg(msg + "|Fail.");
         spb->setStyleSheet("color:red;");
       }
-      emit UpdateOtherPanels();
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
     });
     
     ///===================== for the OnOff CheckBox
@@ -285,7 +320,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
       }
       enableSignalSlot = true;
 
-      emit UpdateOtherPanels();
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
 
     });
 
@@ -367,9 +403,10 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
         }
       }
 
-      UpdateOtherPanels();
-
     });
+
+    UpdatePanelFromMemory();
+    UpdateOtherPanels();
 
   }
   layout->addWidget(groupbox, row, col);
@@ -382,14 +419,18 @@ void SOLARISpanel::RefreshSettings(){
       digi[i]->ReadAllSettings();
     }
   }
-  UpdatePanel();
+  UpdatePanelFromMemory();
 }
 
-void SOLARISpanel::UpdatePanel(){
+void SOLARISpanel::UpdatePanelFromMemory(){
+
+  if( !isVisible() ) return;
+
   enableSignalSlot = false;
 
-  printf("%s\n", __func__);
+  printf("SOLARISpanel::%s\n", __func__);
 
+  //@===================== LineEdit and SpinBox
   for( int SettingID = 0; SettingID < (int) SettingItems.size() ; SettingID ++){
     for( int DigiID = 0; DigiID < (int) mapping.size(); DigiID ++){
       if( DigiID >= nDigi ) continue;;
@@ -410,14 +451,17 @@ void SOLARISpanel::UpdatePanel(){
 
         haha = digi[DigiID]->GetSettingValue(PHA::CH::ChannelEnable, chID);
         chkOnOff[SettingID][DigiID][chID]->setChecked( haha == "True" ? true : false);
-
+        leDisplay[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
+        sbSetting[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
+        
         ///printf("====== %d %d %d |%s|\n", SettingID, DigiID, chID, haha.c_str());
       }
     }
   }
 
+  //@===================== Trigger
   for( int k = 0; k < detIDList.size() ; k++){
-    if( detIDList[k][0] >= detMaxID[0] || 0 > detIDList[k][0]) continue;
+    if( detIDList[k][0] >= detMaxID[0] || 0 > detIDList[k][0]) continue;  //! only for array
     
     //if( detIDList[k].size() <= 2) continue;
     std::vector<unsigned long> triggerMap;
@@ -502,7 +546,35 @@ void SOLARISpanel::UpdatePanel(){
     if( !isAcceptableSetting ) cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Others");
   }
 
+  //@===================== Coin. time
+  std::vector<int> coinTime;
+  
+  for( int i = 0; i < detIDList.size(); i++){
+    for( int j = 1; j < detIDList[i].size(); j++){
+      int digiID = detIDList[i][j] >> 8;
+      int chID = (detIDList[i][j] & 0xFF);
+      if( digiID >= nDigi ) continue;
+      if( digi[digiID]->IsDummy() || !digi[digiID]->IsConnected() ) continue;
+      coinTime.push_back( atoi(digi[digiID]->GetSettingValue(PHA::CH::CoincidenceLength, chID).c_str()));
+    }
+  }
+
+  bool isSameCoinTime = true;
+  for( int i = 1; i < (int) coinTime.size(); i++){
+    if( coinTime[i] != coinTime[0]) {
+      isSameCoinTime = false;
+      break;
+    }
+  }
+
+  if( isSameCoinTime ){
+    sbCoinTime->setValue(coinTime[0]);
+  }else{
+    sbCoinTime->setValue(-1);
+  }
+
   enableSignalSlot = true;
+
 }
 
 void SOLARISpanel::UpdateThreshold(){

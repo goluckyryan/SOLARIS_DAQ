@@ -70,10 +70,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   scope = nullptr;
   digiSetting = nullptr;
 
-  ConnectScopeAndSetting = false;
-  ConnectScopeAndSolaris = false;
-  ConnectSettingAndSolaris = false;
-
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
   QVBoxLayout * layoutMain = new QVBoxLayout(mainLayoutWidget);
@@ -713,6 +709,7 @@ void MainWindow::OpenScope(){
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
       connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
+      connect(scope, &Scope::UpdateOtherPanels, this, [=](){ UpdateAllPanel(0);});
       connect(scope, &Scope::TellACQOnOff, this, [=](const bool onOff){
         if( influx ){
           influx->ClearDataPointsBuffer();
@@ -726,20 +723,10 @@ void MainWindow::OpenScope(){
         influx->AddDataPoint("StartStop value=1");
         influx->WriteData(DatabaseName.toStdString());
       }
-      
-      if( digiSetting &&  ConnectScopeAndSetting ) {
-        connect(scope, &Scope::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
+      if( digiSetting) {
         connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
-        connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
-        ConnectScopeAndSetting = true;
-      }
-      if( digiSetting)  digiSetting->EnableControl();
-
-      if( solarisSetting && !ConnectScopeAndSolaris ){
-        connect(scope, &Scope::UpdateOtherPanels, solarisSetting, &SOLARISpanel::UpdatePanel);
-        connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
-        ConnectScopeAndSolaris = true;
-      }
+        digiSetting->EnableControl();
+      }  
 
     }else{
       scope->show();
@@ -757,42 +744,18 @@ void MainWindow::OpenDigitizersSettings(){
   if( digiSetting == NULL){
     digiSetting = new DigiSettingsPanel(digi, nDigi);
     connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
-
-    if( scope && !ConnectScopeAndSetting) {
-      connect(scope, &Scope::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
-      connect(scope, &Scope::TellSettingsPanelControlOnOff, digiSetting, &DigiSettingsPanel::EnableControl);
-      connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
-      ConnectScopeAndSetting = true;
-    }
-
-    if( solarisSetting && !ConnectSettingAndSolaris){
-      connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, solarisSetting,  &SOLARISpanel::UpdatePanel);
-      connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
-      ConnectSettingAndSolaris = true;
-    }
+    connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(1);});
 
   }else{
     digiSetting->show();
   }
+  digiSetting->UpdatePanelFromMemory();
 }
 
 //^###################################################################### Open SOLARIS setting panel
 void MainWindow::OpenSOLARISpanel(){
   solarisSetting->show();
-  solarisSetting->UpdatePanel();
-
-  if( digiSetting && !ConnectSettingAndSolaris){
-    connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, solarisSetting,  &SOLARISpanel::UpdatePanel);
-    connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, digiSetting, &DigiSettingsPanel::ShowSettingsToPanel);
-    ConnectSettingAndSolaris = true;
-  }
-
-  if( scope && !ConnectScopeAndSolaris){
-    connect(scope, &Scope::UpdateOtherPanels, solarisSetting, &SOLARISpanel::UpdatePanel);
-    connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, scope, &Scope::ReadScopeSettings);
-    ConnectScopeAndSolaris = true;
-  }
-
+  solarisSetting->UpdatePanelFromMemory();
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
@@ -864,11 +827,6 @@ bool MainWindow::CheckSOLARISpanelOK(){
   }
   file.close();
 
-  //if( (int) mapping.size() > nDigi){
-  //  LogMsg("Num. of Digitizer in the Mapping is more than Opened DIgitizer.");
-  //  return false;
-  //}  
-
   LogMsg("Mapping.h | Num. Digi : " + QString::number(mapping.size()));
   for( int i = 0 ; i < (int) mapping.size(); i ++){
     if( i < nDigi ){
@@ -889,10 +847,32 @@ bool MainWindow::CheckSOLARISpanelOK(){
   //@============= Create SOLAIRS panel
   solarisSetting = new SOLARISpanel(digi, nDigi, mapping, detType, detMaxID);
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
+  connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(2);});
 
   if( solarisSetting == nullptr) return false;
 
   return true;
+}
+
+void MainWindow::UpdateAllPanel(int panelID){
+  
+  printf("%s  %d\n", __func__, panelID);
+
+  switch (panelID) {
+    case 0 :{
+      if( digiSetting && digiSetting->isVisible()  ) digiSetting->UpdatePanelFromMemory();
+      if( solarisSetting && solarisSetting->isVisible() ) solarisSetting->UpdatePanelFromMemory();
+    };break;
+    case 1 :{
+      if( scope && scope->isVisible() ) scope->ReadScopeSettings();
+      if( solarisSetting && solarisSetting->isVisible() ) solarisSetting->UpdatePanelFromMemory();
+    };break;
+    case 2 :{
+      if( scope && scope->isVisible() ) scope->ReadScopeSettings();
+      if( digiSetting && digiSetting->isVisible() ) digiSetting->UpdatePanelFromMemory();
+    }
+  }
+    
 }
 
 //^###################################################################### Open Scaler, when DAQ is running

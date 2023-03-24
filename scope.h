@@ -109,6 +109,7 @@ public:
 
 public slots:
   void ReadScopeSettings(); // read from digitizer and show;
+  void UpdateSettingsFromMemeory();
 
 private slots:
   void StartScope();
@@ -130,8 +131,8 @@ private slots:
 signals:
 
   void CloseWindow();
-  void SendLogMsg(const QString &msg);
   void UpdateScalar();
+  void SendLogMsg(const QString &msg);
   void UpdateOtherPanels();
   void TellSettingsPanelControlOnOff();
   void TellACQOnOff(const bool onOff);

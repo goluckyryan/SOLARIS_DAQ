@@ -22,9 +22,9 @@
 #include "CustomWidgets.h"
 #include "macro.h"
 
-#define MaxSettingItem  3
 #define MaxDetType 10
 #define MaxDetID 60
+#define MaxSettingItem  3
 
 class SOLARISpanel : public QWidget{
   Q_OBJECT
@@ -45,11 +45,11 @@ private slots:
   void LoadSettings();
 
 public slots:
-  void UpdatePanel();
   void UpdateThreshold();
+  void UpdatePanelFromMemory();
 
 signals:
-  
+
   void UpdateOtherPanels();
   void SendLogMsg(const QString str);
 
@@ -65,6 +65,8 @@ private:
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
   int FindDetTypID(QList<int> detIDListElement);
+
+  RSpinBox * sbCoinTime;
 
   QCheckBox * chkAll; // checkBox for all setting on that tab;
   QCheckBox * chkAlle;

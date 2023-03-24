@@ -85,7 +85,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     ReadScopeSettings();
-    UpdateOtherPanels();
     digiMTX[iDigi].unlock();
   });
 
@@ -113,6 +112,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   connect(bnScopeReadSettings, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     ReadScopeSettings();
+    UpdateOtherPanels();
   });
 
   //TODO----- add copy settings and paste settings
@@ -327,12 +327,54 @@ Scope::~Scope(){
 
 void Scope::ReadScopeSettings(){
 
-  int iDigi = cbScopeDigi->currentIndex();
-  int ch = cbScopeCh->currentIndex();
+  if( !isVisible() ) return;
 
-  if( !digi[iDigi] && digi[iDigi]->IsDummy() ) return;
+  int iDigi = cbScopeDigi->currentIndex();
+  if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
+
+  int ch = cbScopeCh->currentIndex();
+  digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe0, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe1, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe0, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe1, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe2, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe3, ch);
+
+  digi[iDigi]->ReadValue(PHA::CH::Polarity, ch);
+  digi[iDigi]->ReadValue(PHA::CH::WaveResolution, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingAvg, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineAvg, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterLowFreqFilter, ch);
+
+  digi[iDigi]->ReadValue(PHA::CH::RecordLength, ch);
+  digi[iDigi]->ReadValue(PHA::CH::PreTrigger, ch);
+  digi[iDigi]->ReadValue(PHA::CH::DC_Offset, ch);
+  digi[iDigi]->ReadValue(PHA::CH::TriggerThreshold, ch);
+  digi[iDigi]->ReadValue(PHA::CH::TimeFilterRiseTime, ch);
+  digi[iDigi]->ReadValue(PHA::CH::TimeFilterRetriggerGuard, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterRiseTime, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFlatTop, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPoleZero, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFineGain, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingPosition, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineGuard, ch);
+  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPileUpGuard, ch);
+
+  UpdateSettingsFromMemeory();
+
+}
+
+void Scope::UpdateSettingsFromMemeory(){
+  if( !isVisible() ) return;
+
+  printf("Scope::%s\n", __func__);
+
+  int iDigi = cbScopeDigi->currentIndex();
+  if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
 
   allowChange = false;
+
+  int ch = cbScopeCh->currentIndex();
 
   for( int i = 0 ; i < 2; i++){
     ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
@@ -374,6 +416,7 @@ void Scope::ReadScopeSettings(){
   sbTrapPeaking->setStyleSheet("");
   sbBaselineGuard->setStyleSheet("");
   sbPileUpGuard->setStyleSheet("");
+
 
   allowChange = true;
 }
@@ -550,12 +593,12 @@ void Scope::ScopeControlOnOff(bool on){
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
-  std::string ans = digi[iDigi]->ReadValue(digPara, ch);
+  std::string ans = digi[iDigi]->GetSettingValue(digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
 void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
-  std::string ans = digi[iDigi]->ReadValue(digPara, ch);
+  std::string ans = digi[iDigi]->GetSettingValue(digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
     cb->setCurrentIndex(index);
@@ -595,16 +638,12 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
     if( digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), ch)){
       SendLogMsg(msg + "|OK.");
       sb->setStyleSheet("");
-      
-      //TODO digiSettingPanel update setting
-      printf("UpdateOtherPanels \n");
-      emit UpdateOtherPanels();
-
+      UpdateSettingsFromMemeory();
+      UpdateOtherPanels();
     }else{
       SendLogMsg(msg + "|Fail.");
       sb->setStyleSheet("color:red;");
     }
-
   });
 
 
@@ -632,9 +671,8 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
     if( digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), ch)){
       SendLogMsg(msg + "|OK.");
       cb->setStyleSheet("");
-      //TODO digiSettingPanel update setting
-      printf("UpdateOtherPanels \n");
-      emit UpdateOtherPanels();
+      UpdateSettingsFromMemeory();
+      UpdateOtherPanels();
     }else{
       SendLogMsg(msg + "|Fail.");
       cb->setStyleSheet("color:red;");
