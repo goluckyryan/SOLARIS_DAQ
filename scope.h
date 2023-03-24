@@ -6,6 +6,7 @@
 #include <QChart>
 #include <QChartView>
 #include <QSpinBox>
+#include <QLabel>
 #include <QPushButton>
 #include <QCheckBox>
 #include <QLineEdit>
@@ -59,6 +60,12 @@ public:
   TraceView(QChart * chart, QWidget * parent = nullptr): QChartView(chart, parent){
     m_isTouching = false;
     this->setRubberBand(QChartView::RectangleRubberBand);
+
+    m_coordinateLabel = new QLabel(this);
+    m_coordinateLabel->setStyleSheet("QLabel { color : black; }");
+    m_coordinateLabel->setVisible(false);
+    m_coordinateLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    setMouseTracking(true);
   }
 
 protected:
@@ -74,13 +81,24 @@ protected:
     QChartView::mousePressEvent(event);
   }
   void mouseMoveEvent(QMouseEvent *event){
+
+    QPointF chartPoint = this->chart()->mapToValue(event->pos());
+    QString coordinateText = QString("x: %1, y: %2").arg(QString::number(chartPoint.x(), 'f', 0)).arg(QString::number(chartPoint.y(), 'f', 0));
+    m_coordinateLabel->setText(coordinateText);
+    m_coordinateLabel->move(event->pos() + QPoint(10, -10));
+    m_coordinateLabel->setVisible(true);
     if (m_isTouching) return;
     QChartView::mouseMoveEvent(event);
+
   }
   void mouseReleaseEvent(QMouseEvent *event){
     if (m_isTouching)  m_isTouching = false;
     chart()->setAnimationOptions(QChart::SeriesAnimations);
     QChartView::mouseReleaseEvent(event);
+  }
+  void leaveEvent(QEvent *event) override {
+    m_coordinateLabel->setVisible(false);
+    QChartView::leaveEvent(event);
   }
   void keyPressEvent(QKeyEvent *event){
     switch (event->key()) {
@@ -94,9 +112,10 @@ protected:
       default: QGraphicsView::keyPressEvent(event); break;
     }
   }
-
+  
 private:
   bool m_isTouching;
+  QLabel * m_coordinateLabel;
 };
 
 //^=======================================

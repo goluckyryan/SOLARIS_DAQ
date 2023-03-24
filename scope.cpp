@@ -275,8 +275,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //------------- Key binding
   rowID ++;
-  QLabel * lbhints = new QLabel("Type 'r' to restore view.", this);
-  layout->addWidget(lbhints, rowID, 0, 1, 3);
+  QLabel * lbhints = new QLabel("Type 'r' to restore view, '+/-' Zoom in/out, arrow key to pan.", this);
+  layout->addWidget(lbhints, rowID, 0, 1, 4);
   
   QLabel * lbinfo = new QLabel("Trace update every " + QString::number(updateTraceThread->GetWaitTimeSec()) + " sec.", this);
   lbinfo->setAlignment(Qt::AlignRight);
