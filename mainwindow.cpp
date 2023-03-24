@@ -301,6 +301,9 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
+  //TODO --- printf("----- Save Log File");
+
+
   printf("--- end of %s\n", __func__);
 
 }

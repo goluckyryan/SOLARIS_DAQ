@@ -54,7 +54,7 @@ signals:
   void SendLogMsg(const QString str);
 
 private:
-  void CreateDetGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
+  void CreateDetGroup(int detTypeID, int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
 
   Digitizer2Gen ** digi;
   unsigned short nDigi;
@@ -68,10 +68,12 @@ private:
 
   RSpinBox * sbCoinTime;
 
-  QCheckBox * chkAll; // checkBox for all setting on that tab;
+  QCheckBox * chkAll[MaxDetType][MaxSettingItem]; // checkBox for all setting on that tab;
   QCheckBox * chkAlle;
   QCheckBox * chkAllxf;
   QCheckBox * chkAllxn;
+
+  QGroupBox * groupBox[MaxDetType][MaxSettingItem][MaxDetID];
 
   QLineEdit * leDisplay[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel]; // [SettingID][DigiID][ChID]
   RSpinBox  * sbSetting[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel];

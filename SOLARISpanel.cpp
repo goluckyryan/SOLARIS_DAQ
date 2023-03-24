@@ -172,22 +172,27 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       layout->setAlignment(Qt::AlignLeft|Qt::AlignTop);
       layout->setSpacing(0);
 
-      //TODO======= coincident Time window
-
       //TODO======= check all
-      chkAll = new QCheckBox("Set for all", tab);
-      layout->addWidget(chkAll, 0, 0);
+      chkAll[detTypeID][SettingID] = new QCheckBox("Set for all", tab);
+      layout->addWidget(chkAll[detTypeID][SettingID], 0, 0);
+      connect(chkAll[detTypeID][SettingID], &QCheckBox::stateChanged, this, [=](bool state){
+        int lowID = (detTypeID == 0 ? 0 : detMaxID[detTypeID-1]);
+        for(int i = 1; i < detIDList.size(); i++){
+          if( detIDList[i][0] >= detMaxID[detTypeID] || lowID > detIDList[i][0] ) continue;
+          groupBox[detTypeID][SettingID][detIDList[i][0]]->setEnabled(!state);
+        }
+      });
 
-      if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara() ){
+      if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara() && detTypeID == 0){
         chkAlle = new QCheckBox("Set for all e", tab);
         layout->addWidget(chkAlle, 0, 1);
+
 
         chkAllxf = new QCheckBox("Set for all xf", tab);
         layout->addWidget(chkAllxf, 0, 2);
 
         chkAllxn = new QCheckBox("Set for all xn", tab);
         layout->addWidget(chkAllxn, 0, 3);
-
       }
 
       QFrame *line = new QFrame(tab);
@@ -203,9 +208,12 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       for(int i = 0; i < detIDList.size(); i++){
 
         if( detIDList[i][0] >= detMaxID[detTypeID] || lowID > detIDList[i][0] ) continue;
-        CreateDetGroup(SettingID, detIDList[i], layout, i/NCOL +  2, i%NCOL);
+        CreateDetGroup(detTypeID, SettingID, detIDList[i], layout, i/NCOL +  2, i%NCOL);
 
       }
+
+
+
 
     }
   }
@@ -227,12 +235,13 @@ int SOLARISpanel::FindDetTypID(QList<int> detIDListElement){
   return -1;
 }
 
-void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col){
+void SOLARISpanel::CreateDetGroup(int detTypeID, int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col){
 
-  QGroupBox * groupbox = new QGroupBox("Det-" + QString::number(detID[0]), this);
-  groupbox->setFixedWidth(130);
-  groupbox->setAlignment(Qt::AlignCenter);
-  QGridLayout * layout0 = new QGridLayout(groupbox);
+  //QGroupBox * groupbox = new QGroupBox("Det-" + QString::number(detID[0]), this);
+  groupBox[detTypeID][SettingID][detID[0]] = new QGroupBox("Det-" + QString::number(detID[0]), this);
+  groupBox[detTypeID][SettingID][detID[0]]->setFixedWidth(130);
+  groupBox[detTypeID][SettingID][detID[0]]->setAlignment(Qt::AlignCenter);
+  QGridLayout * layout0 = new QGridLayout(groupBox[detTypeID][SettingID][detID[0]]);
   layout0->setSpacing(0);
   layout0->setAlignment(Qt::AlignLeft);
 
@@ -291,11 +300,14 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
         double value = spb->value();
         spb->setValue( (std::round(value/step) * step) );
       }
+
+      int index = (chkAll[detTypeID][SettingID]->isChecked() ? -1 : chID);
+
       QString msg;
       msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[digiID]->GetSerialNumber());
-      if( para.GetType() == TYPE::CH ) msg += ",CH:" + QString::number(chID);
+      msg += ",CH:" + (index == - 1 ? "All" : QString::number(chID)) ;
       msg += " = " + QString::number(spb->value());
-      if( digi[digiID]->WriteValue(para, std::to_string(spb->value()), chID)){
+      if( digi[digiID]->WriteValue(para, std::to_string(spb->value()), index)){
         SendLogMsg(msg + "|OK.");
         spb->setStyleSheet("");
       }else{
@@ -310,7 +322,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
     connect(chkOnOff[SettingID][digiID][chID], &QCheckBox::stateChanged, this, [=](int state){
       if( !enableSignalSlot ) return; 
 
-      digi[digiID]->WriteValue(PHA::CH::ChannelEnable, state ? "True" : "False", chID);
+      int index = (chkAll[detTypeID][SettingID]->isChecked() ? -1 : chID);
+      digi[digiID]->WriteValue(PHA::CH::ChannelEnable, state ? "True" : "False", index);
 
       enableSignalSlot = false;
       for( int i = 0; i < (int) detType.size(); i++){
@@ -341,7 +354,6 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
   // 5,  ChannelTriggerMask is a 64-bit
   // 6,  CoincidenceLengthT in ns, set to be 100 ns. 
 
-  int detTypeID = FindDetTypID(detID);
   if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara()){
     cbTrigger[detTypeID][detID[0]] = new RComboBox(this); 
     cbTrigger[detTypeID][detID[0]]->addItem("Self Trigger", "ChSelfTrigger");    /// no coincident
@@ -402,14 +414,14 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detID, QGridLayout *
           }; break;
         }
       }
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
 
     });
 
-    UpdatePanelFromMemory();
-    UpdateOtherPanels();
 
   }
-  layout->addWidget(groupbox, row, col);
+  layout->addWidget(groupBox[detTypeID][SettingID][detID[0]], row, col);
 }
 
 //^##############################################################
@@ -486,7 +498,78 @@ void SOLARISpanel::UpdatePanelFromMemory(){
     //       and waveTriggerSource are all ChSelfTrigger
 
     int detTypeID = FindDetTypID(detIDList[k]);
+
+    //====== a stupid way
+    // triggerSource : Other = 0x0, Disabled = 0x1, ChSelfTrigger = 0x2, TRGIN = 0x3
+    // CoinMask      : Other = 0x0, Disbaled = 0x1, Ch64Trigger = 0x2, TRGIN = 0x3
+    // for example, SelfTrigger should be,  0x2211, triggerMask does not matter.
+    //                                        |||+-- anti-coin
+    //                                        ||+-- coin
+    //                                        |+-- wave
+    //                                        +-- event
+
+    // comboxIndex 0) SelfTrigger 0x2211, any trigger mask
+    // comboxIndex 2) TRGIN       0x3331, any trigger mask
+    // comboxIndex 3) Disable     0x1111, any trigger mask
+    // comboxIndex 1) Trigger E   {0x2211 - e , 0x2221 - xf, 0x2221 - xn }, 
+    //                            triggerMask { 0, 0x1, 0x1}
+    // comboxIndex 4) Other settings
+
+    std::vector<unsigned int> stupidIndex;
+    for( int i = 0 ; i < (int) triggerMap.size(); i++){
+      unsigned int index = 0;
+      if(antiCoincidentMask[i] == "Disabled") index += 0x1;
+      if(antiCoincidentMask[i] == "Ch64Trigger") index += 0x2;
+      if(antiCoincidentMask[i] == "TRGIN") index += 0x3;
+      
+      if(coincidentMask[i] == "Disabled") index += 0x10;
+      if(coincidentMask[i] == "Ch64Trigger") index += 0x20;
+      if(coincidentMask[i] == "TRGIN") index += 0x30;
+
+      if(waveTriggerSource[i] == "Disabled") index += 0x100;
+      if(waveTriggerSource[i] == "ChSelfTrigger") index += 0x200;
+      if(waveTriggerSource[i] == "TRGIN") index += 0x300;
+
+      if(eventTriggerSource[i] == "Disabled") index += 0x1000;
+      if(eventTriggerSource[i] == "ChSelfTrigger") index += 0x2000;
+      if(eventTriggerSource[i] == "TRGIN") index += 0x3000;
+
+      stupidIndex.push_back(index);
+    }
+
+    int jaja[5] = {0}; // this store the count for each comboxIndex;
+    for( int i = 0; i < (int) stupidIndex.size(); i++){
+      //printf(" %d | 0x%s \n", i, QString::number(stupidIndex[i], 16).toUpper().toStdString().c_str());
+      if( stupidIndex[i] == 0x2211 ) jaja[0] ++;
+      if( stupidIndex[i] == 0x3331 ) jaja[2] ++;
+      if( stupidIndex[i] == 0x1111 ) jaja[3] ++;
+      if( i == 0 && stupidIndex[i] == 0x2211 ) jaja[1] ++;
+      if( i  > 0 && stupidIndex[i] == 0x2221 ) jaja[1] ++;
+    }
+
+    //Search for jaja, see is there any one equal to total number of ch;
+    int comboxIndex = 4;
+    for( int i = 0; i < 5; i++){
+      //printf("%d | %d \n", i, jaja[i]);
+      if( jaja[i] == (int) stupidIndex.size() )comboxIndex = i;
+    }
+
+    //printf("comboxIndex : %d \n", comboxIndex);
+
+    // if Trigger e, need to check the trigger mask;
+    if( comboxIndex == 3){
+      unsigned long ShouldBeMask = 1ULL << (detIDList[k][1] & 0xFF);
+      for( int i = 1; i < (int) triggerMap.size(); i ++){
+        //printf(" %d | %lu =? %lu \n", i, triggerMap[i], ShouldBeMask);
+        if( triggerMap[i] != ShouldBeMask) comboxIndex = 4;
+      }  
+    }
+
+    cbTrigger[detTypeID][detIDList[k][0]]->setCurrentIndex(comboxIndex);
+
+
     //Check the 0-index
+    /*
     bool isAcceptableSetting = true;
     bool isTriggerE = false;
 
@@ -499,19 +582,19 @@ void SOLARISpanel::UpdatePanelFromMemory(){
     if( isAcceptableSetting ){
       if( eventTriggerSource[0] == "ChSelfTrigger" && coincidentMask[0] == "Disabled") {
         
-        cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Self Trigger");
-
-        unsigned long mask = 1ULL << (detIDList[k][1] & 0xFF);
-
+        //assume isTriggerE
+        isTriggerE = true;
+        unsigned long ShouldBeMask = 1ULL << (detIDList[k][1] & 0xFF);        
         for( int p = 1; p < (int) triggerMap.size(); p ++){
-          if( coincidentMask[p] != "Ch64Trigger") isAcceptableSetting = false;
-          if( triggerMap[p] != mask) isAcceptableSetting = false;
+          if( coincidentMask[p] != "Ch64Trigger") isTriggerE = false;
+          if( triggerMap[p] != ShouldBeMask) isTriggerE = false;
         }  
-        if( isAcceptableSetting ) {
-          cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
-          isTriggerE = true;
-        }
 
+        if( isTriggerE ){
+          cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Trigger e");
+        }else{
+          cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Self Trigger");
+        }
 
       }else if( eventTriggerSource[0] == "Disabled" && coincidentMask[0] == "Disabled" ) {
         cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Disabled");
@@ -544,6 +627,8 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       }
     }
     if( !isAcceptableSetting ) cbTrigger[detTypeID][detIDList[k][0]]->setCurrentText("Others");
+    */
+
   }
 
   //@===================== Coin. time

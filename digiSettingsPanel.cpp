@@ -1536,30 +1536,32 @@ void DigiSettingsPanel::onTriggerClick(int haha){
 
 void DigiSettingsPanel::ReadTriggerMap(){
 
-    enableSignalSlot = false;
+  enableSignalSlot = false;
 
-    cbAllEvtTrigger[ID]->setCurrentIndex(cbbEvtTrigger[ID][MaxNumberOfChannel]->currentIndex());
-    cbAllWaveTrigger[ID]->setCurrentIndex(cbbWaveTrigger[ID][MaxNumberOfChannel]->currentIndex());
-    cbAllCoinMask[ID]->setCurrentIndex(cbbCoinMask[ID][MaxNumberOfChannel]->currentIndex());
-    cbAllAntiCoinMask[ID]->setCurrentIndex(cbbAntiCoinMask[ID][MaxNumberOfChannel]->currentIndex());
-    sbAllCoinLength[ID]->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
+  //printf("%s\n", __func__);
 
-    for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
+  cbAllEvtTrigger[ID]->setCurrentIndex(cbbEvtTrigger[ID][MaxNumberOfChannel]->currentIndex());
+  cbAllWaveTrigger[ID]->setCurrentIndex(cbbWaveTrigger[ID][MaxNumberOfChannel]->currentIndex());
+  cbAllCoinMask[ID]->setCurrentIndex(cbbCoinMask[ID][MaxNumberOfChannel]->currentIndex());
+  cbAllAntiCoinMask[ID]->setCurrentIndex(cbbAntiCoinMask[ID][MaxNumberOfChannel]->currentIndex());
+  sbAllCoinLength[ID]->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
 
-      unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch));
-      //printf("Trigger Mask of ch-%2d : 0x%s |%s| \n", ch, QString::number(mask, 16).toStdString().c_str(), ans.c_str());
+  for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
 
-      for( int k = 0; k < (int) digi[ID]->GetNChannels(); k ++ ){
-        trgMapClickStatus[ID][ch][k] = ( (mask >> k) & 0x1 );
-        if( (mask >> k) & 0x1 ){
-          trgMap[ID][ch][k]->setStyleSheet("background-color: red;"); 
-        }else{
-          trgMap[ID][ch][k]->setStyleSheet("");
-        }
+    unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch));
+    //printf("Trigger Mask of ch-%2d : 0x%s |%s| \n", ch, QString::number(mask, 16).toStdString().c_str(), digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, ch).c_str());
+
+    for( int k = 0; k < (int) digi[ID]->GetNChannels(); k ++ ){
+      trgMapClickStatus[ID][ch][k] = ( (mask >> k) & 0x1 );
+      if( (mask >> k) & 0x1 ){
+        trgMap[ID][ch][k]->setStyleSheet("background-color: red;"); 
+      }else{
+        trgMap[ID][ch][k]->setStyleSheet("");
       }
     }
+  }
 
-    enableSignalSlot = true;
+  enableSignalSlot = true;
 }
 
 //^================================================================
