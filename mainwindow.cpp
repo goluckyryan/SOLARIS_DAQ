@@ -268,7 +268,10 @@ MainWindow::~MainWindow(){
 
   LogMsg("Closing SOLARIS DAQ.");
 
-  QFile file(analysisPath + "/working/Log_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat");
+  QDir dir(analysisPath + "/working/Logs/");
+  if( !dir.exists() ) dir.mkpath(".");
+
+  QFile file(analysisPath + "/working/Logs/Log_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat");
   printf("-------- Save log msg to %s\n", file.fileName().toStdString().c_str());
   if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     QTextStream stream(&file);
@@ -593,7 +596,7 @@ void MainWindow::OpenDigitizers(){
   int nDigiConnected = 0;
 
   //Check path exist
-  QDir dir(analysisPath + "/Settings/");
+  QDir dir(analysisPath + "/working/Settings/");
   if( !dir.exists() ) dir.mkpath(".");
 
   for( int i = 0; i < nDigi; i++){

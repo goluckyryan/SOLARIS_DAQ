@@ -31,7 +31,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   this->mapping = mapping;
   this->detType = detType;
   this->detMaxID = detMaxID;
-  this->digiSettingPath = analysisPath + "/Settings/";
+  this->digiSettingPath = analysisPath + "/working/Settings/";
 
   //Check number of detector type; Array 0-199, Recoil 200-299, other 300-
   int nDetType = detType.size();

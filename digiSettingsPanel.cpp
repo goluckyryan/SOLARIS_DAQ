@@ -70,7 +70,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     this->nDigi = MaxNumberOfChannel;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
-  this->digiSettingPath = analysisPath + "/Settings/";
+  this->digiSettingPath = analysisPath + "/working/Settings/";
 
   ID = 0;
   enableSignalSlot = false;
