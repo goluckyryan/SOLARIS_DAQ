@@ -404,7 +404,8 @@ void MainWindow::StartACQ(){
       QString fileSetting = rawDataFolder + "/" + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
 
-      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr + "_" + QString::number(digi[i]->GetSerialNumber());
+      // name should be [ExpName]_[runID]_[digiID]_[digiSerialNumber]_[acculmulate_count].sol
+      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
       qDebug() << outFileName;
       digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
     }

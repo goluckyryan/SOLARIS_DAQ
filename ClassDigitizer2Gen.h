@@ -130,7 +130,7 @@ class Digitizer2Gen {
     std::string GetSettingFileName() const {return settingFileName;}
     void SetSettingFileName(std::string fileName) {settingFileName = fileName;}
     void ReadAllSettings(); // read settings from digitier and save to memory
-    int  SaveSettingsToFile(const char * saveFileName = NULL); //Save settings from memory to text file
+    int  SaveSettingsToFile(const char * saveFileName = NULL, bool setReadOnly = false); //Save settings from memory to text file
     int  ReadAndSaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
     bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
 

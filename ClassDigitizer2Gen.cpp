@@ -765,7 +765,7 @@ void Digitizer2Gen::ReadAllSettings(){
   }
 }
 
-int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
+int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnly){
   if( saveFileName != NULL) settingFileName = saveFileName;
 
   int totCount = 0;
@@ -809,6 +809,11 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName){
     if( count != totCount ) {
       remove(saveFileName);
       return -1;
+    }
+
+    if( setReadOnly ){
+      int result = chmod(saveFileName, S_IRUSR | S_IRGRP | S_IROTH);
+      if( result != 0 ) printf("somewrong when set file (%s) to read only.", saveFileName);
     }
 
     //printf("Saved setting files to %s\n", saveFileName);
