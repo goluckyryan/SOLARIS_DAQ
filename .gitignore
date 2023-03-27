@@ -9,6 +9,7 @@ screenshot.*
 *settings*.txt
 *settings*.dat
 *.dat
+Logs
 
 *~
 *.autosave

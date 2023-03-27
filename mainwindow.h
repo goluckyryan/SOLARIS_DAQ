@@ -135,6 +135,7 @@ private:
   ReadDataThread ** readDataThread;   
   QString startComment;
   QString stopComment;
+  QString appendComment;
   bool needManualComment;
   bool isRunning;
   QTimer * runTimer;
@@ -184,6 +185,9 @@ private:
   //@------ connection between pannels
   void UpdateAllPanel(int panelID);
 
+  //@------ custom comment;
+  QPushButton * bnComment;
+  void AppendComment();
 };
 
 

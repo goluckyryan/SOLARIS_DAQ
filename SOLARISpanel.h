@@ -32,6 +32,7 @@ class SOLARISpanel : public QWidget{
 public: 
   SOLARISpanel(Digitizer2Gen ** digi, 
                unsigned short nDigi, 
+               QString analysisPath,
                std::vector<std::vector<int>> mapping, 
                QStringList detType, 
                std::vector<int> detMaxID, 
@@ -64,12 +65,13 @@ private:
   std::vector<int> detMaxID;
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
+  QString digiSettingPath;
+
   int FindDetTypeID(QList<int> detIDListElement);
 
   RSpinBox * sbCoinTime;
 
   QCheckBox * chkAll[MaxDetType][MaxSettingItem]; // checkBox for all setting on that tab;
-
 
   QGroupBox * groupBox[MaxDetType][MaxSettingItem][MaxDetID];
 

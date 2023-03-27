@@ -27,7 +27,7 @@ class DigiSettingsPanel : public QWidget{
   Q_OBJECT
 
 public:
-  DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent = nullptr);
+  DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent = nullptr);
   ~DigiSettingsPanel();
 
 private slots:  
@@ -53,6 +53,8 @@ private:
   Digitizer2Gen ** digi;
   unsigned short nDigi;
   unsigned short ID; // index for digitizer;
+
+  QString digiSettingPath;
 
   //------------ Layout/GroupBox
   QGroupBox * digiBox[MaxNumberOfDigitizer];

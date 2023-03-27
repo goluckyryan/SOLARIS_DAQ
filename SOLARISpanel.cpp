@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QList>
 #include <QFrame>
+#include <QFileDialog>
 
 #define NCOL 10 // number of column
 
@@ -12,6 +13,7 @@ std::vector<Reg> SettingItems = {PHA::CH::TriggerThreshold, PHA::CH::DC_Offset};
 const std::vector<QString> arrayLabel = {"e", "xf", "xn"};
 
 SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi, 
+                          QString analysisPath,
                           std::vector<std::vector<int>> mapping, 
                           QStringList detType, 
                           std::vector<int> detMaxID, 
@@ -22,9 +24,14 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
 
   this->digi = digi;
   this->nDigi = nDigi;
+  if( this->nDigi > MaxNumberOfDigitizer ) {
+    this->nDigi = MaxNumberOfChannel;
+    qDebug() << "Please increase the MaxNumberOfChannel";
+  }
   this->mapping = mapping;
   this->detType = detType;
   this->detMaxID = detMaxID;
+  this->digiSettingPath = analysisPath + "/Settings/";
 
   //Check number of detector type; Array 0-199, Recoil 200-299, other 300-
   int nDetType = detType.size();
@@ -90,22 +97,22 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   QGridLayout * mainLayout = new QGridLayout(this); this->setLayout(mainLayout);
 
   ///=================================
-  int rowIndex = 0;
+  int rowIndex = 0 ;
   QPushButton * bnRefresh = new QPushButton("Refresh Settings", this);
   connect(bnRefresh, &QPushButton::clicked, this, &SOLARISpanel::RefreshSettings );
-  mainLayout->addWidget(bnRefresh, rowIndex, 0);
+  mainLayout->addWidget(bnRefresh, rowIndex, 0, 1, 2);
 
   QPushButton * bnSaveSetting = new QPushButton("Save Settings", this);
   connect(bnSaveSetting, &QPushButton::clicked, this, &SOLARISpanel::SaveSettings);
-  mainLayout->addWidget(bnSaveSetting, rowIndex, 1);  
+  mainLayout->addWidget(bnSaveSetting, rowIndex, 2, 1, 2);  
   
   QPushButton * bnLoadSetting = new QPushButton("Load Settings", this);
   connect(bnLoadSetting, &QPushButton::clicked, this, &SOLARISpanel::LoadSettings);
-  mainLayout->addWidget(bnLoadSetting, rowIndex, 2);
+  mainLayout->addWidget(bnLoadSetting, rowIndex, 4, 1, 2);
 
   QLabel * lbCoinTime = new QLabel("Coin. Time (all ch.) [ns]", this);
   lbCoinTime->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-  mainLayout->addWidget(lbCoinTime, rowIndex, 3);
+  mainLayout->addWidget(lbCoinTime, rowIndex, 6, 1, 2);
 
   sbCoinTime = new RSpinBox(this);
   sbCoinTime->setMinimum(-1);
@@ -113,7 +120,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   sbCoinTime->setSingleStep(atof(PHA::CH::CoincidenceLength.GetAnswers()[2].first.c_str()));
   sbCoinTime->setDecimals(0);
   sbCoinTime->SetToolTip(atof(PHA::CH::CoincidenceLength.GetAnswers()[1].first.c_str()));
-  mainLayout->addWidget(sbCoinTime, rowIndex, 4);
+  mainLayout->addWidget(sbCoinTime, rowIndex, 8, 1, 2);
 
   connect(sbCoinTime, &RSpinBox::valueChanged, this, [=](){
     if( !enableSignalSlot ) return;
@@ -152,7 +159,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
 
   ///=================================
   rowIndex ++;
-  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, rowIndex, 0, 1, 5);
+  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget, rowIndex, 0, 1, 10);
   for( int detTypeID = 0; detTypeID < nDetType; detTypeID ++ ){
 
     QTabWidget * tabSetting = new QTabWidget(tabWidget);
@@ -441,7 +448,7 @@ void SOLARISpanel::CreateDetGroup(int detTypeID, int SettingID, QList<int> detID
               digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
             }else {
               digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Ch64Trigger", chID);
-              digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
+              digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100");
 
               //Form the trigger bit
               unsigned long mask = 1ULL << (detID[1] & 0xFF ); // trigger by energy
@@ -454,7 +461,7 @@ void SOLARISpanel::CreateDetGroup(int detTypeID, int SettingID, QList<int> detID
             digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "TRGIN", chID);
             digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "TRGIN", chID);
             
-            digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100", chID);
+            digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100");
           }; break;
           case 3 : { /// disbaled
             digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "Disabled", chID);
@@ -676,10 +683,48 @@ void SOLARISpanel::UpdateThreshold(){
 //^#########################################
 void SOLARISpanel::SaveSettings(){
 
+  for(int i = 0; i < nDigi; i++){
 
+    //*------ search for settings_XXXX.dat
+
+    //Check path exist
+    QDir dir(digiSettingPath);
+    if( !dir.exists() ) dir.mkpath(".");
+
+    QString settingFile = digiSettingPath + "/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat";
+
+
+    int flag = digi[i]->SaveSettingsToFile(settingFile.toStdString().c_str());
+  
+    switch (flag) {
+      case 1 : {
+        SendLogMsg("Saved setting file <b>" +  settingFile + "</b>.");
+      }; break;
+      case 0 : {
+        SendLogMsg("<font style=\"color:red;\"> Fail to write setting file. <b> " + settingFile + " </b></font>");
+      }; break;
+      case -1 : {
+        SendLogMsg("<font style=\"color:red;\"> Fail to save setting file <b> " + settingFile + " </b>, same settings are empty.</font>");
+      }; break;
+    };
+
+  }
 }
 
 void SOLARISpanel::LoadSettings(){
+  for(int i = 0; i < nDigi; i++){
 
+    //*------ search for settings_XXXX.dat
+    QString settingFile = digiSettingPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+    if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
+      SendLogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
+      digi[i]->SetSettingFileName(settingFile.toStdString());
+      SendLogMsg("done settings.");
+    }else{
+      SendLogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
+      digi[i]->SetSettingFileName("");
+    }
+    
+  }
 
 }

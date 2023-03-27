@@ -194,9 +194,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
       bnStartACQ->setEnabled(true);
       bnStopACQ->setEnabled(false);
+      bnComment->setEnabled(false);
       bnOpenScope->setEnabled(true);
       chkSaveRun->setEnabled(true);
-      cbAutoRun->setEnabled(true);
+      if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
 
       if( digiSetting ) digiSetting->EnableControl();
 
@@ -207,6 +208,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leRunComment = new QLineEdit(this);
     leRunComment->setReadOnly(true);
     leRunComment->setStyleSheet("background-color: #F3F3F3;");
+
+    bnComment = new QPushButton("Append Comment", this);
+    connect(bnComment, &QPushButton::clicked, this, &MainWindow::AppendComment);
+    bnComment->setEnabled(false);
     
     layout2->addWidget(lbRawDataPath, 0, 0);
     layout2->addWidget(leRawDataPath, 0, 1, 1, 4);
@@ -220,7 +225,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout2->addWidget(bnStopACQ,  1, 5);
 
     layout2->addWidget(lbRunComment, 2, 0);
-    layout2->addWidget(leRunComment,   2, 1, 1, 5);
+    layout2->addWidget(leRunComment,   2, 1, 1, 4);
+    layout2->addWidget(bnComment, 2, 5);
 
     layout2->setColumnStretch(0, 2);
     layout2->setColumnStretch(1, 1);
@@ -259,6 +265,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 MainWindow::~MainWindow(){
 
   printf("- %s\n", __func__);
+
+  LogMsg("Closing SOLARIS DAQ.");
+
+  QFile file(analysisPath + "/working/Log_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat");
+  printf("-------- Save log msg to %s\n", file.fileName().toStdString().c_str());
+  if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    QTextStream stream(&file);
+    stream << logInfo->toPlainText();
+    file.close();
+  }
 
   printf("-------- remove %s\n", DAQLockFile);
   remove(DAQLockFile);
@@ -342,8 +358,8 @@ void MainWindow::StartACQ(){
 
       if(result == QDialog::Accepted ){
         startComment = lineEdit->text();
-        if( startComment == "") startComment = "No commet was typed.";
-        leRunComment->setText(startComment);
+        if( startComment == "") startComment = "Start Comment: No commet was typed.";
+        leRunComment->setText("Start Comment: " + startComment);
       }else{
         LogMsg("Start Run aborted. ");
         return;
@@ -371,6 +387,7 @@ void MainWindow::StartACQ(){
   //============================= start digitizer
   for( int i = 0 ; i < nDigi; i ++){
     if( digi[i]->IsDummy () ) continue;
+
     for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch ++) oldTimeStamp[i][ch] = 0;
 
     digi[i]->SetPHADataFormat(1);// only save 1 trace
@@ -378,8 +395,13 @@ void MainWindow::StartACQ(){
     //Additional settings
     digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
 
+
     if( chkSaveRun->isChecked() ){
-      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr+ "_" + QString::number(digi[i]->GetSerialNumber());
+      //Save setting to raw data with run ID
+      QString fileSetting = rawDataFolder + "/" + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
+
+      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr + "_" + QString::number(digi[i]->GetSerialNumber());
       qDebug() << outFileName;
       digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
     }
@@ -434,8 +456,8 @@ void MainWindow::StopACQ(){
 
       if(result == QDialog::Accepted ){
         stopComment = lineEdit->text();
-        if( stopComment == "") stopComment = "No commet was typed.";
-        leRunComment->setText(stopComment);
+        if( stopComment == "") stopComment = "Stop Comment: No commet was typed.";
+        leRunComment->setText("Stop Comment: " + stopComment);
       }else{
         LogMsg("Cancel Run aborted. ");
         return;
@@ -503,6 +525,7 @@ void MainWindow::AutoRun(){
     StartACQ();
     bnStartACQ->setEnabled(false);
     bnStopACQ->setEnabled(true);
+    bnComment->setEnabled(false);
     bnOpenScope->setEnabled(false);
     chkSaveRun->setEnabled(false);
     cbAutoRun->setEnabled(false);
@@ -524,6 +547,7 @@ void MainWindow::AutoRun(){
         if( cbAutoRun->currentData().toInt() > 0 ) {
           bnStartACQ->setEnabled(true);
           bnStopACQ->setEnabled(false);
+          bnComment->setEnabled(false);
         }
       }else {
         StartACQ();
@@ -550,6 +574,7 @@ void MainWindow::AutoRun(){
 
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(true);
+  if(chkSaveRun->isChecked()) bnComment->setEnabled(true);
   bnOpenScope->setEnabled(false);
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
@@ -567,6 +592,10 @@ void MainWindow::OpenDigitizers(){
 
   int nDigiConnected = 0;
 
+  //Check path exist
+  QDir dir(analysisPath + "/Settings/");
+  if( !dir.exists() ) dir.mkpath(".");
+
   for( int i = 0; i < nDigi; i++){
 
     LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
@@ -580,11 +609,9 @@ void MainWindow::OpenDigitizers(){
 
       readDataThread[i] = new ReadDataThread(digi[i], i, this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
-      //connect(readDataThread[i], &ReadDataThread::checkFileSize, this, &MainWindow::CheckOutFileSize);
-      //connect(readDataThread[i], &ReadDataThread::endOfLastData, this, &MainWindow::CheckOutFileSize);
 
       //*------ search for settings_XXXX.dat
-      QString settingFile = analysisPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      QString settingFile = analysisPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
         LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());
@@ -618,6 +645,7 @@ void MainWindow::OpenDigitizers(){
     SetUpScalar();
     bnStartACQ->setEnabled(true);
     bnStopACQ->setEnabled(false);
+    bnComment->setEnabled(false);
     bnOpenScope->setEnabled(true);
     chkSaveRun->setEnabled(true);
     bnOpenDigitizers->setEnabled(false);
@@ -692,6 +720,7 @@ void MainWindow::CloseDigitizers(){
   bnSOLSettings->setEnabled(false);
   bnStartACQ->setEnabled(false);
   bnStopACQ->setEnabled(false);
+  bnComment->setEnabled(false);
   bnOpenScope->setEnabled(false);
   bnOpenScalar->setEnabled(false);
   chkSaveRun->setEnabled(false);
@@ -745,7 +774,7 @@ void MainWindow::OpenDigitizersSettings(){
   LogMsg("Open digitizers Settings Panel");
 
   if( digiSetting == NULL){
-    digiSetting = new DigiSettingsPanel(digi, nDigi);
+    digiSetting = new DigiSettingsPanel(digi, nDigi, analysisPath);
     connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
     connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(1);});
 
@@ -757,15 +786,16 @@ void MainWindow::OpenDigitizersSettings(){
 
 //^###################################################################### Open SOLARIS setting panel
 void MainWindow::OpenSOLARISpanel(){
+  LogMsg("Open SOLARIS Panel.");
   solarisSetting->show();
   solarisSetting->UpdatePanelFromMemory();
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
 
-  QFile file(analysisPath + "/Mapping.h");
+  QFile file(analysisPath + "/working/Mapping.h");
   if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-    LogMsg("Fail to open <b>" + analysisPath + "/Mapping.h </b>. SOLARIS panel disabled.");
+    LogMsg("Fail to open <b>" + file.fileName() + "</b>. SOLARIS panel disabled.");
 
     //TODO ----- Create a template of the mapping
 
@@ -848,7 +878,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
   }
 
   //@============= Create SOLAIRS panel
-  solarisSetting = new SOLARISpanel(digi, nDigi, mapping, detType, detMaxID);
+  solarisSetting = new SOLARISpanel(digi, nDigi, analysisPath, mapping, detType, detMaxID);
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
   connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(2);});
 
@@ -1601,7 +1631,7 @@ bool MainWindow::LoadExpSettings(){
 
   if( analysisPath == "") return false;
 
-  QString settingFile = analysisPath + "/expName.sh";
+  QString settingFile = analysisPath + "/working/expName.sh";
 
   LogMsg("Loading <b>" + settingFile + "</b> for Experiment.");
 
@@ -1723,8 +1753,12 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 }
 
 void MainWindow::WriteExpNameSh(){
+
+  QDir dir(analysisPath + "/working/");
+  if( !dir.exists() ) dir.mkpath(".");
+
   //----- create the expName.sh
-  QFile file2(analysisPath + "/expName.sh");
+  QFile file2(analysisPath + "/working/expName.sh");
   
   file2.open(QIODevice::Text | QIODevice::WriteOnly);
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
@@ -1733,7 +1767,7 @@ void MainWindow::WriteExpNameSh(){
   file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
   file2.write("//------------end of file.");
   file2.close();
-  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/expName.sh<b>.");
+  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/working/expName.sh<b>.");
 
 }
 
@@ -1897,5 +1931,54 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun){
   }
   
   file.close();
+
+}
+
+void MainWindow::AppendComment(){
+
+  //if Started ACQ, append Comment, if ACQ stopped, disbale
+
+  if( !chkSaveRun->isChecked() ) return;
+
+  QDialog * dOpen = new QDialog(this);
+  dOpen->setWindowTitle("Append Run Comment");
+  dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+  dOpen->setMinimumWidth(600);
+  connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
+
+  QGridLayout * vlayout = new QGridLayout(dOpen);
+  QLabel *label = new QLabel("Enter Append Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
+  QLineEdit *lineEdit = new QLineEdit(dOpen);
+  QPushButton *button1 = new QPushButton("OK", dOpen);
+  QPushButton *button2 = new QPushButton("Cancel", dOpen);
+
+  vlayout->addWidget(label, 0, 0, 1, 2);
+  vlayout->addWidget(lineEdit, 1, 0, 1, 2);
+  vlayout->addWidget(button1, 2, 0);
+  vlayout->addWidget(button2, 2, 1);
+
+  connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
+  connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
+  int result = dOpen->exec();
+
+  if(result == QDialog::Accepted ){
+    appendComment = lineEdit->text();
+    if( appendComment == "") return;
+
+    appendComment = QDateTime::currentDateTime().toString("[MM.dd hh:mm:ss]") + appendComment;
+
+    AppendElog(appendComment);
+
+    leRunComment->setText("Append Comment: " + appendComment);
+
+    if( influx ){
+      influx->ClearDataPointsBuffer();
+      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + appendComment.replace(' ', '_').toStdString() + "\"");
+      influx->WriteData(DatabaseName.toStdString());
+    }
+
+  }else{
+    return;
+  }
 
 }

@@ -58,7 +58,7 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
                        "Time-energy event free space status (1 = time-energy can be written)",
                        "Waveform event free space status (1 = waveform can be written)"};
 
-DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QWidget * parent) : QWidget(parent){
+DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent) : QWidget(parent){
 
   setWindowTitle("Digitizers Settings");
   setGeometry(0, 0, 1850, 1000);
@@ -70,6 +70,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     this->nDigi = MaxNumberOfChannel;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
+  this->digiSettingPath = analysisPath + "/Settings/";
 
   ID = 0;
   enableSignalSlot = false;
@@ -1623,8 +1624,11 @@ void DigiSettingsPanel::EnableControl(){
 
 void DigiSettingsPanel::SaveSettings(){
 
-  //TODO default file Path
-  QString filePath = QFileDialog::getSaveFileName(this, "Save Settings File", "", "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
+  //Check path exist
+  QDir dir(digiSettingPath);
+  if( !dir.exists() ) dir.mkpath(".");
+
+  QString filePath = QFileDialog::getSaveFileName(this, "Save Settings File", digiSettingPath, "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
 
   if (!filePath.isEmpty()) {
 
@@ -1641,12 +1645,12 @@ void DigiSettingsPanel::SaveSettings(){
       }; break;
       case 0 : {
         leSettingFile[ID]->setText("fail to write setting file.");
-        SendLogMsg("<font style=\"color:red;\"> Fail to write setting file.</font>");
+        SendLogMsg("<font style=\"color:red;\"> Fail to write setting file. <b>" +  filePath + "</b></font>");
       }; break;
 
       case -1 : {
         leSettingFile[ID]->setText("fail to save setting file, same settings are empty.");
-        SendLogMsg("<font style=\"color:red;\"> Fail to save setting file, same settings are empty.</font>");
+        SendLogMsg("<font style=\"color:red;\"> Fail to save setting file <b>" +  filePath + "</b>, same settings are empty.</font>");
       }; break;
     };
 
@@ -1656,6 +1660,7 @@ void DigiSettingsPanel::SaveSettings(){
 
 void DigiSettingsPanel::LoadSettings(){
   QFileDialog fileDialog(this);
+  fileDialog.setDirectory(digiSettingPath);
   fileDialog.setFileMode(QFileDialog::ExistingFile);
   fileDialog.setNameFilter("Data file (*.dat);;Text file (*.txt);;All file (*.*)");
   fileDialog.exec();
