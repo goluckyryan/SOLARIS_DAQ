@@ -64,14 +64,12 @@ private:
   std::vector<int> detMaxID;
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
-  int FindDetTypID(QList<int> detIDListElement);
+  int FindDetTypeID(QList<int> detIDListElement);
 
   RSpinBox * sbCoinTime;
 
   QCheckBox * chkAll[MaxDetType][MaxSettingItem]; // checkBox for all setting on that tab;
-  QCheckBox * chkAlle;
-  QCheckBox * chkAllxf;
-  QCheckBox * chkAllxn;
+
 
   QGroupBox * groupBox[MaxDetType][MaxSettingItem][MaxDetID];
 
