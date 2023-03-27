@@ -37,7 +37,7 @@ int main(int argc, char *argv[]){
         msgBox.setText("The DAQ program is already opened, or crashed perviously. \nPID is " + QString::number(pid) + "\n You can kill the procee by \"kill -9 <pid>\" and delete the " + DAQLockFile + "\n or click the \"Kill\" button");
         msgBox.setIcon(QMessageBox::Information);
     
-        QPushButton * kill = msgBox.addButton("Kill", QMessageBox::AcceptRole);
+        QPushButton * kill = msgBox.addButton("Kill and Open New", QMessageBox::AcceptRole);
 
         msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.setDefaultButton(QMessageBox::Ok);

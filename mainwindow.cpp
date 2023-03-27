@@ -34,6 +34,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   setWindowIcon(icon);
 
   nDigi = 0;
+  nDigiConnected = 0;
   digiSetting = nullptr;
   influx = nullptr;
   readDataThread = nullptr;
@@ -594,7 +595,7 @@ void MainWindow::OpenDigitizers(){
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
 
-  int nDigiConnected = 0;
+  nDigiConnected = 0;
 
   //Check path exist
   QDir dir(analysisPath + "/working/Settings/");
@@ -664,7 +665,7 @@ void MainWindow::OpenDigitizers(){
   bnProgramSettings->setEnabled(false);
   bnNewExp->setEnabled(false);
 
-  bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
+  if( nDigiConnected > 0 ) bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
 
 }
 
@@ -672,7 +673,7 @@ void MainWindow::CloseDigitizers(){
 
   if( digi == NULL) return;
 
-  if(scalar ){ // scalar is child of this
+  if(scalar && nDigiConnected > 0 ){ // scalar is child of this
     scalar->close();
     DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
   }
@@ -701,8 +702,6 @@ void MainWindow::CloseDigitizers(){
     delete digi[i];
 
     LogMsg("Closed Digitizer : " + QString::number(digi[i]->GetSerialNumber()));
-
-    if( digiSetting != NULL )  digiSetting->close(); 
 
     if( readDataThread[i] != NULL ){
       LogMsg("Waiting for readData Thread .....");

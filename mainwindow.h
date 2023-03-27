@@ -92,6 +92,7 @@ private:
 
   static Digitizer2Gen ** digi; 
   unsigned short nDigi;
+  unsigned short nDigiConnected = 0;
 
   //@----- log msg
   QPlainTextEdit * logInfo;
