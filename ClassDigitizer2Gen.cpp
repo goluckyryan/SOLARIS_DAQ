@@ -792,8 +792,8 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
                                              VGASetting[i].GetValue().c_str());
       count ++;
     }
-    for(int ch = 0; ch < nChannels ; ch++ ){
-      for( int i = 0; i < (int) chSettings[ch].size(); i++){
+    for( int i = 0; i < (int) chSettings[0].size(); i++){
+      for(int ch = 0; ch < nChannels ; ch++ ){
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
         totCount ++;
         if( chSettings[ch][i].GetValue() == "") break;
