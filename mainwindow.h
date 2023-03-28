@@ -155,6 +155,7 @@ private:
   QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
   QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
   QLineEdit * lDataPath; // only live in ProgramSettigns()
+  QLineEdit * lRootDataPath; // only live in ProgramSettigns()
 
   QLineEdit * lIPDomain;
   QLineEdit * lDatbaseIP;
@@ -164,6 +165,7 @@ private:
   QString settingFilePath;
   QString analysisPath;
   QString dataPath;
+  QString rootDataPath;
   QString IPListStr;
   QStringList IPList;
   QString DatabaseIP;
@@ -175,6 +177,7 @@ private:
   bool useGit;
   QString expName;
   QString rawDataFolder;
+  QString rootDataFolder;
   int runID;
   QString runIDStr;
   int elogID;  // 0 = ready, -1 = disable, >1 = elogID

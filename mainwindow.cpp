@@ -1140,6 +1140,16 @@ void MainWindow::ProgramSettingsPanel(){
   QPushButton * bnDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnDataPath, rowID, 3);
   connect(bnDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(2);});
 
+  //-------- root data Path
+  rowID ++;
+  QLabel *lbRootDataPath = new QLabel("Root Data Path", &dialog); 
+  lbRootDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbRootDataPath, rowID, 0);
+  lRootDataPath = new QLineEdit(rootDataPath, &dialog); layout->addWidget(lRootDataPath, rowID, 1, 1, 2);
+
+  QPushButton * bnRootDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnRootDataPath, rowID, 3);
+  connect(bnRootDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(3);});
+
   //-------- IP Domain
   rowID ++;
   QLabel *lbIPDomain = new QLabel("Digitizers IP List", &dialog); 
@@ -1195,6 +1205,7 @@ void MainWindow::OpenDirectory(int id){
     case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 2 : lDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
   }
 }
 
@@ -1224,21 +1235,23 @@ bool MainWindow::LoadProgramSettings(){
         case 0 : settingFilePath = line; break;
         case 1 : analysisPath    = line; break;
         case 2 : dataPath        = line; break;
-        case 3 : IPListStr          = line; break;
-        case 4 : DatabaseIP      = line; break;
-        case 5 : DatabaseName    = line; break;
-        case 6 : ElogIP          = line; break;
+        case 3 : rootDataPath    = line; break;
+        case 4 : IPListStr       = line; break;
+        case 5 : DatabaseIP      = line; break;
+        case 6 : DatabaseName    = line; break;
+        case 7 : ElogIP          = line; break;
       }
 
       count ++;
       line = in.readLine();
     }
 
-    if( count == 7 ) {
+    if( count == 8 ) {
       logMsgHTMLMode = false;
       LogMsg("Setting File Path : " + settingFilePath);
       LogMsg("    Analysis Path : " + analysisPath);
       LogMsg("        Data Path : " + dataPath);
+      LogMsg("   Root Data Path : " + rootDataPath);
       LogMsg("    Digi. IP List : " + IPListStr);
       LogMsg("      Database IP : " + DatabaseIP);
       LogMsg("    Database Name : " + DatabaseName);
@@ -1366,6 +1379,7 @@ void MainWindow::SaveProgramSettings(){
   settingFilePath = lSaveSettingPath->text();
   analysisPath = lAnalysisPath->text();
   dataPath = lDataPath->text();
+  rootDataPath = lRootDataPath->text();
 
   QFile file(settingFilePath + "/programSettings.txt");
   
@@ -1374,6 +1388,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((settingFilePath+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
   file.write((dataPath+"\n").toStdString().c_str());
+  file.write((rootDataPath+"\n").toStdString().c_str());
   file.write((IPListStr+"\n").toStdString().c_str());
   file.write((DatabaseIP+"\n").toStdString().c_str());
   file.write((DatabaseName+"\n").toStdString().c_str());
@@ -1402,7 +1417,7 @@ void MainWindow::SetupNewExpPanel(){
 
   QDialog dialog(this);
   dialog.setWindowTitle("Setup / change Experiment");
-  dialog.setGeometry(0, 0, 500, 550);
+  dialog.setGeometry(0, 0, 500, 500);
   dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
@@ -1417,7 +1432,7 @@ void MainWindow::SetupNewExpPanel(){
   instr->setStyleSheet("background-color: #F3F3F3;");
   instr->appendHtml("Setup new experiment will do following things:");
   instr->appendHtml("<b>0,</b> Check the git repository in <font style=\"color:blue;\">Analysis Path</font>");
-  instr->appendHtml("<b>1,</b> Create folder in <font style=\"color:blue;\">Data Path</font>");
+  instr->appendHtml("<b>1,</b> Create folder in <font style=\"color:blue;\">Data Path</font> and <font style=\"color:blue;\">Root Data Path</font>");
   instr->appendHtml("<b>2,</b> Create Symbolic links in <font style=\"color:blue;\">Analysis Path</font>");
   instr->appendHtml("<b>3,</b> Create <b>expName.sh</b> in <font style=\"color:blue;\">Analysis Path</font> ");
   instr->appendHtml("<p></p>");
@@ -1450,6 +1465,16 @@ void MainWindow::SetupNewExpPanel(){
   QLineEdit * le2 = new QLineEdit(dataPath, &dialog);
   le2->setReadOnly(true);
   layout->addWidget(le2, rowID, 1, 1, 3);
+
+  //------- Root Data Path
+  rowID ++;
+  QLabel * l2a = new QLabel("Root Data Path ", &dialog);
+  l2a->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(l2a, rowID, 0);
+
+  QLineEdit * le2a = new QLineEdit(rootDataPath, &dialog);
+  le2a->setReadOnly(true);
+  layout->addWidget(le2a, rowID, 1, 1, 3);
 
   //------- get harddisk space;
   rowID ++;
@@ -1664,8 +1689,9 @@ bool MainWindow::LoadExpSettings(){
     switch (count){
       case 0 : expName = haha; break;
       case 1 : rawDataFolder = haha; break;
-      case 2 : runID = haha.toInt(); break;
-      case 3 : elogID = haha.toInt(); break;
+      case 2 : rootDataFolder = haha; break;
+      case 3 : runID = haha.toInt(); break;
+      case 4 : elogID = haha.toInt(); break;
     }
 
     count ++;
@@ -1766,6 +1792,7 @@ void MainWindow::WriteExpNameSh(){
   file2.open(QIODevice::Text | QIODevice::WriteOnly);
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
   file2.write(("rawDataPath="+ rawDataFolder + "\n").toStdString().c_str());
+  file2.write(("rootDataPath="+ rootDataFolder + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
   file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
   file2.write("//------------end of file.");
@@ -1787,6 +1814,19 @@ void MainWindow::CreateRawDataFolderAndLink(){
     }
   }else{
       LogMsg("<b>" + rawDataFolder + "</b> already exist." );
+  }
+
+  //----- create root data folder
+  rootDataFolder = rootDataFolder + "/" + expName;
+  QDir rootDir;
+  if( !rootDir.exists(rootDataFolder)) {
+   if( rootDir.mkdir(rootDataFolder) ){
+      LogMsg("Created folder " + rootDataFolder + " for storing root files");
+   }else{
+      LogMsg("<font style=\"color:red;\"><b>" + rootDataFolder + "</b> cannot be created. Access right problem? </font>" );
+   }
+  }else{
+    LogMsg("<b>" + rootDataFolder + "</b> already exist." );
   }
 
   //----- create analysis Folder
@@ -1814,6 +1854,18 @@ void MainWindow::CreateRawDataFolderAndLink(){
   } else {
       LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created. </font>");
   }
+
+  linkName = analysisPath + "root_data";
+  if( file.exists(linkName)) {
+    file.remove(linkName);
+  }
+
+  if (file.link(rawDataFolder, linkName)) {
+      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rootDataFolder + " created.");
+  } else {
+      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rootDataFolder + " cannot be created. </font>");
+  }
+
 }
 
 //^###################################################################### log msg
