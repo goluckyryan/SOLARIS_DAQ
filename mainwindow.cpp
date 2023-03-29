@@ -1098,7 +1098,10 @@ void MainWindow::ProgramSettingsPanel(){
                            the folder of the analysis code. e.g. /home/<user>/analysis/");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of Raw data will store. e.g. /mnt/data0/, \
-                          experiment data will be saved under this folder. e.g. /mnt/data1/exp1");
+                          experiment data will be saved under this folder. e.g. /mnt/data0/exp1");  
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Root Data Path  </font> is the path of the \
+                             <b>parents folder</b> of Root data will store. e.g. /mnt/data1/, \
+                          root data will be saved under this folder. e.g. /mnt/data1/exp1");
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
@@ -1496,6 +1499,8 @@ void MainWindow::SetupNewExpPanel(){
   QProcess git;
   git.setWorkingDirectory(analysisPath);
   //?git.setWorkingDirectory("/home/ryan/digios");
+  git.start("git", QStringList() << "fetch");
+  git.waitForFinished();
   git.start("git", QStringList() << "branch" << "-a");
   git.waitForFinished();
 
