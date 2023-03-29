@@ -421,7 +421,7 @@ void MainWindow::StartACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=1");
     influx->WriteData(DatabaseName.toStdString());
@@ -515,6 +515,10 @@ void MainWindow::StopACQ(){
         + "======================";
     AppendElog(msg, chromeWindowID);
 
+
+    QProcess endRunScript;
+    endRunScript.start("/bin/bash", QStringList() << "scripts/endRunScript.sh");
+    //endRunScript.waitForFinished();
 
   }else{
     LogMsg("===========================  no-Save Run stopped.");
@@ -1767,6 +1771,14 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setStyleSheet("color:red;");
 
+  if( influx ){
+    influx->ClearDataPointsBuffer();
+    startComment = "New experiment [" + expName + "] was created.";
+    influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+    influx->WriteData(DatabaseName.toStdString());
+  }
+
+
 }
 
 void MainWindow::ChangeExperiment(const QString newExpName){
@@ -1784,6 +1796,13 @@ void MainWindow::ChangeExperiment(const QString newExpName){
   CreateRawDataFolderAndLink();
   LoadExpSettings();
 
+  if( influx ){
+    influx->ClearDataPointsBuffer();
+    startComment = "Switched to experiment [" + expName + "].";
+    influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+    influx->WriteData(DatabaseName.toStdString());
+  }
+
 }
 
 void MainWindow::WriteExpNameSh(){
@@ -1800,7 +1819,7 @@ void MainWindow::WriteExpNameSh(){
   file2.write(("rootDataPath="+ rootDataFolder + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
   file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
-  file2.write("//------------end of file.");
+  file2.write("#------------end of file.");
   file2.close();
   LogMsg("Saved expName.sh to <b>"+ analysisPath + "/working/expName.sh<b>.");
 
