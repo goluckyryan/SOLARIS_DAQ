@@ -12,6 +12,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QTimer>
+#include <QThread>
 
 #include <QChart>
 #include <QLineSeries>
@@ -140,6 +141,7 @@ private:
   bool needManualComment;
   bool isRunning;
   QTimer * runTimer;
+  QElapsedTimer elapsedTimer;
   unsigned int autoRunStartRunID;
 
   //@----- digi Setting panel
@@ -192,6 +194,7 @@ private:
   //@------ custom comment;
   QPushButton * bnComment;
   void AppendComment();
+
 };
 
 

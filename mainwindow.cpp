@@ -362,12 +362,19 @@ void MainWindow::StartACQ(){
 
       if(result == QDialog::Accepted ){
         startComment = lineEdit->text();
-        if( startComment == "") startComment = "Start Comment: No commet was typed.";
-        leRunComment->setText("Start Comment: " + startComment);
+        if( startComment == "") startComment = "No commet was typed.";
+        startComment = "Start Comment: " + startComment;
       }else{
         LogMsg("Start Run aborted. ");
         return;
       }
+
+      if( cbAutoRun -> currentData().toInt() != 0 ){
+        startComment = startComment +  ". AutoRun for " + cbAutoRun->currentText();
+      }
+
+      leRunComment->setText(startComment);
+
     }else{
       //==========TODO auto run comment
       startComment = "AutoRun for " + cbAutoRun->currentText();
@@ -461,14 +468,14 @@ void MainWindow::StopACQ(){
 
       if(result == QDialog::Accepted ){
         stopComment = lineEdit->text();
-        if( stopComment == "") stopComment = "Stop Comment: No commet was typed.";
-        leRunComment->setText("Stop Comment: " + stopComment);
+        if( stopComment == "") stopComment = "No commet was typed.";
+        stopComment = "Stop Comment: " + stopComment;
+        leRunComment->setText(stopComment);
       }else{
         LogMsg("Cancel Run aborted. ");
         return;
       }
     }else{
-      //TODO ============= 
       stopComment = "End of AutoRun for " + cbAutoRun->currentText();
       leRunComment->setText(stopComment);
     }
@@ -515,10 +522,7 @@ void MainWindow::StopACQ(){
         + "======================";
     AppendElog(msg, chromeWindowID);
 
-
-    QProcess endRunScript;
-    endRunScript.start("/bin/bash", QStringList() << "scripts/endRunScript.sh");
-    //endRunScript.waitForFinished();
+    QProcess::startDetached(settingFilePath + "/scripts/endRunScript.sh");
 
   }else{
     LogMsg("===========================  no-Save Run stopped.");
@@ -543,25 +547,27 @@ void MainWindow::AutoRun(){
   }
 
   needManualComment = true;
-  isRunning = true;
   ///=========== infinite single run
   if( cbAutoRun->currentData().toInt() == 0 ){
     StartACQ();
+    disconnect(runTimer,  &QTimer::timeout, nullptr, nullptr);
   }else{
     StartACQ();
     connect(runTimer, &QTimer::timeout, this, [=](){
-      if( isRunning ){
-        StopACQ();
-        isRunning = false;
-        if( cbAutoRun->currentData().toInt() > 0 ) {
-          bnStartACQ->setEnabled(true);
-          bnStopACQ->setEnabled(false);
-          bnComment->setEnabled(false);
-        }
-      }else {
+      StopACQ();
+      if( cbAutoRun->currentData().toInt() > 0 ) {
+        bnStartACQ->setEnabled(true);
+        bnStopACQ->setEnabled(false);
+        bnComment->setEnabled(false);
+      }else{
+
+        LogMsg("Wait for 10 sec for next Run....");
+        elapsedTimer.invalidate();
+        elapsedTimer.start();
+        while(elapsedTimer.elapsed() < 10000) QCoreApplication::processEvents();
+
         StartACQ();
-        isRunning = true;
-      }
+      } 
     });
   }
 
@@ -818,7 +824,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
   while (!in.atEnd()) {
     QString line = in.readLine();
     if( line.contains("//^")) continue;
-    if( line.contains("//*=")){
+    if( line.contains("//C=")){
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
@@ -829,7 +835,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
       }
     }
-    if( line.contains("//*#")){
+    if( line.contains("//C#")){
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
@@ -841,12 +847,12 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
       }
     }
-    if( line.contains("//* ") ) {
+    if( line.contains("//C ") ) {
       startRecord = true;
       singleDigiMap.clear();
       continue;
     }
-    if( startRecord && line.contains("//*----")){
+    if( startRecord && line.contains("//C----")){
       startRecord = false;
       mapping.push_back(singleDigiMap);
       continue;
@@ -1918,7 +1924,7 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
   QStringList arg;
   arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" 
       << "-a" << "Author=\'General SOLARIS\'" ;
-  if( runNumber > 0 ) arg << "-a" << "Run=" + QString::number(runNumber);
+  if( runNumber > 0 ) arg << "-a" << "RunNo=" + QString::number(runNumber);
   if( category != "" ) arg << "-a" << "Category=" + category;
 
   arg << "-a" << "Subject=" + subject 

@@ -308,7 +308,7 @@ void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
   if( evt ) delete evt;
   evt = new Event();
   evt->SetDataType(dataFormat);
-  dataStartIndetifier += dataFormat;
+  dataStartIndetifier = 0xAAA0 + dataFormat;
 
   if( dataFormat == 0 ){  
     ret = CAEN_FELib_SetReadDataFormat(ep_handle, 

@@ -42,7 +42,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   printf("################################# \n");
   for( int i = 0; i < (int) mapping.size() ; i++){
     for( int j = 0; j < (int) mapping[i].size(); j++ ){
-      printf("%3d,", mapping[i][j]);
+      printf("%4d,", mapping[i][j]);
       QList<int> haha ;
       haha << mapping[i][j] << ((i << 8 ) + j);
       if( mapping[i][j] >= 0 ) detIDListTemp <<  haha;
