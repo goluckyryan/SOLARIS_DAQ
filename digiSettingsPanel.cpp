@@ -966,7 +966,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       
       {//@============== Trigger Mask/Map  tab
 
-        //TODO==========================
         triggerMapTab[iDigi] = new QTabWidget(tab);
         chTabWidget->addTab(triggerMapTab[iDigi], "Trigger Map");
 

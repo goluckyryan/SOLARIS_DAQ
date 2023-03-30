@@ -1,0 +1,29 @@
+{
+  "dashboard": {
+    "uid": "iXH6cG-Vz",
+    "editable":false,
+    "nav":[
+    {
+      "enable":false,
+      "type":"timepicker"
+    }
+    ],
+    "rows": [
+      {
+
+      }
+    ],
+    "style":"dark",
+    "tags":[],
+    "templating":{
+      "list":[
+      ]
+    },
+    "time":{
+    },
+    "timezone":"browser",
+    "title":"haha",
+    "version":5
+  },
+  "expires": 10
+}

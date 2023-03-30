@@ -321,9 +321,6 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
-  //TODO --- printf("----- Save Log File");
-
-
   printf("--- end of %s\n", __func__);
 
 }
@@ -522,6 +519,7 @@ void MainWindow::StopACQ(){
         + "======================";
     AppendElog(msg, chromeWindowID);
 
+    LogMsg("Run " + settingFilePath + "/scripts/endRunScript.sh" );
     QProcess::startDetached(settingFilePath + "/scripts/endRunScript.sh");
 
   }else{
@@ -1983,6 +1981,8 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
         arg << "-f" << "screenshot.png";
       }
     }
+
+    //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
 
     elogBash.start("elog", arg); 
     elogBash.waitForFinished();

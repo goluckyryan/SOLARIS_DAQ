@@ -10,6 +10,7 @@ screenshot.*
 *settings*.dat
 *.dat
 Logs
+*.png
 
 *~
 *.autosave
