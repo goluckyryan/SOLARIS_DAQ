@@ -22,7 +22,7 @@
 #include "CustomWidgets.h"
 #include "macro.h"
 
-#define MaxDetType 10
+#define MaxDetGroup 10
 #define MaxDetID 60
 #define MaxSettingItem  3
 
@@ -35,6 +35,8 @@ public:
                QString analysisPath,
                std::vector<std::vector<int>> mapping, 
                QStringList detType, 
+               QStringList detGroupName,
+               std::vector<int> detGroupID,
                std::vector<int> detMaxID, 
                QWidget * parent = nullptr);
   ~SOLARISpanel();
@@ -55,31 +57,35 @@ signals:
   void SendLogMsg(const QString str);
 
 private:
-  void CreateDetGroup(int detTypeID, int SettingID, QList<int> detID, QGridLayout * &layout, int row, int col);
+  void CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLayout * &layout, int row, int col);
 
   Digitizer2Gen ** digi;
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detType;
-  std::vector<int> nDet; // number of distgish detector
+  std::vector<int> nDetinType;
   std::vector<int> detMaxID;
+  QStringList detGroupName;
+  std::vector<int> detGroupID;
+  std::vector<int> nDetinGroup; 
   QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
   QString digiSettingPath;
 
-  int FindDetTypeID(QList<int> detIDListElement);
+  int FindDetTypeID(int detID);
+  int FindDetGroup(int detID);
 
   RSpinBox * sbCoinTime;
 
-  QCheckBox * chkAll[MaxDetType][MaxSettingItem]; // checkBox for all setting on that tab;
+  QCheckBox * chkAll[MaxDetGroup][MaxSettingItem]; // checkBox for all setting on that tab;
 
-  QGroupBox * groupBox[MaxDetType][MaxSettingItem][MaxDetID];
+  QGroupBox * groupBox[MaxDetGroup][MaxSettingItem][MaxDetID];
 
   QLineEdit * leDisplay[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel]; // [SettingID][DigiID][ChID]
   RSpinBox  * sbSetting[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel];
   QCheckBox * chkOnOff[MaxSettingItem][MaxNumberOfDigitizer][MaxNumberOfChannel];
 
-  RComboBox * cbTrigger[MaxDetType][MaxDetID]; //[detTypeID][detID] for array only
+  RComboBox * cbTrigger[MaxDetGroup][MaxDetID]; //[detTypeID][detID] for array only
 
   bool enableSignalSlot;
 

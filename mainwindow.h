@@ -152,6 +152,8 @@ private:
   std::vector<std::vector<int>> mapping;
   QStringList detType;
   std::vector<int> detMaxID;
+  std::vector<int> detGroupID;
+  QStringList detGroupName;
 
   //@----- Program settings
   QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()

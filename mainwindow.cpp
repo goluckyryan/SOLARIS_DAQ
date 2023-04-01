@@ -673,7 +673,7 @@ void MainWindow::OpenDigitizers(){
   bnProgramSettings->setEnabled(false);
   bnNewExp->setEnabled(false);
 
-  if( nDigiConnected > 0 ) bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
+  bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
 
 }
 
@@ -815,7 +815,9 @@ bool MainWindow::CheckSOLARISpanelOK(){
   mapping.clear();
   std::vector<int> singleDigiMap;
   detType.clear();
+  detGroupID.clear();
   detMaxID.clear();
+  detGroupName.clear();
 
   bool startRecord = false;
   QTextStream in(&file);
@@ -833,6 +835,29 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
       }
     }
+    if( line.contains("//C%")){
+      int in1 = line.indexOf("{");
+      int in2 = line.lastIndexOf("}");
+      if( in2 > in1){
+        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
+        detGroupName = subLine.split(",");
+      }else{
+        LogMsg("Problem Found for the Mapping.h.");
+        return false;
+      }
+    }
+    if( line.contains("//C&")){
+      int in1 = line.indexOf("{");
+      int in2 = line.lastIndexOf("}");
+      if( in2 > in1){
+        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
+        QStringList haha = subLine.split(",");
+        for( int i = 0; i < haha.size(); i++) detGroupID.push_back(haha[i].toInt());
+      }else{
+        LogMsg("Problem Found for the Mapping.h.");
+        return false;
+    }
+      }
     if( line.contains("//C#")){
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
@@ -882,14 +907,15 @@ bool MainWindow::CheckSOLARISpanelOK(){
     }
   }
 
-
   if( (int) detMaxID.size() != detType.size() ){
     LogMsg("Size of detector Name and detctor max ID does not match.");
     return false;
   }
 
+  if( nDigiConnected == 0 ) return false;
+
   //@============= Create SOLAIRS panel
-  solarisSetting = new SOLARISpanel(digi, nDigi, analysisPath, mapping, detType, detMaxID);
+  solarisSetting = new SOLARISpanel(digi, nDigi, analysisPath, mapping, detType, detGroupName, detGroupID, detMaxID);
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
   connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(2);});
 
