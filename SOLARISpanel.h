@@ -62,13 +62,13 @@ private:
   Digitizer2Gen ** digi;
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
-  QStringList detType;
+  QStringList detTypeNameList;
   std::vector<int> nDetinType;
   std::vector<int> detMaxID;
-  QStringList detGroupName;
+  QStringList detGroupNameList;
   std::vector<int> detGroupID;
   std::vector<int> nDetinGroup; 
-  QList<QList<int>> detIDList; // 1-D array of { detID,  (Digi << 8 ) + ch}
+  QList<QList<int>> detIDArrayList; // 1-D array of { detID,  (Digi << 8 ) + ch}
 
   QString digiSettingPath;
 
