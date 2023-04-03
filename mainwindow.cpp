@@ -326,7 +326,7 @@ MainWindow::~MainWindow(){
 }
 
 //^################################################################ ACQ control 
-void MainWindow::StartACQ(){
+int MainWindow::StartACQ(){
 
   if( chkSaveRun->isChecked() ){
     runID ++;
@@ -363,7 +363,9 @@ void MainWindow::StartACQ(){
         startComment = "Start Comment: " + startComment;
       }else{
         LogMsg("Start Run aborted. ");
-        return;
+        runID --;
+        leRunID->setText(QString::number(runID));
+        return 0 ;
       }
 
       if( cbAutoRun -> currentData().toInt() != 0 ){
@@ -434,6 +436,8 @@ void MainWindow::StartACQ(){
   if( !scalar->isVisible() ) scalar->show();
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   scalarThread->start();
+
+  return 1;
 
 }
 
@@ -533,24 +537,26 @@ void MainWindow::StopACQ(){
 void MainWindow::AutoRun(){
 
   if( chkSaveRun->isChecked() == false){
-    StartACQ();
-    bnStartACQ->setEnabled(false);
-    bnStopACQ->setEnabled(true);
-    bnComment->setEnabled(false);
-    bnOpenScope->setEnabled(false);
-    chkSaveRun->setEnabled(false);
-    cbAutoRun->setEnabled(false);
-    if( digiSetting ) digiSetting->EnableControl();
+    if( StartACQ() ){  
+      bnStartACQ->setEnabled(false);
+      bnStopACQ->setEnabled(true);
+      bnComment->setEnabled(false);
+      bnOpenScope->setEnabled(false);
+      chkSaveRun->setEnabled(false);
+      cbAutoRun->setEnabled(false);
+      if( digiSetting ) digiSetting->EnableControl();
+    }
     return;
   }
 
   needManualComment = true;
+  int isRun = 0;
   ///=========== infinite single run
   if( cbAutoRun->currentData().toInt() == 0 ){
-    StartACQ();
+    isRun = StartACQ();
     disconnect(runTimer,  &QTimer::timeout, nullptr, nullptr);
   }else{
-    StartACQ();
+    isRun = StartACQ();
     connect(runTimer, &QTimer::timeout, this, [=](){
       StopACQ();
       if( cbAutoRun->currentData().toInt() > 0 ) {
@@ -568,6 +574,8 @@ void MainWindow::AutoRun(){
       } 
     });
   }
+
+  if( isRun == 0 ) return;
 
   int timeMiliSec = cbAutoRun->currentData().toInt() * 60 * 1000;
 
@@ -624,7 +632,7 @@ void MainWindow::OpenDigitizers(){
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
       //*------ search for settings_XXXX.dat
-      QString settingFile = analysisPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      QString settingFile = analysisPath + "/working/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
         LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());
@@ -2029,19 +2037,35 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
 void MainWindow::WriteRunTimeStampDat(bool isStartRun){
   
-  QFile file(dataPath + "/" + expName + "/RunTimeStampe.dat");
+  QFile file(dataPath + "/" + expName + "/RunTimeStamp.dat");
   
-  file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append);
-
   QString dateTime = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+  if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
-  if( isStartRun ){
-    file.write(("Start Run | " + dateTime + " | " + startComment + "\n").toStdString().c_str());
-  }else{
-    file.write((" Stop Run | " + dateTime + " | " + stopComment + "\n").toStdString().c_str());
+    if( isStartRun ){
+      file.write(("Start Run | " + QString::number(runID) + " | " + dateTime + " | " + startComment + "\n").toStdString().c_str());
+    }else{
+      file.write((" Stop Run | " + QString::number(runID) + " | " + dateTime + " | " + stopComment + "\n").toStdString().c_str());
+    }
+    
+    file.close();
   }
-  
-  file.close();
+
+
+  QFile fileCSV(dataPath + "/" + expName + "/RunTimeStamp.csv");
+
+  if( fileCSV.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
+
+    QTextStream out(&fileCSV);
+
+    if( isStartRun){
+      out << QString::number(runID) + "," + dateTime + "," + startComment;
+    }else{
+      out << "," + dateTime + "," + stopComment + "\n";
+    }
+
+    fileCSV.close();
+  }
 
 }
 

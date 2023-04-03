@@ -108,10 +108,10 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   //printf(" %s|%s \n", __func__, parameter);
   ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
-    printf("%-45s | read fail\n", parameter);
+    printf("  %s|%d|%-45s| read fail\n", __func__, serialNumber, parameter);
     return ErrorMsg(__func__);
   }else{
-    if( verbose ) printf("%-45s : %s\n", parameter, retValue);
+    if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
   }
   return retValue;
 }
@@ -133,6 +133,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
   if( !isConnected ) return false; 
+  //ReadValue(parameter, 1);
   printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
@@ -776,7 +777,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
       totCount ++;
       if( boardSettings[i].GetValue() == "" && boardSettings[i].GetPara() != "Gateway") break;
-      fprintf(saveFile, "%-45s|%d|%4d|%s\n", boardSettings[i].GetFullPara().c_str(),  
+      fprintf(saveFile, "%-45s!%d!%4d!%s\n", boardSettings[i].GetFullPara().c_str(),  
                                              boardSettings[i].ReadWrite(),
                                              8000 + i, 
                                              boardSettings[i].GetValue().c_str());
@@ -786,7 +787,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
     for(int i = 0; i < 4 ; i ++){
       totCount ++;
       if( VGASetting[i].GetValue() == "" ) break;
-      fprintf(saveFile, "%-45s|%d|%4d|%s\n", VGASetting[i].GetFullPara(i).c_str(), 
+      fprintf(saveFile, "%-45s!%d!%4d!%s\n", VGASetting[i].GetFullPara(i).c_str(), 
                                              VGASetting[i].ReadWrite(), 
                                              9000 + i,
                                              VGASetting[i].GetValue().c_str());
@@ -797,7 +798,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
         totCount ++;
         if( chSettings[ch][i].GetValue() == "") break;
-        fprintf(saveFile, "%-45s|%d|%4d|%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
                                                chSettings[ch][i].ReadWrite(),
                                                ch*100 + i,
                                                chSettings[ch][i].GetValue().c_str());
@@ -847,7 +848,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
     while(fgets(line, sizeof(line), loadFile) != NULL){
 
       //printf("%s", line);
-      char* token = std::strtok(line, "|");
+      char* token = std::strtok(line, "!");
       int count = 0;
       while( token != nullptr){
 
@@ -866,7 +867,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         if( count > 3) break;
         
         count ++;
-        token = std::strtok(nullptr, "|");
+        token = std::strtok(nullptr, "!");
       }
 
       int id = atoi(idStr);

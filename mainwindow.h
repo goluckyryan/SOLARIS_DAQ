@@ -51,7 +51,7 @@ private slots:
   void OpenSOLARISpanel();
   bool CheckSOLARISpanelOK();
 
-  void StartACQ();
+  int  StartACQ(); // return 1 when ACQ start
   void StopACQ();
   void AutoRun();
 

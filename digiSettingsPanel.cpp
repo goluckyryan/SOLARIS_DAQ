@@ -1662,7 +1662,9 @@ void DigiSettingsPanel::LoadSettings(){
   fileDialog.setDirectory(digiSettingPath);
   fileDialog.setFileMode(QFileDialog::ExistingFile);
   fileDialog.setNameFilter("Data file (*.dat);;Text file (*.txt);;All file (*.*)");
-  fileDialog.exec();
+  int result = fileDialog.exec();
+
+  if( ! (result == QDialog::Accepted) ) return;
 
   if( fileDialog.selectedFiles().size() == 0 ) return; // when no file selected.
 

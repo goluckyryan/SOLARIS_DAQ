@@ -72,13 +72,14 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(cbScopeCh, rowID, 1);
 
   connect(cbScopeDigi, &RComboBox::currentIndexChanged, this, [=](){
-    //if( allowChange ) StopScope();
     int index = cbScopeDigi->currentIndex();
     if( index == -1 ) return;
+    allowChange = false;
+    cbScopeCh->clear();
     for( int i = 0; i < digi[index]->GetNChannels(); i++){
       cbScopeCh->addItem("ch-" + QString::number(i), i);
     }
-    //if( allowChange )StartScope(index);
+    allowChange = true;
   });
 
   connect(cbScopeCh, &RComboBox::currentIndexChanged, this, [=](){
