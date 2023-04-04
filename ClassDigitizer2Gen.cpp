@@ -561,7 +561,7 @@ void Digitizer2Gen::SaveDataToFile(){
     CloseOutFile();
     outFileIndex ++;
     sprintf(outFileName, "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
-    outFile = fopen(outFileName, "a+b");
+    outFile = fopen(outFileName, "wb"); //overwrite binary
   }
 
   if( evt->dataType == 0){

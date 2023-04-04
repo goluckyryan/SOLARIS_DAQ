@@ -121,7 +121,7 @@ class Digitizer2Gen {
     uint64_t       GetHandle()    const {return handle;}
     
     Event *evt;  // should be evt[MaxNumber], when full or stopACQ, save into file
-    void OpenOutFile(std::string fileName, const char * mode = "w");
+    void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
     void CloseOutFile();
     void SaveDataToFile();
     unsigned int GetFileSize() const {return outFileSize;}

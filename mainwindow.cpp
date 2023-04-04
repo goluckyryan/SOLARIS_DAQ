@@ -199,7 +199,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
       bnOpenScope->setEnabled(true);
       chkSaveRun->setEnabled(true);
       if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
-
       if( digiSetting ) digiSetting->EnableControl();
 
     });
@@ -563,6 +562,10 @@ void MainWindow::AutoRun(){
         bnStartACQ->setEnabled(true);
         bnStopACQ->setEnabled(false);
         bnComment->setEnabled(false);
+        bnOpenScope->setEnabled(true);
+        chkSaveRun->setEnabled(true);
+        cbAutoRun->setEnabled(true);
+        if( digiSetting ) digiSetting->EnableControl();
       }else{
 
         LogMsg("Wait for 10 sec for next Run....");
