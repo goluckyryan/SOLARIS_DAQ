@@ -133,7 +133,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         LEDStatus[iDigi][i]->setToolTip(QString::number(i) + " - " + LEDToolTip[i]);
         LEDStatus[iDigi][i]->setToolTipDuration(-1);
         //TODO set tooltip position on top
-        statusLayout->addWidget(LEDStatus[iDigi][i], 0, 1 + 19 - i);
+        statusLayout->addWidget(LEDStatus[iDigi][i], 0, 19 - i);
       
       }
 
@@ -148,7 +148,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ACQStatus[iDigi][i]->setFixedSize(QSize(30,30));
         ACQStatus[iDigi][i]->setToolTip(QString::number(i) + " - " + ACQToolTip[i]);
         ACQStatus[iDigi][i]->setToolTipDuration(-1);
-        statusLayout->addWidget(ACQStatus[iDigi][i], 1, 1 + 7 - i);
+        statusLayout->addWidget(ACQStatus[iDigi][i], 1,  7 - i);
       }
 
       //------- Temperatures
@@ -210,24 +210,38 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       rowId ++;
       bnClearData[iDigi] = new QPushButton("Clear Data", tab);
       bnLayout->addWidget(bnClearData[iDigi], rowId, 0, 1, 2);
-      connect(bnClearData[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(PHA::DIG::ClearData); });
+      connect(bnClearData[iDigi], &QPushButton::clicked, this, [=](){ 
+        digi[ID]->SendCommand(PHA::DIG::ClearData);
+        SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::ClearData.GetFullPara()));
+      });
       
       bnArmACQ[iDigi] = new QPushButton("Arm ACQ", tab);
       bnLayout->addWidget(bnArmACQ[iDigi], rowId, 2, 1, 2);
-      connect(bnArmACQ[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(PHA::DIG::ArmACQ); });
+      connect(bnArmACQ[iDigi], &QPushButton::clicked, this, [=](){ 
+        digi[ID]->SendCommand(PHA::DIG::ArmACQ); 
+        SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::ArmACQ.GetFullPara()));
+      });
       
       bnDisarmACQ[iDigi] = new QPushButton("Disarm ACQ", tab);
       bnLayout->addWidget(bnDisarmACQ[iDigi], rowId, 4, 1, 2);
-      connect(bnDisarmACQ[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(PHA::DIG::DisarmACQ); });
+      connect(bnDisarmACQ[iDigi], &QPushButton::clicked, this, [=](){ 
+        digi[ID]->SendCommand(PHA::DIG::DisarmACQ); 
+        SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::DisarmACQ.GetFullPara()));
+      });
 
       bnSoftwareStart[iDigi] = new QPushButton("Software Start ACQ", tab);
       bnLayout->addWidget(bnSoftwareStart[iDigi], rowId, 6, 1, 2);
-      connect(bnSoftwareStart[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(PHA::DIG::SoftwareStartACQ); });
+      connect(bnSoftwareStart[iDigi], &QPushButton::clicked, this, [=](){ 
+        digi[ID]->SendCommand(PHA::DIG::SoftwareStartACQ); 
+        SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::SoftwareStartACQ.GetFullPara()));
+      });
 
       bnSoftwareStop[iDigi] = new QPushButton("Software Stop ACQ", tab);
       bnLayout->addWidget(bnSoftwareStop[iDigi], rowId, 8, 1, 2);
-      connect(bnSoftwareStop[iDigi], &QPushButton::clicked, this, [=](){ digi[ID]->SendCommand(PHA::DIG::SoftwareStopACQ); });
-
+      connect(bnSoftwareStop[iDigi], &QPushButton::clicked, this, [=](){ 
+        digi[ID]->SendCommand(PHA::DIG::SoftwareStopACQ); 
+        SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::SoftwareStopACQ.GetFullPara()));
+      });
 
       //--------------- 
       if( digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected() ){
@@ -1170,7 +1184,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       sbBdSettingsWrite = new RSpinBox(ICTab);
       sbBdSettingsWrite->setFixedWidth(200);
       inquiryLayout->addWidget(sbBdSettingsWrite, rowID, 7);
-      connect(sbBdSettingsWrite, &RSpinBox::valueChanged, this, [=](){ sbBdSettingsWrite->setStyleSheet("color: green;");});
+      connect(sbBdSettingsWrite, &RSpinBox::valueChanged, this, [=](){if( enableSignalSlot ) sbBdSettingsWrite->setStyleSheet("color: green;");});
       connect(sbBdSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
         if( !enableSignalSlot ) return;
         if( sbBdSettingsWrite->decimals() == 0 && sbBdSettingsWrite->singleStep() != 1) {
@@ -1201,7 +1215,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       leBdSettingsWrite->setAlignment(Qt::AlignRight);
       leBdSettingsWrite->setFixedWidth(200);
       inquiryLayout->addWidget(leBdSettingsWrite, rowID, 8);
-      connect(leBdSettingsWrite, &QLineEdit::textChanged, this, [=](){leBdSettingsWrite->setStyleSheet("color: green;");});
+      connect(leBdSettingsWrite, &QLineEdit::textChanged, this, [=](){if( enableSignalSlot )leBdSettingsWrite->setStyleSheet("color: green;");});
       connect(leBdSettingsWrite, &QLineEdit::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         std::string value = leBdSettingsWrite->text().toStdString();
@@ -1289,7 +1303,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       sbChSettingsWrite = new RSpinBox(ICTab);
       sbChSettingsWrite->setFixedWidth(200);
       inquiryLayout->addWidget(sbChSettingsWrite, rowID, 7);
-      connect(sbChSettingsWrite, &RSpinBox::valueChanged, this, [=](){ sbChSettingsWrite->setStyleSheet("color: green;");});
+      connect(sbChSettingsWrite, &RSpinBox::valueChanged, this, [=](){ if( enableSignalSlot ) sbChSettingsWrite->setStyleSheet("color: green;");});
       connect(sbChSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
         if( !enableSignalSlot ) return;
         if( sbChSettingsWrite->decimals() == 0 && sbChSettingsWrite->singleStep() != 1) {
@@ -1321,7 +1335,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       leChSettingsWrite = new QLineEdit(ICTab);
       leChSettingsWrite->setFixedWidth(200);
       inquiryLayout->addWidget(leChSettingsWrite, rowID, 8);
-      connect(leChSettingsWrite, &QLineEdit::textChanged, this, [=](){leChSettingsWrite->setStyleSheet("color: green;");});
+      connect(leChSettingsWrite, &QLineEdit::textChanged, this, [=](){if( enableSignalSlot ) leChSettingsWrite->setStyleSheet("color: green;");});
       connect(leChSettingsWrite, &QLineEdit::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         std::string value = leChSettingsWrite->text().toStdString();

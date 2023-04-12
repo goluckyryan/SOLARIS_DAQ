@@ -5,6 +5,7 @@ SOLARIS_DAQ
 programSettings.txt
 test
 windowID
+tempSettings
 screenshot.*
 *settings*.txt
 *settings*.dat

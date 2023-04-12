@@ -185,6 +185,9 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   rowIndex ++;
   QLabel * info = new QLabel("Only simple trigger is avalible. For complex trigger scheme, please use the setting panel.", this);
   mainLayout->addWidget(info, rowIndex, 0, 1, 4);
+  rowIndex ++;
+  QLabel * info2 = new QLabel("The panel is defined by " + analysisPath + "/working/Mapping.h", this);
+  mainLayout->addWidget(info2, rowIndex, 0, 1, 4);
 
   ///=================================
   rowIndex ++;

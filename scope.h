@@ -129,10 +129,10 @@ public:
 public slots:
   void ReadScopeSettings(); // read from digitizer and show;
   void UpdateSettingsFromMemeory();
-
-private slots:
   void StartScope();
   void StopScope();
+
+private slots:
   void UpdateScope();
   void ScopeControlOnOff(bool on);
   void ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara);

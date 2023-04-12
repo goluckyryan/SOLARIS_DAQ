@@ -116,6 +116,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
     bnEventBuilder->setEnabled(false);
+    
+    QPushButton * bnHVController = new QPushButton("HV Controller", this);
+    bnHVController->setEnabled(false);
+    
+    QPushButton * bnTargetFanController = new QPushButton("Target Fan", this);
+    bnTargetFanController->setEnabled(false);
 
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
@@ -130,6 +136,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
     layout1->addWidget(bnEventBuilder, 3, 0);
+    layout1->addWidget(bnHVController, 3, 1);
+    layout1->addWidget(bnTargetFanController, 3, 2, 1, 2);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -181,6 +189,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     cbAutoRun->addItem("Every 5 hrs",  -300);
     cbAutoRun->setEnabled(false);
 
+    QComboBox * cbDataFormat = new QComboBox(this);
+    cbDataFormat->addItem("Everything", 0);
+    cbDataFormat->addItem("1 trace", 1);
+    cbDataFormat->addItem("No trace", 2);
+    cbDataFormat->addItem("Minimum", 3);
+    cbDataFormat->setCurrentIndex(1);
+    cbDataFormat->setEnabled(false);
+
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
     //connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
@@ -214,26 +230,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnComment->setEnabled(false);
     
     layout2->addWidget(lbRawDataPath, 0, 0);
-    layout2->addWidget(leRawDataPath, 0, 1, 1, 4);
-    layout2->addWidget(bnOpenScalar, 0, 5);
+    layout2->addWidget(leRawDataPath, 0, 1, 1, 5);
+    layout2->addWidget(bnOpenScalar, 0, 6);
 
-    layout2->addWidget(lbRunID,    1, 0);
-    layout2->addWidget(leRunID,    1, 1);
-    layout2->addWidget(chkSaveRun, 1, 2);
-    layout2->addWidget(cbAutoRun,  1, 3);
-    layout2->addWidget(bnStartACQ, 1, 4);
-    layout2->addWidget(bnStopACQ,  1, 5);
+    layout2->addWidget(lbRunID,       1, 0);
+    layout2->addWidget(leRunID,       1, 1);
+    layout2->addWidget(chkSaveRun,    1, 2);
+    layout2->addWidget(cbAutoRun,     1, 3);
+    layout2->addWidget(cbDataFormat,  1, 4);
+    layout2->addWidget(bnStartACQ,    1, 5);
+    layout2->addWidget(bnStopACQ,     1, 6);
 
     layout2->addWidget(lbRunComment, 2, 0);
-    layout2->addWidget(leRunComment,   2, 1, 1, 4);
-    layout2->addWidget(bnComment, 2, 5);
+    layout2->addWidget(leRunComment,   2, 1, 1, 5);
+    layout2->addWidget(bnComment, 2, 6);
 
-    layout2->setColumnStretch(0, 2);
+    layout2->setColumnStretch(0, 1);
     layout2->setColumnStretch(1, 1);
     layout2->setColumnStretch(2, 1);
     layout2->setColumnStretch(3, 1);
-    layout2->setColumnStretch(4, 3);
+    layout2->setColumnStretch(4, 1);
     layout2->setColumnStretch(5, 3);
+    layout2->setColumnStretch(6, 3);
 
   }
 
@@ -717,6 +735,12 @@ void MainWindow::CloseDigitizers(){
 
   for( int i = 0; i < nDigi; i++){    
     if( digi[i] == NULL) return;
+
+    if( digi[i]->IsConnected() ){
+      int digiSN = digi[i]->GetSerialNumber();
+      LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + settingFilePath + "/tempSettings/");
+      digi[i]->SaveSettingsToFile((settingFilePath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString().c_str());
+    }
     digi[i]->CloseDigitizer();
     delete digi[i];
 
@@ -770,6 +794,11 @@ void MainWindow::OpenScope(){
           influx->AddDataPoint(onOff ? "StartStop value=1" : "StartStop value=0");
           influx->WriteData(DatabaseName.toStdString());
         }
+        if( onOff){
+          lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
+        }else{
+          lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
+        }
       });
 
       if( influx ){
@@ -782,8 +811,11 @@ void MainWindow::OpenScope(){
         digiSetting->EnableControl();
       }  
 
+      scope->StartScope();
+
     }else{
       scope->show();
+      scope->StartScope();
       if( digiSetting ) digiSetting->EnableControl();
     }
   }
@@ -965,12 +997,16 @@ void MainWindow::SetUpScalar(){
 
   scalar->setGeometry(0, 0, 10 + nDigi * 230, 1500);
 
-  lbLastUpdateTime = new QLabel("Last update : ");
+  if( lbLastUpdateTime == nullptr ) { // use lbLastUpdateTime as a flag 
+    lbLastUpdateTime = new QLabel("Last update : ", scalar);
+    lbScalarACQStatus = new QLabel("ACQ status", scalar);
+  }
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
+  scalarLayout->removeWidget(lbLastUpdateTime);
   scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, 1 + nDigi);
 
-  lbScalarACQStatus = new QLabel("ACQ status");
   lbScalarACQStatus->setAlignment(Qt::AlignCenter);
+  scalarLayout->removeWidget(lbScalarACQStatus);
   scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
 
   ///==== create the 1st row
@@ -978,13 +1014,18 @@ void MainWindow::SetUpScalar(){
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
-      QLabel * lbCH_H = new QLabel("Ch", scalar); scalarLayout->addWidget(lbCH_H, rowID, 0);
+      if( lbLastUpdateTime == nullptr ) {
+        QLabel * lbCH_H = new QLabel("Ch", scalar); 
+        scalarLayout->addWidget(lbCH_H, rowID, 0);
+      }
     }  
 
     rowID ++;
-    QLabel * lbCH = new QLabel(QString::number(ch), scalar);
-    lbCH->setAlignment(Qt::AlignCenter);
-    scalarLayout->addWidget(lbCH, rowID, 0);
+    if( lbLastUpdateTime == nullptr ) {
+      QLabel * lbCH = new QLabel(QString::number(ch), scalar);
+      lbCH->setAlignment(Qt::AlignCenter);
+      scalarLayout->addWidget(lbCH, rowID, 0);
+    }
   }
   
   ///===== create the trigger and accept
@@ -1013,12 +1054,12 @@ void MainWindow::SetUpScalar(){
     
       rowID ++;
       
-      leTrigger[iDigi][ch] = new QLineEdit();
+      leTrigger[iDigi][ch] = new QLineEdit(scalar);
       leTrigger[iDigi][ch]->setReadOnly(true);
       leTrigger[iDigi][ch]->setAlignment(Qt::AlignRight);
       scalarLayout->addWidget(leTrigger[iDigi][ch], rowID, 2*iDigi+1);
 
-      leAccept[iDigi][ch] = new QLineEdit();
+      leAccept[iDigi][ch] = new QLineEdit(scalar);
       leAccept[iDigi][ch]->setReadOnly(true);
       leAccept[iDigi][ch]->setAlignment(Qt::AlignRight);
       leAccept[iDigi][ch]->setStyleSheet("background-color: #F0F0F0;");
@@ -1027,6 +1068,7 @@ void MainWindow::SetUpScalar(){
   }
 
 }
+
 
 void MainWindow::DeleteTriggerLineEdit(){
 

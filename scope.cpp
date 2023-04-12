@@ -317,17 +317,25 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   show();
 
-  StartScope();
+  //StartScope();
 
 }
 
 Scope::~Scope(){
+
+  printf("------- %s \n", __func__);
+
+  StopScope();
+
+  printf("------- A \n");
   updateTraceThread->Stop();
   updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
   for( int i = 0; i < 6; i++) delete dataTrace[i];
+  printf("------- B \n");
   delete plot;
+  printf("------- C \n");
 }
 
 void Scope::ReadScopeSettings(){
@@ -478,7 +486,7 @@ void Scope::StopScope(){
       readDataThread[i]->quit();
       readDataThread[i]->wait();
     }
-
+    
     emit TellACQOnOff(false);
   }
 
@@ -536,8 +544,7 @@ void Scope::UpdateScope(){
 }
 
 void Scope::ProbeChange(RComboBox * cb[], const int size ){
-
-  printf("%s\n", __func__);
+  //printf("%s\n", __func__);
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
     model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
@@ -613,7 +620,7 @@ void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg d
 }
 
 void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
-  printf("%s\n", __func__);
+  //printf("%s\n", __func__);
   QLabel * lb = new QLabel(str, this);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);

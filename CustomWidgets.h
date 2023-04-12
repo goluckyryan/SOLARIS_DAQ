@@ -38,6 +38,9 @@ class RSpinBox : public QDoubleSpinBox{
       setToolTipDuration(-1);
     }
 
+    void SetStyleNormal() { setStyleSheet(""); }
+    void SetStyleGreen()  { setStyleSheet("color:green"); }
+
   signals:
     void returnPressed();
   protected:

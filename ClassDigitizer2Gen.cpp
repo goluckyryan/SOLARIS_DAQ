@@ -5,7 +5,7 @@
 #include <sys/stat.h>
 
 Digitizer2Gen::Digitizer2Gen(){  
-  printf("======== %s \n",__func__);
+  //printf("======== %s \n",__func__);
   Initialization();
 }
 
@@ -15,7 +15,7 @@ Digitizer2Gen::~Digitizer2Gen(){
 }
 
 void Digitizer2Gen::Initialization(){
-  printf("======== %s \n",__func__);
+  //printf("======== %s \n",__func__);
 
   handle = 0;
   ret = 0;
@@ -131,10 +131,10 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
   return ans;
 }
 
-bool Digitizer2Gen::WriteValue(const char * parameter, std::string value){
+bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool verbose){
   if( !isConnected ) return false; 
   //ReadValue(parameter, 1);
-  printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
+  if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
     printf("WriteError|%s||%s|\n", parameter, value.c_str());
@@ -185,7 +185,7 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
 
 void Digitizer2Gen::SendCommand(const char * parameter){
   if( !isConnected ) return;
-  printf("Send Command : %s \n", parameter);
+  printf(" %s|%d|Send Command : %s \n", __func__, serialNumber, parameter);
   ret = CAEN_FELib_SendCommand(handle, parameter);
   if (ret != CAEN_FELib_Success) {
     ErrorMsg(__func__);
@@ -201,11 +201,11 @@ void Digitizer2Gen::SendCommand(std::string shortPara){
 //########################################### Open digitizer
 int Digitizer2Gen::OpenDigitizer(const char * url){
   
-  printf("======== %s \n",__func__);
+  //printf("======== %s \n",__func__);
 
   ret = CAEN_FELib_Open(url, &handle);
 
-  printf("===  ret : %d | %d \n", ret, CAEN_FELib_Success);
+  //printf("===  ret : %d | %d \n", ret, CAEN_FELib_Success);
   
   if (ret != CAEN_FELib_Success) {
     ErrorMsg(__func__);
@@ -744,7 +744,7 @@ std::string Digitizer2Gen::ErrorMsg(const char * funcName){
     printf("%s failed\n", __func__);
     return errMsg;
   }
-  printf("Error msg (%d): %s\n", ret, msg);
+  if( ret != CAEN_FELib_Stop ) printf("Error msg (%d): %s\n", ret, msg);
   return msg;
 }
 
@@ -753,10 +753,19 @@ void Digitizer2Gen::ReadAllSettings(){
   if( !isConnected ) return;
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
+    if( !(ModelName == "VX2745" && FPGAType == "DPP_PHA") && 
+     (boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
+      boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
+      boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
+      boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
+      boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
+      boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara()
+     )
+    ) continue;
     ReadValue(boardSettings[i]);
   }
 
-  for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
+  if( ModelName == "VX2745" && FPGAType == "DPP_PHA") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
   for(int ch = 0; ch < nChannels ; ch++ ){
     for( int i = 0; i < (int) chSettings[ch].size(); i++){
@@ -784,14 +793,16 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       count ++;
     }
 
-    for(int i = 0; i < 4 ; i ++){
-      totCount ++;
-      if( VGASetting[i].GetValue() == "" ) break;
-      fprintf(saveFile, "%-45s!%d!%4d!%s\n", VGASetting[i].GetFullPara(i).c_str(), 
-                                             VGASetting[i].ReadWrite(), 
-                                             9000 + i,
-                                             VGASetting[i].GetValue().c_str());
-      count ++;
+    if( ModelName == "VX2745" && FPGAType == "DPP_PHA") {
+      for(int i = 0; i < 4 ; i ++){
+        totCount ++;
+        if( VGASetting[i].GetValue() == "" ) break;
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", VGASetting[i].GetFullPara(i).c_str(), 
+                                              VGASetting[i].ReadWrite(), 
+                                              9000 + i,
+                                              VGASetting[i].GetValue().c_str());
+        count ++;
+      }
     }
     for( int i = 0; i < (int) chSettings[0].size(); i++){
       for(int ch = 0; ch < nChannels ; ch++ ){
@@ -889,7 +900,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         VGASetting[id - 9000].SetValue(value);
       }
       //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
-      if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value);
+      if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value, false);
     }
 
     delete [] para;
