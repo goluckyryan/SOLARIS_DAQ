@@ -1674,6 +1674,7 @@ void MainWindow::SetupNewExpPanel(){
 
   QPushButton *bnChangeBranch = new QPushButton("Change", &dialog);
   layout->addWidget(bnChangeBranch, rowID, 3);
+  bnChangeBranch->setAutoDefault(false);
 
   connect(bnChangeBranch, &QPushButton::clicked, this, [=](){ this->ChangeExperiment(cb->currentText());  });
   connect(bnChangeBranch, &QPushButton::clicked, &dialog, &QDialog::accept);
@@ -1684,9 +1685,11 @@ void MainWindow::SetupNewExpPanel(){
   }else{
     for( int i = 0; i < branches.size(); i++){
       if( i == bID ) continue;
+      if( branches[i].contains("HEAD")) continue;
+      if( branches[i].contains(presentBranch)) continue;
       cb->addItem(branches[i].remove(" "));
     }
-    if ( branches.size() == 1) {
+    if ( cb->count() == 0) {
       cb->setEnabled(false);
       cb->addItem("no other branch");
       bnChangeBranch->setEnabled(false);
@@ -1694,11 +1697,11 @@ void MainWindow::SetupNewExpPanel(){
   }
 
   connect(cbUseGit, &QCheckBox::clicked, this, [=](){
-                        if( branches.size() > 1 ) cb->setEnabled(cbUseGit->isChecked());
-                      });
-  connect(cbUseGit, &QCheckBox::clicked, this, [=](){
-                        if(branches.size() > 1 ) bnChangeBranch->setEnabled(cbUseGit->isChecked());
-                      });
+    if( cb->count() > 1 ) {
+      cb->setEnabled(cbUseGit->isChecked());
+      bnChangeBranch->setEnabled(cbUseGit->isChecked());
+    }
+  });
   
   //------- type existing or new experiment
   rowID ++;
@@ -1708,15 +1711,28 @@ void MainWindow::SetupNewExpPanel(){
 
   QLineEdit * newExp = new QLineEdit("type and Enter", &dialog);
   layout->addWidget(newExp, rowID, 1, 1, 2);
+  //newExp->setFocus();
 
-  QPushButton *button1 = new QPushButton("Create", &dialog);
-  layout->addWidget(button1, rowID, 3);
-  button1->setEnabled(false);
+  QPushButton *bnCreateNewExp = new QPushButton("Create", &dialog);
+  layout->addWidget(bnCreateNewExp, rowID, 3);
+  bnCreateNewExp->setEnabled(false);
+  bnCreateNewExp->setAutoDefault(false);
   
-  connect(newExp, &QLineEdit::textChanged, this, [=](){ newExp->setStyleSheet("color : green;");});
-  connect(newExp, &QLineEdit::returnPressed, this, [=](){ if( newExp->text() != "") { newExp->setStyleSheet(""); button1->setEnabled(true);}});
-  connect(button1, &QPushButton::clicked, this, [=](){ this->CreateNewExperiment(newExp->text());});
-  connect(button1, &QPushButton::clicked, &dialog, &QDialog::accept);
+  connect(newExp, &QLineEdit::textChanged, this, [=](){
+    newExp->setStyleSheet("color : blue;"); 
+    if( newExp->text() == "") bnCreateNewExp->setEnabled(false);
+  });
+
+  connect(newExp, &QLineEdit::returnPressed, this, [=](){ 
+    if( newExp->text() != "") { 
+      newExp->setStyleSheet(""); 
+      bnCreateNewExp->setEnabled(true);
+    }
+
+  });
+  
+  connect(bnCreateNewExp, &QPushButton::clicked, this, [=](){ this->CreateNewExperiment(newExp->text());});
+  connect(bnCreateNewExp, &QPushButton::clicked, &dialog, &QDialog::accept);
 
   //----- diable all possible actions
   //?---- don't know why isGitExist && !isCleanGit does not work
@@ -1726,12 +1742,13 @@ void MainWindow::SetupNewExpPanel(){
       cb->setEnabled(false);
       bnChangeBranch->setEnabled(false);
       newExp->setEnabled(false);
-      button1->setEnabled(false);
+      bnCreateNewExp->setEnabled(false);
     }
   }
   //--------- cancel
   rowID ++;
   QPushButton *bnCancel = new QPushButton("Cancel", &dialog);
+  bnCancel->setAutoDefault(false);
   layout->addWidget(bnCancel, rowID, 0, 1, 4);
   connect(bnCancel, &QPushButton::clicked, this, [=](){this->LogMsg("Cancel <b>New/Change/Reload Exp</b>");});
   connect(bnCancel, &QPushButton::clicked, &dialog, &QDialog::reject);
@@ -1804,6 +1821,7 @@ bool MainWindow::LoadExpSettings(){
 
 void MainWindow::CreateNewExperiment(const QString newExpName){
   
+  LogMsg("======================================");
   LogMsg("Creating new Exp. : <font style=\"color: red;\">" + newExpName + "</font>");
 
   expName = newExpName;
@@ -1841,10 +1859,27 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
     git.start("git", QStringList() << "commit" << "-m" << "initial commit.");
     git.waitForFinished();
 
-    LogMsg("Commit branch : <b>" + newExpName + "</b> as \"initial commit\"");
+    LogMsg("Commit branch : <b>" + expName + "</b> as \"initial commit\"");
+
+    //check if remote exist, if exist, push to remote
+    git.start("git", QStringList() << "remote" );
+    git.waitForFinished();
+
+    QString haha = QString::fromLocal8Bit(git.readAllStandardOutput());
+
+    if( haha != ""){
+      git.start("git", QStringList() << "push" << "--set-upstream" << haha.remove('\n') << expName);
+      git.waitForFinished();
+
+      qDebug() << QString::fromLocal8Bit(git.readAllStandardOutput());
+      LogMsg("Pushed new branch : <b>" + expName + "</b> to remote repositiory.");
+    }
+
   }
 
-  CheckElog();
+  //CheckElog();
+  logMsgHTMLMode = true;
+  LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
 
   leRawDataPath->setText(rawDataFolder);
   leExpName->setText(expName);
@@ -1861,21 +1896,26 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-
 }
 
 void MainWindow::ChangeExperiment(const QString newExpName){
 
-  //@---- git must exist.
+  expName = newExpName;
+  if( newExpName.contains("remotes")){
+    QStringList haha = newExpName.split('/');
+    expName = haha.last();
+  }
 
+  //@---- git must exist.
   QProcess git;
   git.setWorkingDirectory(analysisPath);
-  git.start("git", QStringList() << "checkout" << newExpName);
+  git.start("git", QStringList() << "checkout" << expName);
   git.waitForFinished();
 
-  LogMsg("Swicted to branch : <b>" + newExpName + "</b>");
 
-  expName = newExpName;
+  LogMsg("=============================================");
+  LogMsg("Swicted to branch : <b>" + expName + "</b>");
+
   CreateRawDataFolderAndLink();
   LoadExpSettings();
 
@@ -1915,7 +1955,7 @@ void MainWindow::CreateRawDataFolderAndLink(){
   QDir dir;
   if( !dir.exists(rawDataFolder)){
     if( dir.mkdir(rawDataFolder)){
-      LogMsg("<b>" + rawDataFolder + "</b> created." );
+      LogMsg("Created folder <b>" + rawDataFolder + "</b> for storing raw data." );
     }else{
       LogMsg("<font style=\"color:red;\"><b>" + rawDataFolder + "</b> cannot be created. Access right problem? </font>" );
     }
@@ -1924,11 +1964,11 @@ void MainWindow::CreateRawDataFolderAndLink(){
   }
 
   //----- create root data folder
-  rootDataFolder = rootDataFolder + "/" + expName;
+  rootDataFolder = rootDataPath + "/" + expName;
   QDir rootDir;
   if( !rootDir.exists(rootDataFolder)) {
    if( rootDir.mkdir(rootDataFolder) ){
-      LogMsg("Created folder " + rootDataFolder + " for storing root files");
+      LogMsg("Created folder <b>" + rootDataFolder + "</b> for storing root files.");
    }else{
       LogMsg("<font style=\"color:red;\"><b>" + rootDataFolder + "</b> cannot be created. Access right problem? </font>" );
    }
@@ -1954,6 +1994,7 @@ void MainWindow::CreateRawDataFolderAndLink(){
 
   if( file.exists(linkName)) {
     file.remove(linkName);
+    LogMsg("removing existing Link");
   }
 
   if (file.link(rawDataFolder, linkName)) {
@@ -1962,9 +2003,10 @@ void MainWindow::CreateRawDataFolderAndLink(){
       LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created. </font>");
   }
 
-  linkName = analysisPath + "root_data";
+  linkName = analysisPath + "/root_data";
   if( file.exists(linkName)) {
     file.remove(linkName);
+    LogMsg("removing existing Link");
   }
 
   if (file.link(rawDataFolder, linkName)) {
