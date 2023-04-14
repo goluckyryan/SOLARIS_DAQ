@@ -152,6 +152,7 @@ namespace PHA{
     const Reg TempSensADC7             ("TempSensADC7", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
 
     const std::vector<Reg> TempSensADC = {TempSensADC0,TempSensADC1,TempSensADC2,TempSensADC3,TempSensADC4,TempSensADC5,TempSensADC6,TempSensADC7};
+    const std::vector<Reg> TempSensOthers = {TempSensAirIn,TempSensAirOut,TempSensCore,TempSensFirstADC,TempSensLastADC,TempSensHottestADC};
 
     const Reg TempSensDCDC             ("TempSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "C");
     const Reg VInSensDCDC              ("VInSensDCDC", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "V");

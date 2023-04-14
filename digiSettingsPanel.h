@@ -41,7 +41,8 @@ private slots:
 
 public slots:
   void EnableControl();
-  void UpdatePanelFromMemory();
+  void UpdatePanelFromMemory(bool onlyStatus = false);
+  void UpdateStatus();
 
 signals:
 
@@ -55,6 +56,8 @@ private:
   unsigned short ID; // index for digitizer;
 
   QString digiSettingPath;
+
+  QTabWidget * tabWidget;
 
   //------------ Layout/GroupBox
   QGroupBox * digiBox[MaxNumberOfDigitizer];

@@ -76,7 +76,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
   enableSignalSlot = false;
 
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
-  QTabWidget * tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
+  tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
 
   //@========================== Tab for each digitizer
   for(unsigned short iDigi = 0; iDigi < this->nDigi; iDigi++){
@@ -91,8 +91,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     
     QHBoxLayout * tabLayout_H  = new QHBoxLayout(tab); //tab->setLayout(tabLayout_H);
 
-    QVBoxLayout * tabLayout_V1 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V1);
-    QVBoxLayout * tabLayout_V2 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V2);
+    QVBoxLayout * tabLayout_V1 = new QVBoxLayout(tab); tabLayout_H->addLayout(tabLayout_V1);
+    QVBoxLayout * tabLayout_V2 = new QVBoxLayout(tab); tabLayout_H->addLayout(tabLayout_V2);
 
     {//^====================== Group of Digitizer Info
       QGroupBox * infoBox = new QGroupBox("Board Info", tab);
@@ -163,6 +163,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         statusLayout->addWidget(leTemp[iDigi][i], 2, 1 + 2*i, 1, 2);
       }
 
+      QPushButton * bnUpdateStatus = new QPushButton("Update Status", this);
+      statusLayout->addWidget(bnUpdateStatus, 2, 19);
+      connect(bnUpdateStatus, &QPushButton::clicked, this, &DigiSettingsPanel::UpdateStatus);
+
       for( int i = 0; i < statusLayout->columnCount(); i++) statusLayout->setColumnStretch(i, 0 );
     }
 
@@ -213,6 +217,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnClearData[iDigi], &QPushButton::clicked, this, [=](){ 
         digi[ID]->SendCommand(PHA::DIG::ClearData);
         SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::ClearData.GetFullPara()));
+        UpdateStatus();
       });
       
       bnArmACQ[iDigi] = new QPushButton("Arm ACQ", tab);
@@ -220,6 +225,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnArmACQ[iDigi], &QPushButton::clicked, this, [=](){ 
         digi[ID]->SendCommand(PHA::DIG::ArmACQ); 
         SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::ArmACQ.GetFullPara()));
+        UpdateStatus();
       });
       
       bnDisarmACQ[iDigi] = new QPushButton("Disarm ACQ", tab);
@@ -227,6 +233,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnDisarmACQ[iDigi], &QPushButton::clicked, this, [=](){ 
         digi[ID]->SendCommand(PHA::DIG::DisarmACQ); 
         SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::DisarmACQ.GetFullPara()));
+        UpdateStatus();
       });
 
       bnSoftwareStart[iDigi] = new QPushButton("Software Start ACQ", tab);
@@ -234,6 +241,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnSoftwareStart[iDigi], &QPushButton::clicked, this, [=](){ 
         digi[ID]->SendCommand(PHA::DIG::SoftwareStartACQ); 
         SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::SoftwareStartACQ.GetFullPara()));
+        UpdateStatus();
       });
 
       bnSoftwareStop[iDigi] = new QPushButton("Software Stop ACQ", tab);
@@ -241,6 +249,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnSoftwareStop[iDigi], &QPushButton::clicked, this, [=](){ 
         digi[ID]->SendCommand(PHA::DIG::SoftwareStopACQ); 
         SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Send Command : " + QString::fromStdString(PHA::DIG::SoftwareStopACQ.GetFullPara()));
+        UpdateStatus();
       });
 
       //--------------- 
@@ -1585,6 +1594,24 @@ void DigiSettingsPanel::RefreshSettings(){
   UpdatePanelFromMemory();
 }
 
+void DigiSettingsPanel::UpdateStatus(){
+
+  if( tabWidget->currentIndex() >= nDigi) return;
+
+  digi[ID]->ReadValue(PHA::DIG::LED_status);
+  digi[ID]->ReadValue(PHA::DIG::ACQ_status);
+
+  for( int i = 0; i < (int) PHA::DIG::TempSensADC.size(); i++){
+    digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+  }
+  for( int i = 0; i < (int) PHA::DIG::TempSensOthers.size(); i++){
+    digi[ID]->ReadValue(PHA::DIG::TempSensOthers[i]);
+  }
+
+  UpdatePanelFromMemory(true);
+
+}
+
 void DigiSettingsPanel::EnableControl(){
 
   UpdatePanelFromMemory();
@@ -1703,17 +1730,17 @@ void DigiSettingsPanel::SetDefaultPHASettigns(){
   RefreshSettings();
 }
 
-void DigiSettingsPanel::UpdatePanelFromMemory(){
+void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   if( !isVisible() ) return;
 
   enableSignalSlot = false;
 
-  printf("DigiSettingsPanel::%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
-
-  for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
-    leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
-  } 
+  if( onlyStatus){
+    printf("DigiSettingsPanel::%s Digi-%d [Only Board Status]\n", __func__, digi[ID]->GetSerialNumber());
+  }else{
+    printf("DigiSettingsPanel::%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
+  }  
 
   //--------- LED Status
   unsigned int ledStatus = atoi(digi[ID]->GetSettingValue(PHA::DIG::LED_status).c_str());
@@ -1739,6 +1766,15 @@ void DigiSettingsPanel::UpdatePanelFromMemory(){
   for( int i = 0; i < 8; i++){
     leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValue(PHA::DIG::TempSensADC[i])));
   }
+  
+  if( onlyStatus ) {
+    enableSignalSlot = true;
+    return;
+  }
+
+  for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
+    leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
+  } 
 
   //-------- board settings
   FillComboBoxValueFromMemory(cbbClockSource[ID], PHA::DIG::ClockSource);

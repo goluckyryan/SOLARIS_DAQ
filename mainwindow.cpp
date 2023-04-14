@@ -1153,6 +1153,9 @@ void MainWindow::UpdateScalar(){
     influx->ClearDataPointsBuffer();
   }
 
+  //TODO record ADC temperature, and status. In this case, the digiSetting is only UpdateFromMemory, manually looping digitizers and get the status.
+  if( digiSetting && digiSetting->isVisible() ) digiSetting->UpdateStatus();
+
   if( solarisSetting && solarisSetting->isVisible() ) solarisSetting->UpdateThreshold();
 
 }
@@ -1877,6 +1880,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
   }
 
+  //TODO is there anyway to create a new elog ?? direct edit the config.cfg??
   //CheckElog();
   logMsgHTMLMode = true;
   LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
