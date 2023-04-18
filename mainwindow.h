@@ -57,7 +57,7 @@ private slots:
 
   void OpenScaler();
   void SetUpScalar();
-  void DeleteTriggerLineEdit();
+  void CleanUpScalar();
   void UpdateScalar();
 
   void ProgramSettingsPanel();
@@ -117,13 +117,15 @@ private:
 
   //@----- scalar;
   QMainWindow  * scalar;
+  QGridLayout  * scalarLayout;
+  ScalarThread * scalarThread;
   QPushButton  * bnOpenScalar;
   QLineEdit  *** leTrigger; // need to delete manually
   QLineEdit  *** leAccept; // need to delete manually
-  QGridLayout  * scalarLayout;
-  ScalarThread * scalarThread;
   QLabel       * lbLastUpdateTime;
   QLabel       * lbScalarACQStatus;
+
+
   InfluxDB     * influx;
 
   //@------ ACQ things
@@ -166,7 +168,7 @@ private:
   QLineEdit * lDatbaseName;
   QLineEdit * lElogIP;
 
-  QString settingFilePath;
+  QString programSettingsPath;
   QString analysisPath;
   QString dataPath;
   QString rootDataPath;

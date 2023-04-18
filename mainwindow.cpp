@@ -10,6 +10,7 @@
 #include <QProcess>
 #include <QRandomGenerator>
 #include <QVariant>
+#include <QCoreApplication>
 #include <QChartView>
 #include <QValueAxis>
 #include <QStandardItemModel>
@@ -327,7 +328,7 @@ MainWindow::~MainWindow(){
   CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
 
   printf("-------- Delete scalar Thread\n");
-  DeleteTriggerLineEdit();
+  CleanUpScalar();
   delete scalarThread;
   
   printf("-------- delete influx\n");
@@ -342,7 +343,8 @@ MainWindow::~MainWindow(){
 
 }
 
-//^################################################################ ACQ control 
+//*################################################################ 
+//*################################################################ ACQ control 
 int MainWindow::StartACQ(){
 
   if( chkSaveRun->isChecked() ){
@@ -540,8 +542,8 @@ void MainWindow::StopACQ(){
         + "======================";
     AppendElog(msg, chromeWindowID);
 
-    LogMsg("Run " + settingFilePath + "/scripts/endRunScript.sh" );
-    QProcess::startDetached(settingFilePath + "/scripts/endRunScript.sh");
+    LogMsg("Run " + programSettingsPath + "/scripts/endRunScript.sh" );
+    QProcess::startDetached(programSettingsPath + "/scripts/endRunScript.sh");
 
   }else{
     LogMsg("===========================  no-Save Run stopped.");
@@ -624,7 +626,8 @@ void MainWindow::AutoRun(){
 
 }
 
-//^###################################################################### open and close digitizer
+//*###################################################################### 
+//*###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
   LogMsg("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
@@ -680,8 +683,8 @@ void MainWindow::OpenDigitizers(){
 
       readDataThread[i] = NULL;
     }
+    QCoreApplication::processEvents(); // to prevent application busy.
   }
-
 
   if( nDigiConnected > 0 ){
     SetUpScalar();
@@ -712,7 +715,7 @@ void MainWindow::CloseDigitizers(){
 
   if(scalar && nDigiConnected > 0 ){ // scalar is child of this
     scalar->close();
-    DeleteTriggerLineEdit(); // this use digi->GetNChannels(); 
+    CleanUpScalar(); // this use digi->GetNChannels(); 
   }
 
   if( scope ){
@@ -738,8 +741,8 @@ void MainWindow::CloseDigitizers(){
 
     if( digi[i]->IsConnected() ){
       int digiSN = digi[i]->GetSerialNumber();
-      LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + settingFilePath + "/tempSettings/");
-      digi[i]->SaveSettingsToFile((settingFilePath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString().c_str());
+      LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + programSettingsPath + "/tempSettings/");
+      digi[i]->SaveSettingsToFile((programSettingsPath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString().c_str());
     }
     digi[i]->CloseDigitizer();
     delete digi[i];
@@ -779,7 +782,8 @@ void MainWindow::CloseDigitizers(){
 
 }
 
-//^###################################################################### Open Scope
+//*######################################################################
+//*###################################################################### Open Scope
 void MainWindow::OpenScope(){
   if( digi ){
     if( !scope ){
@@ -997,14 +1001,12 @@ void MainWindow::SetUpScalar(){
 
   scalar->setGeometry(0, 0, 10 + nDigi * 230, 1500);
 
-  if( lbLastUpdateTime == nullptr ) { // use lbLastUpdateTime as a flag 
-    lbLastUpdateTime = new QLabel("Last update : ", scalar);
-    lbScalarACQStatus = new QLabel("ACQ status", scalar);
-  }
+  lbLastUpdateTime = new QLabel("Last update : ", scalar);
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
   scalarLayout->removeWidget(lbLastUpdateTime);
   scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, 1 + nDigi);
 
+  lbScalarACQStatus = new QLabel("ACQ status", scalar);
   lbScalarACQStatus->setAlignment(Qt::AlignCenter);
   scalarLayout->removeWidget(lbScalarACQStatus);
   scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
@@ -1014,18 +1016,14 @@ void MainWindow::SetUpScalar(){
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
-      if( lbLastUpdateTime == nullptr ) {
-        QLabel * lbCH_H = new QLabel("Ch", scalar); 
-        scalarLayout->addWidget(lbCH_H, rowID, 0);
-      }
+      QLabel * lbCH_H = new QLabel("Ch", scalar); 
+      scalarLayout->addWidget(lbCH_H, rowID, 0);
     }  
 
     rowID ++;
-    if( lbLastUpdateTime == nullptr ) {
-      QLabel * lbCH = new QLabel(QString::number(ch), scalar);
-      lbCH->setAlignment(Qt::AlignCenter);
-      scalarLayout->addWidget(lbCH, rowID, 0);
-    }
+    QLabel * lbCH = new QLabel(QString::number(ch), scalar);
+    lbCH->setAlignment(Qt::AlignCenter);
+    scalarLayout->addWidget(lbCH, rowID, 0);
   }
   
   ///===== create the trigger and accept
@@ -1070,9 +1068,9 @@ void MainWindow::SetUpScalar(){
 }
 
 
-void MainWindow::DeleteTriggerLineEdit(){
+void MainWindow::CleanUpScalar(){
 
-  if( leTrigger ) return;
+  if( leTrigger == nullptr ) return;
 
   for( int i = 0; i < nDigi; i++){
     for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){
@@ -1083,8 +1081,12 @@ void MainWindow::DeleteTriggerLineEdit(){
     delete [] leAccept[i];
   }
   delete [] leTrigger;
-  leTrigger = NULL;
-  leAccept = NULL;
+  leTrigger = nullptr;
+  leAccept = nullptr;
+
+  //Clean up QLabel
+  QList<QLabel *> labelChildren = scalar->findChildren<QLabel *>();
+  for( int i = 0; i < labelChildren.size(); i++) delete labelChildren[i];
 
 }
 
@@ -1160,7 +1162,8 @@ void MainWindow::UpdateScalar(){
 
 }
 
-//^###################################################################### Program Settings
+//*######################################################################
+//*###################################################################### Program Settings
 void MainWindow::ProgramSettingsPanel(){
 
   LogMsg("Open <b>Program Settings</b>.");
@@ -1208,7 +1211,7 @@ void MainWindow::ProgramSettingsPanel(){
   QLabel *lbSaveSettingPath = new QLabel("Settings Save Path", &dialog);
   lbSaveSettingPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbSaveSettingPath, rowID, 0);
-  lSaveSettingPath = new QLineEdit(settingFilePath, &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
+  lSaveSettingPath = new QLineEdit(programSettingsPath, &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
 
   QPushButton * bnSaveSettingPath = new QPushButton("browser", &dialog); layout->addWidget(bnSaveSettingPath, rowID, 3);
   connect(bnSaveSettingPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(0);});
@@ -1287,21 +1290,6 @@ void MainWindow::ProgramSettingsPanel(){
   dialog.exec();
 }
 
-void MainWindow::OpenDirectory(int id){ 
-  QFileDialog fileDialog(this);
-  fileDialog.setFileMode(QFileDialog::Directory);
-  fileDialog.exec();
-
-  //qDebug() << fileDialog.selectedFiles();
-  
-  switch (id){
-    case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
-    case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
-    case 2 : lDataPath->setText(fileDialog.selectedFiles().at(0)); break;
-    case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
-  }
-}
-
 bool MainWindow::LoadProgramSettings(){
 
   QString settingFile = QDir::current().absolutePath() + "/programSettings.txt";
@@ -1325,7 +1313,7 @@ bool MainWindow::LoadProgramSettings(){
       if( line.left(6) == "//----") break;
 
       switch (count){
-        case 0 : settingFilePath = line; break;
+        case 0 : programSettingsPath = line; break;
         case 1 : analysisPath    = line; break;
         case 2 : dataPath        = line; break;
         case 3 : rootDataPath    = line; break;
@@ -1341,7 +1329,7 @@ bool MainWindow::LoadProgramSettings(){
 
     if( count == 8 ) {
       logMsgHTMLMode = false;
-      LogMsg("Setting File Path : " + settingFilePath);
+      LogMsg("Setting File Path : " + programSettingsPath);
       LogMsg("    Analysis Path : " + analysisPath);
       LogMsg("        Data Path : " + dataPath);
       LogMsg("   Root Data Path : " + rootDataPath);
@@ -1374,6 +1362,61 @@ bool MainWindow::LoadProgramSettings(){
   }
 }
 
+void MainWindow::SaveProgramSettings(){
+
+  IPListStr = lIPDomain->text();
+  DatabaseIP = lDatbaseIP->text();
+  DatabaseName = lDatbaseName->text();
+  ElogIP = lElogIP->text();
+
+  programSettingsPath = lSaveSettingPath->text();
+  analysisPath = lAnalysisPath->text();
+  dataPath = lDataPath->text();
+  rootDataPath = lRootDataPath->text();
+
+  QFile file(programSettingsPath + "/programSettings.txt");
+  
+  file.open(QIODevice::Text | QIODevice::WriteOnly);
+
+  file.write((programSettingsPath+"\n").toStdString().c_str());
+  file.write((analysisPath+"\n").toStdString().c_str());
+  file.write((dataPath+"\n").toStdString().c_str());
+  file.write((rootDataPath+"\n").toStdString().c_str());
+  file.write((IPListStr+"\n").toStdString().c_str());
+  file.write((DatabaseIP+"\n").toStdString().c_str());
+  file.write((DatabaseName+"\n").toStdString().c_str());
+  file.write((ElogIP+"\n").toStdString().c_str());
+  file.write("//------------end of file.");
+  
+  file.close();
+  LogMsg("Saved program settings to <b>"+programSettingsPath + "/programSettings.txt<b>.");
+
+  bnProgramSettings->setStyleSheet("");
+  bnNewExp->setEnabled(true);
+  bnOpenDigitizers->setEnabled(true);
+
+  DecodeIPList();
+  SetupInflux();
+
+  LoadExpSettings();
+
+}
+
+void MainWindow::OpenDirectory(int id){ 
+  QFileDialog fileDialog(this);
+  fileDialog.setFileMode(QFileDialog::Directory);
+  fileDialog.exec();
+
+  //qDebug() << fileDialog.selectedFiles();
+  
+  switch (id){
+    case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 2 : lDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+  }
+}
+
 void MainWindow::DecodeIPList(){
   //------- decode IPListStr
   nDigi = 0;
@@ -1394,115 +1437,8 @@ void MainWindow::DecodeIPList(){
   nDigi = IPList.size();
 }
 
-void MainWindow::SetupInflux(){
-  if( influx ) {
-    delete influx;
-    influx = NULL;
-  }
-  if( DatabaseIP != ""){
-    influx = new InfluxDB(DatabaseIP.toStdString(), false);
-
-    if( influx->TestingConnection() ){
-      LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid </font>");
-
-      //==== chck database exist
-      LogMsg("List of database:");
-      std::vector<std::string> databaseList = influx->GetDatabaseList();
-      bool foundDatabase = false;
-      for( int i = 0; i < (int) databaseList.size(); i++){
-        if( databaseList[i] == DatabaseName.toStdString() ) foundDatabase = true;
-        LogMsg(QString::number(i) + "|" + QString::fromStdString(databaseList[i]));
-      }
-
-      if( foundDatabase ){
-        LogMsg("<font style=\"color : green;\"> Database <b>" + DatabaseName + "</b> found.");
-
-        influx->AddDataPoint("ProgramStart value=1");
-        influx->WriteData(DatabaseName.toStdString());
-        influx->ClearDataPointsBuffer();
-        if( influx->IsWriteOK() ){
-          LogMsg("<font style=\"color : green;\">test write database OK.</font>");
-        }else{
-          LogMsg("<font style=\"color : red;\">test write database FAIL.</font>");
-        }
-
-      }else{
-        LogMsg("<font style=\"color : red;\"> Database <b>" + DatabaseName + "</b> NOT found.");
-        delete influx;
-        influx = NULL;
-      }
-
-    }else{
-      LogMsg("<font style=\"color : red;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is NOT Valid </font>");
-      delete influx;
-      influx = NULL;
-    }
-  }else{
-    LogMsg("No database is provided.");
-  }
-}
-
-void MainWindow::CheckElog(){
-
-  WriteElog("Checking elog writing", "Testing communication", "checking");
-
-  if( elogID > 0 ){
-    LogMsg("Checked Elog writing. OK.");
-
-    AppendElog("Check Elog append.", -1);
-    if( elogID > 0 ){
-      LogMsg("Checked Elog Append. OK.");
-    }else{
-      LogMsg("<font style=\"color : red;\">Checked Elog Append. FAIL. (no elog will be used.) </font>");
-    }
-
-  }else{
-    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) (probably logbook <b>" + expName + "</b> does not exist) </font>");
-  }
-
-}
-
-void MainWindow::SaveProgramSettings(){
-
-  IPListStr = lIPDomain->text();
-  DatabaseIP = lDatbaseIP->text();
-  DatabaseName = lDatbaseName->text();
-  ElogIP = lElogIP->text();
-
-  settingFilePath = lSaveSettingPath->text();
-  analysisPath = lAnalysisPath->text();
-  dataPath = lDataPath->text();
-  rootDataPath = lRootDataPath->text();
-
-  QFile file(settingFilePath + "/programSettings.txt");
-  
-  file.open(QIODevice::Text | QIODevice::WriteOnly);
-
-  file.write((settingFilePath+"\n").toStdString().c_str());
-  file.write((analysisPath+"\n").toStdString().c_str());
-  file.write((dataPath+"\n").toStdString().c_str());
-  file.write((rootDataPath+"\n").toStdString().c_str());
-  file.write((IPListStr+"\n").toStdString().c_str());
-  file.write((DatabaseIP+"\n").toStdString().c_str());
-  file.write((DatabaseName+"\n").toStdString().c_str());
-  file.write((ElogIP+"\n").toStdString().c_str());
-  file.write("//------------end of file.");
-  
-  file.close();
-  LogMsg("Saved program settings to <b>"+settingFilePath + "/programSettings.txt<b>.");
-
-  bnProgramSettings->setStyleSheet("");
-  bnNewExp->setEnabled(true);
-  bnOpenDigitizers->setEnabled(true);
-
-  DecodeIPList();
-  SetupInflux();
-
-  LoadExpSettings();
-
-}
-
-//^###################################################################### Setup new exp
+//*######################################################################
+//*###################################################################### Setup new exp
 
 void MainWindow::SetupNewExpPanel(){
 
@@ -1822,6 +1758,26 @@ bool MainWindow::LoadExpSettings(){
 
 }
 
+void MainWindow::WriteExpNameSh(){
+
+  QDir dir(analysisPath + "/working/");
+  if( !dir.exists() ) dir.mkpath(".");
+
+  //----- create the expName.sh
+  QFile file2(analysisPath + "/working/expName.sh");
+  
+  file2.open(QIODevice::Text | QIODevice::WriteOnly);
+  file2.write(("expName="+ expName + "\n").toStdString().c_str());
+  file2.write(("rawDataPath="+ rawDataFolder + "\n").toStdString().c_str());
+  file2.write(("rootDataPath="+ rootDataFolder + "\n").toStdString().c_str());
+  file2.write(("runID="+std::to_string(runID)+"\n").c_str());
+  file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
+  file2.write("#------------end of file.");
+  file2.close();
+  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/working/expName.sh<b>.");
+
+}
+
 void MainWindow::CreateNewExperiment(const QString newExpName){
   
   LogMsg("======================================");
@@ -1932,26 +1888,6 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 
 }
 
-void MainWindow::WriteExpNameSh(){
-
-  QDir dir(analysisPath + "/working/");
-  if( !dir.exists() ) dir.mkpath(".");
-
-  //----- create the expName.sh
-  QFile file2(analysisPath + "/working/expName.sh");
-  
-  file2.open(QIODevice::Text | QIODevice::WriteOnly);
-  file2.write(("expName="+ expName + "\n").toStdString().c_str());
-  file2.write(("rawDataPath="+ rawDataFolder + "\n").toStdString().c_str());
-  file2.write(("rootDataPath="+ rootDataFolder + "\n").toStdString().c_str());
-  file2.write(("runID="+std::to_string(runID)+"\n").c_str());
-  file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
-  file2.write("#------------end of file.");
-  file2.close();
-  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/working/expName.sh<b>.");
-
-}
-
 void MainWindow::CreateRawDataFolderAndLink(){
 
   //----- create data folder
@@ -2021,7 +1957,8 @@ void MainWindow::CreateRawDataFolderAndLink(){
 
 }
 
-//^###################################################################### log msg
+//*###################################################################### 
+//*###################################################################### log msg and others
 
 void MainWindow::LogMsg(QString msg){
 
@@ -2037,6 +1974,73 @@ void MainWindow::LogMsg(QString msg){
     logInfo->repaint();
 }
 
+void MainWindow::SetupInflux(){
+  if( influx ) {
+    delete influx;
+    influx = NULL;
+  }
+  if( DatabaseIP != ""){
+    influx = new InfluxDB(DatabaseIP.toStdString(), false);
+
+    if( influx->TestingConnection() ){
+      LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid </font>");
+
+      //==== chck database exist
+      LogMsg("List of database:");
+      std::vector<std::string> databaseList = influx->GetDatabaseList();
+      bool foundDatabase = false;
+      for( int i = 0; i < (int) databaseList.size(); i++){
+        if( databaseList[i] == DatabaseName.toStdString() ) foundDatabase = true;
+        LogMsg(QString::number(i) + "|" + QString::fromStdString(databaseList[i]));
+      }
+
+      if( foundDatabase ){
+        LogMsg("<font style=\"color : green;\"> Database <b>" + DatabaseName + "</b> found.");
+
+        influx->AddDataPoint("ProgramStart value=1");
+        influx->WriteData(DatabaseName.toStdString());
+        influx->ClearDataPointsBuffer();
+        if( influx->IsWriteOK() ){
+          LogMsg("<font style=\"color : green;\">test write database OK.</font>");
+        }else{
+          LogMsg("<font style=\"color : red;\">test write database FAIL.</font>");
+        }
+
+      }else{
+        LogMsg("<font style=\"color : red;\"> Database <b>" + DatabaseName + "</b> NOT found.");
+        delete influx;
+        influx = NULL;
+      }
+
+    }else{
+      LogMsg("<font style=\"color : red;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is NOT Valid </font>");
+      delete influx;
+      influx = NULL;
+    }
+  }else{
+    LogMsg("No database is provided.");
+  }
+}
+
+void MainWindow::CheckElog(){
+
+  WriteElog("Checking elog writing", "Testing communication", "checking");
+
+  if( elogID > 0 ){
+    LogMsg("Checked Elog writing. OK.");
+
+    AppendElog("Check Elog append.", -1);
+    if( elogID > 0 ){
+      LogMsg("Checked Elog Append. OK.");
+    }else{
+      LogMsg("<font style=\"color : red;\">Checked Elog Append. FAIL. (no elog will be used.) </font>");
+    }
+
+  }else{
+    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) (probably logbook <b>" + expName + "</b> does not exist) </font>");
+  }
+
+}
 void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
   
   //if( elogID < 0 ) return;
