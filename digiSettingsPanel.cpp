@@ -1737,7 +1737,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   enableSignalSlot = false;
 
   if( onlyStatus){
-    printf("DigiSettingsPanel::%s Digi-%d [Only Board Status]\n", __func__, digi[ID]->GetSerialNumber());
+    //printf("DigiSettingsPanel::%s Digi-%d [Only Board Status]\n", __func__, digi[ID]->GetSerialNumber());
   }else{
     printf("DigiSettingsPanel::%s Digi-%d\n", __func__, digi[ID]->GetSerialNumber());
   }  

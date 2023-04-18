@@ -322,20 +322,14 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 }
 
 Scope::~Scope(){
-
-  printf("------- %s \n", __func__);
-
+  //printf("------- %s \n", __func__);
   StopScope();
-
-  printf("------- A \n");
   updateTraceThread->Stop();
   updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
   for( int i = 0; i < 6; i++) delete dataTrace[i];
-  printf("------- B \n");
   delete plot;
-  printf("------- C \n");
 }
 
 void Scope::ReadScopeSettings(){
