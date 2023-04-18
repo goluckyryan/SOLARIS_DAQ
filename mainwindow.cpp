@@ -838,6 +838,7 @@ void MainWindow::OpenDigitizersSettings(){
 
   }else{
     digiSetting->show();
+    if( digiSetting->isVisible() ) digiSetting->activateWindow();
   }
   digiSetting->UpdatePanelFromMemory();
 }
@@ -847,6 +848,7 @@ void MainWindow::OpenSOLARISpanel(){
   LogMsg("Open SOLARIS Panel.");
   solarisSetting->show();
   solarisSetting->UpdatePanelFromMemory();
+  if( solarisSetting->isVisible() ) solarisSetting->activateWindow();
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
@@ -995,6 +997,8 @@ void MainWindow::UpdateAllPanel(int panelID){
 //^###################################################################### Open Scaler, when DAQ is running
 void MainWindow::OpenScaler(){
   scalar->show();
+
+  if( scalar->isVisible() ) scalar->activateWindow();
 }
 
 void MainWindow::SetUpScalar(){
