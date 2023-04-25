@@ -115,7 +115,7 @@ private:
   QPushButton * pbCopyDigi;
   
   //------------ status
-  QLineEdit * leInfo[MaxNumberOfChannel][12];
+  QLineEdit * leInfo[MaxNumberOfDigitizer][12];
   QPushButton * LEDStatus[MaxNumberOfDigitizer][19];
   QPushButton * ACQStatus[MaxNumberOfDigitizer][19];
   QLineEdit * leTemp[MaxNumberOfDigitizer][8];

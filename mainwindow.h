@@ -118,7 +118,7 @@ private:
   //@----- scalar;
   QMainWindow  * scalar;
   QGridLayout  * scalarLayout;
-  ScalarThread * scalarThread;
+  TimingThread * scalarThread;
   QPushButton  * bnOpenScalar;
   QLineEdit  *** leTrigger; // need to delete manually
   QLineEdit  *** leAccept; // need to delete manually

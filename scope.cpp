@@ -54,8 +54,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   xaxis->setLabelFormat("%.0f");
   xaxis->setTitleText("Time [ns]");
 
-  updateTraceThread = new UpdateTraceThread();
-  connect(updateTraceThread, &UpdateTraceThread::updateTrace, this, &Scope::UpdateScope);
+  updateTraceThread = new TimingThread();
+  connect(updateTraceThread, &TimingThread::TimeUp, this, &Scope::UpdateScope);
   
   //*================ add Widgets
   int rowID = -1;
@@ -283,7 +283,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   QLabel * lbhints = new QLabel("Type 'r' to restore view, '+/-' Zoom in/out, arrow key to pan.", this);
   layout->addWidget(lbhints, rowID, 0, 1, 4);
   
-  QLabel * lbinfo = new QLabel("Trace update every " + QString::number(updateTraceThread->GetWaitTimeSec()) + " sec.", this);
+  QLabel * lbinfo = new QLabel("Trace update every " + QString::number(updateTraceThread->GetWaitTimeinSec()) + " sec.", this);
   lbinfo->setAlignment(Qt::AlignRight);
   layout->addWidget(lbinfo, rowID, 5);
 

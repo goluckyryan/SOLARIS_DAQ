@@ -162,7 +162,7 @@ private:
   unsigned short nDigi;
 
   ReadDataThread ** readDataThread;   
-  UpdateTraceThread * updateTraceThread;
+  TimingThread * updateTraceThread;
 
   QChart      * plot;
   QLineSeries * dataTrace[6];

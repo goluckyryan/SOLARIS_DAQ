@@ -63,8 +63,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leTrigger = nullptr;
     leAccept = nullptr;
 
-    scalarThread = new ScalarThread();
-    connect(scalarThread, &ScalarThread::updataScalar, this, &MainWindow::UpdateScalar);
+    scalarThread = new TimingThread();
+    connect(scalarThread, &TimingThread::TimeUp, this, &MainWindow::UpdateScalar);
 
   }
   
