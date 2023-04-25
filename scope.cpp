@@ -55,6 +55,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   xaxis->setTitleText("Time [ns]");
 
   updateTraceThread = new TimingThread();
+  updateTraceThread->SetWaitTimeSec(0.2);
   connect(updateTraceThread, &TimingThread::TimeUp, this, &Scope::UpdateScope);
   
   //*================ add Widgets
@@ -322,7 +323,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 }
 
 Scope::~Scope(){
-  //printf("------- %s \n", __func__);
+  printf("------- %s \n", __func__);
   StopScope();
   updateTraceThread->Stop();
   updateTraceThread->quit();
@@ -330,6 +331,7 @@ Scope::~Scope(){
   delete updateTraceThread;
   for( int i = 0; i < 6; i++) delete dataTrace[i];
   delete plot;
+  printf("------- end of %s \n", __func__);
 }
 
 void Scope::ReadScopeSettings(){

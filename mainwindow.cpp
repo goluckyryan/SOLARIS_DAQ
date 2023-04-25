@@ -713,15 +713,15 @@ void MainWindow::CloseDigitizers(){
 
   if( digi == NULL) return;
 
-  if(scalar && nDigiConnected > 0 ){ // scalar is child of this
-    scalar->close();
-    CleanUpScalar(); // this use digi->GetNChannels(); 
-  }
-
   if( scope ){
     scope->close();
     delete scope;
     scope = NULL;
+  }
+
+  if(scalar && nDigiConnected > 0 ){ // scalar is child of this, This MUST after scope, because scope tell scalar to update ACQ status
+    scalar->close();
+    CleanUpScalar(); // this use digi->GetNChannels(); 
   }
   
   if( digiSetting ){
