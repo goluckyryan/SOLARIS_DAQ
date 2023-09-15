@@ -419,7 +419,7 @@ int MainWindow::StartACQ(){
   }
 
   //============================= start digitizer
-  for( int i = 0 ; i < nDigi; i ++){
+  for( int i = nDigi-1 ; i >= 0; i --){
     if( digi[i]->IsDummy () ) continue;
 
     for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch ++) oldTimeStamp[i][ch] = 0;

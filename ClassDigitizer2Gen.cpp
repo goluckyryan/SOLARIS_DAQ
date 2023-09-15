@@ -629,13 +629,14 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
   if( !isConnected ) return ;
 
   // Acquistion
-  WriteValue("/par/StartSource"  , "SWcmd | SINedge");
+  WriteValue("/par/StartSource"  , "SWcmd");
   WriteValue("/par/TrgOutMode", "Disabled");
   WriteValue("/par/GPIOMode",   "Disabled");
   WriteValue("/par/SyncOutMode", "Disabled");  
   WriteValue("/par/RunDelay", "0"); // ns, that is for sync time with multi board
   WriteValue("/par/IOlevel", "NIM"); 
   WriteValue("/par/EnStatEvents", "true");
+  WriteValue("/par/BusyInSource", "Disabled");
   
   // Channel setting  
   if( testPulse){
@@ -700,7 +701,7 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
   }
   
   WriteValue("/ch/0..63/par/DCOffset"   , "10");  /// 10% 
-  WriteValue("/ch/0..63/par/WaveSaving" , "Always");
+  WriteValue("/ch/0..63/par/WaveSaving" , "OnRequest");
   
   WriteValue("/ch/0..63/par/ChRecordLengthT"   , "4096");  /// 4096 ns, S and T are not Sync
   WriteValue("/ch/0..63/par/ChPreTriggerT"     , "1000");  /// 1000 ns
