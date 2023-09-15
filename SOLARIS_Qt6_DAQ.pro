@@ -8,6 +8,7 @@ INCLUDEPATH += .
 
 QT += widgets charts
 
+QMAKE_CXXFLAGS += -g  # for gdb debug
 LIBS += -lcurl -lCAEN_FELib -lX11
 
 # You can make your code fail to compile if you use deprecated APIs.
@@ -18,5 +19,22 @@ LIBS += -lcurl -lCAEN_FELib -lX11
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 # Input
-HEADERS += ClassDigitizer2Gen.h Event.h influxdb.h mainwindow.h digiSettingsPanel.h Digiparameters.h scope.h manyThread.h CustomWidgets.h macro.h SOLARISpanel.h
-SOURCES += ClassDigitizer2Gen.cpp influxdb.cpp main.cpp mainwindow.cpp digiSettingsPanel.cpp scope.cpp SOLARISpanel.cpp
+HEADERS += ClassDigitizer2Gen.h \
+           Event.h \
+					 influxdb.h \
+					 mainwindow.h \
+					 digiSettingsPanel.h \
+					 Digiparameters.h \
+					 scope.h \
+					 CustomThreads.h \
+					 CustomWidgets.h \
+					 macro.h \
+					 SOLARISpanel.h
+
+SOURCES += ClassDigitizer2Gen.cpp \
+           influxdb.cpp \
+					 main.cpp \
+					 mainwindow.cpp \
+					 digiSettingsPanel.cpp \
+					 scope.cpp \
+					 SOLARISpanel.cpp

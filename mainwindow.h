@@ -24,7 +24,7 @@
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
 
-#include "manyThread.h"
+#include "CustomThreads.h"
 
 #include "digiSettingsPanel.h"
 #include "scope.h"
@@ -47,6 +47,7 @@ private slots:
 
   void OpenScope();  
   void OpenDigitizersSettings();
+  void OpenSyncHelper();
 
   void OpenSOLARISpanel();
   bool CheckSOLARISpanelOK();
@@ -105,6 +106,7 @@ private:
   QPushButton * bnNewExp;
   QLineEdit   * leExpName;
 
+  QPushButton * bnSyncHelper;
   QPushButton * bnOpenDigitizers;
   QPushButton * bnCloseDigitizers;
   
@@ -133,6 +135,7 @@ private:
   QPushButton * bnStopACQ;
   QCheckBox   * chkSaveRun;
   QComboBox   * cbAutoRun;
+  QComboBox * cbDataFormat;
   QLineEdit   * leRunID;
   QLineEdit   * leRawDataPath;
   QLineEdit   * leRunComment;

@@ -134,6 +134,7 @@ private:
 
   //-------------- board settings
   RComboBox * cbbClockSource[MaxNumberOfDigitizer];
+  RComboBox * cbbEnClockFrontPanel[MaxNumberOfDigitizer];
   QCheckBox * ckbStartSource[MaxNumberOfDigitizer][5];
   QCheckBox * ckbGlbTrgSource[MaxNumberOfDigitizer][5];
   RComboBox * cbbTrgOut[MaxNumberOfDigitizer];

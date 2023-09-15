@@ -276,6 +276,29 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       //-------------------------------------
       SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, true, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
+      QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", tab);
+      lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+      boardLayout->addWidget(lbEnClockFP, rowId, 2, 1, 3);
+
+      cbbEnClockFrontPanel[iDigi] = new RComboBox(tab);
+      boardLayout->addWidget(cbbEnClockFrontPanel[iDigi], rowId, 5);
+      SetupShortComboBox(cbbEnClockFrontPanel[iDigi], PHA::DIG::EnableClockOutFrontPanel);
+      connect(cbbEnClockFrontPanel[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+        if( !enableSignalSlot ) return;
+        //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
+        QString msg;
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableClockOutFrontPanel.GetPara());
+        msg += " = " + cbbEnClockFrontPanel[ID]->currentData().toString();
+        if( digi[ID]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, cbbEnClockFrontPanel[ID]->currentData().toString().toStdString())){
+          SendLogMsg(msg + "|OK.");
+          cbbEnClockFrontPanel[ID]->setStyleSheet("");
+        }else{
+          SendLogMsg(msg + "|Fail.");
+          cbbEnClockFrontPanel[ID]->setStyleSheet("color:red;");
+        }
+      });
+
+
       //-------------------------------------
       rowId ++;
       QLabel * lbStartSource = new QLabel("Start Source :", tab);
@@ -320,7 +343,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         if( !enableSignalSlot ) return;
         //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
         QString msg;
-        msg = QString::fromStdString(PHA::DIG::EnableAutoDisarmACQ.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableAutoDisarmACQ.GetPara());
         msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
         if( digi[ID]->WriteValue(PHA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
           SendLogMsg(msg + "|OK.");
@@ -345,7 +368,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
         if( !enableSignalSlot ) return;
         QString msg;
-        msg = QString::fromStdString(PHA::DIG::EnableStatisticEvents.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableStatisticEvents.GetPara());
         msg += " = " + cbbStatEvents[ID]->currentData().toString();
         if( digi[ID]->WriteValue(PHA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
           SendLogMsg(msg + "|OK.");
@@ -382,7 +405,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         if( !enableSignalSlot ) return;
         //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
         QString msg;
-        msg = QString::fromStdString(PHA::DIG::BoardVetoWidth.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoWidth.GetPara());
         msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
         if( digi[ID]->WriteValue(PHA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
           dsbBdVetoWidth[ID]->setStyleSheet("");
@@ -424,7 +447,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         double value = dsbVolatileClockOutDelay[ID]->value();
         dsbVolatileClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
         QString msg;
-        msg = QString::fromStdString(PHA::DIG::VolatileClockOutDelay.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::VolatileClockOutDelay.GetPara());
         msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
         if( digi[ID]->WriteValue(PHA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
           dsbVolatileClockOutDelay[ID]->setStyleSheet("");
@@ -461,7 +484,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         double value = dsbClockOutDelay[ID]->value();
         dsbClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
         QString msg;
-        msg = QString::fromStdString(PHA::DIG::PermanentClockOutDelay.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::PermanentClockOutDelay.GetPara());
         msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
         if( digi[ID]->WriteValue(PHA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
           dsbClockOutDelay[ID]->setStyleSheet("");
@@ -523,7 +546,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           double value = VGA[ID][k]->value();
           VGA[ID][k]->setValue( (std::round(value/step) * step) );
           QString msg;
-          msg = QString::fromStdString(PHA::VGA::VGAGain.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::VGA::VGAGain.GetPara());
           if( PHA::VGA::VGAGain.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(k);
           msg += " = " + QString::number(VGA[ID][k]->value());
           if( digi[ID]->WriteValue(PHA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
@@ -1543,7 +1566,7 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   QString kaka = QString::number(mask);
 
   QString msg;
-  msg = QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + "|DIG:" + QString::number(digi[iDig]->GetNChannels()) + ",CH:" + QString::number(ch) + " = 0x" + QString::number(mask,16);
+  msg = "DIG:" + QString::number(digi[iDig]->GetNChannels()) + ",CH:" + QString::number(ch) + "|" + QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + " = 0x" + QString::number(mask,16);
 
   if( digi[iDig]->WriteValue(PHA::CH::ChannelsTriggerMask, kaka.toStdString(), ch) ){
     SendLogMsg(msg + "|OK.");
@@ -1616,49 +1639,51 @@ void DigiSettingsPanel::EnableControl(){
 
   UpdatePanelFromMemory();
 
-  bool enable = !digi[ID]->IsAcqOn();
+  for( int id = 0; id < nDigi; id ++){
+    bool enable = !digi[id]->IsAcqOn();
 
-  digiBox[ID]->setEnabled(enable);
-  if( digi[ID]->GetFPGAType() == "DPP_PHA") VGABox[ID]->setEnabled(enable);
-  if( ckbGlbTrgSource[ID][3]->isChecked() ) testPulseBox[ID]->setEnabled(enable);
-  box1[ID]->setEnabled(enable);
-  box3[ID]->setEnabled(enable);
-  box4[ID]->setEnabled(enable);
-  box5[ID]->setEnabled(enable);
-  box6[ID]->setEnabled(enable);
+    digiBox[id]->setEnabled(enable);
+    if( digi[id]->GetFPGAType() == "DPP_PHA") VGABox[id]->setEnabled(enable);
+    if( ckbGlbTrgSource[id][3]->isChecked() ) testPulseBox[id]->setEnabled(enable);
+    box1[id]->setEnabled(enable);
+    box3[id]->setEnabled(enable);
+    box4[id]->setEnabled(enable);
+    box5[id]->setEnabled(enable);
+    box6[id]->setEnabled(enable);
 
-  bnReadSettngs[ID]->setEnabled(enable);
-  bnResetBd[ID]->setEnabled(enable);
-  bnDefaultSetting[ID]->setEnabled(enable);
-  bnSaveSettings[ID]->setEnabled(enable);
-  bnLoadSettings[ID]->setEnabled(enable);
-  bnClearData[ID]->setEnabled(enable);
-  bnArmACQ[ID]->setEnabled(enable);
-  bnDisarmACQ[ID]->setEnabled(enable);
-  bnSoftwareStart[ID]->setEnabled(enable);
-  bnSoftwareStop[ID]->setEnabled(enable);
+    bnReadSettngs[id]->setEnabled(enable);
+    bnResetBd[id]->setEnabled(enable);
+    bnDefaultSetting[id]->setEnabled(enable);
+    bnSaveSettings[id]->setEnabled(enable);
+    bnLoadSettings[id]->setEnabled(enable);
+    bnClearData[id]->setEnabled(enable);
+    bnArmACQ[id]->setEnabled(enable);
+    bnDisarmACQ[id]->setEnabled(enable);
+    bnSoftwareStart[id]->setEnabled(enable);
+    bnSoftwareStop[id]->setEnabled(enable);
 
-  if( digi[ID]->GetFPGAType() != "DPP_PHA" || digi[ID]->GetModelName() != "VX2745" ) VGABox[ID]->setEnabled(false);
+    if( digi[id]->GetFPGAType() != "DPP_PHA" || digi[id]->GetModelName() != "VX2745" ) VGABox[id]->setEnabled(false);
 
-  QVector<QTabWidget*> tempArray = {inputTab[ID], trapTab[ID], probeTab[ID], otherTab[ID] };
+    QVector<QTabWidget*> tempArray = {inputTab[id], trapTab[id], probeTab[id], otherTab[id] };
 
-  for( int k = 0; k < tempArray.size(); k++){
-    for( int i = 0; i < tempArray[k]->count(); i++) {
-      if( k == 0 && (i == 0 || i == 1 || i == 2 ) ) continue;
-      QWidget* currentTab = tempArray[k]->widget(i);
-      if( currentTab ){
-        QList<QWidget*> childWidgets = currentTab->findChildren<QWidget*>();
-        for(int j=0; j<childWidgets.count(); j++) {
-            childWidgets[j]->setEnabled(enable);
+    for( int k = 0; k < tempArray.size(); k++){
+      for( int i = 0; i < tempArray[k]->count(); i++) {
+        if( k == 0 && (i == 0 || i == 1 || i == 2 ) ) continue;
+        QWidget* currentTab = tempArray[k]->widget(i);
+        if( currentTab ){
+          QList<QWidget*> childWidgets = currentTab->findChildren<QWidget*>();
+          for(int j=0; j<childWidgets.count(); j++) {
+              childWidgets[j]->setEnabled(enable);
+          }
         }
       }
     }
-  }
-  
-  //triggerMapTab[ID]->setEnabled(enable);
+    
+    //triggerMapTab[ID]->setEnabled(enable);
 
-  icBox1->setEnabled(enable);
-  icBox2->setEnabled(enable);
+    icBox1->setEnabled(enable);
+    icBox2->setEnabled(enable);
+  }
 
 }
 
@@ -1964,7 +1989,7 @@ void DigiSettingsPanel::SetStartSource(){
 
   //printf("================ %s\n", value.c_str());
   QString msg;
-  msg = QString::fromStdString(PHA::DIG::StartSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+  msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" +  QString::fromStdString(PHA::DIG::StartSource.GetPara());
   msg += " = " + QString::fromStdString(value);
   SendLogMsg(msg);
 
@@ -1987,7 +2012,7 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
 
   //printf("================ %s\n", value.c_str());
   QString msg;
-  msg = QString::fromStdString(PHA::DIG::GlobalTriggerSource.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+  msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::GlobalTriggerSource.GetPara());
   msg += " = " + QString::fromStdString(value);
   SendLogMsg(msg);
 
@@ -2019,7 +2044,7 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
     //int index = ch_index;
     //printf("%s %d  %s \n", para.GetPara().c_str(), index, cbb->currentData().toString().toStdString().c_str());
     QString msg;
-    msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+    msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
     if( para.GetType() == TYPE::CH ) msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
     if( para.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(index);
     msg += " = " + cbb->currentData().toString();
@@ -2069,7 +2094,7 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     }
     int index = ( ch_index == -1 && isMaster ?  cbChPick[ID]->currentData().toInt() : ch_index);
     QString msg;
-    msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+    msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara()) ;
     if( para.GetType() == TYPE::CH ) msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
     msg += " = " + QString::number(spb->value());
     if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){

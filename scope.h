@@ -19,7 +19,7 @@
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
-#include "manyThread.h"
+#include "CustomThreads.h"
 #include "CustomWidgets.h"
 
 class Trace : public QChart{

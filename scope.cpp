@@ -296,11 +296,12 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   rowID ++;
   bnScopeStart = new QPushButton("Start", this);
   layout->addWidget(bnScopeStart, rowID, 0);
-  bnScopeStart->setEnabled(false);
+  bnScopeStart->setEnabled(true);
   connect(bnScopeStart, &QPushButton::clicked, this, [=](){this->StartScope();});
 
   bnScopeStop = new QPushButton("Stop", this);
   layout->addWidget(bnScopeStop, rowID, 1);
+  bnScopeStop->setEnabled(false);
   connect(bnScopeStop, &QPushButton::clicked, this, &Scope::StopScope);
 
   QLabel * lbTriggerRate = new QLabel("Trigger Rate [Hz] : ", this);
@@ -479,6 +480,7 @@ void Scope::StopScope(){
       digi[i]->WriteValue(PHA::CH::ChannelEnable, "True", -1);
       digiMTX[i].unlock();
 
+      readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
     }
@@ -559,15 +561,15 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
     }
   }
 
-  int ID = cbScopeDigi->currentIndex();
-  digiMTX[ID].lock();
+  //int ID = cbScopeDigi->currentIndex();
+  //digiMTX[ID].lock();
   if( size == 2) {// analog probes
     for( int j = 0; j < 2; j++ )dataTrace[j]->setName(cb[j]->currentText());
   }
   if( size == 4){ // digitial probes
     for( int j = 2; j < 6; j++ )dataTrace[j]->setName(cb[j-2]->currentText());
   }
-  digiMTX[ID].unlock();
+  //digiMTX[ID].unlock();
 
 }
 

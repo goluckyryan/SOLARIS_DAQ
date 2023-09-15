@@ -101,19 +101,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     connect(bnOpenScope, &QPushButton::clicked, this, &MainWindow::OpenScope);
 
     bnOpenDigitizers = new QPushButton("Open Digitizers", this);
-    connect(bnOpenDigitizers, SIGNAL(clicked()), this, SLOT(OpenDigitizers()));
+    connect(bnOpenDigitizers, &QPushButton::clicked, this, &MainWindow::OpenDigitizers);
 
     bnCloseDigitizers = new QPushButton("Close Digitizers", this);
     bnCloseDigitizers->setEnabled(false);
-    connect(bnCloseDigitizers, SIGNAL(clicked()), this, SLOT(CloseDigitizers()));
+    connect(bnCloseDigitizers, &QPushButton::clicked, this, &MainWindow::CloseDigitizers);
   
     bnDigiSettings = new QPushButton("Digitizers Settings", this);
     bnDigiSettings->setEnabled(false);
-    connect(bnDigiSettings, SIGNAL(clicked()), this, SLOT(OpenDigitizersSettings()));
+    connect(bnDigiSettings, &QPushButton::clicked, this, &MainWindow::OpenDigitizersSettings);
 
     bnSOLSettings = new QPushButton("SOLARIS Settings", this);
     bnSOLSettings->setEnabled(false);
-    connect(bnSOLSettings, SIGNAL(clicked()), this, SLOT(OpenSOLARISpanel()));
+    connect(bnSOLSettings, &QPushButton::clicked, this, &MainWindow::OpenSOLARISpanel);
+
+    bnSyncHelper = new QPushButton("Sync Helper", this);
+    bnSyncHelper->setEnabled(false);
+    connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
     QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
     bnEventBuilder->setEnabled(false);
@@ -129,6 +133,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(lExpName, 0, 2);
     layout1->addWidget(leExpName, 0, 3);
 
+    layout1->addWidget(bnSyncHelper, 1, 0);
     layout1->addWidget(bnOpenDigitizers, 1, 1);
     layout1->addWidget(bnCloseDigitizers, 1, 2, 1, 2);
 
@@ -172,7 +177,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leRunID->setStyleSheet("background-color: #F3F3F3;");
 
     chkSaveRun = new QCheckBox("Save Run", this);
-    chkSaveRun->setChecked(true);
+    chkSaveRun->setChecked(false);
     chkSaveRun->setEnabled(false);
     connect(chkSaveRun, &QCheckBox::clicked, this, [=]() { cbAutoRun->setEnabled(chkSaveRun->isChecked()); });
 
@@ -190,12 +195,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     cbAutoRun->addItem("Every 5 hrs",  -300);
     cbAutoRun->setEnabled(false);
 
-    QComboBox * cbDataFormat = new QComboBox(this);
+    cbDataFormat = new QComboBox(this);
     cbDataFormat->addItem("Everything", 0);
     cbDataFormat->addItem("1 trace", 1);
     cbDataFormat->addItem("No trace", 2);
     cbDataFormat->addItem("Minimum", 3);
-    cbDataFormat->setCurrentIndex(1);
+    cbDataFormat->setCurrentIndex(3);
     cbDataFormat->setEnabled(false);
 
     bnStartACQ = new QPushButton("Start ACQ", this);
@@ -419,7 +424,9 @@ int MainWindow::StartACQ(){
 
     for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch ++) oldTimeStamp[i][ch] = 0;
 
-    digi[i]->SetPHADataFormat(1);// only save 1 trace
+    //digi[i]->SetPHADataFormat(1);// only save 1 trace
+    int dataFormatID = cbDataFormat->currentData().toInt();
+    digi[i]->SetPHADataFormat(dataFormatID);// only save 1 trace
 
     //Additional settings
     digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
@@ -507,6 +514,7 @@ void MainWindow::StopACQ(){
     digi[i]->StopACQ();
 
     if( readDataThread[i]->isRunning()){
+      readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
     }
@@ -585,6 +593,7 @@ void MainWindow::AutoRun(){
         bnOpenScope->setEnabled(true);
         chkSaveRun->setEnabled(true);
         cbAutoRun->setEnabled(true);
+        cbDataFormat->setEnabled(true);
         if( digiSetting ) digiSetting->EnableControl();
       }else{
 
@@ -664,9 +673,9 @@ void MainWindow::OpenDigitizers(){
       }else{
         LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
         digi[i]->SetSettingFileName("");
-        LogMsg("Reset digitizer And set default PHA settings.");        
-        digi[i]->Reset();
-        digi[i]->ProgramPHA(false);
+        //LogMsg("Reset digitizer And set default PHA settings.");        
+        //digi[i]->Reset();
+        //digi[i]->ProgramPHA(false);
       }
 
       digi[i]->ReadAllSettings();
@@ -693,9 +702,11 @@ void MainWindow::OpenDigitizers(){
     bnComment->setEnabled(false);
     bnOpenScope->setEnabled(true);
     chkSaveRun->setEnabled(true);
+    bnSyncHelper->setEnabled(true);
     bnOpenDigitizers->setEnabled(false);
     bnOpenDigitizers->setStyleSheet("");
     cbAutoRun->setEnabled(true);
+    cbDataFormat->setEnabled(true);
     bnOpenScalar->setEnabled(true);
   }
 
@@ -751,6 +762,7 @@ void MainWindow::CloseDigitizers(){
 
     if( readDataThread[i] != NULL ){
       LogMsg("Waiting for readData Thread .....");
+      readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
       delete readDataThread[i];
@@ -761,7 +773,7 @@ void MainWindow::CloseDigitizers(){
   digi = NULL;
   readDataThread = NULL;
 
-
+  bnSyncHelper->setEnabled(false);
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setFocus();
   bnCloseDigitizers->setEnabled(false);
@@ -774,11 +786,47 @@ void MainWindow::CloseDigitizers(){
   bnOpenScalar->setEnabled(false);
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
+  cbDataFormat->setEnabled(false);
 
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
 
   LogMsg("Closed all digitizers and readData Threads.");
+
+}
+
+void MainWindow::OpenSyncHelper(){
+  LogMsg("Open <b>Sync Helper</b>.");
+
+  QDialog dialog(this);
+  dialog.setWindowTitle("Sync Helper");
+  dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint);
+
+  QVBoxLayout * layout = new QVBoxLayout(&dialog);
+
+  QPushButton * bnNoSync = new QPushButton("No Sync", &dialog);
+  QPushButton * bnMethod1 = new QPushButton("Software TRG-OUT --> TRG-IN ", &dialog);
+  QPushButton * bnMethod2 = new QPushButton("Software TRG-OUT --> S-IN ", &dialog);
+  QPushButton * bnMethod3 = new QPushButton("External TRG-OUT --> S-IN ", &dialog);
+
+  layout->addWidget( bnNoSync, 1);
+  layout->addWidget(bnMethod1, 2);
+  layout->addWidget(bnMethod2, 3);
+  layout->addWidget(bnMethod3, 4);
+
+  bnNoSync->setFixedHeight(40);
+  bnMethod1->setFixedHeight(40);
+  bnMethod2->setFixedHeight(40);
+  bnMethod3->setFixedHeight(40);
+
+  connect(bnNoSync, &QPushButton::clicked, [&](){
+    for(unsigned int i = 0; i < nDigi; i++){
+
+    }
+    dialog.accept();
+  });
+
+  dialog.exec();
 
 }
 
@@ -815,11 +863,11 @@ void MainWindow::OpenScope(){
         digiSetting->EnableControl();
       }  
 
-      scope->StartScope();
+      //scope->StartScope();
 
     }else{
       scope->show();
-      scope->StartScope();
+      //scope->StartScope();
       if( digiSetting ) digiSetting->EnableControl();
     }
   }

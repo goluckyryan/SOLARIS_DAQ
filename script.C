@@ -9,7 +9,7 @@
 
 void script(){ 
 
-  SolReader * reader = new SolReader("haha_000.sol");
+  SolReader * reader = new SolReader("/home/ryan/analysis/data_raw/test_000_01_21233_000.sol");
   Event * evt = reader->evt;
 
   printf("----------file size: %u Byte\n", reader->GetFileSize());

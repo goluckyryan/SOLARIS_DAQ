@@ -1,13 +1,12 @@
 
-#ifndef MANYTHREADS_H
-#define MANYTHREADS_H
+#ifndef CUSTOMTHREADS_H
+#define CUSTOMTHREADS_H
 
 #include <QThread>
 #include <QMutex>
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
-#include "macro.h"
 
 static QMutex digiMTX[MaxNumberOfDigitizer];
 
@@ -19,11 +18,15 @@ public:
     this->digi = dig;
     this->ID = digiID;
     isSaveData = false;
+    stop = false;
   }
+  void Stop(){ this->stop = true;}
   void SetSaveData(bool onOff) {this->isSaveData = onOff;}
   void run(){
+    stop = false;
     clock_gettime(CLOCK_REALTIME, &ta);
-    while(true){
+
+    while(!stop){
       digiMTX[ID].lock();
       int ret = digi->ReadData();
       digiMTX[ID].unlock();
@@ -59,7 +62,7 @@ private:
   Digitizer2Gen * digi; 
   int ID;
   timespec ta, tb;
-  bool isSaveData;
+  bool isSaveData, stop;
 };
 
 //^#======================================================= Timing Thread, for some action need to be done periodically
