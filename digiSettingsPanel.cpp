@@ -61,7 +61,7 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
 DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent) : QWidget(parent){
 
   setWindowTitle("Digitizers Settings");
-  setGeometry(0, 0, 1850, 1000);
+  setGeometry(0, 0, 1850, 1050);
   //setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
   this->digi = digi;
@@ -74,7 +74,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
   ID = 0;
   enableSignalSlot = false;
-
   QVBoxLayout * mainLayout = new QVBoxLayout(this); this->setLayout(mainLayout);
   tabWidget = new QTabWidget(this); mainLayout->addWidget(tabWidget);
 
@@ -89,11 +88,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     QWidget * tab = new QWidget(tabWidget);
     scrollArea->setWidget(tab);
     
-    QHBoxLayout * tabLayout_H  = new QHBoxLayout(tab); //tab->setLayout(tabLayout_H);
-
-    QVBoxLayout * tabLayout_V1 = new QVBoxLayout(tab); tabLayout_H->addLayout(tabLayout_V1);
-    QVBoxLayout * tabLayout_V2 = new QVBoxLayout(tab); tabLayout_H->addLayout(tabLayout_V2);
-
+    QHBoxLayout * tabLayout_H  = new QHBoxLayout(tab); 
+    QVBoxLayout * tabLayout_V1 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V1);
+    QVBoxLayout * tabLayout_V2 = new QVBoxLayout(); tabLayout_H->addLayout(tabLayout_V2);
+    
     {//^====================== Group of Digitizer Info
       QGroupBox * infoBox = new QGroupBox("Board Info", tab);
       //infoBox->setSizePolicy(sizePolicy);

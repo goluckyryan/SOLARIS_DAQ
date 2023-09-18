@@ -446,6 +446,7 @@ void Scope::StartScope(){
 
     ReadScopeSettings();
 
+    digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     digi[iDigi]->SetPHADataFormat(0);

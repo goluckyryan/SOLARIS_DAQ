@@ -805,26 +805,44 @@ void MainWindow::OpenSyncHelper(){
   QVBoxLayout * layout = new QVBoxLayout(&dialog);
 
   QPushButton * bnNoSync = new QPushButton("No Sync", &dialog);
-  QPushButton * bnMethod1 = new QPushButton("Software TRG-OUT --> TRG-IN ", &dialog);
-  QPushButton * bnMethod2 = new QPushButton("Software TRG-OUT --> S-IN ", &dialog);
-  QPushButton * bnMethod3 = new QPushButton("External TRG-OUT --> S-IN ", &dialog);
+  QPushButton * bnMethod1 = new QPushButton("Software CLK-OUT --> CLK-IN\n(Master = 1st Digi)", &dialog);
 
   layout->addWidget( bnNoSync, 1);
   layout->addWidget(bnMethod1, 2);
-  layout->addWidget(bnMethod2, 3);
-  layout->addWidget(bnMethod3, 4);
 
   bnNoSync->setFixedHeight(40);
   bnMethod1->setFixedHeight(40);
-  bnMethod2->setFixedHeight(40);
-  bnMethod3->setFixedHeight(40);
 
   connect(bnNoSync, &QPushButton::clicked, [&](){
     for(unsigned int i = 0; i < nDigi; i++){
-
+      digi[i]->WriteValue(PHA::DIG::ClockSource, "Internal"); 
+      digi[i]->WriteValue(PHA::DIG::StartSource, "SWcmd");
+      digi[i]->WriteValue(PHA::DIG::SyncOutMode, "Disabled");
     }
+
+    if( digiSetting ) digiSetting->UpdatePanelFromMemory();
+
     dialog.accept();
   });
+
+  connect(bnMethod1, &QPushButton::clicked, [&](){
+    digi[0]->WriteValue(PHA::DIG::ClockSource, "Internal"); 
+    digi[0]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, "True"); 
+    digi[0]->WriteValue(PHA::DIG::StartSource, "SWcmd");
+    digi[0]->WriteValue(PHA::DIG::SyncOutMode, "Run");
+
+    for(unsigned int i = 1; i < nDigi; i++){
+      digi[i]->WriteValue(PHA::DIG::ClockSource, "FPClkIn"); 
+      digi[i]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, "True"); 
+      digi[i]->WriteValue(PHA::DIG::StartSource, "EncodedClkIn");
+      digi[i]->WriteValue(PHA::DIG::SyncOutMode, "SyncIn");
+    }
+
+    if( digiSetting ) digiSetting->UpdatePanelFromMemory();
+    
+    dialog.accept();
+  });
+
 
   dialog.exec();
 
