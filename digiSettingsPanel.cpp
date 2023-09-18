@@ -511,7 +511,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         bdTestPulse[iDigi] = new QWidget(this);
         bdTab->addTab(bdTestPulse[iDigi], "Test Pulse");
         QGridLayout * testPulseLayout = new QGridLayout(bdTestPulse[iDigi]);
-        testPulseLayout->setAlignment(Qt::AlignTop);
+        testPulseLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
         testPulseLayout->setSpacing(2);
 
         SetupSpinBox(dsbTestPuslePeriod[iDigi], PHA::DIG::TestPulsePeriod, -1, false, "Period [ns] :", testPulseLayout, 0, 0);
@@ -534,7 +534,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         
         QGridLayout * vgaLayout = new QGridLayout(bdVGA[iDigi]);
         //vgaLayout->setVerticalSpacing(0);
-        vgaLayout->setAlignment(Qt::AlignTop);
+        vgaLayout->setAlignment(Qt::AlignTop| Qt::AlignLeft);
 
         for( int k = 0; k < 4; k ++){
           QLabel * lb = new QLabel("VGA-" + QString::number(k) + " [dB] :", tab);
@@ -573,6 +573,129 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
       }
     
+      {//^====================== ITL
+        bdITL[iDigi] = new QWidget(this);
+        bdTab->addTab(bdITL[iDigi], "ITL-A/B");
+        QGridLayout * ITLLayout = new QGridLayout(bdITL[iDigi]);
+        ITLLayout->setAlignment(Qt::AlignTop);
+
+        QGroupBox * gbITLA = new QGroupBox("ITL-A", bdITL[iDigi]);
+        ITLLayout->addWidget(gbITLA, 0, 0);
+        QGridLayout * aLayout = new QGridLayout(gbITLA);
+
+        SetupComboBox(cbITLAMainLogic[iDigi], PHA::DIG::ITLAMainLogic,   -1, false, "Main Logic", aLayout, 0, 0);
+        SetupSpinBox( sbITLAMajority[iDigi],  PHA::DIG::ITLAMajorityLev, -1, false, "Majority", aLayout, 1, 0);
+        SetupComboBox(cbITLAPairLogic[iDigi], PHA::DIG::ITLAPairLogic,   -1, false, "Pair Logic", aLayout, 2, 0);
+        SetupComboBox(cbITLAPolarity[iDigi],  PHA::DIG::ITLAPolarity,    -1, false, "Polarity", aLayout, 3, 0);
+        SetupSpinBox( sbITLAGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "GateWidth [ns]", aLayout, 4, 0);
+
+      
+        QGroupBox * gbITLB = new QGroupBox("ITL-B", bdITL[iDigi]);
+        ITLLayout->addWidget(gbITLB, 0, 1);
+        QGridLayout * bLayout = new QGridLayout(gbITLB);
+
+        SetupComboBox(cbITLBMainLogic[iDigi], PHA::DIG::ITLAMainLogic,   -1, false, "Main Logic", bLayout, 0, 0);
+        SetupSpinBox( sbITLBMajority[iDigi],  PHA::DIG::ITLAMajorityLev, -1, false, "Majority", bLayout, 1, 0);
+        SetupComboBox(cbITLBPairLogic[iDigi], PHA::DIG::ITLAPairLogic,   -1, false, "Pair Logic", bLayout, 2, 0);
+        SetupComboBox(cbITLBPolarity[iDigi],  PHA::DIG::ITLAPolarity,    -1, false, "Polarity", bLayout, 3, 0);
+        SetupSpinBox( sbITLBGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "GateWidth [ns]", bLayout, 4, 0);
+
+
+        QGroupBox * gbITL = new QGroupBox("ITL-Connect", bdITL[iDigi]);
+        ITLLayout->addWidget(gbITL, 1, 0, 1, 2);
+        QGridLayout * cLayout = new QGridLayout(gbITL);
+
+        for( int i = 0; i < 32; i++){
+          if( i % 3 == 0  || i == 31){
+            QLabel * haha = new QLabel(QString::number(i), bdITL[iDigi]); cLayout->addWidget(haha, 0, i + 1);
+          }
+        }
+
+        QLabel * lb1 = new QLabel("ITL-A", bdITL[iDigi]);
+        cLayout->addWidget(lb1, 1, 0, 2, 1);
+
+        QLabel * lb2 = new QLabel("ITL-B", bdITL[iDigi]);
+        cLayout->addWidget(lb2, 4, 0, 2, 1);
+
+        QFrame *horizontalSeparator = new QFrame();
+        horizontalSeparator->setFrameShape(QFrame::HLine);
+        horizontalSeparator->setFrameShadow(QFrame::Sunken);
+        cLayout->addWidget(horizontalSeparator, 3, 0, 1, 33);
+
+
+        for( int i = 0; i < 64; i++){
+          chITLConnect[iDigi][i][0] = new QPushButton(bdITL[iDigi]);
+          chITLConnect[iDigi][i][0]->setFixedSize(15, 15);
+          cLayout->addWidget(chITLConnect[iDigi][i][0], 1 + i/32, i%32 + 1);
+
+          chITLConnect[iDigi][i][1] = new QPushButton(bdITL[iDigi]);
+          chITLConnect[iDigi][i][1]->setFixedSize(15, 15);
+          cLayout->addWidget(chITLConnect[iDigi][i][1], 4 + i/32, i%32 + 1);
+
+          connect(chITLConnect[iDigi][i][0], &QPushButton::clicked, this, [=](){
+            //printf(" %d ch %d clicked, %d \n", iDigi, i, ITLConnectStatus[iDigi][i]);
+            if( (ITLConnectStatus[iDigi][i] & 0x1) == 0 ){
+              ITLConnectStatus[iDigi][i] += 1;
+              chITLConnect[iDigi][i][0]->setStyleSheet("background-color : green;");
+              if( ((ITLConnectStatus[iDigi][i] >> 1) & 0x1) == 1 ) {
+                ITLConnectStatus[iDigi][i] -= 2;
+                chITLConnect[iDigi][i][1]->setStyleSheet("");
+              }
+            }else{
+              ITLConnectStatus[iDigi][i] -= 1;
+              chITLConnect[iDigi][i][0]->setStyleSheet("");
+            }
+
+            std::string value = "Disabled";
+            if( ITLConnectStatus[iDigi][i] == 1 ) value = "ITLA";
+            if( ITLConnectStatus[iDigi][i] == 2 ) value = "ITLB";
+
+            QString msg;
+            msg = "DIG:" + QString::number(digi[ID]->GetNChannels()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
+            if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
+              SendLogMsg(msg + "|OK.");
+            }else{
+              SendLogMsg(msg + "|Fail.");
+              digi[ID]->ReadValue(PHA::CH::ITLConnect, i);
+              chITLConnect[iDigi][i][0]->setStyleSheet("background-color : red;");
+            }
+
+          });
+
+          connect(chITLConnect[iDigi][i][1], &QPushButton::clicked, this, [=](){
+            //printf(" %d ch %d clicked, %d \n", iDigi, i, ITLConnectStatus[iDigi][i]);
+            if( ((ITLConnectStatus[iDigi][i] >> 1) & 0x1) == 0 ){
+              ITLConnectStatus[iDigi][i] += 2;
+              chITLConnect[iDigi][i][1]->setStyleSheet("background-color : green;");
+
+              if( (ITLConnectStatus[iDigi][i] & 0x1) == 1 ) {
+                ITLConnectStatus[iDigi][i] -= 1;
+                chITLConnect[iDigi][i][0]->setStyleSheet("");
+              }
+
+            }else{
+              ITLConnectStatus[iDigi][i] -= 2;
+              chITLConnect[iDigi][i][1]->setStyleSheet("");
+            }
+
+            std::string value = "Disabled";
+            if( ITLConnectStatus[iDigi][i] == 1 ) value = "ITLA";
+            if( ITLConnectStatus[iDigi][i] == 2 ) value = "ITLB";
+
+            QString msg;
+            msg = "DIG:" + QString::number(digi[ID]->GetNChannels()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
+            if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
+              SendLogMsg(msg + "|OK.");
+            }else{
+              SendLogMsg(msg + "|Fail.");
+              digi[ID]->ReadValue(PHA::CH::ITLConnect, i);
+              chITLConnect[iDigi][i][1]->setStyleSheet("background-color : red;");
+            }
+          });
+
+        }
+
+      } 
 
       {//^====================== LVDS
         bdLVDS[iDigi] = new QWidget(this);
@@ -581,17 +704,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         LVDSLayout->setAlignment(Qt::AlignTop);
         //LVDSLayout->setSpacing(2);
 
-        
+
       }
 
-      {//^====================== ITL
-        bdITL[iDigi] = new QWidget(this);
-        bdTab->addTab(bdITL[iDigi], "ITL-A/B");
-        QGridLayout * ITLLayout = new QGridLayout(bdITL[iDigi]);
-        ITLLayout->setAlignment(Qt::AlignTop);
-
-
-      } 
 
     }
 
@@ -1233,7 +1348,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
         ID = cbIQDigi->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += " = " + cbBdAns->currentData().toString();
         if( digi[ID]->WriteValue(para, value) ){
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
@@ -1263,7 +1378,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
         ID = cbIQDigi->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += " = " + QString::number(sbBdSettingsWrite->value());
         if( digi[ID]->WriteValue(para, std::to_string(sbBdSettingsWrite->value()))){
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
@@ -1282,14 +1397,14 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       leBdSettingsWrite->setAlignment(Qt::AlignRight);
       leBdSettingsWrite->setFixedWidth(200);
       inquiryLayout->addWidget(leBdSettingsWrite, rowID, 8);
-      connect(leBdSettingsWrite, &QLineEdit::textChanged, this, [=](){if( enableSignalSlot )leBdSettingsWrite->setStyleSheet("color: green;");});
+      connect(leBdSettingsWrite, &QLineEdit::textChanged, this, [=](){if( enableSignalSlot )leBdSettingsWrite->setStyleSheet("color: blue;");});
       connect(leBdSettingsWrite, &QLineEdit::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         std::string value = leBdSettingsWrite->text().toStdString();
         Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
         ID = cbIQDigi->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += " = " + QString::number(sbBdSettingsWrite->value());
         if( digi[ID]->WriteValue(para, value)){
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
@@ -1888,6 +2003,19 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   FillSpinBoxValueFromMemory(spbTestPusleLowLevel[ID], PHA::DIG::TestPulseLowLevel);
   FillSpinBoxValueFromMemory(spbTestPusleHighLevel[ID], PHA::DIG::TestPulseHighLevel);
 
+  //------------- ITL
+  FillComboBoxValueFromMemory(cbITLAMainLogic[ID], PHA::DIG::ITLAMainLogic);
+  FillComboBoxValueFromMemory(cbITLAPairLogic[ID], PHA::DIG::ITLAPairLogic);
+  FillComboBoxValueFromMemory(cbITLAPolarity[ID],  PHA::DIG::ITLAPolarity);
+  FillSpinBoxValueFromMemory( sbITLAMajority[ID],  PHA::DIG::ITLAMajorityLev);
+  FillSpinBoxValueFromMemory( sbITLAGateWidth[ID], PHA::DIG::ITLAGateWidth);
+
+  FillComboBoxValueFromMemory(cbITLBMainLogic[ID], PHA::DIG::ITLBMainLogic);
+  FillComboBoxValueFromMemory(cbITLBPairLogic[ID], PHA::DIG::ITLBPairLogic);
+  FillComboBoxValueFromMemory(cbITLBPolarity[ID],  PHA::DIG::ITLBPolarity);
+  FillSpinBoxValueFromMemory( sbITLBMajority[ID],  PHA::DIG::ITLBMajorityLev);
+  FillSpinBoxValueFromMemory( sbITLBGateWidth[ID], PHA::DIG::ITLBGateWidth);
+
   //@============================== Channel setting/ status
   for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
 
@@ -1945,6 +2073,24 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, ch);
     FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, ch);
     FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, ch);
+
+    std::string itlConnect = digi[ID]->GetSettingValue(PHA::CH::ITLConnect, ch);
+    if( itlConnect == "Disabled" ) {
+      ITLConnectStatus[ID][ch] = 0;
+      chITLConnect[ID][ch][0]->setStyleSheet("");
+      chITLConnect[ID][ch][1]->setStyleSheet("");
+    }
+    if( itlConnect == "ITLA" ) {
+      ITLConnectStatus[ID][ch] = 1;
+      chITLConnect[ID][ch][0]->setStyleSheet("background-color : green;");
+      chITLConnect[ID][ch][1]->setStyleSheet("");
+    }
+    if( itlConnect == "ITLB" ) {
+      ITLConnectStatus[ID][ch] = 2;
+      chITLConnect[ID][ch][0]->setStyleSheet("");
+      chITLConnect[ID][ch][1]->setStyleSheet("background-color : green;");
+    }
+
 
   }
 

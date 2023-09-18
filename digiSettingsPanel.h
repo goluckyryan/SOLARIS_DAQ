@@ -60,9 +60,11 @@ private:
   QTabWidget * tabWidget;
 
   //------------ Layout/GroupBox
-  //QGroupBox * digiBox[MaxNumberOfDigitizer];
-  //QGroupBox * VGABox[MaxNumberOfDigitizer];
-  //QGroupBox * testPulseBox[MaxNumberOfDigitizer];
+  QWidget * bdCfg[MaxNumberOfDigitizer];
+  QWidget * bdTestPulse[MaxNumberOfDigitizer];
+  QWidget * bdVGA[MaxNumberOfDigitizer];
+  QWidget * bdLVDS[MaxNumberOfDigitizer];
+  QWidget * bdITL[MaxNumberOfDigitizer];
 
   QGroupBox * box0[MaxNumberOfDigitizer];
   QGroupBox * box1[MaxNumberOfDigitizer];
@@ -133,18 +135,6 @@ private:
   QPushButton * bnSoftwareStop[MaxNumberOfChannel];
 
   //-------------- board settings
-  //QGridLayout * bdCfgLayout[MaxNumberOfDigitizer];
-  //QGridLayout * bdTestPulseLayout[MaxNumberOfDigitizer];
-  //QGridLayout * bdVGALayout[MaxNumberOfDigitizer];
-  QGridLayout * bdLVDSLayout[MaxNumberOfDigitizer];
-
-  QWidget * bdCfg[MaxNumberOfDigitizer];
-  QWidget * bdTestPulse[MaxNumberOfDigitizer];
-  QWidget * bdVGA[MaxNumberOfDigitizer];
-  QWidget * bdLVDS[MaxNumberOfDigitizer];
-  QWidget * bdITL[MaxNumberOfDigitizer];
-
-
   RComboBox * cbbClockSource[MaxNumberOfDigitizer];
   RComboBox * cbbEnClockFrontPanel[MaxNumberOfDigitizer];
   QCheckBox * ckbStartSource[MaxNumberOfDigitizer][5];
@@ -171,6 +161,22 @@ private:
 
   //-------------- VGA
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
+
+  //-------------- ITL-A/B
+  RComboBox * cbITLAMainLogic[MaxNumberOfDigitizer];
+  RSpinBox  * sbITLAMajority[MaxNumberOfDigitizer];
+  RComboBox * cbITLAPairLogic[MaxNumberOfDigitizer];
+  RComboBox * cbITLAPolarity[MaxNumberOfDigitizer];
+  RSpinBox  * sbITLAGateWidth[MaxNumberOfDigitizer];
+
+  RComboBox * cbITLBMainLogic[MaxNumberOfDigitizer];
+  RComboBox * cbITLBPairLogic[MaxNumberOfDigitizer];
+  RComboBox * cbITLBPolarity[MaxNumberOfDigitizer];
+  RSpinBox  * sbITLBMajority[MaxNumberOfDigitizer];
+  RSpinBox  * sbITLBGateWidth[MaxNumberOfDigitizer];
+
+  QPushButton * chITLConnect[MaxNumberOfDigitizer][MaxNumberOfChannel][2]; // 0 for A, 1 for B
+  unsigned short ITLConnectStatus[MaxNumberOfDigitizer][MaxNumberOfChannel]; // 0 = disabled, 1 = A, 2 = B
 
   //-------------- LVDS
 

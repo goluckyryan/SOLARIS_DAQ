@@ -190,6 +190,11 @@ namespace PHA{
                                                                                  {"TRGIN",     "TRG-IN"}, 
                                                                                  {"SwTrg",     "Software Trigger"}, 
                                                                                  {"LVDS",      "LVDS"}, 
+                                                                                 {"ITLA",      "ITL-A"},
+                                                                                 {"ITLB",      "ITL-B"},
+                                                                                 {"ITLA_AND_ITLB",  "ITL-A & B"},
+                                                                                 {"ITLA_OR_ITLB",  "ITL-A || B"},
+                                                                                 {"EncodedClkIn",  "Encoded CLK-IN"},
                                                                                  {"Run",       "Run Signal"}, 
                                                                                  {"RefClk",    "Reference Clock"}, 
                                                                                  {"TestPulse", "Test Pulse"}, 
@@ -204,8 +209,13 @@ namespace PHA{
     const Reg GPIOMode                 ("GPIOMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
                                                                                {"TRGIN",     "TRG-IN"}, 
                                                                                {"P0",        "Back Plane"}, 
-                                                                               {"SIN",       "S-IN Signal"}, 
+                                                                               {"SIN",       "S-IN Signal"},
                                                                                {"LVDS",      "LVDS Trigger"}, 
+                                                                               {"ITLA",      "ITL-A"},
+                                                                               {"ITLB",      "ITL-B"},
+                                                                               {"ITLA_AND_ITLB",  "ITL-A & B"},
+                                                                               {"ITLA_OR_ITLB",  "ITL-A || B"},
+                                                                               {"EncodedClkIn",  "Encoded CLK-IN"},
                                                                                {"SwTrg",     "Software Trigger"}, 
                                                                                {"Run",       "Run Signal"}, 
                                                                                {"RefClk",    "Referece Clock"}, 
@@ -222,7 +232,8 @@ namespace PHA{
                                                                                       {"SIN",      "S-IN"}, 
                                                                                       {"LVDS",     "LVDS"}, 
                                                                                       {"GPIO",     "GPIO"}, 
-                                                                                      {"P0",       "Back Plane"}});
+                                                                                      {"P0",       "Back Plane"},
+                                                                                      {"EncodedClkIn",  "Encoded CLK-IN"}});
     const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "High"}, {"ActiveLow", "Low"}});
     const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
