@@ -60,9 +60,9 @@ private:
   QTabWidget * tabWidget;
 
   //------------ Layout/GroupBox
-  QGroupBox * digiBox[MaxNumberOfDigitizer];
-  QGroupBox * VGABox[MaxNumberOfDigitizer];
-  QGroupBox * testPulseBox[MaxNumberOfDigitizer];
+  //QGroupBox * digiBox[MaxNumberOfDigitizer];
+  //QGroupBox * VGABox[MaxNumberOfDigitizer];
+  //QGroupBox * testPulseBox[MaxNumberOfDigitizer];
 
   QGroupBox * box0[MaxNumberOfDigitizer];
   QGroupBox * box1[MaxNumberOfDigitizer];
@@ -133,6 +133,18 @@ private:
   QPushButton * bnSoftwareStop[MaxNumberOfChannel];
 
   //-------------- board settings
+  //QGridLayout * bdCfgLayout[MaxNumberOfDigitizer];
+  //QGridLayout * bdTestPulseLayout[MaxNumberOfDigitizer];
+  //QGridLayout * bdVGALayout[MaxNumberOfDigitizer];
+  QGridLayout * bdLVDSLayout[MaxNumberOfDigitizer];
+
+  QWidget * bdCfg[MaxNumberOfDigitizer];
+  QWidget * bdTestPulse[MaxNumberOfDigitizer];
+  QWidget * bdVGA[MaxNumberOfDigitizer];
+  QWidget * bdLVDS[MaxNumberOfDigitizer];
+  QWidget * bdITL[MaxNumberOfDigitizer];
+
+
   RComboBox * cbbClockSource[MaxNumberOfDigitizer];
   RComboBox * cbbEnClockFrontPanel[MaxNumberOfDigitizer];
   QCheckBox * ckbStartSource[MaxNumberOfDigitizer][5];
@@ -160,12 +172,14 @@ private:
   //-------------- VGA
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 
+  //-------------- LVDS
+
   //--------------- trigger map
-  RComboBox * cbAllEvtTrigger[MaxNumberOfDigitizer];
-  RComboBox * cbAllWaveTrigger[MaxNumberOfDigitizer];
-  RComboBox * cbAllCoinMask[MaxNumberOfDigitizer];
-  RComboBox * cbAllAntiCoinMask[MaxNumberOfDigitizer];
-  RSpinBox  * sbAllCoinLength[MaxNumberOfDigitizer];
+  //RComboBox * cbAllEvtTrigger[MaxNumberOfDigitizer];
+  //RComboBox * cbAllWaveTrigger[MaxNumberOfDigitizer];
+  //RComboBox * cbAllCoinMask[MaxNumberOfDigitizer];
+  //RComboBox * cbAllAntiCoinMask[MaxNumberOfDigitizer];
+  //RSpinBox  * sbAllCoinLength[MaxNumberOfDigitizer];
   QPushButton * trgMap[MaxNumberOfDigitizer][MaxNumberOfChannel][MaxNumberOfChannel];
   bool trgMapClickStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][MaxNumberOfChannel];
 

@@ -36,6 +36,20 @@ The test.cpp is a demo code to use the ClassDigitizer2Gen.h/cpp.
 
 https://fsunuc.physics.fsu.edu/wiki/index.php/FRIB_SOLARIS_Collaboration
 
+# Additional function
+
+## connect to analysis working directory
+When the analysis path is set, it will do servera things
+
+- save the expName.sh
+- save Settings 
+- try to load the Mapping.h in the working directory
+
+## End run bash script
+
+When run stop, it will run the bash script under the directory scripts/endRUnScript.h
+
+
 # Required / Development enviroment
 
 Ubuntu 22.04
@@ -64,3 +78,7 @@ in the *.pro, add
 run ` qmake6 *.pro` it will generate Makefile
 
 then  ` make`
+
+# Known Issues
+
+The "Accp." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.

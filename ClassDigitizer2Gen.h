@@ -60,9 +60,11 @@ class Digitizer2Gen {
     std::string settingFileName;
     std::vector<Reg> boardSettings; 
     std::vector<Reg> chSettings[MaxNumberOfChannel];
+    std::vector<Reg> LVDSSettings[4];
     Reg VGASetting[4]; 
 
     std::map<std::string, int> boardMap;
+    std::map<std::string, int> LVDSMap;
     std::map<std::string, int> chMap;
 
   public:

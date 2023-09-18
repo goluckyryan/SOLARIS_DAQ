@@ -199,7 +199,7 @@ namespace PHA{
                                                                                  {"SyncIn",    "SyncIn Signal"}, 
                                                                                  {"SIN",       "S-IN Signal"}, 
                                                                                  {"GPIO",      "GPIO Signal"}, 
-                                                                                 {"AccepTrg",  "Acceped Trigger Signal"}, 
+                                                                                 {"AcceptTrg", "Acceped Trigger Signal"}, 
                                                                                  {"TrgClk",    "Trigger Clock"}});
     const Reg GPIOMode                 ("GPIOMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
                                                                                {"TRGIN",     "TRG-IN"}, 
@@ -247,6 +247,24 @@ namespace PHA{
     const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::INTEGER, "units");
     const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::INTEGER);
     const Reg EnableOffsetCalibration  ("EnOffsetCalibration", RW::ReadWrite, TYPE::DIG, {{"True", "Applied Cali."}, {"False", "No Cali."}});
+
+    const Reg ITLAMainLogic          ("ITLAMainLogic",   RW::ReadWrite, TYPE::DIG, {{"OR", "OR"},{"AND", "AND"}, {"Majority", "Majority"}});
+    const Reg ITLAMajorityLev        ("ITLAMajorityLev", RW::ReadWrite, TYPE::DIG, {{"1", ""},{"63", ""}, {"1", ""}}, ANSTYPE::INTEGER);
+    const Reg ITLAPairLogic          ("ITLAPairLogic",   RW::ReadWrite, TYPE::DIG, {{"OR", "OR"},{"AND", "AND"}, {"NONE", "NONE"}});
+    const Reg ITLAPolarity           ("ITLAPolarity",    RW::ReadWrite, TYPE::DIG, {{"Direct", "Direct"},{"Inverted", "Inverted"}});
+    const Reg ITLAMask               ("ITLAMask",        RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BYTE, "64-bit");
+    const Reg ITLAGateWidth          ("ITLAGateWidth",   RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+
+    const Reg ITLBMainLogic          ("ITLBMainLogic",   RW::ReadWrite, TYPE::DIG, {{"OR", "OR"},{"AND", "AND"}, {"Majority", "Majority"}});
+    const Reg ITLBMajorityLev        ("ITLBMajorityLev", RW::ReadWrite, TYPE::DIG, {{"1", ""},{"63", ""}, {"1", ""}}, ANSTYPE::INTEGER);
+    const Reg ITLBPairLogic          ("ITLBPairLogic",   RW::ReadWrite, TYPE::DIG, {{"OR", "OR"},{"AND", "AND"}, {"NONE", "NONE"}});
+    const Reg ITLBPolarity           ("ITLBPolarity",    RW::ReadWrite, TYPE::DIG, {{"Direct", "Direct"},{"Inverted", "Inverted"}});
+    const Reg ITLBMask               ("ITLBMask",        RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BYTE, "64-bit");
+    const Reg ITLBGateWidth          ("ITLBGateWidth",   RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+
+
+    const Reg LVDSIOReg   ("LVDSIOReg",   RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::STR);
+    //const Reg LVDSTrgMask ("lvdstrgmask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BYTE, "64-bit");
 
     /// ========== command
     const Reg Reset               ("Reset", RW::WriteOnly, TYPE::DIG, {}, ANSTYPE::NONE, "", true);
@@ -338,7 +356,21 @@ namespace PHA{
       DACoutMode               ,
       DACoutStaticLevel        ,
       DACoutChSelect           ,
-      EnableOffsetCalibration  
+      EnableOffsetCalibration  ,
+      ITLAMainLogic            ,
+      ITLAMajorityLev          ,
+      ITLAPairLogic            ,
+      ITLAPolarity             ,
+      ITLAMask                 ,
+      ITLAGateWidth            ,
+      ITLBMainLogic            ,
+      ITLBMajorityLev          ,
+      ITLBPairLogic            ,
+      ITLBPolarity             ,
+      ITLBMask                 ,
+      ITLBGateWidth            ,
+      LVDSIOReg                
+      //LVDSTrgMask              
     };
 
 
@@ -346,6 +378,22 @@ namespace PHA{
 
   namespace VGA{
     const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::INTEGER, "dB"); // VX2745 only
+  }
+
+  namespace LVDS{
+
+    const Reg LVDSMode ("LVDSMode", RW::ReadWrite, TYPE::LVDS, {{"SelfTriggers", "Self-Trigger"},
+                                                                {"Sync", "Sync"},
+                                                                {"IORegister", "IORegister"}});
+
+    const Reg LVDSDirection ("LVDSDirection", RW::ReadWrite, TYPE::LVDS, {{"Input", "Input"},
+                                                                          {"Output", "Output"}});
+
+    const std::vector<Reg> AllSettings = {
+      LVDSMode      ,
+      LVDSDirection 
+    };
+
   }
 
   namespace CH{
@@ -526,6 +574,8 @@ namespace PHA{
     const Reg EnergyFilterBaselineGuardSample ("EnergyFilterBaselineGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
     const Reg EnergyFilterPileUpGuardSample   ("EnergyFilterPileUpGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
 
+    const Reg ITLConnect             ("ITLConnect",    RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},{"ITLA", "ITLA"}, {"ITLB", "ITLB"}});
+
     const std::vector<Reg> AllSettings = {
       SelfTrgRate                ,
       ChannelStatus              ,
@@ -585,7 +635,8 @@ namespace PHA{
       EnergyFilterFlatTopSample        ,
       EnergyFilterPoleZeroSample       ,
       EnergyFilterBaselineGuardSample  ,
-      EnergyFilterPileUpGuardSample    
+      EnergyFilterPileUpGuardSample    ,
+      ITLConnect
     };
 
   }

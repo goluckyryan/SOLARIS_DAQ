@@ -40,10 +40,14 @@ void Digitizer2Gen::Initialization(){
   settingFileName = "";
   boardSettings = PHA::DIG::AllSettings;
   for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
-  for( int index = 0 ; index < 4; index ++) VGASetting[index] = PHA::VGA::VGAGain;
+  for( int index = 0 ; index < 4; index ++) {
+    VGASetting[index] = PHA::VGA::VGAGain;
+    LVDSSettings[index] = PHA::LVDS::AllSettings;
+  }
 
   //build map
   for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
+  for( int i = 0; i < (int) PHA::LVDS::AllSettings.size(); i++) LVDSMap[PHA::LVDS::AllSettings[i].GetPara()] = i;
   for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
   
 }
@@ -98,7 +102,7 @@ int Digitizer2Gen::FindIndex(const Reg para){
     case TYPE::CH: return chMap[para.GetPara()];
     case TYPE::DIG: return boardMap[para.GetPara()];
     case TYPE::VGA: return 0;
-    case TYPE::LVDS: return -1;
+    case TYPE::LVDS: return LVDSMap[para.GetPara()];
   }
   return -1;
 }
@@ -125,7 +129,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
     case TYPE::CH  : chSettings[ch_index][index].SetValue(ans); break;
     case TYPE::DIG : boardSettings[index].SetValue(ans); break;
     case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
-    case TYPE::LVDS: return "LVDS not implemented.";
+    case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
   }
 
   return ans;
@@ -768,6 +772,14 @@ void Digitizer2Gen::ReadAllSettings(){
 
   if( ModelName == "VX2745" && FPGAType == "DPP_PHA") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
+  for( int index = 0; index < 4; index++){
+    for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
+      if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
+      ReadValue(LVDSSettings[index][i], index, false);
+      //printf("%d %d | %s | %s \n", index, i, LVDSSettings[index][i].GetPara().c_str(), LVDSSettings[index][i].GetValue().c_str());
+    }
+  }
+
   for(int ch = 0; ch < nChannels ; ch++ ){
     for( int i = 0; i < (int) chSettings[ch].size(); i++){
       if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
@@ -805,6 +817,20 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
         count ++;
       }
     }
+
+    for( int i = 0; i < (int) LVDSSettings[0].size(); i++){
+      for( int index = 0; index < 4; index++){
+        if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
+        totCount ++;
+        if( LVDSSettings[index][i].GetValue() == "") break;
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", LVDSSettings[index][i].GetFullPara(index).c_str(), 
+                                               LVDSSettings[index][i].ReadWrite(),
+                                               7000 + 4 * index + i,
+                                               LVDSSettings[index][i].GetValue().c_str());
+        count ++;
+      }
+    }
+
     for( int i = 0; i < (int) chSettings[0].size(); i++){
       for(int ch = 0; ch < nChannels ; ch++ ){
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
@@ -820,7 +846,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
     fclose(saveFile);
 
     if( count != totCount ) {
-      remove(saveFileName);
+      printf("!!!!! some setting is empty. !!!!!! ");
       return -1;
     }
 
@@ -883,7 +909,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       }
 
       int id = atoi(idStr);
-      if( id < 8000){ // channel
+      if( id < 7000){ // channel
         int ch = id / 100;
         int index = id - ch * 100;
         chSettings[ch][index].SetValue(value);
@@ -891,6 +917,11 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(), 
         //                         chSettings[ch][index].ReadWrite(), id, 
         //                         chSettings[ch][index].GetValue().c_str());
+
+      }else if ( 7000 <= id && id < 8000){ // LVDS
+        int index = (id-7000)/4;
+        int ch = id - 7000 - index * 4;
+        LVDSSettings[index][ch].SetValue(value);
 
       }else if ( 8000 <= id && id < 9000){ // board
         boardSettings[id - 8000].SetValue(value);
@@ -924,7 +955,7 @@ std::string Digitizer2Gen::GetSettingValue(const Reg para, unsigned int ch_index
     case TYPE::DIG:  return boardSettings[index].GetValue();
     case TYPE::CH:   return chSettings[ch_index][index].GetValue();
     case TYPE::VGA:  return VGASetting[ch_index].GetValue();
-    case TYPE::LVDS: return "not defined";
+    case TYPE::LVDS: return LVDSSettings[ch_index][index].GetValue();
     default : return "invalid";
   }
   return "no such parameter";

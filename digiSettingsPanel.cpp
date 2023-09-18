@@ -264,298 +264,335 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
     }
 
-    {//^====================== Group Board settings
-      digiBox[iDigi] = new QGroupBox("Board Settings", tab);
-      //digiBox->setSizePolicy(sizePolicy);
-      QGridLayout * boardLayout = new QGridLayout(digiBox[iDigi]);
-      tabLayout_V1->addWidget(digiBox[iDigi]);
-        
-      int rowId = 0;
-      //-------------------------------------
-      SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, true, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
-      QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", tab);
-      lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-      boardLayout->addWidget(lbEnClockFP, rowId, 2, 1, 3);
+    {//^============================ Board Settings tab
 
-      cbbEnClockFrontPanel[iDigi] = new RComboBox(tab);
-      boardLayout->addWidget(cbbEnClockFrontPanel[iDigi], rowId, 5);
-      SetupShortComboBox(cbbEnClockFrontPanel[iDigi], PHA::DIG::EnableClockOutFrontPanel);
-      connect(cbbEnClockFrontPanel[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableClockOutFrontPanel.GetPara());
-        msg += " = " + cbbEnClockFrontPanel[ID]->currentData().toString();
-        if( digi[ID]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, cbbEnClockFrontPanel[ID]->currentData().toString().toStdString())){
-          SendLogMsg(msg + "|OK.");
-          cbbEnClockFrontPanel[ID]->setStyleSheet("");
-        }else{
-          SendLogMsg(msg + "|Fail.");
-          cbbEnClockFrontPanel[ID]->setStyleSheet("color:red;");
-        }
-      });
+      QTabWidget * bdTab = new QTabWidget(tab);
+      tabLayout_V1->addWidget(bdTab);
 
+      {//^====================== Group Board settings
 
-      //-------------------------------------
-      rowId ++;
-      QLabel * lbStartSource = new QLabel("Start Source :", tab);
-      lbStartSource->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbStartSource, rowId, 0);
+        bdCfg[iDigi] = new QWidget(this);
+        bdTab->addTab(bdCfg[iDigi], "Board");
 
-      for( int i = 0; i < (int) PHA::DIG::StartSource.GetAnswers().size(); i++){
-        ckbStartSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::StartSource.GetAnswers())[i].second), tab);
-        boardLayout->addWidget(ckbStartSource[iDigi][i], rowId, 1 + i);
-        connect(ckbStartSource[iDigi][i], &QCheckBox::stateChanged, this, &DigiSettingsPanel::SetStartSource);
-      }
+        //digiBox[iDigi] = new QGroupBox("Board Settings", tab);
+        // //digiBox->setSizePolicy(sizePolicy);
+        QGridLayout * boardLayout = new QGridLayout(bdCfg[iDigi]);
+        boardLayout->setAlignment(Qt::AlignTop);
+        boardLayout->setSpacing(2);
+        //tabLayout_V1->addWidget(digiBox[iDigi]);
+          
+        int rowId = 0;
+        //-------------------------------------
+        SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, true, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
-      //-------------------------------------
-      rowId ++;
-      QLabel * lbGlobalTrgSource = new QLabel("Global Trigger Source :", tab);
-      lbGlobalTrgSource->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbGlobalTrgSource, rowId, 0);
+        QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", tab);
+        lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+        boardLayout->addWidget(lbEnClockFP, rowId, 2, 1, 3);
 
-      for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
-        ckbGlbTrgSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[i].second), tab);
-        boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i);
-        connect(ckbGlbTrgSource[iDigi][i], &QCheckBox::stateChanged, this, &DigiSettingsPanel::SetGlobalTriggerSource);
-      }
-
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbTrgOut[iDigi], PHA::DIG::TrgOutMode, -1, true, "Trg-OUT Mode :", boardLayout, rowId, 0, 1, 2);
-            
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbGPIO[iDigi], PHA::DIG::GPIOMode, -1, true, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
-
-      //-------------------------------------
-      QLabel * lbAutoDisarmAcq = new QLabel("Auto disarm ACQ :", tab);
-      lbAutoDisarmAcq->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbAutoDisarmAcq, rowId, 4, 1, 2);
-
-      cbbAutoDisarmAcq[iDigi] = new RComboBox(tab);
-      boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
-      SetupShortComboBox(cbbAutoDisarmAcq[iDigi], PHA::DIG::EnableAutoDisarmACQ);
-      connect(cbbAutoDisarmAcq[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableAutoDisarmACQ.GetPara());
-        msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
-        if( digi[ID]->WriteValue(PHA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
-          SendLogMsg(msg + "|OK.");
-          cbbAutoDisarmAcq[ID]->setStyleSheet("");
-        }else{
-          SendLogMsg(msg + "|Fail.");
-          cbbAutoDisarmAcq[ID]->setStyleSheet("color:red;");
-        }
-      });
-
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbBusyIn[iDigi], PHA::DIG::BusyInSource, -1, true, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
-
-      QLabel * lbStatEvents = new QLabel("Stat. Event :", tab);
-      lbStatEvents->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbStatEvents, rowId, 4, 1, 2);
-
-      cbbStatEvents[iDigi] = new RComboBox(tab);
-      boardLayout->addWidget(cbbStatEvents[iDigi], rowId, 6);
-      SetupShortComboBox(cbbStatEvents[iDigi], PHA::DIG::EnableStatisticEvents);
-      connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableStatisticEvents.GetPara());
-        msg += " = " + cbbStatEvents[ID]->currentData().toString();
-        if( digi[ID]->WriteValue(PHA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
-          SendLogMsg(msg + "|OK.");
-          cbbStatEvents[ID]->setStyleSheet("");
-        }else{
-          SendLogMsg(msg + "|Fail.");
-          cbbStatEvents[ID]->setStyleSheet("color:red");
-        }
-      });
-
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, true, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
-
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, true, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
-
-      QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] :", tab);
-      lbBdVetoWidth->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbBdVetoWidth, rowId, 3, 1, 2);
-
-      dsbBdVetoWidth[iDigi] = new RSpinBox(tab, 0); // may be QDoubleSpinBox
-      dsbBdVetoWidth[iDigi]->setMinimum(0);
-      dsbBdVetoWidth[iDigi]->setMaximum(34359738360);
-      dsbBdVetoWidth[iDigi]->setSingleStep(20);
-      dsbBdVetoWidth[iDigi]->SetToolTip();
-      boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
-      connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        dsbBdVetoWidth[ID]->setStyleSheet("color:blue;");
-      });
-      connect(dsbBdVetoWidth[iDigi], &RSpinBox::returnPressed, this, [=](){
-        if( !enableSignalSlot ) return;
-        //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoWidth.GetPara());
-        msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
-        if( digi[ID]->WriteValue(PHA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
-          dsbBdVetoWidth[ID]->setStyleSheet("");
-          SendLogMsg(msg + "|OK.");
-        }else{
-          dsbBdVetoWidth[ID]->setStyleSheet("color:red;");
-          SendLogMsg(msg + "|Fail.");
-        }
-      });
-
-      cbbBdVetoPolarity[iDigi] = new RComboBox(tab);
-      boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
-      SetupShortComboBox(cbbBdVetoPolarity[iDigi], PHA::DIG::BoardVetoPolarity);
-      
-      //-------------------------------------
-      rowId ++;
-      SetupSpinBox(spbRunDelay[iDigi], PHA::DIG::RunDelay, -1, false, "Run Delay [ns] :", boardLayout, rowId, 0);
-
-      //-------------------------------------
-      QLabel * lbClockOutDelay = new QLabel("Temp. Clock Out Delay [ps] :", tab);
-      lbClockOutDelay->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbClockOutDelay, rowId, 3, 1, 2);
-
-      dsbVolatileClockOutDelay[iDigi] = new RSpinBox(tab, 3);
-      dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
-      dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
-      dsbVolatileClockOutDelay[iDigi]->setSingleStep(74.074);
-      dsbVolatileClockOutDelay[iDigi]->setValue(0);
-      dsbVolatileClockOutDelay[iDigi]->SetToolTip();
-      boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
-      connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        dsbVolatileClockOutDelay[ID]->setStyleSheet("color:blue;");
-      });
-      connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
-        if( !enableSignalSlot ) return;
-        //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        double step = dsbVolatileClockOutDelay[ID]->singleStep();
-        double value = dsbVolatileClockOutDelay[ID]->value();
-        dsbVolatileClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::VolatileClockOutDelay.GetPara());
-        msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
-        if( digi[ID]->WriteValue(PHA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
-          dsbVolatileClockOutDelay[ID]->setStyleSheet("");
-          SendLogMsg(msg + "|OK.");
-        }else{
-          dsbVolatileClockOutDelay[ID]->setStyleSheet("color:red;");
-          SendLogMsg(msg + "|Fail.");
-        }
-      });
-
-      //-------------------------------------
-      rowId ++;
-      SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, true, "IO Level :", boardLayout, rowId, 0, 1, 2);
-
-      QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", tab);
-      lbClockOutDelay2->setAlignment(Qt::AlignRight);
-      boardLayout->addWidget(lbClockOutDelay2, rowId, 3, 1, 2);
-
-      dsbClockOutDelay[iDigi] = new RSpinBox(tab, 3);
-      dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
-      dsbClockOutDelay[iDigi]->setMaximum(18888.888);
-      dsbClockOutDelay[iDigi]->setValue(0);
-      dsbClockOutDelay[iDigi]->setSingleStep(74.074);
-      dsbClockOutDelay[iDigi]->SetToolTip();
-      boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
-      connect(dsbClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
-        if( !enableSignalSlot ) return;
-        dsbClockOutDelay[ID]->setStyleSheet("color:blue;");
-      });
-      connect(dsbClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
-        if( !enableSignalSlot ) return;
-        //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-        double step = dsbClockOutDelay[ID]->singleStep();
-        double value = dsbClockOutDelay[ID]->value();
-        dsbClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
-        QString msg;
-        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::PermanentClockOutDelay.GetPara());
-        msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
-        if( digi[ID]->WriteValue(PHA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
-          dsbClockOutDelay[ID]->setStyleSheet("");
-          SendLogMsg(msg + "|OK.");
-        }else{
-          dsbClockOutDelay[ID]->setStyleSheet("color:red;");
-          SendLogMsg(msg + "|Fail.");
-        }
-      });
-    }
-    
-    {//^====================== Test Pulse settings
-      testPulseBox[iDigi] = new QGroupBox("Test Pulse Settings", tab); 
-      tabLayout_V1->addWidget(testPulseBox[iDigi]);
-      QGridLayout * testPulseLayout = new QGridLayout(testPulseBox[iDigi]);
-      testPulseLayout->setAlignment(Qt::AlignLeft);
-      testPulseLayout->setVerticalSpacing(0);
-
-      SetupSpinBox(dsbTestPuslePeriod[iDigi], PHA::DIG::TestPulsePeriod, -1, false, "Period [ns] :", testPulseLayout, 0, 0);
-      SetupSpinBox(dsbTestPusleWidth[iDigi], PHA::DIG::TestPulseWidth, -1, false, "Width [ns] :", testPulseLayout, 0, 2);
-      SetupSpinBox(spbTestPusleLowLevel[iDigi], PHA::DIG::TestPulseLowLevel, -1, false, "Low Lvl. [LSB] :", testPulseLayout, 0, 4);
-      SetupSpinBox(spbTestPusleHighLevel[iDigi], PHA::DIG::TestPulseHighLevel, -1, false, "High Lvl. [LSB] :", testPulseLayout, 0, 6);
-
-      dsbTestPuslePeriod[iDigi]->setFixedSize(110, 30);
-      dsbTestPuslePeriod[iDigi]->setDecimals(0);
-      dsbTestPusleWidth[iDigi]->setFixedSize(110, 30);
-      dsbTestPusleWidth[iDigi]->setDecimals(0);
-
-      for( int i = 0; i < testPulseLayout->columnCount(); i++) testPulseLayout->setColumnStretch(i, 0 );
-    }
-
-    {//^====================== VGA settings
-      VGABox[iDigi] = new QGroupBox("Gain Amplifier Settings", tab); 
-      tabLayout_V1->addWidget(VGABox[iDigi]);
-      QGridLayout * vgaLayout = new QGridLayout(VGABox[iDigi]);
-      vgaLayout->setVerticalSpacing(0);
-      //vgaLayout->setAlignment(Qt::AlignLeft);
-
-      for( int k = 0; k < 4; k ++){
-        QLabel * lb = new QLabel("VGA-" + QString::number(k) + " [dB] :", tab);
-        lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-        vgaLayout->addWidget(lb, 0, 2*k);
-
-        VGA[iDigi][k] = new RSpinBox(tab, 1);
-        VGA[iDigi][k]->setMinimum(0);
-        VGA[iDigi][k]->setMaximum(40);
-        VGA[iDigi][k]->setSingleStep(0.5);
-        VGA[iDigi][k]->SetToolTip();
-        
-        vgaLayout->addWidget(VGA[iDigi][k], 0, 2*k+1);
-        connect(VGA[iDigi][k], &RSpinBox::valueChanged, this, [=](){ 
-          if( !enableSignalSlot ) return; 
-          VGA[ID][k]->setStyleSheet("color:blue;");
+        cbbEnClockFrontPanel[iDigi] = new RComboBox(tab);
+        boardLayout->addWidget(cbbEnClockFrontPanel[iDigi], rowId, 5);
+        SetupShortComboBox(cbbEnClockFrontPanel[iDigi], PHA::DIG::EnableClockOutFrontPanel);
+        connect(cbbEnClockFrontPanel[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableClockOutFrontPanel.GetPara());
+          msg += " = " + cbbEnClockFrontPanel[ID]->currentData().toString();
+          if( digi[ID]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, cbbEnClockFrontPanel[ID]->currentData().toString().toStdString())){
+            SendLogMsg(msg + "|OK.");
+            cbbEnClockFrontPanel[ID]->setStyleSheet("");
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            cbbEnClockFrontPanel[ID]->setStyleSheet("color:red;");
+          }
         });
-        connect(VGA[iDigi][k], &RSpinBox::returnPressed, this, [=](){
+
+
+        //-------------------------------------
+        rowId ++;
+        QLabel * lbStartSource = new QLabel("Start Source :", tab);
+        lbStartSource->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbStartSource, rowId, 0);
+
+        for( int i = 0; i < (int) PHA::DIG::StartSource.GetAnswers().size(); i++){
+          ckbStartSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::StartSource.GetAnswers())[i].second), tab);
+          boardLayout->addWidget(ckbStartSource[iDigi][i], rowId, 1 + i);
+          connect(ckbStartSource[iDigi][i], &QCheckBox::stateChanged, this, &DigiSettingsPanel::SetStartSource);
+        }
+
+        //-------------------------------------
+        rowId ++;
+        QLabel * lbGlobalTrgSource = new QLabel("Global Trigger Source :", tab);
+        lbGlobalTrgSource->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbGlobalTrgSource, rowId, 0);
+
+        for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
+          ckbGlbTrgSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[i].second), tab);
+          boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i);
+          connect(ckbGlbTrgSource[iDigi][i], &QCheckBox::stateChanged, this, &DigiSettingsPanel::SetGlobalTriggerSource);
+        }
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbTrgOut[iDigi], PHA::DIG::TrgOutMode, -1, true, "Trg-OUT Mode :", boardLayout, rowId, 0, 1, 2);
+              
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbGPIO[iDigi], PHA::DIG::GPIOMode, -1, true, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
+
+        //-------------------------------------
+        QLabel * lbAutoDisarmAcq = new QLabel("Auto disarm ACQ :", tab);
+        lbAutoDisarmAcq->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbAutoDisarmAcq, rowId, 4, 1, 2);
+
+        cbbAutoDisarmAcq[iDigi] = new RComboBox(tab);
+        boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
+        SetupShortComboBox(cbbAutoDisarmAcq[iDigi], PHA::DIG::EnableAutoDisarmACQ);
+        connect(cbbAutoDisarmAcq[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableAutoDisarmACQ.GetPara());
+          msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
+          if( digi[ID]->WriteValue(PHA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
+            SendLogMsg(msg + "|OK.");
+            cbbAutoDisarmAcq[ID]->setStyleSheet("");
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            cbbAutoDisarmAcq[ID]->setStyleSheet("color:red;");
+          }
+        });
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbBusyIn[iDigi], PHA::DIG::BusyInSource, -1, true, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
+
+        QLabel * lbStatEvents = new QLabel("Stat. Event :", tab);
+        lbStatEvents->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbStatEvents, rowId, 4, 1, 2);
+
+        cbbStatEvents[iDigi] = new RComboBox(tab);
+        boardLayout->addWidget(cbbStatEvents[iDigi], rowId, 6);
+        SetupShortComboBox(cbbStatEvents[iDigi], PHA::DIG::EnableStatisticEvents);
+        connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableStatisticEvents.GetPara());
+          msg += " = " + cbbStatEvents[ID]->currentData().toString();
+          if( digi[ID]->WriteValue(PHA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
+            SendLogMsg(msg + "|OK.");
+            cbbStatEvents[ID]->setStyleSheet("");
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            cbbStatEvents[ID]->setStyleSheet("color:red");
+          }
+        });
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, true, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, true, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
+
+        QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] :", tab);
+        lbBdVetoWidth->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbBdVetoWidth, rowId, 3, 1, 2);
+
+        dsbBdVetoWidth[iDigi] = new RSpinBox(tab, 0); // may be QDoubleSpinBox
+        dsbBdVetoWidth[iDigi]->setMinimum(0);
+        dsbBdVetoWidth[iDigi]->setMaximum(34359738360);
+        dsbBdVetoWidth[iDigi]->setSingleStep(20);
+        dsbBdVetoWidth[iDigi]->SetToolTip();
+        boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
+        connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          dsbBdVetoWidth[ID]->setStyleSheet("color:blue;");
+        });
+        connect(dsbBdVetoWidth[iDigi], &RSpinBox::returnPressed, this, [=](){
           if( !enableSignalSlot ) return;
           //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-          double step = VGA[ID][k]->singleStep();
-          double value = VGA[ID][k]->value();
-          VGA[ID][k]->setValue( (std::round(value/step) * step) );
           QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::VGA::VGAGain.GetPara());
-          if( PHA::VGA::VGAGain.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(k);
-          msg += " = " + QString::number(VGA[ID][k]->value());
-          if( digi[ID]->WriteValue(PHA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
-            VGA[ID][k]->setStyleSheet("");
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoWidth.GetPara());
+          msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
+          if( digi[ID]->WriteValue(PHA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
+            dsbBdVetoWidth[ID]->setStyleSheet("");
             SendLogMsg(msg + "|OK.");
           }else{
-            VGA[ID][k]->setStyleSheet("color:red;");
+            dsbBdVetoWidth[ID]->setStyleSheet("color:red;");
+            SendLogMsg(msg + "|Fail.");
+          }
+        });
+
+        cbbBdVetoPolarity[iDigi] = new RComboBox(tab);
+        boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
+        SetupShortComboBox(cbbBdVetoPolarity[iDigi], PHA::DIG::BoardVetoPolarity);
+        
+        //-------------------------------------
+        rowId ++;
+        SetupSpinBox(spbRunDelay[iDigi], PHA::DIG::RunDelay, -1, false, "Run Delay [ns] :", boardLayout, rowId, 0);
+
+        //-------------------------------------
+        QLabel * lbClockOutDelay = new QLabel("Temp. Clock Out Delay [ps] :", tab);
+        lbClockOutDelay->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbClockOutDelay, rowId, 3, 1, 2);
+
+        dsbVolatileClockOutDelay[iDigi] = new RSpinBox(tab, 3);
+        dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
+        dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
+        dsbVolatileClockOutDelay[iDigi]->setSingleStep(74.074);
+        dsbVolatileClockOutDelay[iDigi]->setValue(0);
+        dsbVolatileClockOutDelay[iDigi]->SetToolTip();
+        boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
+        connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          dsbVolatileClockOutDelay[ID]->setStyleSheet("color:blue;");
+        });
+        connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
+          if( !enableSignalSlot ) return;
+          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+          double step = dsbVolatileClockOutDelay[ID]->singleStep();
+          double value = dsbVolatileClockOutDelay[ID]->value();
+          dsbVolatileClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::VolatileClockOutDelay.GetPara());
+          msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
+          if( digi[ID]->WriteValue(PHA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
+            dsbVolatileClockOutDelay[ID]->setStyleSheet("");
+            SendLogMsg(msg + "|OK.");
+          }else{
+            dsbVolatileClockOutDelay[ID]->setStyleSheet("color:red;");
+            SendLogMsg(msg + "|Fail.");
+          }
+        });
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, true, "IO Level :", boardLayout, rowId, 0, 1, 2);
+
+        QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", tab);
+        lbClockOutDelay2->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbClockOutDelay2, rowId, 3, 1, 2);
+
+        dsbClockOutDelay[iDigi] = new RSpinBox(tab, 3);
+        dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
+        dsbClockOutDelay[iDigi]->setMaximum(18888.888);
+        dsbClockOutDelay[iDigi]->setValue(0);
+        dsbClockOutDelay[iDigi]->setSingleStep(74.074);
+        dsbClockOutDelay[iDigi]->SetToolTip();
+        boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
+        connect(dsbClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          dsbClockOutDelay[ID]->setStyleSheet("color:blue;");
+        });
+        connect(dsbClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
+          if( !enableSignalSlot ) return;
+          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+          double step = dsbClockOutDelay[ID]->singleStep();
+          double value = dsbClockOutDelay[ID]->value();
+          dsbClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::PermanentClockOutDelay.GetPara());
+          msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
+          if( digi[ID]->WriteValue(PHA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
+            dsbClockOutDelay[ID]->setStyleSheet("");
+            SendLogMsg(msg + "|OK.");
+          }else{
+            dsbClockOutDelay[ID]->setStyleSheet("color:red;");
             SendLogMsg(msg + "|Fail.");
           }
         });
       }
+      
+      {//^====================== Test Pulse settings
+
+        bdTestPulse[iDigi] = new QWidget(this);
+        bdTab->addTab(bdTestPulse[iDigi], "Test Pulse");
+        QGridLayout * testPulseLayout = new QGridLayout(bdTestPulse[iDigi]);
+        testPulseLayout->setAlignment(Qt::AlignTop);
+        testPulseLayout->setSpacing(2);
+
+        SetupSpinBox(dsbTestPuslePeriod[iDigi], PHA::DIG::TestPulsePeriod, -1, false, "Period [ns] :", testPulseLayout, 0, 0);
+        SetupSpinBox(dsbTestPusleWidth[iDigi], PHA::DIG::TestPulseWidth, -1, false, "Width [ns] :", testPulseLayout, 1, 0);
+        SetupSpinBox(spbTestPusleLowLevel[iDigi], PHA::DIG::TestPulseLowLevel, -1, false, "Low Lvl. [LSB] :", testPulseLayout, 2, 0);
+        SetupSpinBox(spbTestPusleHighLevel[iDigi], PHA::DIG::TestPulseHighLevel, -1, false, "High Lvl. [LSB] :", testPulseLayout, 3, 0);
+
+        // dsbTestPuslePeriod[iDigi]->setFixedSize(110, 30);
+        // dsbTestPuslePeriod[iDigi]->setDecimals(0);
+        // dsbTestPusleWidth[iDigi]->setFixedSize(110, 30);
+        // dsbTestPusleWidth[iDigi]->setDecimals(0);
+
+        for( int i = 0; i < testPulseLayout->columnCount(); i++) testPulseLayout->setColumnStretch(i, 0 );
+      }
+
+      {//^====================== VGA settings
+
+        bdVGA[iDigi] = new QWidget(this);
+        bdTab->addTab(bdVGA[iDigi], "VGA Setting");
+        
+        QGridLayout * vgaLayout = new QGridLayout(bdVGA[iDigi]);
+        //vgaLayout->setVerticalSpacing(0);
+        vgaLayout->setAlignment(Qt::AlignTop);
+
+        for( int k = 0; k < 4; k ++){
+          QLabel * lb = new QLabel("VGA-" + QString::number(k) + " [dB] :", tab);
+          lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+          vgaLayout->addWidget(lb, k, 0);
+
+          VGA[iDigi][k] = new RSpinBox(tab, 1);
+          VGA[iDigi][k]->setMinimum(0);
+          VGA[iDigi][k]->setMaximum(40);
+          VGA[iDigi][k]->setSingleStep(0.5);
+          VGA[iDigi][k]->SetToolTip();
+          
+          vgaLayout->addWidget(VGA[iDigi][k], k, 1);
+          connect(VGA[iDigi][k], &RSpinBox::valueChanged, this, [=](){ 
+            if( !enableSignalSlot ) return; 
+            VGA[ID][k]->setStyleSheet("color:blue;");
+          });
+          connect(VGA[iDigi][k], &RSpinBox::returnPressed, this, [=](){
+            if( !enableSignalSlot ) return;
+            //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
+            double step = VGA[ID][k]->singleStep();
+            double value = VGA[ID][k]->value();
+            VGA[ID][k]->setValue( (std::round(value/step) * step) );
+            QString msg;
+            msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::VGA::VGAGain.GetPara());
+            if( PHA::VGA::VGAGain.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(k);
+            msg += " = " + QString::number(VGA[ID][k]->value());
+            if( digi[ID]->WriteValue(PHA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
+              VGA[ID][k]->setStyleSheet("");
+              SendLogMsg(msg + "|OK.");
+            }else{
+              VGA[ID][k]->setStyleSheet("color:red;");
+              SendLogMsg(msg + "|Fail.");
+            }
+          });
+        }
+      }
+    
+
+      {//^====================== LVDS
+        bdLVDS[iDigi] = new QWidget(this);
+        bdTab->addTab(bdLVDS[iDigi], "LVDS");
+        QGridLayout * LVDSLayout = new QGridLayout(bdLVDS[iDigi]);
+        LVDSLayout->setAlignment(Qt::AlignTop);
+        //LVDSLayout->setSpacing(2);
+
+        
+      }
+
+      {//^====================== ITL
+        bdITL[iDigi] = new QWidget(this);
+        bdTab->addTab(bdITL[iDigi], "ITL-A/B");
+        QGridLayout * ITLLayout = new QGridLayout(bdITL[iDigi]);
+        ITLLayout->setAlignment(Qt::AlignTop);
+
+
+      } 
+
     }
 
     {//^====================== Group channel settings
@@ -1018,17 +1055,17 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         int rowID = 0;
         //----------------------------
-        SetupComboBox( cbAllEvtTrigger[iDigi], PHA::CH::EventTriggerSource, -1, false, "Event Trigger Source (all ch.)", triggerLayout, rowID, 0);
-        SetupComboBox( cbAllWaveTrigger[iDigi], PHA::CH::WaveTriggerSource, -1, false, "Wave Trigger Source (all ch.)", triggerLayout, rowID, 2);
+        // SetupComboBox( cbAllEvtTrigger[iDigi], PHA::CH::EventTriggerSource, -1, false, "Event Trigger Source (all ch.)", triggerLayout, rowID, 0);
+        // SetupComboBox( cbAllWaveTrigger[iDigi], PHA::CH::WaveTriggerSource, -1, false, "Wave Trigger Source (all ch.)", triggerLayout, rowID, 2);
 
-        //----------------------------
-        rowID ++;
-        SetupComboBox( cbAllCoinMask[iDigi], PHA::CH::CoincidenceMask, -1, false, "Coincident Mask (all ch.)", triggerLayout, rowID, 0);
-        SetupSpinBox( sbAllCoinLength[iDigi], PHA::CH::CoincidenceLength, -1, false, "Coincident Length [ns] (all ch.)", triggerLayout, rowID, 2);
+        // //----------------------------
+        // rowID ++;
+        // SetupComboBox( cbAllCoinMask[iDigi], PHA::CH::CoincidenceMask, -1, false, "Coincident Mask (all ch.)", triggerLayout, rowID, 0);
+        // SetupSpinBox( sbAllCoinLength[iDigi], PHA::CH::CoincidenceLength, -1, false, "Coincident Length [ns] (all ch.)", triggerLayout, rowID, 2);
         
-        //----------------------------
-        rowID ++;
-        SetupComboBox( cbAllAntiCoinMask[iDigi], PHA::CH::AntiCoincidenceMask, -1, false, "Anti-Coincident Mask (all ch.)", triggerLayout, rowID, 0);
+        // //----------------------------
+        // rowID ++;
+        // SetupComboBox( cbAllAntiCoinMask[iDigi], PHA::CH::AntiCoincidenceMask, -1, false, "Anti-Coincident Mask (all ch.)", triggerLayout, rowID, 0);
 
         QSignalMapper * triggerMapper = new QSignalMapper(tab);
         connect(triggerMapper, &QSignalMapper::mappedInt, this, &DigiSettingsPanel::onTriggerClick);
@@ -1584,11 +1621,11 @@ void DigiSettingsPanel::ReadTriggerMap(){
 
   //printf("%s\n", __func__);
 
-  cbAllEvtTrigger[ID]->setCurrentIndex(cbbEvtTrigger[ID][MaxNumberOfChannel]->currentIndex());
-  cbAllWaveTrigger[ID]->setCurrentIndex(cbbWaveTrigger[ID][MaxNumberOfChannel]->currentIndex());
-  cbAllCoinMask[ID]->setCurrentIndex(cbbCoinMask[ID][MaxNumberOfChannel]->currentIndex());
-  cbAllAntiCoinMask[ID]->setCurrentIndex(cbbAntiCoinMask[ID][MaxNumberOfChannel]->currentIndex());
-  sbAllCoinLength[ID]->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
+  // cbAllEvtTrigger[ID]->setCurrentIndex(cbbEvtTrigger[ID][MaxNumberOfChannel]->currentIndex());
+  // cbAllWaveTrigger[ID]->setCurrentIndex(cbbWaveTrigger[ID][MaxNumberOfChannel]->currentIndex());
+  // cbAllCoinMask[ID]->setCurrentIndex(cbbCoinMask[ID][MaxNumberOfChannel]->currentIndex());
+  // cbAllAntiCoinMask[ID]->setCurrentIndex(cbbAntiCoinMask[ID][MaxNumberOfChannel]->currentIndex());
+  // sbAllCoinLength[ID]->setValue(spbCoinLength[ID][MaxNumberOfChannel]->value());
 
   for( int ch = 0; ch < (int) digi[ID]->GetNChannels(); ch ++){
 
@@ -1640,9 +1677,13 @@ void DigiSettingsPanel::EnableControl(){
   for( int id = 0; id < nDigi; id ++){
     bool enable = !digi[id]->IsAcqOn();
 
-    digiBox[id]->setEnabled(enable);
-    if( digi[id]->GetFPGAType() == "DPP_PHA") VGABox[id]->setEnabled(enable);
-    if( ckbGlbTrgSource[id][3]->isChecked() ) testPulseBox[id]->setEnabled(enable);
+    //digiBox[id]->setEnabled(enable);
+    //if( digi[id]->GetFPGAType() == "DPP_PHA") VGABox[id]->setEnabled(enable);
+    //if( ckbGlbTrgSource[id][3]->isChecked() ) testPulseBox[id]->setEnabled(enable);
+
+    bdCfg[id]->setEnabled(enable);
+    bdTestPulse[id]->setEnabled(enable);
+
     box1[id]->setEnabled(enable);
     box3[id]->setEnabled(enable);
     box4[id]->setEnabled(enable);
@@ -1660,7 +1701,7 @@ void DigiSettingsPanel::EnableControl(){
     bnSoftwareStart[id]->setEnabled(enable);
     bnSoftwareStop[id]->setEnabled(enable);
 
-    if( digi[id]->GetFPGAType() != "DPP_PHA" || digi[id]->GetModelName() != "VX2745" ) VGABox[id]->setEnabled(false);
+    if( digi[id]->GetFPGAType() != "DPP_PHA" || digi[id]->GetModelName() != "VX2745" ) bdVGA[id]->setEnabled(false);
 
     QVector<QTabWidget*> tempArray = {inputTab[id], trapTab[id], probeTab[id], otherTab[id] };
 
@@ -1815,13 +1856,13 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   result = QString::fromStdString(digi[ID]->GetSettingValue(PHA::DIG::GlobalTriggerSource));
   resultList = result.remove(QChar(' ')).split("|");
-  testPulseBox[ID]->setEnabled(false);
+  bdTestPulse[ID]->setEnabled(false);
   for( int j = 0; j < (int) PHA::DIG::StartSource.GetAnswers().size(); j++){
     ckbGlbTrgSource[ID][j]->setChecked(false);
     for( int i = 0; i < resultList.count(); i++){
       if( resultList[i] == QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[j].first) ) {
         ckbGlbTrgSource[ID][j]->setChecked(true);
-        if( resultList[i] == "TestPulse" ) testPulseBox[ID]->setEnabled(true);
+        if( resultList[i] == "TestPulse" ) bdTestPulse[ID]->setEnabled(true);
       }
     }
   }
@@ -1998,13 +2039,13 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   if( !enableSignalSlot ) return;
 
   std::string value = "";
-  testPulseBox[ID]->setEnabled(false);
+  bdTestPulse[ID]->setEnabled(false);
   for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
     if( ckbGlbTrgSource[ID][i]->isChecked() ){
       //printf("----- %s \n", DIGIPARA::DIG::StartSource.GetAnswers()[i].first.c_str());
       if( value != "" ) value += " | ";
       value += PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first;
-      if( PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first == "TestPulse" ) testPulseBox[ID]->setEnabled(true);
+      if( PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first == "TestPulse" ) bdTestPulse[ID]->setEnabled(true);
     }
   }
 
