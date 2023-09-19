@@ -126,7 +126,7 @@ private:
   QLineEdit  *** leAccept; // need to delete manually
   QLabel       * lbLastUpdateTime;
   QLabel       * lbScalarACQStatus;
-
+  bool           scalarOutputInflux;
 
   InfluxDB     * influx;
 

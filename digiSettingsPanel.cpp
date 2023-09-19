@@ -537,39 +537,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         vgaLayout->setAlignment(Qt::AlignTop| Qt::AlignLeft);
 
         for( int k = 0; k < 4; k ++){
-          QLabel * lb = new QLabel("VGA-" + QString::number(k) + " [dB] :", tab);
-          lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-          vgaLayout->addWidget(lb, k, 0);
-
-          VGA[iDigi][k] = new RSpinBox(tab, 1);
-          VGA[iDigi][k]->setMinimum(0);
-          VGA[iDigi][k]->setMaximum(40);
+          SetupSpinBox(VGA[iDigi][k], PHA::VGA::VGAGain, -1, false, "VGA-" + QString::number(k) + " [dB] :", vgaLayout, k, 0);
           VGA[iDigi][k]->setSingleStep(0.5);
+          VGA[iDigi][k]->setFixedWidth(40);
           VGA[iDigi][k]->SetToolTip();
           
-          vgaLayout->addWidget(VGA[iDigi][k], k, 1);
-          connect(VGA[iDigi][k], &RSpinBox::valueChanged, this, [=](){ 
-            if( !enableSignalSlot ) return; 
-            VGA[ID][k]->setStyleSheet("color:blue;");
-          });
-          connect(VGA[iDigi][k], &RSpinBox::returnPressed, this, [=](){
-            if( !enableSignalSlot ) return;
-            //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-            double step = VGA[ID][k]->singleStep();
-            double value = VGA[ID][k]->value();
-            VGA[ID][k]->setValue( (std::round(value/step) * step) );
-            QString msg;
-            msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::VGA::VGAGain.GetPara());
-            if( PHA::VGA::VGAGain.GetType() == TYPE::VGA ) msg += ",VGA:" + QString::number(k);
-            msg += " = " + QString::number(VGA[ID][k]->value());
-            if( digi[ID]->WriteValue(PHA::VGA::VGAGain, std::to_string(VGA[ID][k]->value()), k)){
-              VGA[ID][k]->setStyleSheet("");
-              SendLogMsg(msg + "|OK.");
-            }else{
-              VGA[ID][k]->setStyleSheet("color:red;");
-              SendLogMsg(msg + "|Fail.");
-            }
-          });
         }
       }
     
@@ -587,18 +559,18 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupSpinBox( sbITLAMajority[iDigi],  PHA::DIG::ITLAMajorityLev, -1, false, "Majority", aLayout, 1, 0);
         SetupComboBox(cbITLAPairLogic[iDigi], PHA::DIG::ITLAPairLogic,   -1, false, "Pair Logic", aLayout, 2, 0);
         SetupComboBox(cbITLAPolarity[iDigi],  PHA::DIG::ITLAPolarity,    -1, false, "Polarity", aLayout, 3, 0);
-        SetupSpinBox( sbITLAGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "GateWidth [ns]", aLayout, 4, 0);
+        SetupSpinBox( sbITLAGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "Output GateWidth [ns]", aLayout, 4, 0);
 
       
         QGroupBox * gbITLB = new QGroupBox("ITL-B", bdITL[iDigi]);
         ITLLayout->addWidget(gbITLB, 0, 1);
         QGridLayout * bLayout = new QGridLayout(gbITLB);
 
-        SetupComboBox(cbITLBMainLogic[iDigi], PHA::DIG::ITLAMainLogic,   -1, false, "Main Logic", bLayout, 0, 0);
-        SetupSpinBox( sbITLBMajority[iDigi],  PHA::DIG::ITLAMajorityLev, -1, false, "Majority", bLayout, 1, 0);
-        SetupComboBox(cbITLBPairLogic[iDigi], PHA::DIG::ITLAPairLogic,   -1, false, "Pair Logic", bLayout, 2, 0);
-        SetupComboBox(cbITLBPolarity[iDigi],  PHA::DIG::ITLAPolarity,    -1, false, "Polarity", bLayout, 3, 0);
-        SetupSpinBox( sbITLBGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "GateWidth [ns]", bLayout, 4, 0);
+        SetupComboBox(cbITLBMainLogic[iDigi], PHA::DIG::ITLBMainLogic,   -1, false, "Main Logic", bLayout, 0, 0);
+        SetupSpinBox( sbITLBMajority[iDigi],  PHA::DIG::ITLBMajorityLev, -1, false, "Majority", bLayout, 1, 0);
+        SetupComboBox(cbITLBPairLogic[iDigi], PHA::DIG::ITLBPairLogic,   -1, false, "Pair Logic", bLayout, 2, 0);
+        SetupComboBox(cbITLBPolarity[iDigi],  PHA::DIG::ITLBPolarity,    -1, false, "Polarity", bLayout, 3, 0);
+        SetupSpinBox( sbITLBGateWidth[iDigi], PHA::DIG::ITLBGateWidth,   -1, false, "Output GateWidth [ns]", bLayout, 4, 0);
 
 
         QGroupBox * gbITL = new QGroupBox("ITL-Connect", bdITL[iDigi]);
@@ -1775,6 +1747,7 @@ void DigiSettingsPanel::UpdateStatus(){
   digi[ID]->ReadValue(PHA::DIG::ACQ_status);
 
   for( int i = 0; i < (int) PHA::DIG::TempSensADC.size(); i++){
+    if( digi[ID]->GetModelName() != "VX2745" && i > 0 ) continue;
     digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
   }
   for( int i = 0; i < (int) PHA::DIG::TempSensOthers.size(); i++){
@@ -1798,6 +1771,9 @@ void DigiSettingsPanel::EnableControl(){
 
     bdCfg[id]->setEnabled(enable);
     bdTestPulse[id]->setEnabled(enable);
+    bdVGA[id]->setEnabled(enable);
+    bdLVDS[id]->setEnabled(enable);
+    bdITL[id]->setEnabled(enable);
 
     box1[id]->setEnabled(enable);
     box3[id]->setEnabled(enable);

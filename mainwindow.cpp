@@ -42,8 +42,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   runTimer = new QTimer();
   needManualComment = true;
+  isRunning = false;
 
   {
+    scalarOutputInflux = false;
     scalar = new QMainWindow(this);
     scalar->setWindowTitle("Scalar");
     scalar->setGeometry(0, 0, 1000, 800);
@@ -333,6 +335,11 @@ MainWindow::~MainWindow(){
   CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
 
   printf("-------- Delete scalar Thread\n");
+  if( scalarThread->isRunning()){
+    scalarThread->Stop();
+    scalarThread->quit();
+    scalarThread->wait();
+  }
   CleanUpScalar();
   delete scalarThread;
   
@@ -460,8 +467,10 @@ int MainWindow::StartACQ(){
   }
 
   if( !scalar->isVisible() ) scalar->show();
+  isRunning = True;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
-  scalarThread->start();
+  //scalarThread->start();
+  scalarOutputInflux = true;
 
   return 1;
 
@@ -521,11 +530,12 @@ void MainWindow::StopACQ(){
     if( chkSaveRun->isChecked() ) digi[i]->CloseOutFile();
   }
 
-  if( scalarThread->isRunning()){
-    scalarThread->Stop();
-    scalarThread->quit();
-    scalarThread->wait();
-  }
+  // if( scalarThread->isRunning()){
+    // scalarThread->Stop();
+    // scalarThread->quit();
+    // scalarThread->wait();
+  // }
+  scalarOutputInflux = false;
 
   if( influx ){
     influx->ClearDataPointsBuffer();
@@ -557,6 +567,7 @@ void MainWindow::StopACQ(){
     LogMsg("===========================  no-Save Run stopped.");
   }
 
+  isRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
 }
@@ -855,7 +866,7 @@ void MainWindow::OpenScope(){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
-      connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
+      //connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
       connect(scope, &Scope::UpdateOtherPanels, this, [=](){ UpdateAllPanel(0);});
       connect(scope, &Scope::TellACQOnOff, this, [=](const bool onOff){
@@ -1063,6 +1074,13 @@ void MainWindow::UpdateAllPanel(int panelID){
 //^###################################################################### Open Scaler, when DAQ is running
 void MainWindow::OpenScaler(){
   scalar->show();
+  if( isRunning ) {
+    lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
+  }else{
+    lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
+  }
+
+  scalarThread->start();
 
   if( scalar->isVisible() ) scalar->activateWindow();
 }
@@ -1081,8 +1099,12 @@ void MainWindow::SetUpScalar(){
   scalarLayout->removeWidget(lbScalarACQStatus);
   scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
 
+  // QPushButton * bnUpdateScaler = new QPushButton("Manual Update", scalar);
+  // scalarLayout->addWidget(bnUpdateScaler, 2, 1, 1, 1 + nDigi);
+  // connect(bnUpdateScaler, &QPushButton::clicked, this, &MainWindow::UpdateScalar);
+
   ///==== create the 1st row
-  int rowID = 3;
+  int rowID = 4;
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
@@ -1100,7 +1122,7 @@ void MainWindow::SetUpScalar(){
   leTrigger = new QLineEdit**[nDigi];
   leAccept = new QLineEdit**[nDigi];
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
-    rowID = 2;
+    rowID = 3;
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
@@ -1165,7 +1187,7 @@ void MainWindow::UpdateScalar(){
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
-  if( influx ) influx->ClearDataPointsBuffer();
+  if( influx && scalarOutputInflux) influx->ClearDataPointsBuffer();
   std::string haha[MaxNumberOfChannel] = {""};
   double acceptRate[MaxNumberOfChannel] = {0};
 
@@ -1209,7 +1231,7 @@ void MainWindow::UpdateScalar(){
     }
 
     ///============== push the trigger, acceptRate rate database
-    if( influx ){
+    if( influx && scalarOutputInflux ){
       for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
         influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + haha[ch]);
         if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(acceptRate[ch]));
@@ -1218,7 +1240,7 @@ void MainWindow::UpdateScalar(){
     totalFileSize +=  digi[iDigi]->GetTotalFilesSize();
   }
 
-  if( influx && influx->GetDataLength() > 0 ){
+  if( influx && influx->GetDataLength() > 0 && scalarOutputInflux ){
     if( chkSaveRun->isChecked() ) influx->AddDataPoint("FileSize value=" + std::to_string(totalFileSize));
     //influx->PrintDataPoints();
     influx->WriteData(DatabaseName.toStdString());
