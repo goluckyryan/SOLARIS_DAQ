@@ -81,4 +81,6 @@ then  ` make`
 
 # Known Issues
 
-The "Accp." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.
+-The "Trig." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.
+-LVDSTrgMask cannot acess.
+-The CoincidenceLengthT not loaded. 

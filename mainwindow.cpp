@@ -217,13 +217,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
       runTimer->stop();
       StopACQ();
 
-      bnStartACQ->setEnabled(true);
-      bnStopACQ->setEnabled(false);
-      bnComment->setEnabled(false);
-      bnOpenScope->setEnabled(true);
-      chkSaveRun->setEnabled(true);
-      if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
-      if( digiSetting ) digiSetting->EnableControl();
+      if( !isRunning ){
+        bnStartACQ->setEnabled(true);
+        bnStopACQ->setEnabled(false);
+        bnComment->setEnabled(false);
+        bnOpenScope->setEnabled(true);
+        chkSaveRun->setEnabled(true);
+        if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
+        if( digiSetting ) digiSetting->EnableControl();
+      }
 
     });
 
@@ -466,7 +468,10 @@ int MainWindow::StartACQ(){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-  if( !scalar->isVisible() ) scalar->show();
+  if( !scalar->isVisible() ) {
+    scalar->show();
+    if( !scalarThread->isRunning() ) scalarThread->start();
+  }
   isRunning = True;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   //scalarThread->start();
@@ -743,6 +748,11 @@ void MainWindow::CloseDigitizers(){
 
   if(scalar && nDigiConnected > 0 ){ // scalar is child of this, This MUST after scope, because scope tell scalar to update ACQ status
     scalar->close();
+    if( scalarThread->isRunning()){
+      scalarThread->Stop();
+      scalarThread->quit();
+      scalarThread->wait();
+    }
     CleanUpScalar(); // this use digi->GetNChannels(); 
   }
   
@@ -896,6 +906,7 @@ void MainWindow::OpenScope(){
 
     }else{
       scope->show();
+      if( scope->isVisible() ) scope->activateWindow();
       //scope->StartScope();
       if( digiSetting ) digiSetting->EnableControl();
     }
@@ -1134,10 +1145,10 @@ void MainWindow::SetUpScalar(){
 
           rowID ++;
 
-          QLabel * lbA = new QLabel("Trig. [Hz]", scalar);
+          QLabel * lbA = new QLabel("Input [Hz]", scalar);
           lbA->setAlignment(Qt::AlignCenter);
           scalarLayout->addWidget(lbA, rowID, 2*iDigi+1);
-          QLabel * lbB = new QLabel("Accp. [Hz]", scalar);
+          QLabel * lbB = new QLabel("Trig. [Hz]", scalar);
           lbB->setAlignment(Qt::AlignCenter);
           scalarLayout->addWidget(lbB, rowID, 2*iDigi+2);
       }

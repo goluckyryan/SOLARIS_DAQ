@@ -66,6 +66,7 @@ private:
   QWidget * bdLVDS[MaxNumberOfDigitizer];
   QWidget * bdITL[MaxNumberOfDigitizer];
 
+
   QGroupBox * box0[MaxNumberOfDigitizer];
   QGroupBox * box1[MaxNumberOfDigitizer];
   QGroupBox * box3[MaxNumberOfDigitizer];
@@ -179,6 +180,14 @@ private:
   unsigned short ITLConnectStatus[MaxNumberOfDigitizer][MaxNumberOfChannel]; // 0 = disabled, 1 = A, 2 = B
 
   //-------------- LVDS
+  RComboBox * cbLVDSMode[MaxNumberOfDigitizer][4];
+  RComboBox * cbLVDSDirection[MaxNumberOfDigitizer][4];
+  QLineEdit * leLVDSIOReg[MaxNumberOfDigitizer];
+
+  //-------------- DAC output
+  RComboBox * cbDACoutMode[MaxNumberOfDigitizer];
+  RSpinBox *  sbDACoutStaticLevel[MaxNumberOfDigitizer];
+  RSpinBox *  sbDACoutChSelect[MaxNumberOfDigitizer];
 
   //--------------- trigger map
   //RComboBox * cbAllEvtTrigger[MaxNumberOfDigitizer];

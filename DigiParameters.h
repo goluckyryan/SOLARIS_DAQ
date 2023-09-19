@@ -248,13 +248,13 @@ namespace PHA{
     const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
     const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
-    const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static", "DAC fixed level"},
-                                                                                 {"ChInput", "From Channel"},
-                                                                                 {"ChSum", "Sum of all Channels"},
+    const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static",     "DAC static level"},
+                                                                                 {"ChInput",    "From Channel"},
+                                                                                 {"ChSum",      "Sum of all Channels"},
                                                                                  {"OverThrSum", "Number of Channels triggered"},
-                                                                                 {"Ramp", "14-bit counter"},
-                                                                                 {"Sin5MHz", "5 MHz Sin wave"},
-                                                                                 {"Square", "Test Pulse"}});
+                                                                                 {"Ramp",       "14-bit counter"},
+                                                                                 {"Sin5MHz",    "5 MHz Sin wave Vpp = 2V"},
+                                                                                 {"Square",     "Test Pulse"}});
     const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::INTEGER, "units");
     const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::INTEGER);
     const Reg EnableOffsetCalibration  ("EnOffsetCalibration", RW::ReadWrite, TYPE::DIG, {{"True", "Applied Cali."}, {"False", "No Cali."}});

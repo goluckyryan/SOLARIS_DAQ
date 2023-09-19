@@ -194,6 +194,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(bnResetBd[iDigi], &QPushButton::clicked, this, [=](){
          SendLogMsg("Reset Digitizer-" + QString::number(digi[ID]->GetSerialNumber()));
          digi[ID]->Reset();    
+         RefreshSettings();
       });
       
       bnDefaultSetting[iDigi] = new QPushButton("Set Default PHA Settings", tab);
@@ -284,7 +285,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           
         int rowId = 0;
         //-------------------------------------
-        SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, true, "Clock Source :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, false, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
         QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", tab);
         lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -335,11 +336,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbTrgOut[iDigi], PHA::DIG::TrgOutMode, -1, true, "Trg-OUT Mode :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbTrgOut[iDigi], PHA::DIG::TrgOutMode, -1, false, "Trg-OUT Mode :", boardLayout, rowId, 0, 1, 2);
               
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbGPIO[iDigi], PHA::DIG::GPIOMode, -1, true, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbGPIO[iDigi], PHA::DIG::GPIOMode, -1, false, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
         QLabel * lbAutoDisarmAcq = new QLabel("Auto disarm ACQ :", tab);
@@ -366,7 +367,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbBusyIn[iDigi], PHA::DIG::BusyInSource, -1, true, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbBusyIn[iDigi], PHA::DIG::BusyInSource, -1, false, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
 
         QLabel * lbStatEvents = new QLabel("Stat. Event :", tab);
         lbStatEvents->setAlignment(Qt::AlignRight);
@@ -391,11 +392,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, true, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, false, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, true, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, false, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
 
         QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] :", tab);
         lbBdVetoWidth->setAlignment(Qt::AlignRight);
@@ -470,7 +471,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, true, "IO Level :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, false, "IO Level :", boardLayout, rowId, 0, 1, 2);
 
         QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", tab);
         lbClockOutDelay2->setAlignment(Qt::AlignRight);
@@ -504,6 +505,43 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             SendLogMsg(msg + "|Fail.");
           }
         });
+
+        //-------------------------------------
+        rowId ++;
+        SetupComboBox(cbDACoutMode[iDigi], PHA::DIG::DACoutMode, -1, false, "DAC out Mode :", boardLayout, rowId, 0, 1, 2);
+
+        //-------------------------------------
+        rowId ++;
+        SetupSpinBox(sbDACoutStaticLevel[iDigi], PHA::DIG::DACoutStaticLevel, -1, false, "DAC Static Lv. :", boardLayout, rowId, 0, 1, 2);
+
+        //-------------------------------------
+        rowId ++;
+        SetupSpinBox(sbDACoutChSelect[iDigi], PHA::DIG::DACoutChSelect, -1, false, "DAC Channel :", boardLayout, rowId, 0, 1, 2);
+
+        connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "Static" ) {
+            sbDACoutStaticLevel[iDigi]->setEnabled(true);
+          }else{
+            sbDACoutStaticLevel[iDigi]->setEnabled(false);
+          }
+        });
+
+        connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "ChInput"  ) {
+            sbDACoutChSelect[iDigi]->setEnabled(true);
+          }else{
+            sbDACoutChSelect[iDigi]->setEnabled(false);
+          }
+        });
+
+        connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "Square" ) {
+            bdTestPulse[iDigi]->setEnabled(true);
+          }else{
+            if( ckbGlbTrgSource[iDigi][3]->isChecked() == false )  bdTestPulse[iDigi]->setEnabled(false);
+          }
+        });
+
       }
       
       {//^====================== Test Pulse settings
@@ -519,12 +557,24 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupSpinBox(spbTestPusleLowLevel[iDigi], PHA::DIG::TestPulseLowLevel, -1, false, "Low Lvl. [LSB] :", testPulseLayout, 2, 0);
         SetupSpinBox(spbTestPusleHighLevel[iDigi], PHA::DIG::TestPulseHighLevel, -1, false, "High Lvl. [LSB] :", testPulseLayout, 3, 0);
 
-        // dsbTestPuslePeriod[iDigi]->setFixedSize(110, 30);
-        // dsbTestPuslePeriod[iDigi]->setDecimals(0);
-        // dsbTestPusleWidth[iDigi]->setFixedSize(110, 30);
-        // dsbTestPusleWidth[iDigi]->setDecimals(0);
+        dsbTestPuslePeriod[iDigi]->setFixedWidth(100);
+        dsbTestPusleWidth[iDigi]->setFixedWidth(100);
+        spbTestPusleLowLevel[iDigi]->setFixedWidth(100);
+        spbTestPusleHighLevel[iDigi]->setFixedWidth(100);
 
-        for( int i = 0; i < testPulseLayout->columnCount(); i++) testPulseLayout->setColumnStretch(i, 0 );
+        QLabel * lblow = new QLabel("", bdTestPulse[iDigi]); lblow->setAlignment(Qt::AlignCenter); testPulseLayout->addWidget(lblow, 2, 2);
+        QLabel * lbhigh = new QLabel("", bdTestPulse[iDigi]); lbhigh->setAlignment(Qt::AlignCenter); testPulseLayout->addWidget(lbhigh, 3, 2);
+        
+        connect(spbTestPusleLowLevel[iDigi], &RSpinBox::valueChanged, this, [=](){
+          double value = spbTestPusleLowLevel[iDigi]->value();
+          lblow->setText("approx. " + QString::number(value/0xffff*2 - 1, 'f', 2) + " V");
+        });
+
+        connect(spbTestPusleHighLevel[iDigi], &RSpinBox::valueChanged, this, [=](){
+          double value = spbTestPusleHighLevel[iDigi]->value();
+          lbhigh->setText("approx. " + QString::number(value/0xffff*2 - 1, 'f', 2) + " V");
+        });
+
       }
 
       {//^====================== VGA settings
@@ -539,7 +589,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         for( int k = 0; k < 4; k ++){
           SetupSpinBox(VGA[iDigi][k], PHA::VGA::VGAGain, -1, false, "VGA-" + QString::number(k) + " [dB] :", vgaLayout, k, 0);
           VGA[iDigi][k]->setSingleStep(0.5);
-          VGA[iDigi][k]->setFixedWidth(40);
+          VGA[iDigi][k]->setFixedWidth(100);
           VGA[iDigi][k]->SetToolTip();
           
         }
@@ -673,12 +723,41 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         bdLVDS[iDigi] = new QWidget(this);
         bdTab->addTab(bdLVDS[iDigi], "LVDS");
         QGridLayout * LVDSLayout = new QGridLayout(bdLVDS[iDigi]);
-        LVDSLayout->setAlignment(Qt::AlignTop);
+        LVDSLayout->setAlignment(Qt::AlignTop | Qt::AlignLeft);
         //LVDSLayout->setSpacing(2);
 
+        for(int k = 0; k < 4; k ++){
+          SetupComboBox(cbLVDSMode[iDigi][k], PHA::LVDS::LVDSMode, k, false, "Ch-" + QString::number(16* k) + ":" + QString::number(16*(k+1)-1) + "  Mode :", LVDSLayout, k, 0);
+          SetupComboBox(cbLVDSDirection[iDigi][k], PHA::LVDS::LVDSDirection, k, false, "Direction :", LVDSLayout, k, 2);
+        }
+
+        QLabel * lbIOReg = new QLabel("Status :", bdLVDS[iDigi]);
+        lbIOReg->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+        LVDSLayout->addWidget(lbIOReg, 4, 0);
+
+        leLVDSIOReg[iDigi] = new QLineEdit(bdLVDS[iDigi]);
+        LVDSLayout->addWidget(leLVDSIOReg[iDigi], 4, 1, 1, 3);
+        connect(leLVDSIOReg[iDigi], &QLineEdit::textChanged, this, [=](){if( enableSignalSlot ) leLVDSIOReg[iDigi]->setStyleSheet("color: green;");});
+        connect(leLVDSIOReg[iDigi], &QLineEdit::returnPressed, this, [=](){
+          if( !enableSignalSlot ) return;
+          std::string value = leLVDSIOReg[iDigi]->text().toStdString();
+          Reg para = PHA::DIG::LVDSIOReg;
+
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
+          msg += " = " + leLVDSIOReg[iDigi]->text();
+          if( digi[ID]->WriteValue(para, value)){
+            SendLogMsg(msg + "|OK.");
+            leLVDSIOReg[iDigi]->setStyleSheet("");
+            UpdatePanelFromMemory();
+            UpdateOtherPanels();
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            leLVDSIOReg[iDigi]->setStyleSheet("color:red;");
+          }
+        });
 
       }
-
 
     }
 
@@ -1438,7 +1517,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += ",CH:" + QString::number(ch_index);
         msg += " = " + cbChSettingsWrite->currentData().toString();
         if( digi[ID]->WriteValue(para, value, ch_index) ){
@@ -1470,7 +1549,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += ",CH:" + QString::number(ch_index);
         msg += " = " + QString::number(sbChSettingsWrite->value());
         if( digi[ID]->WriteValue(para, std::to_string(sbChSettingsWrite->value()), ch_index)){
@@ -1497,7 +1576,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+        msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
         msg += " = " + QString::number(sbChSettingsWrite->value());
         if( digi[ID]->WriteValue(para, value, ch_index)){
           leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValue(para)));
@@ -1948,12 +2027,12 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   result = QString::fromStdString(digi[ID]->GetSettingValue(PHA::DIG::GlobalTriggerSource));
   resultList = result.remove(QChar(' ')).split("|");
   bdTestPulse[ID]->setEnabled(false);
-  for( int j = 0; j < (int) PHA::DIG::StartSource.GetAnswers().size(); j++){
+  for( int j = 0; j < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); j++){
     ckbGlbTrgSource[ID][j]->setChecked(false);
     for( int i = 0; i < resultList.count(); i++){
       if( resultList[i] == QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[j].first) ) {
         ckbGlbTrgSource[ID][j]->setChecked(true);
-        if( resultList[i] == "TestPulse" ) bdTestPulse[ID]->setEnabled(true);
+        if( resultList[i] == "TestPulse" ||  cbDACoutMode[ID]->currentData().toString().toStdString() == "Square" ) bdTestPulse[ID]->setEnabled(true);
       }
     }
   }
@@ -1991,6 +2070,31 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   FillComboBoxValueFromMemory(cbITLBPolarity[ID],  PHA::DIG::ITLBPolarity);
   FillSpinBoxValueFromMemory( sbITLBMajority[ID],  PHA::DIG::ITLBMajorityLev);
   FillSpinBoxValueFromMemory( sbITLBGateWidth[ID], PHA::DIG::ITLBGateWidth);
+
+  //------------- LVDS
+  for( int k = 0; k < 4; k ++){
+    FillComboBoxValueFromMemory(cbLVDSMode[ID][k], PHA::LVDS::LVDSMode, k);
+    FillComboBoxValueFromMemory(cbLVDSDirection[ID][k], PHA::LVDS::LVDSDirection, k);
+  }
+  leLVDSIOReg[ID]->setText(QString::fromStdString(digi[ID]->GetSettingValue(PHA::DIG::LVDSIOReg)));
+
+  //------------- DAC 
+  FillComboBoxValueFromMemory(cbDACoutMode[ID], PHA::DIG::DACoutMode);
+  FillSpinBoxValueFromMemory(sbDACoutStaticLevel[ID], PHA::DIG::DACoutStaticLevel);
+  FillSpinBoxValueFromMemory(sbDACoutChSelect[ID], PHA::DIG::DACoutChSelect);
+
+  if( cbDACoutMode[ID]->currentData().toString().toStdString() == "Static" ) {
+    sbDACoutStaticLevel[ID]->setEnabled(true);
+  }else{
+    sbDACoutStaticLevel[ID]->setEnabled(false);
+  }
+
+  if( cbDACoutMode[ID]->currentData().toString().toStdString() == "ChInput"  ) {
+    sbDACoutChSelect[ID]->setEnabled(true);
+  }else{
+    sbDACoutChSelect[ID]->setEnabled(false);
+  }
+
 
   //@============================== Channel setting/ status
   for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
@@ -2161,7 +2265,7 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   if( !enableSignalSlot ) return;
 
   std::string value = "";
-  bdTestPulse[ID]->setEnabled(false);
+  if( cbDACoutMode[ID]->currentData().toString().toStdString() != "Square") bdTestPulse[ID]->setEnabled(false);
   for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
     if( ckbGlbTrgSource[ID][i]->isChecked() ){
       //printf("----- %s \n", DIGIPARA::DIG::StartSource.GetAnswers()[i].first.c_str());
@@ -2180,6 +2284,7 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   digi[ID]->WriteValue(PHA::DIG::GlobalTriggerSource, value);
 
 }
+
 
 //^###########################################################################
 void DigiSettingsPanel::SetupShortComboBox(RComboBox *&cbb, Reg para){
