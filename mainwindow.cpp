@@ -696,7 +696,7 @@ void MainWindow::OpenDigitizers(){
         digi[i]->SetSettingFileName("");
         //LogMsg("Reset digitizer And set default PHA settings.");        
         //digi[i]->Reset();
-        //digi[i]->ProgramPHABoard(false);
+        //digi[i]->ProgramDPPBoard(false);
       }
 
       digi[i]->ReadAllSettings();

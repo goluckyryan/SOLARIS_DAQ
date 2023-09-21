@@ -283,6 +283,20 @@ void Digitizer2Gen::StopACQ(){
   acqON = false;
 }
 
+//================ Data Format 
+//------- PHA
+// 0 = all
+// 1 = 1 trace
+// 2 = no trace
+// 3 = minimum (only energy and timestamp)
+// 15 = raw buffer
+//------- PSD
+//?? 4 = all
+//?? 5 = 1 trace
+//?? 6 = no trace
+//?? 7 = only energy + timestamp
+//?? 16 = raw buffer
+
 void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
   
   printf("%s : %d\n", __func__, dataFormat);
@@ -629,7 +643,7 @@ void Digitizer2Gen::SaveDataToFile(){
 //###########################################
 void Digitizer2Gen::Reset(){ SendCommand("/cmd/Reset"); }
 
-void Digitizer2Gen::ProgramPHABoard(){
+void Digitizer2Gen::ProgramDPPBoard(){
   if( !isConnected ) return ;
 
   //============= Board
@@ -687,12 +701,7 @@ void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
   // Channel setting  
   if( testPulse){
     WriteValue("/ch/0..63/par/ChEnable"   , "false");
-    WriteValue("/ch/0/par/ChEnable"   , "true");
-    WriteValue("/ch/1/par/ChEnable"   , "true");
-    WriteValue("/ch/2/par/ChEnable"   , "true");
-    WriteValue("/ch/3/par/ChEnable"   , "true");
-    
-    //WriteValue("/ch/0..63/par/ChEnable"   , "true");
+    WriteValue("/ch/0..63/par/ChEnable"   , "true");
 
     WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
     WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); // EventTriggerSource enought
@@ -707,7 +716,8 @@ void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
 
     //======== Self trigger for each channel 
     WriteValue("/ch/0..63/par/ChEnable"                 , "true");
-    WriteValue("/ch/0..63/par/WaveAnalogProbe0"         , "ADCInput");
+    WriteValue("/ch/0..63/par/WaveDaatSource"           , "ADC_DATA");
+
     WriteValue("/ch/0..63/par/WaveResolution"           , "RES8");  /// 8 ns 
     WriteValue("/ch/0..63/par/WaveSaving"               , "OnRequest");
     WriteValue("/ch/0..63/par/PulsePolarity"            , "Positive");
@@ -757,8 +767,45 @@ void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
     WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
 
   }
+}
 
-  
+void Digitizer2Gen::ProgramPSDChannels(bool testPulse){
+  if( testPulse){
+    WriteValue("/ch/0..63/par/ChEnable"   , "false");
+    WriteValue("/ch/0..63/par/ChEnable"   , "true");
+
+    WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
+    WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); // EventTriggerSource enought
+
+    WriteValue("/par/GlobalTriggerSource", "SwTrg | TestPulse");
+    WriteValue("/par/TestPulsePeriod"    , "1000000"); // 1.0 msec = 1000Hz, tested, 1 trace recording
+    WriteValue("/par/TestPulseWidth"     , "1000"); // nsec
+    WriteValue("/par/TestPulseLowLevel"  , "0");
+    WriteValue("/par/TestPulseHighLevel" , "10000");
+
+  }else{
+
+    //TODO not finished.
+
+    //======== Self trigger for each channel 
+    WriteValue("/ch/0..63/par/ChEnable"                 , "true");
+    WriteValue("/ch/0..63/par/WaveDaatSource"           , "ADC_DATA");
+    WriteValue("/ch/0..63/par/WaveResolution"           , "RES8");  /// 8 ns 
+    WriteValue("/ch/0..63/par/WaveSaving"               , "OnRequest");
+    WriteValue("/ch/0..63/par/PulsePolarity"            , "Positive");
+    WriteValue("/ch/0..63/par/DCOffset"                 , "20");  /// 20% 
+    WriteValue("/ch/0..63/par/TriggerThr"               , "1000"); 
+
+    WriteValue("/ch/0..63/par/EventNeutronReject", "Disabled");
+    WriteValue("/ch/0..63/par/WaveNeutronReject", "Disabled");
+
+    WriteValue("/ch/0..63/par/WaveAnalogProbe0"         , "ADCInput");
+
+    WriteValue("/ch/0..63/par/ChRecordLengthT"           , "4096");  /// 4096 ns, S and T are not Sync
+    WriteValue("/ch/0..63/par/ChPreTriggerT"             , "1000");  /// 1000 ns
+
+  }
+
 }
 
 std::string Digitizer2Gen::ErrorMsg(const char * funcName){

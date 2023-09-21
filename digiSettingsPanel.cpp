@@ -430,6 +430,20 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         cbbBdVetoPolarity[iDigi] = new RComboBox(tab);
         boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
         SetupShortComboBox(cbbBdVetoPolarity[iDigi], PHA::DIG::BoardVetoPolarity);
+        connect(cbbBdVetoPolarity[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoPolarity.GetPara());
+          msg += " = " + cbbBdVetoPolarity[ID]->currentData().toString();
+          if( digi[ID]->WriteValue(PHA::DIG::BoardVetoPolarity, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
+            SendLogMsg(msg + "|OK.");
+            cbbBdVetoPolarity[ID]->setStyleSheet("");
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            cbbBdVetoPolarity[ID]->setStyleSheet("color:red");
+          }
+        });
+
         
         //-------------------------------------
         rowId ++;
@@ -1966,7 +1980,7 @@ void DigiSettingsPanel::LoadSettings(){
 
 void DigiSettingsPanel::SetDefaultPHASettigns(){
   SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
-  digi[ID]->ProgramPHABoard();
+  digi[ID]->ProgramDPPBoard();
   digi[ID]->ProgramPHAChannels();
   RefreshSettings();
 }

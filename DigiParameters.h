@@ -655,4 +655,469 @@ namespace PHA{
 };
 
 
+namespace PSD{
+
+  namespace DIG{
+
+    ///============== read only
+    const Reg CupVer                   = PHA::DIG::CupVer;
+    const Reg FPGA_firmwareVersion     = PHA::DIG::FPGA_firmwareVersion;
+    const Reg FirmwareType             = PHA::DIG::FirmwareType;
+    const Reg ModelCode                = PHA::DIG::ModelCode;
+    const Reg PBCode                   = PHA::DIG::PBCode;
+    const Reg ModelName                = PHA::DIG::ModelName;
+    const Reg FromFactor               = PHA::DIG::FromFactor;
+    const Reg FamilyCode               = PHA::DIG::FamilyCode;
+    const Reg SerialNumber             = PHA::DIG::SerialNumber;
+    const Reg PCBrev_MB                = PHA::DIG::PCBrev_MB;
+    const Reg PCBrev_PB                = PHA::DIG::PCBrev_PB;
+    const Reg DPP_License              = PHA::DIG::DPP_License;
+    const Reg DPP_LicenseStatus        = PHA::DIG::DPP_LicenseStatus;
+    const Reg DPP_LicenseRemainingTime = PHA::DIG::DPP_LicenseRemainingTime;
+    const Reg NumberOfChannel          = PHA::DIG::NumberOfChannel;
+    const Reg ADC_bit                  = PHA::DIG::ADC_bit;
+    const Reg ADC_SampleRate           = PHA::DIG::ADC_SampleRate;
+    const Reg InputDynamicRange        = PHA::DIG::InputDynamicRange;
+    const Reg InputType                = PHA::DIG::InputType;
+    const Reg InputImpedance           = PHA::DIG::InputImpedance;
+    const Reg IPAddress                = PHA::DIG::IPAddress;
+    const Reg NetMask                  = PHA::DIG::NetMask;
+    const Reg Gateway                  = PHA::DIG::Gateway;
+    const Reg LED_status               = PHA::DIG::LED_status;
+    const Reg ACQ_status               = PHA::DIG::ACQ_status;
+    const Reg MaxRawDataSize           = PHA::DIG::MaxRawDataSize;
+    const Reg TempSensAirIn            = PHA::DIG::TempSensAirIn;
+    const Reg TempSensAirOut           = PHA::DIG::TempSensAirOut;
+    const Reg TempSensCore             = PHA::DIG::TempSensCore;
+    const Reg TempSensFirstADC         = PHA::DIG::TempSensFirstADC;
+    const Reg TempSensLastADC          = PHA::DIG::TempSensLastADC;
+    const Reg TempSensHottestADC       = PHA::DIG::TempSensHottestADC;
+    const Reg TempSensADC0             = PHA::DIG::TempSensADC0;
+    const Reg TempSensADC1             = PHA::DIG::TempSensADC1;
+    const Reg TempSensADC2             = PHA::DIG::TempSensADC2;
+    const Reg TempSensADC3             = PHA::DIG::TempSensADC3;
+    const Reg TempSensADC4             = PHA::DIG::TempSensADC4;
+    const Reg TempSensADC5             = PHA::DIG::TempSensADC5;
+    const Reg TempSensADC6             = PHA::DIG::TempSensADC6;
+    const Reg TempSensADC7             = PHA::DIG::TempSensADC7;
+
+    const std::vector<Reg> TempSensADC = {TempSensADC0,TempSensADC1,TempSensADC2,TempSensADC3,TempSensADC4,TempSensADC5,TempSensADC6,TempSensADC7};
+    const std::vector<Reg> TempSensOthers = {TempSensAirIn,TempSensAirOut,TempSensCore,TempSensFirstADC,TempSensLastADC,TempSensHottestADC};
+
+    const Reg TempSensDCDC             = PHA::DIG::TempSensDCDC;
+    const Reg VInSensDCDC              = PHA::DIG::VInSensDCDC;
+    const Reg VOutSensDCDC             = PHA::DIG::VOutSensDCDC;
+    const Reg IOutSensDCDC             = PHA::DIG::IOutSensDCDC;
+    const Reg FreqSensCore             = PHA::DIG::FreqSensCore;
+    const Reg DutyCycleSensDCDC        = PHA::DIG::DutyCycleSensDCDC;
+    const Reg SpeedSensFan1            = PHA::DIG::SpeedSensFan1;
+    const Reg SpeedSensFan2            = PHA::DIG::SpeedSensFan2;
+    const Reg ErrorFlags               = PHA::DIG::ErrorFlags;
+    const Reg BoardReady               = PHA::DIG::BoardReady;
+
+///============= read write
+    //const Reg EnableClockOutBackplane  ("EnClockOutP0", RW::ReadWrite, TYPE::DIG);
+    const Reg ClockSource              = PHA::DIG::ClockSource;
+    const Reg IO_Level                 = PHA::DIG::IO_Level;
+    const Reg StartSource              = PHA::DIG::StartSource;
+    const Reg GlobalTriggerSource      = PHA::DIG::GlobalTriggerSource;
+    const Reg BusyInSource             = PHA::DIG::BusyInSource;
+    const Reg EnableClockOutFrontPanel = PHA::DIG::EnableClockOutFrontPanel;
+    const Reg TrgOutMode               = PHA::DIG::TrgOutMode;
+    const Reg GPIOMode                 = PHA::DIG::GPIOMode;
+    const Reg SyncOutMode              = PHA::DIG::SyncOutMode;
+    const Reg BoardVetoSource          = PHA::DIG::BoardVetoSource;
+    const Reg BoardVetoWidth           = PHA::DIG::BoardVetoWidth;
+    const Reg BoardVetoPolarity        = PHA::DIG::BoardVetoPolarity;
+    const Reg RunDelay                 = PHA::DIG::RunDelay;
+    const Reg EnableAutoDisarmACQ      = PHA::DIG::EnableAutoDisarmACQ;
+    const Reg EnableDataReduction      = PHA::DIG::EnableDataReduction;
+    const Reg EnableStatisticEvents    = PHA::DIG::EnableStatisticEvents;
+    const Reg VolatileClockOutDelay    = PHA::DIG::VolatileClockOutDelay;
+    const Reg PermanentClockOutDelay   = PHA::DIG::PermanentClockOutDelay;
+    const Reg TestPulsePeriod          = PHA::DIG::TestPulsePeriod;
+    const Reg TestPulseWidth           = PHA::DIG::TestPulseWidth;
+    const Reg TestPulseLowLevel        = PHA::DIG::TestPulseLowLevel;
+    const Reg TestPulseHighLevel       = PHA::DIG::TestPulseHighLevel;
+    const Reg ErrorFlagMask            = PHA::DIG::ErrorFlagMask;
+    const Reg ErrorFlagDataMask        = PHA::DIG::ErrorFlagDataMask;
+    const Reg DACoutMode               = PHA::DIG::DACoutMode;
+    const Reg DACoutStaticLevel        = PHA::DIG::DACoutStaticLevel;
+    const Reg DACoutChSelect           = PHA::DIG::DACoutChSelect;
+    const Reg EnableOffsetCalibration  = PHA::DIG::EnableOffsetCalibration;
+
+    const Reg ITLAMainLogic           = PHA::DIG::ITLAMainLogic;
+    const Reg ITLAMajorityLev         = PHA::DIG::ITLAMajorityLev;
+    const Reg ITLAPairLogic           = PHA::DIG::ITLAPairLogic;
+    const Reg ITLAPolarity            = PHA::DIG::ITLAPolarity;
+    const Reg ITLAMask                = PHA::DIG::ITLAMask;
+    const Reg ITLAGateWidth           = PHA::DIG::ITLAGateWidth;
+    const Reg ITLBMainLogic           = PHA::DIG::ITLBMainLogic;
+    const Reg ITLBMajorityLev         = PHA::DIG::ITLBMajorityLev;
+    const Reg ITLBPairLogic           = PHA::DIG::ITLBPairLogic;
+    const Reg ITLBPolarity            = PHA::DIG::ITLBPolarity;
+    const Reg ITLBMask                = PHA::DIG::ITLBMask;
+    const Reg ITLBGateWidth           = PHA::DIG::ITLBGateWidth;
+
+
+    const Reg LVDSIOReg   = PHA::DIG::LVDSIOReg;
+    //const Reg LVDSTrgMask ("lvdstrgmask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BYTE, "64-bit");
+
+    /// ========== command
+    const Reg Reset                = PHA::DIG::Reset;
+    const Reg ClearData            = PHA::DIG::ClearData;
+    const Reg ArmACQ               = PHA::DIG::ArmACQ;
+    const Reg DisarmACQ            = PHA::DIG::DisarmACQ;
+    const Reg SoftwareStartACQ     = PHA::DIG::SoftwareStartACQ;
+    const Reg SoftwareStopACQ      = PHA::DIG::SoftwareStopACQ;
+    const Reg SendSoftwareTrigger  = PHA::DIG::SendSoftwareTrigger;
+    const Reg ReloadCalibration    = PHA::DIG::ReloadCalibration;
+
+
+    const std::vector<Reg> AllSettings = {
+      CupVer                   ,
+      FPGA_firmwareVersion     ,
+      FirmwareType             ,
+      ModelCode                ,
+      PBCode                   ,
+      ModelName                ,
+      FromFactor               ,
+      FamilyCode               ,
+      SerialNumber             ,
+      PCBrev_MB                ,
+      PCBrev_PB                ,
+      DPP_License              ,
+      DPP_LicenseStatus        ,
+      DPP_LicenseRemainingTime ,
+      NumberOfChannel          ,
+      ADC_bit                  ,
+      ADC_SampleRate           ,
+      InputDynamicRange        ,
+      InputType                ,
+      InputImpedance           ,
+      IPAddress                ,
+      NetMask                  ,
+      Gateway                  ,
+      LED_status               ,
+      ACQ_status               ,
+      MaxRawDataSize           ,
+      TempSensAirIn            ,
+      TempSensAirOut           ,
+      TempSensCore             ,
+      TempSensFirstADC         ,
+      TempSensLastADC          ,
+      TempSensHottestADC       ,
+      TempSensADC0             ,
+      TempSensADC1             ,
+      TempSensADC2             ,
+      TempSensADC3             ,
+      TempSensADC4             ,
+      TempSensADC5             ,
+      TempSensADC6             ,
+      TempSensADC7             ,
+      TempSensDCDC             ,
+      VInSensDCDC              ,
+      VOutSensDCDC             ,
+      IOutSensDCDC             ,
+      FreqSensCore             ,
+      DutyCycleSensDCDC        ,
+      SpeedSensFan1            ,
+      SpeedSensFan2            ,
+      ErrorFlags               ,
+      BoardReady               ,
+      ClockSource              ,
+      IO_Level                 ,
+      StartSource              ,
+      GlobalTriggerSource      ,
+      BusyInSource             ,
+      //EnableClockOutBackplane  ,
+      EnableClockOutFrontPanel ,
+      TrgOutMode               ,
+      GPIOMode                 ,
+      SyncOutMode              ,
+      BoardVetoSource          ,
+      BoardVetoWidth           ,
+      BoardVetoPolarity        ,
+      RunDelay                 ,
+      EnableAutoDisarmACQ      ,
+      EnableDataReduction      ,
+      EnableStatisticEvents    ,
+      VolatileClockOutDelay    ,
+      PermanentClockOutDelay   ,
+      TestPulsePeriod          ,
+      TestPulseWidth           ,
+      TestPulseLowLevel        ,
+      TestPulseHighLevel       ,
+      ErrorFlagMask            ,
+      ErrorFlagDataMask        ,
+      DACoutMode               ,
+      DACoutStaticLevel        ,
+      DACoutChSelect           ,
+      EnableOffsetCalibration  ,
+      ITLAMainLogic            ,
+      ITLAMajorityLev          ,
+      ITLAPairLogic            ,
+      ITLAPolarity             ,
+      ITLAMask                 ,
+      ITLAGateWidth            ,
+      ITLBMainLogic            ,
+      ITLBMajorityLev          ,
+      ITLBPairLogic            ,
+      ITLBPolarity             ,
+      ITLBMask                 ,
+      ITLBGateWidth            ,
+      LVDSIOReg                
+      //LVDSTrgMask              
+    };
+
+
+  }
+
+  namespace VGA{
+    const Reg VGAGain = PHA::VGA::VGAGain;
+  }
+
+  namespace LVDS{
+
+    const Reg LVDSMode      = PHA::LVDS::LVDSMode;
+    const Reg LVDSDirection = PHA::LVDS::LVDSDirection;
+
+    const std::vector<Reg> AllSettings = {
+      LVDSMode      ,
+      LVDSDirection 
+    };
+
+  }
+
+  namespace CH{
+
+    /// ========= red only
+    const Reg SelfTrgRate          = PHA::CH::SelfTrgRate;
+    const Reg ChannelStatus        = PHA::CH::ChannelStatus;
+    const Reg GainFactor           = PHA::CH::GainFactor;
+    const Reg ADCToVolts           = PHA::CH::ADCToVolts;
+    const Reg ChannelRealtime      = PHA::CH::ChannelRealtime;
+    const Reg ChannelDeadtime      = PHA::CH::ChannelDeadtime;
+    const Reg ChannelTriggerCount  = PHA::CH::ChannelTriggerCount;
+    const Reg ChannelSavedCount    = PHA::CH::ChannelSavedCount;
+    const Reg ChannelWaveCount     = PHA::CH::ChannelWaveCount;
+
+    /// ======= read write
+    const Reg ChannelEnable    = PHA::CH::ChannelEnable;
+    const Reg DC_Offset        = PHA::CH::DC_Offset;
+    const Reg TriggerThreshold = PHA::CH::TriggerThreshold;
+    const Reg Polarity         = PHA::CH::Polarity;
+
+    const Reg WaveDataSource              = PHA::CH::WaveDataSource;
+    const Reg RecordLength                = PHA::CH::RecordLength;
+    const Reg PreTrigger                  = PHA::CH::PreTrigger;
+    const Reg WaveSaving                  = PHA::CH::WaveSaving;
+    const Reg WaveResolution              = PHA::CH::WaveResolution;
+
+
+    const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
+                                                                                         {"ADCInputBaseline",           "ADC Input baseline"}, 
+                                                                                         {"CFDFilter",                  "CFD Filter"}});
+    const Reg WaveAnalogProbe1            ("WaveAnalogProbe1", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
+                                                                                         {"ADCInputBaseline",           "ADC Input baseline"}, 
+                                                                                         {"CFDFilter",                  "CFD Filter"}});
+    const Reg WaveDigitalProbe0           ("WaveDigitalProbe0", RW::ReadWrite, TYPE::CH, {{"Trigger",                      "Trigger"},              
+                                                                                          {"CFDFilterArmed",               "CFD Filter Armed"},    
+                                                                                          {"ReTriggerGuard",               "ReTrigger Guard"},      
+                                                                                          {"ADCInputBaselineFreeze",       "ADC Input basline Freeze"}, 
+                                                                                          {"ADCInputOverthreshold",        "ADC Input Over-threshold"},  
+                                                                                          {"ChargeReady",                  "Charge Ready"},        
+                                                                                          {"LongGate",                     "Long Gate"},        
+                                                                                          {"ShortGate",                    "Short Gate"},        
+                                                                                          {"PileUpTrigger",                "Pile-up Trig."},        
+                                                                                          {"ChargeOverRange",               "Charge Over Range"},        
+                                                                                          {"ADCSaturation",                 "ADC Saturate"},         
+                                                                                          {"ADCInputNegativeOverthreshold", "ADC Input Neg. Over-Threshold"} });
+    const Reg WaveDigitalProbe1           ("WaveDigitalProbe1", RW::ReadWrite, TYPE::CH, {{"Trigger",                      "Trigger"},              
+                                                                                          {"CFDFilterArmed",               "CFD Filter Armed"},    
+                                                                                          {"ReTriggerGuard",               "ReTrigger Guard"},      
+                                                                                          {"ADCInputBaselineFreeze",       "ADC Input basline Freeze"}, 
+                                                                                          {"ADCInputOverthreshold",        "ADC Input Over-threshold"},  
+                                                                                          {"ChargeReady",                  "Charge Ready"},        
+                                                                                          {"LongGate",                     "Long Gate"},        
+                                                                                          {"ShortGate",                    "Short Gate"},        
+                                                                                          {"PileUpTrigger",                "Pile-up Trig."},        
+                                                                                          {"ChargeOverRange",               "Charge Over Range"},        
+                                                                                          {"ADCSaturation",                 "ADC Saturate"},         
+                                                                                          {"ADCInputNegativeOverthreshold", "ADC Input Neg. Over-Threshold"} });
+    const Reg WaveDigitalProbe2           ("WaveDigitalProbe2", RW::ReadWrite, TYPE::CH, {{"Trigger",                      "Trigger"},              
+                                                                                          {"CFDFilterArmed",               "CFD Filter Armed"},    
+                                                                                          {"ReTriggerGuard",               "ReTrigger Guard"},      
+                                                                                          {"ADCInputBaselineFreeze",       "ADC Input basline Freeze"}, 
+                                                                                          {"ADCInputOverthreshold",        "ADC Input Over-threshold"},  
+                                                                                          {"ChargeReady",                  "Charge Ready"},        
+                                                                                          {"LongGate",                     "Long Gate"},        
+                                                                                          {"ShortGate",                    "Short Gate"},        
+                                                                                          {"PileUpTrigger",                "Pile-up Trig."},        
+                                                                                          {"ChargeOverRange",               "Charge Over Range"},        
+                                                                                          {"ADCSaturation",                 "ADC Saturate"},         
+                                                                                          {"ADCInputNegativeOverthreshold", "ADC Input Neg. Over-Threshold"} });
+    const Reg WaveDigitalProbe3           ("WaveDigitalProbe3", RW::ReadWrite, TYPE::CH, {{"Trigger",                      "Trigger"},              
+                                                                                          {"CFDFilterArmed",               "CFD Filter Armed"},    
+                                                                                          {"ReTriggerGuard",               "ReTrigger Guard"},      
+                                                                                          {"ADCInputBaselineFreeze",       "ADC Input basline Freeze"}, 
+                                                                                          {"ADCInputOverthreshold",        "ADC Input Over-threshold"},  
+                                                                                          {"ChargeReady",                  "Charge Ready"},        
+                                                                                          {"LongGate",                     "Long Gate"},        
+                                                                                          {"ShortGate",                    "Short Gate"},        
+                                                                                          {"PileUpTrigger",                "Pile-up Trig."},        
+                                                                                          {"ChargeOverRange",               "Charge Over Range"},        
+                                                                                          {"ADCSaturation",                 "ADC Saturate"},         
+                                                                                          {"ADCInputNegativeOverthreshold", "ADC Input Neg. Over-Threshold"} });
+
+    const std::vector<Reg> AnalogProbe  = {WaveAnalogProbe0, WaveAnalogProbe1};
+    const std::vector<Reg> DigitalProbe = {WaveDigitalProbe0, WaveDigitalProbe1, WaveDigitalProbe2, WaveDigitalProbe3};
+
+
+    const Reg EventTriggerSource     = PHA::CH::EventTriggerSource;
+    const Reg ChannelsTriggerMask    = PHA::CH::ChannelsTriggerMask;
+    const Reg ChannelVetoSource      = PHA::CH::ChannelVetoSource;
+    const Reg WaveTriggerSource      = PHA::CH::WaveTriggerSource;
+
+    const Reg EventSelector          = PHA::CH::EventSelector;
+    const Reg WaveSelector           = PHA::CH::WaveSelector;
+    const Reg CoincidenceMask         = PHA::CH::CoincidenceMask;
+    const Reg AntiCoincidenceMask     = PHA::CH::AntiCoincidenceMask;
+    const Reg CoincidenceLength       = PHA::CH::CoincidenceLength;
+    const Reg CoincidenceLengthSample = PHA::CH::CoincidenceLengthSample;
+
+    const Reg ADCVetoWidth       = PHA::CH::ADCVetoWidth;
+
+    const Reg EventNeutronReject  ("EventNeutronReject", RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},{"Enabled", "Enabled"}});
+    const Reg WaveNeutronReject   ("WaveNeutronReject", RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},{"Enabled", "Enabled"}});
+
+    const Reg EnergySkimLowDiscriminator  = PHA::CH::EnergySkimLowDiscriminator;
+    const Reg EnergySkimHighDiscriminator = PHA::CH::EnergySkimHighDiscriminator;
+
+    const Reg RecordLengthSample     = PHA::CH::RecordLengthSample;
+    const Reg PreTriggerSample       = PHA::CH::PreTriggerSample;
+   
+    const Reg ITLConnect          = PHA::CH::ITLConnect;
+
+    const Reg ADCInputBaselineAvg  ("ADCInputBaselineAvg", RW::ReadWrite, TYPE::CH, {{"Fixed", "Fixed"},
+                                                                                     {"Low", "Low"},
+                                                                                     {"MediumLow", "MediumLow"},
+                                                                                     {"MediumHigh", "MediumHigh"},
+                                                                                     {"High", "High"}});
+                                                                                    
+    const Reg AbsoluteBaseline ("AbsoluteBaseline", RW::ReadWrite, TYPE::CH, {{"0", ""},{"65535", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg ADCInputBaselineGuard ("ADCInputBaselineGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+
+    const Reg SmoothingFactor ("SmoothingFactor", RW::ReadWrite, TYPE::CH, {{"1", "Disabled"},
+                                                                            {"2", "Avg. 2 samples"},
+                                                                            {"4", "Avg. 4 samples"},
+                                                                            {"8", "Avg. 8 samples"},
+                                                                            {"16", "Avg. 16 samples"}});
+
+    const Reg ChargeSmoothing     ("ChargeSmoothing", RW::ReadWrite, TYPE::CH, {{"Enabled", "Enabled"}, {"Disabled", "Disabled"}});
+    const Reg TimeFilterSmoothing ("TimeFilterSmoothing", RW::ReadWrite, TYPE::CH, {{"Enabled", "Enabled"}, {"Disabled", "Disabled"}});
+    const Reg TriggerFilterSelection ("TriggerFilterSelection", RW::ReadWrite, TYPE::CH, {{"LeadingEdge", "Leading Edge"}, {"CFD", "CFD"}});
+
+    const Reg CFDDelay ("CFDDelayT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"8184", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg CFDFraction ("CFDFraction", RW::ReadWrite, TYPE::CH, {{"25", ""},{"100", ""},{"0", ""}}, ANSTYPE::INTEGER, "%");
+
+    const Reg TimeFilterRetriggerGuard ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+
+    const Reg TriggerHysteresis     ("TriggerHysteresis", RW::ReadWrite, TYPE::CH, {{"Enabled", "Enabled"}, {"Disabled", "Disabled"}});
+    const Reg PileupGap ("PileupGap", RW::ReadWrite, TYPE::CH, {{"0", ""},{"65535", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg GateLongLength ("GateLongLengthT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"32000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg GateShortLength ("GateShortLengthT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"32000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg GateOffset ("GateOffsetT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"2000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg LongChargeIntegratorPedestal  ("LongChargeIntegratorPedestal", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
+    const Reg ShortChargeIntegratorPedestal ("ShortChargeIntegratorPedestal", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
+
+    const Reg EnergyGain ("EnergyGain", RW::ReadWrite, TYPE::CH, {{"1",   "No Gain"},
+                                                                  {"4",   "x4"},
+                                                                  {"16",  "x16"},
+                                                                  {"64",  "x64"},
+                                                                  {"256", "x256"}});
+
+    const Reg NeutronThreshold ("NeutronThreshold", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
+
+    const Reg ADCInputBaselineGuardSample ("ADCInputBaselineGuardS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg CFDDelaySample ("CFDDelayS", RW::ReadWrite, TYPE::CH, {{"4", ""},{"1023", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg TimeFilterRetriggerGuardSample ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg GateLongLengthSample ("GateLongLengthS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"4000", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg GateShortLengthSample ("GateShortLengthS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"4000", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+    const Reg GateOffsetSample ("GateOffsetS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"250", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
+
+
+    const std::vector<Reg> AllSettings = {
+      SelfTrgRate                ,
+      ChannelStatus              ,
+      GainFactor                 ,
+      ADCToVolts                 ,
+      ChannelRealtime            ,
+      ChannelDeadtime            ,
+      ChannelTriggerCount        ,
+      ChannelSavedCount          ,
+      ChannelWaveCount           ,
+      ChannelEnable              ,
+      DC_Offset                  ,
+      TriggerThreshold           ,
+      Polarity                   ,
+      WaveDataSource             ,
+      RecordLength               ,
+      WaveSaving                 ,
+      WaveResolution             ,
+      PreTrigger                 ,
+      WaveAnalogProbe0           ,
+      WaveAnalogProbe1           ,
+      WaveDigitalProbe0          ,
+      WaveDigitalProbe1          ,
+      WaveDigitalProbe2          ,
+      WaveDigitalProbe3          ,
+      EventTriggerSource         ,
+      ChannelsTriggerMask        ,
+      ChannelVetoSource          ,
+      WaveTriggerSource          ,
+      EventSelector              ,
+      WaveSelector               ,
+      CoincidenceMask            ,
+      AntiCoincidenceMask        ,
+      CoincidenceLength          ,
+      CoincidenceLengthSample    ,
+      ADCVetoWidth               ,
+      EnergySkimLowDiscriminator ,
+      EnergySkimHighDiscriminator,
+      RecordLengthSample         ,
+      PreTriggerSample           ,
+      ITLConnect                 ,
+      ADCInputBaselineAvg        ,
+      AbsoluteBaseline           ,
+      ADCInputBaselineGuard      ,
+      SmoothingFactor            ,
+      ChargeSmoothing            ,
+      TimeFilterSmoothing        ,
+      TriggerFilterSelection     ,
+      CFDDelay                   ,
+      CFDFraction                ,
+      TimeFilterRetriggerGuard   ,
+      TriggerHysteresis          ,
+      PileupGap                  ,
+      GateLongLength             ,
+      GateShortLength            ,
+      GateOffset                 ,
+      LongChargeIntegratorPedestal,
+      ShortChargeIntegratorPedestal,
+      EnergyGain                 ,
+      NeutronThreshold           ,
+      ADCInputBaselineGuardSample,
+      CFDDelaySample             ,
+      TimeFilterRetriggerGuardSample,
+      GateLongLengthSample       ,
+      GateShortLengthSample      ,
+      GateOffsetSample      
+    };
+
+  }
+
+
+};
+
 #endif
