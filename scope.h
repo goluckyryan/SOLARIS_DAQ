@@ -201,6 +201,10 @@ private:
 
   bool allowChange;
 
+  // remembee setting, once the scope stop, restore it.
+  std::string channelEnable[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  std::string waveSaving;
+  std::string waveTriggerSource; 
 };
 
 #endif

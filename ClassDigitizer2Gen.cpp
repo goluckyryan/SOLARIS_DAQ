@@ -629,19 +629,61 @@ void Digitizer2Gen::SaveDataToFile(){
 //###########################################
 void Digitizer2Gen::Reset(){ SendCommand("/cmd/Reset"); }
 
-void Digitizer2Gen::ProgramPHA(bool testPulse){
+void Digitizer2Gen::ProgramPHABoard(){
   if( !isConnected ) return ;
 
-  // Acquistion
-  WriteValue("/par/StartSource"  , "SWcmd");
-  WriteValue("/par/TrgOutMode", "Disabled");
-  WriteValue("/par/GPIOMode",   "Disabled");
-  WriteValue("/par/SyncOutMode", "Disabled");  
-  WriteValue("/par/RunDelay", "0"); // ns, that is for sync time with multi board
-  WriteValue("/par/IOlevel", "NIM"); 
-  WriteValue("/par/EnStatEvents", "true");
-  WriteValue("/par/BusyInSource", "Disabled");
+  //============= Board
+  WriteValue("/par/ClockSource"          , "Internal");
+  WriteValue("/par/EnClockOutFP"         , "True");
+  WriteValue("/par/StartSource"          , "SWcmd");
+  WriteValue("/par/GlobalTriggerSource"  , "TrgIn");
+
+  WriteValue("/par/TrgOutMode"      , "Disabled");
+  WriteValue("/par/GPIOMode"        , "Disabled");
+  WriteValue("/par/BusyInSource"    , "Disabled");
+  WriteValue("/par/SyncOutMode"     , "Disabled"); 
+  WriteValue("/par/BoardVetoSource" , "Disabled"); 
+
+  WriteValue("/par/RunDelay"  , "0"); // ns, that is for sync time with multi board
+  WriteValue("/par/IOlevel"   , "NIM");
+
+  WriteValue("/par/EnAutoDisarmAcq" , "true");
+  WriteValue("/par/EnStatEvents"    , "true");
   
+  WriteValue("/par/BoardVetoWidth"    , "0");
+  WriteValue("/par/VolatileClockOutDelay"    , "0");
+  WriteValue("/par/PermanentClockOutDelay"    , "0");
+
+  WriteValue("/par/DACoutMode"         , "ChInput");
+  WriteValue("/par/DACoutStaticLevel"  , "8192");
+  WriteValue("/par/DACoutChSelect"     , "0");
+
+
+  //============== Test pulse
+  //WriteValue("/par/TestPulsePeriod"    , "1000000"); // 1.0 msec = 1000Hz, tested, 1 trace recording
+  //WriteValue("/par/TestPulseWidth"     , "1000"); // nsec
+  //WriteValue("/par/TestPulseLowLevel"  , "0");
+  //WriteValue("/par/TestPulseHighLevel" , "10000");
+
+  //============== ITL
+  WriteValue("/par/ITLAMainLogic"    , "OR"); 
+  WriteValue("/par/ITLAMajorityLev"  , "2"); 
+  WriteValue("/par/ITLAPairLogic"    , "NONE"); 
+  WriteValue("/par/ITLAPolarity"     , "Direct"); 
+  WriteValue("/par/ITLAGateWidth"    , "100"); 
+
+  WriteValue("/par/ITLBMainLogic"    , "OR"); 
+  WriteValue("/par/ITLBMajorityLev"  , "2"); 
+  WriteValue("/par/ITLBPairLogic"    , "NONE"); 
+  WriteValue("/par/ITLBPolarity"     , "Direct"); 
+  WriteValue("/par/ITLBGateWidth"    , "100"); 
+
+
+}
+
+void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
+
+
   // Channel setting  
   if( testPulse){
     WriteValue("/ch/0..63/par/ChEnable"   , "false");
@@ -658,84 +700,64 @@ void Digitizer2Gen::ProgramPHA(bool testPulse){
     WriteValue("/par/GlobalTriggerSource", "SwTrg | TestPulse");
     WriteValue("/par/TestPulsePeriod"    , "1000000"); // 1.0 msec = 1000Hz, tested, 1 trace recording
     WriteValue("/par/TestPulseWidth"     , "1000"); // nsec
-    WriteValue("/par/TestPulseLowLevel"     , "0");
-    WriteValue("/par/TestPulseHighLevel"     , "10000");
+    WriteValue("/par/TestPulseLowLevel"  , "0");
+    WriteValue("/par/TestPulseHighLevel" , "10000");
 
   }else{
-    //======= this is for manual send trigger signal via software
-    //WriteValue("/ch/0..63/par/EventTriggerSource", "SwTrg");
-    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "SwTrg"); 
-    
-    
+
     //======== Self trigger for each channel 
-    WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
-    WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
+    WriteValue("/ch/0..63/par/ChEnable"                 , "true");
+    WriteValue("/ch/0..63/par/WaveAnalogProbe0"         , "ADCInput");
+    WriteValue("/ch/0..63/par/WaveResolution"           , "RES8");  /// 8 ns 
+    WriteValue("/ch/0..63/par/WaveSaving"               , "OnRequest");
+    WriteValue("/ch/0..63/par/PulsePolarity"            , "Positive");
+    WriteValue("/ch/0..63/par/EnergyFilterLFLimitation" , "Off");
+    WriteValue("/ch/0..63/par/DCOffset"                 , "10");  /// 10% 
+    WriteValue("/ch/0..63/par/TriggerThr"               , "1000"); 
 
-    //======== One (or more) slef-trigger can trigger whole board, ??? depend on Channel Trigger mask
-    //WriteValue("/ch/0..63/par/EventTriggerSource", "Ch64Trigger");
-    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "Ch64Trigger"); 
+    WriteValue("/ch/0..63/par/TimeFilterRiseTimeS"       , "10");   // 80 ns
+    WriteValue("/ch/0..63/par/TimeFilterRetriggerGuardS" , "10");   // 80 ns
+    WriteValue("/ch/0..63/par/ChRecordLengthT"           , "4096");  /// 4096 ns, S and T are not Sync
+    WriteValue("/ch/0..63/par/ChPreTriggerT"             , "1000");  /// 1000 ns
 
-    //WriteValue("/ch/0..63/par/ChannelsTriggerMask", "0x0000FFFF000F000F");
+    //======== Trapezoid setting
+    WriteValue("/ch/0..63/par/EnergyFilterRiseTimeS"       , "62");   //  496 ns
+    WriteValue("/ch/0..63/par/EnergyFilterFlatTopS"        , "200");  // 1600 ns
+    WriteValue("/ch/0..63/par/EnergyFilterPoleZeroS"       , "6250"); // 50 us
+    WriteValue("/ch/0..63/par/EnergyFilterPeakingPosition" , "20");   // 20 % = Flatup * 20% = 320 ns
+    WriteValue("/ch/0..63/par/EnergyFilterBaselineGuardS"  , "100");  // 800 ns
+    WriteValue("/ch/0..63/par/EnergyFilterPileupGuardS"    , "10");   // 80 ns
+    WriteValue("/ch/0..63/par/EnergyFilterBaselineAvg"     , "Medium"); // 1024 sample
+    WriteValue("/ch/0..63/par/EnergyFilterFineGain"        , "1.0");
+    WriteValue("/ch/0..63/par/EnergyFilterPeakingAvg"      , "LowAVG");
 
-    //WriteValue("/ch/0..3/par/ChannelsTriggerMask", "0x1");
-    //WriteValue("/ch/4..7/par/ChannelsTriggerMask", "0x10");
+    //======== Probe Setting
+    WriteValue("/ch/0..63/par/WaveAnalogProbe0"  , "ADCInput");
+    WriteValue("/ch/0..63/par/WaveAnalogProbe1"  , "EnergyFilterMinusBaseline");
+    WriteValue("/ch/0..63/par/WaveDigitalProbe0" , "Trigger");
+    WriteValue("/ch/0..63/par/WaveDigitalProbe1" , "EnergyFilterPeaking");
+    WriteValue("/ch/0..63/par/WaveDigitalProbe2" , "TimeFilterArmed");
+    WriteValue("/ch/0..63/par/WaveDigitalProbe3" , "EnergyFilterPeakReady");
 
-    //WriteValue("/ch/0/par/ChannelsTriggerMask", "0x000F");
-    //WriteValue("/ch/12/par/ChannelsTriggerMask", "0x000F");
-    //WriteValue("/ch/38/par/ChannelsTriggerMask", "0x000F"); // when channel has no input, it still record.
+    //======== Trigger setting
+    WriteValue("/ch/0..63/par/EventTriggerSource"  , "ChSelfTrigger");
+    WriteValue("/ch/0..63/par/WaveTriggerSource"   , "Disabled"); 
+    WriteValue("/ch/0..63/par/ChannelVetoSource"   , "Disabled"); 
+    WriteValue("/ch/0..63/par/ChannelsTriggerMask" , "0x0");
+    WriteValue("/ch/0..63/par/CoincidenceMask"     , "Disabled");
+    WriteValue("/ch/0..63/par/AntiCoincidenceMask" , "Disabled");
+    WriteValue("/ch/0..63/par/CoincidenceLengthT"  , "0");
+    WriteValue("/ch/0..63/par/ADCVetoWidth"        , "0");
 
-    //----------- coincident trigger to ch-4n
-    //WriteValue("/ch/0..63/par/EventTriggerSource", "ChSelfTrigger");
-    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "ChSelfTrigger"); 
+    //======== Other Setting
+    WriteValue("/ch/0..63/par/EventSelector"               , "All");
+    WriteValue("/ch/0..63/par/WaveSelector"                , "All");
+    WriteValue("/ch/0..63/par/EnergySkimLowDiscriminator"  , "0");
+    WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "0");
+    WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
 
-    //for(int i = 0 ; i < 16; i++){
-    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/ChannelsTriggerMask").c_str(), "0x1");
-    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceMask").c_str(), "Ch64Trigger");
-    //  WriteValue(("/ch/"+ std::to_string(4*i+1) + ".." + std::to_string(4*i+3) + "/par/CoincidenceLengthT").c_str(), "100"); // ns
-    //}
-    //======== ACQ trigger?
-    //WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
-    //WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); 
-   
-    //WriteValue("/par/GlobalTriggerSource", "SwTrg");
-
-    
-    WriteValue("/ch/0..63/par/ChEnable"   , "true");
-    //WriteValue("/ch/0..15/par/ChEnable"   , "true");
   }
-  
-  WriteValue("/ch/0..63/par/DCOffset"   , "10");  /// 10% 
-  WriteValue("/ch/0..63/par/WaveSaving" , "OnRequest");
-  
-  WriteValue("/ch/0..63/par/ChRecordLengthT"   , "4096");  /// 4096 ns, S and T are not Sync
-  WriteValue("/ch/0..63/par/ChPreTriggerT"     , "1000");  /// 1000 ns
-  WriteValue("/ch/0..63/par/WaveResolution"    , "RES8");  /// 8 ns 
-  
-  WriteValue("/ch/0..63/par/WaveAnalogProbe0"  , "ADCInput");
-  WriteValue("/ch/0..63/par/WaveAnalogProbe1"  , "EnergyFilterMinusBaseline");
-  WriteValue("/ch/0..63/par/WaveDigitalProbe0" , "Trigger");
-  WriteValue("/ch/0..63/par/WaveDigitalProbe1" , "EnergyFilterPeaking");
-  WriteValue("/ch/0..63/par/WaveDigitalProbe2" , "TimeFilterArmed");
-  WriteValue("/ch/0..63/par/WaveDigitalProbe3" , "EnergyFilterPeakReady");
 
-  // Filter parameters
-  WriteValue("/ch/0..63/par/TimeFilterRiseTimeS"         , "10");   // 80 ns
-  WriteValue("/ch/0..63/par/TriggerThr"                  , "1000"); 
-  WriteValue("/ch/0..63/par/PulsePolarity"               , "Positive");
-  WriteValue("/ch/0..63/par/EnergyFilterBaselineAvg"     , "Medium"); // 1024 sample
-  WriteValue("/ch/0..63/par/EnergyFilterFineGain"        , "1.0");
-
-  WriteValue("/ch/0..63/par/EnergyFilterRiseTimeS"       , "62");   //  496 ns
-  WriteValue("/ch/0..63/par/EnergyFilterFlatTopS"        , "200");  // 1600 ns
-  WriteValue("/ch/0..63/par/EnergyFilterPoleZeroS"       , "6250"); // 50 us
-
-  WriteValue("/ch/0..63/par/EnergyFilterPeakingPosition" , "20");   // 20 % = Flatup * 20% = 320 ns
-
-  WriteValue("/ch/0..63/par/TimeFilterRetriggerGuardS"   , "10");   // 80 ns
-  WriteValue("/ch/0..63/par/EnergyFilterPileupGuardS"    , "10");   // 80 ns
-  WriteValue("/ch/0..63/par/EnergyFilterBaselineGuardS"  , "100");  // 800 ns
-
-  WriteValue("/ch/0..63/par/EnergyFilterLFLimitation"    , "Off");
   
 }
 

@@ -611,6 +611,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBox(cbITLAPolarity[iDigi],  PHA::DIG::ITLAPolarity,    -1, false, "Polarity", aLayout, 3, 0);
         SetupSpinBox( sbITLAGateWidth[iDigi], PHA::DIG::ITLAGateWidth,   -1, false, "Output GateWidth [ns]", aLayout, 4, 0);
 
+        connect(cbITLAMainLogic[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          sbITLAMajority[iDigi]->setEnabled(cbITLAMainLogic[iDigi]->currentData().toString() == "Majority");
+        });
       
         QGroupBox * gbITLB = new QGroupBox("ITL-B", bdITL[iDigi]);
         ITLLayout->addWidget(gbITLB, 0, 1);
@@ -622,6 +625,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBox(cbITLBPolarity[iDigi],  PHA::DIG::ITLBPolarity,    -1, false, "Polarity", bLayout, 3, 0);
         SetupSpinBox( sbITLBGateWidth[iDigi], PHA::DIG::ITLBGateWidth,   -1, false, "Output GateWidth [ns]", bLayout, 4, 0);
 
+        connect(cbITLBMainLogic[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          sbITLBMajority[iDigi]->setEnabled(cbITLBMainLogic[iDigi]->currentData().toString() == "Majority");
+        });
 
         QGroupBox * gbITL = new QGroupBox("ITL-Connect", bdITL[iDigi]);
         ITLLayout->addWidget(gbITL, 1, 0, 1, 2);
@@ -967,7 +973,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             leTriggerMask[ID][ch]->setText(SixteenBaseValue);
 
             QString msg;
-            msg = QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara()) + "|DIG:"+ QString::number(digi[ID]->GetSerialNumber());
+            msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara()) ;
             msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
             msg += " = " + SixteenBaseValue;
 
@@ -1960,7 +1966,8 @@ void DigiSettingsPanel::LoadSettings(){
 
 void DigiSettingsPanel::SetDefaultPHASettigns(){
   SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
-  digi[ID]->ProgramPHA();
+  digi[ID]->ProgramPHABoard();
+  digi[ID]->ProgramPHAChannels();
   RefreshSettings();
 }
 
@@ -2189,6 +2196,10 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     }
 
     if( isSame ) leTriggerMask[ID][MaxNumberOfChannel]->setText("0x" + QString::number(mask, 16).toUpper());
+  }else{
+    unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
+    leTriggerMask[ID][digi[ID]->GetNChannels()]->setText("0x" + QString::number(mask, 16).toUpper());
+    leTriggerMask[ID][digi[ID]->GetNChannels()]->setStyleSheet("");
   }
 
   enableSignalSlot = true;
@@ -2256,9 +2267,18 @@ void DigiSettingsPanel::SetStartSource(){
   QString msg;
   msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" +  QString::fromStdString(PHA::DIG::StartSource.GetPara());
   msg += " = " + QString::fromStdString(value);
-  SendLogMsg(msg);
 
-  digi[ID]->WriteValue(PHA::DIG::StartSource, value);
+  if( digi[ID]->WriteValue(PHA::DIG::StartSource, value) ){
+    SendLogMsg(msg + "|OK.");
+    for( int i = 0; i < (int) PHA::DIG::StartSource.GetAnswers().size(); i++){
+      ckbStartSource[ID][i]->setStyleSheet("");
+    }
+  }else{
+    SendLogMsg(msg + "|Fail.");
+    for( int i = 0; i < (int) PHA::DIG::StartSource.GetAnswers().size(); i++){
+      ckbStartSource[ID][i]->setStyleSheet("background-color : red");
+    }
+  }
 }
 
 void DigiSettingsPanel::SetGlobalTriggerSource(){
@@ -2281,7 +2301,17 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   msg += " = " + QString::fromStdString(value);
   SendLogMsg(msg);
 
-  digi[ID]->WriteValue(PHA::DIG::GlobalTriggerSource, value);
+  if( digi[ID]->WriteValue(PHA::DIG::GlobalTriggerSource, value) ){
+    SendLogMsg(msg + "|OK.");
+    for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
+      ckbGlbTrgSource[ID][i]->setStyleSheet("");
+    }
+  }else{
+    SendLogMsg(msg + "|Fail.");
+    for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
+      ckbGlbTrgSource[ID][i]->setStyleSheet("background-color : red");
+    }
+  }
 
 }
 

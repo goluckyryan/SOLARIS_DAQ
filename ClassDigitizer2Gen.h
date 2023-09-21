@@ -116,7 +116,8 @@ class Digitizer2Gen {
     uint64_t GetRealTime(int ch) const {return realTime[ch];}
 
     void Reset();
-    void ProgramPHA(bool testPulse = false);
+    void ProgramPHABoard();
+    void ProgramPHAChannels(bool testPulse = false);
     
     unsigned short GetNChannels() const {return nChannels;}
     unsigned short GetCh2ns()     const {return ch2ns;}

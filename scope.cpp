@@ -80,6 +80,9 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     for( int i = 0; i < digi[index]->GetNChannels(); i++){
       cbScopeCh->addItem("ch-" + QString::number(i), i);
     }
+    digiMTX[index].lock();
+    ReadScopeSettings();
+    digiMTX[index].unlock();
     allowChange = true;
   });
 
@@ -103,14 +106,17 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   allowChange = true;
 
 
-  bnScopeReset = new QPushButton("ReProgram Digitizer", this);
+  bnScopeReset = new QPushButton("ReProgram Channels", this);
   layout->addWidget(bnScopeReset, rowID, 2);
   connect(bnScopeReset, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-    digi[iDigi]->Reset();
-    digi[iDigi]->ProgramPHA(false);
-    SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
+    //digi[iDigi]->Reset();
+    digi[iDigi]->ProgramPHAChannels();
+    //SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
+    ReadScopeSettings();
+    UpdateOtherPanels();
+    SendLogMsg("Re-program all Channels to default PHA settings");
   });
 
   bnScopeReadSettings = new QPushButton("Read Ch. Settings", this);
@@ -268,6 +274,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, PHA::CH::EnergyFilterPeakingAvg);
     ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, PHA::CH::EnergyFilterBaselineGuard);
     ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, PHA::CH::EnergyFilterBaselineAvg);
+
+    //----------------- next row
     ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, PHA::CH::EnergyFilterPileUpGuard);
     ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, PHA::CH::EnergyFilterLowFreqFilter);
 
@@ -321,6 +329,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //StartScope();
 
+  UpdateSettingsFromMemeory();
+
 }
 
 Scope::~Scope(){
@@ -342,33 +352,35 @@ void Scope::ReadScopeSettings(){
   int iDigi = cbScopeDigi->currentIndex();
   if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
 
-  int ch = cbScopeCh->currentIndex();
-  digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe0, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe1, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe0, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe1, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe2, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe3, ch);
+  // int ch = cbScopeCh->currentIndex();
+  // digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe0, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe1, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe0, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe1, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe2, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe3, ch);
 
-  digi[iDigi]->ReadValue(PHA::CH::Polarity, ch);
-  digi[iDigi]->ReadValue(PHA::CH::WaveResolution, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingAvg, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineAvg, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterLowFreqFilter, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::Polarity, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::WaveResolution, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingAvg, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineAvg, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterLowFreqFilter, ch);
 
-  digi[iDigi]->ReadValue(PHA::CH::RecordLength, ch);
-  digi[iDigi]->ReadValue(PHA::CH::PreTrigger, ch);
-  digi[iDigi]->ReadValue(PHA::CH::DC_Offset, ch);
-  digi[iDigi]->ReadValue(PHA::CH::TriggerThreshold, ch);
-  digi[iDigi]->ReadValue(PHA::CH::TimeFilterRiseTime, ch);
-  digi[iDigi]->ReadValue(PHA::CH::TimeFilterRetriggerGuard, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterRiseTime, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFlatTop, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPoleZero, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFineGain, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingPosition, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineGuard, ch);
-  digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPileUpGuard, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::RecordLength, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::PreTrigger, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::DC_Offset, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::TriggerThreshold, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::TimeFilterRiseTime, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::TimeFilterRetriggerGuard, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterRiseTime, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFlatTop, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPoleZero, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFineGain, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingPosition, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineGuard, ch);
+  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPileUpGuard, ch);
+
+  // digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
 
   UpdateSettingsFromMemeory();
 
@@ -446,11 +458,23 @@ void Scope::StartScope(){
 
     ReadScopeSettings();
 
-    digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
+    for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
+      channelEnable[iDigi][ch2] = digi[iDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
+    }
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
-    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-    digi[iDigi]->SetPHADataFormat(0);
 
+    if( iDigi == cbScopeDigi->currentIndex() ){
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
+
+      waveSaving =  digi[iDigi]->ReadValue(PHA::CH::WaveSaving, ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
+
+      waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
+
+    }
+
+    digi[iDigi]->SetPHADataFormat(0);
     digi[iDigi]->StartACQ();
 
     readDataThread[iDigi]->SetSaveData(false);
@@ -476,18 +500,26 @@ void Scope::StopScope(){
   if(digi){
     for(int i = 0; i < nDigi; i++){
       if( digi[i]->IsDummy() ) continue;
-      digiMTX[i].lock();
-      digi[i]->StopACQ();
-      digi[i]->WriteValue(PHA::CH::ChannelEnable, "True", -1);
-      digiMTX[i].unlock();
 
       readDataThread[i]->Stop();
       readDataThread[i]->quit();
       readDataThread[i]->wait();
+
+      digiMTX[i].lock();
+      digi[i]->StopACQ();
+      for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
+        digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
+      }
+      if( i == cbScopeDigi->currentIndex() ) {
+        digi[i]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, cbScopeCh->currentIndex());
+        digi[i]->WriteValue(PHA::CH::WaveSaving, waveSaving, cbScopeCh->currentIndex());
+      }
+      digiMTX[i].unlock();
     }
     
     emit TellACQOnOff(false);
   }
+
 
   ScopeControlOnOff(true);
   emit TellSettingsPanelControlOnOff();

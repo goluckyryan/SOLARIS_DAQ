@@ -223,6 +223,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
         bnComment->setEnabled(false);
         bnOpenScope->setEnabled(true);
         chkSaveRun->setEnabled(true);
+        cbDataFormat->setEnabled(true);
         if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
         if( digiSetting ) digiSetting->EnableControl();
       }
@@ -437,9 +438,11 @@ int MainWindow::StartACQ(){
     int dataFormatID = cbDataFormat->currentData().toInt();
     digi[i]->SetPHADataFormat(dataFormatID);// only save 1 trace
 
-    //Additional settings
-    digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
-
+    //Additional settings, it is better user to control
+    //if( cbDataFormat->currentIndex() <  2 )  {
+    //  digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
+    //  digi[i]->WriteValue(PHA::CH::WaveSaving, "True", -1);
+    //}
 
     if( chkSaveRun->isChecked() ){
       //Save setting to raw data with run ID
@@ -587,6 +590,7 @@ void MainWindow::AutoRun(){
       bnOpenScope->setEnabled(false);
       chkSaveRun->setEnabled(false);
       cbAutoRun->setEnabled(false);
+      cbDataFormat->setEnabled(false);
       if( digiSetting ) digiSetting->EnableControl();
     }
     return;
@@ -646,6 +650,7 @@ void MainWindow::AutoRun(){
   if(chkSaveRun->isChecked()) bnComment->setEnabled(true);
   bnOpenScope->setEnabled(false);
   chkSaveRun->setEnabled(false);
+  cbDataFormat->setEnabled(false);
   cbAutoRun->setEnabled(false);
   if( digiSetting ) digiSetting->EnableControl();
 
@@ -691,7 +696,7 @@ void MainWindow::OpenDigitizers(){
         digi[i]->SetSettingFileName("");
         //LogMsg("Reset digitizer And set default PHA settings.");        
         //digi[i]->Reset();
-        //digi[i]->ProgramPHA(false);
+        //digi[i]->ProgramPHABoard(false);
       }
 
       digi[i]->ReadAllSettings();

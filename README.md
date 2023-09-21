@@ -81,6 +81,7 @@ then  ` make`
 
 # Known Issues
 
--The "Trig." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.
--LVDSTrgMask cannot acess.
--The CoincidenceLengthT not loaded. 
+- The "Trig." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.
+- LVDSTrgMask cannot acess.
+- The CoincidenceLengthT not loaded. 
+- Sometime, the digitizer halt after sent the /cmd/armacquisition command. This is CAEN library problem.

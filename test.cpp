@@ -90,7 +90,7 @@ int main(int argc, char* argv[]){
 
   digi->OpenDigitizer(url);
   digi->Reset();
-  //digi->ProgramPHA(false);
+  //digi->ProgramPHABoard(false);
   
   //printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
 
