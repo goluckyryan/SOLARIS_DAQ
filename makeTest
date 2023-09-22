@@ -1,5 +1,5 @@
 CC       = g++
-COPTS    = -fPIC -DLINUX -O2 -std=c++17 -lpthread
+COPTS    = -fPIC -DLINUX -O2 -std=c++17 -lpthread -g
 CAENLIBS = -lCAEN_FELib
 CURLLIBS = -lcurl
 
@@ -15,7 +15,7 @@ test : test.cpp ClassDigitizer2Gen.o influxdb.o
 	@echo "------- test"
 	$(CC) $(COPTS) $(OBJS) -o test test.cpp  $(CAENLIBS) $(CURLLIBS)
 #
-ClassDigitizer2Gen.o : ClassDigitizer2Gen.cpp ClassDigitizer2Gen.h Event.h
+ClassDigitizer2Gen.o : ClassDigitizer2Gen.cpp ClassDigitizer2Gen.h Event.h DigiParameters.h
 	@echo "------- ClassDigitizer2Gen.o"
 	$(CC) $(COPTS) -c ClassDigitizer2Gen.cpp $(CAENLIBS)
 #

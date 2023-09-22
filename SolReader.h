@@ -67,7 +67,7 @@ SolReader::SolReader(){
 SolReader::SolReader(std::string fileName, unsigned short dataType = 0){
   init();
   OpenFile(fileName);
-  evt->SetDataType(dataType);
+  evt->SetDataType(dataType, DPPType::PHA);
 }
 
 SolReader::~SolReader(){
@@ -107,39 +107,41 @@ inline int SolReader::ReadNextBlock(int opt){
   
   fread(&blockStartIdentifier, 2, 1, inFile);
 
-  if( (blockStartIdentifier & 0xAAA0) != 0xAAA0 ) {
+  if( (blockStartIdentifier & 0xAA00) != 0xAA00 ) {
     printf("header fail.\n");
     return -2 ;
   } 
 
-  if( ( blockStartIdentifier & 0xF ) == 15 ){
-    evt->SetDataType(15);  
+  if( ( blockStartIdentifier & 0xF ) == DataFormat::RAW ){
+    evt->SetDataType(DataFormat::RAW, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
   }
   evt->dataType = blockStartIdentifier & 0xF;
+  evt->DPPType = ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
 
-  if( evt->dataType == 0){
+  if( evt->dataType == DataFormat::ALL){
     if( opt == 0 ){
-      fread(&evt->channel, 1, 1, inFile);
-      fread(&evt->energy, 2, 1, inFile);
-      fread(&evt->timestamp, 6, 1, inFile);
-      fread(&evt->fine_timestamp, 2, 1, inFile);
+      fread(&evt->channel,             1, 1, inFile);
+      fread(&evt->energy,              2, 1, inFile);
+      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
+      fread(&evt->timestamp,           6, 1, inFile);
+      fread(&evt->fine_timestamp,      2, 1, inFile);
       fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority, 2, 1, inFile);
-      fread(&evt->downSampling, 1, 1, inFile);
-      fread(&evt->board_fail, 1, 1, inFile);
-      fread(&evt->flush, 1, 1, inFile);
-      fread(&evt->trigger_threashold, 2, 1, inFile);
-      fread(&evt->event_size, 8, 1, inFile);
-      fread(&evt->aggCounter, 4, 1, inFile);
+      fread(&evt->flags_low_priority,  2, 1, inFile);
+      fread(&evt->downSampling,        1, 1, inFile);
+      fread(&evt->board_fail,          1, 1, inFile);
+      fread(&evt->flush,               1, 1, inFile);
+      fread(&evt->trigger_threashold,  2, 1, inFile);
+      fread(&evt->event_size,          8, 1, inFile);
+      fread(&evt->aggCounter,          4, 1, inFile);
     }else{
-      fseek(inFile, 31, SEEK_CUR);
+      fseek(inFile, evt->DPPType == DPPType::PHA ? 31 : 33, SEEK_CUR);
     }
     fread(&evt->traceLenght, 8, 1, inFile);
     if( opt == 0){
-      fread(evt->analog_probes_type, 2, 1, inFile);
-      fread(evt->digital_probes_type, 4, 1, inFile);
-      fread(evt->analog_probes[0], evt->traceLenght*4, 1, inFile);
-      fread(evt->analog_probes[1], evt->traceLenght*4, 1, inFile);
+      fread(evt->analog_probes_type,     2, 1, inFile);
+      fread(evt->digital_probes_type,    4, 1, inFile);
+      fread(evt->analog_probes[0],  evt->traceLenght*4, 1, inFile);
+      fread(evt->analog_probes[1],  evt->traceLenght*4, 1, inFile);
       fread(evt->digital_probes[0], evt->traceLenght, 1, inFile);
       fread(evt->digital_probes[1], evt->traceLenght, 1, inFile);
       fread(evt->digital_probes[2], evt->traceLenght, 1, inFile);
@@ -147,16 +149,17 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, 6 + evt->traceLenght*(12), SEEK_CUR);
     } 
-  }else if( evt->dataType == 1){
+  }else if( evt->dataType == DataFormat::OneTrace){
     if( opt == 0 ){
-      fread(&evt->channel, 1, 1, inFile);
-      fread(&evt->energy, 2, 1, inFile);
-      fread(&evt->timestamp, 6, 1, inFile);
-      fread(&evt->fine_timestamp, 2, 1, inFile);
+      fread(&evt->channel,             1, 1, inFile);
+      fread(&evt->energy,              2, 1, inFile);
+      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
+      fread(&evt->timestamp,           6, 1, inFile);
+      fread(&evt->fine_timestamp,      2, 1, inFile);
       fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority, 2, 1, inFile);
+      fread(&evt->flags_low_priority,  2, 1, inFile);
     }else{
-      fseek(inFile, 14, SEEK_CUR);
+      fseek(inFile, evt->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
     fread(&evt->traceLenght, 8, 1, inFile);
     if( opt == 0){
@@ -165,26 +168,28 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, 1 + evt->traceLenght*4, SEEK_CUR);
     }
-  }else if( evt->dataType == 2){
+  }else if( evt->dataType == DataFormat::NoTrace){
     if( opt == 0 ){
-      fread(&evt->channel, 1, 1, inFile);
-      fread(&evt->energy, 2, 1, inFile);
-      fread(&evt->timestamp, 6, 1, inFile);
-      fread(&evt->fine_timestamp, 2, 1, inFile);
+      fread(&evt->channel,             1, 1, inFile);
+      fread(&evt->energy,              2, 1, inFile);
+      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
+      fread(&evt->timestamp,           6, 1, inFile);
+      fread(&evt->fine_timestamp,      2, 1, inFile);
       fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority, 2, 1, inFile);
+      fread(&evt->flags_low_priority,  2, 1, inFile);
     }else{
-      fseek(inFile, 14, SEEK_CUR);
+      fseek(inFile, evt->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
-  }else if( evt->dataType == 3){
+  }else if( evt->dataType == DataFormat::Minimum){
     if( opt == 0 ){
-      fread(&evt->channel, 1, 1, inFile);
-      fread(&evt->energy, 2, 1, inFile);
+      fread(&evt->channel,   1, 1, inFile);
+      fread(&evt->energy,    2, 1, inFile);
+      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
       fread(&evt->timestamp, 6, 1, inFile);
     }else{
-      fseek(inFile, 9, SEEK_CUR);
+      fseek(inFile, evt->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
     }
-  }else if( evt->dataType == 15){
+  }else if( evt->dataType == DataFormat::RAW){
       fread(&evt->dataSize, 8, 1, inFile);
     if( opt == 0){
       fread(evt->data, evt->dataSize, 1, inFile);

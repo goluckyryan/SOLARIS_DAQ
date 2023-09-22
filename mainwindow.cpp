@@ -436,7 +436,7 @@ int MainWindow::StartACQ(){
 
     //digi[i]->SetPHADataFormat(1);// only save 1 trace
     int dataFormatID = cbDataFormat->currentData().toInt();
-    digi[i]->SetPHADataFormat(dataFormatID);// only save 1 trace
+    digi[i]->SetDataFormat(dataFormatID);
 
     //Additional settings, it is better user to control
     //if( cbDataFormat->currentIndex() <  2 )  {

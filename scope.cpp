@@ -474,7 +474,7 @@ void Scope::StartScope(){
 
     }
 
-    digi[iDigi]->SetPHADataFormat(0);
+    digi[iDigi]->SetDataFormat(0); //TODO Should be only trace?
     digi[iDigi]->StartACQ();
 
     readDataThread[iDigi]->SetSaveData(false);

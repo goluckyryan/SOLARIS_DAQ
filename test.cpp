@@ -86,10 +86,22 @@ int main(int argc, char* argv[]){
 
   remove("haha_000.sol");
 
-  const char * url = "dig2://192.168.0.100/";
+  //const char * url = "dig2://192.168.0.100/";
+  const char * url = "dig2://192.168.0.254/";
 
   digi->OpenDigitizer(url);
   digi->Reset();
+  //digi->ReadValue(PSD::DIG::CupVer, -1, true);
+  digi->ReadAllSettings();
+
+  for( int ch = 0; ch < 64; ch++ ) {
+    printf( "|%s| \n", digi->GetSettingValue(PSD::CH::TimeFilterRetriggerGuard, ch).c_str());
+  }
+
+
+  digi->SaveSettingsToFile("test_setting.txt");
+
+
   //digi->ProgramDPPBoard(false);
   
   //printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
@@ -98,7 +110,7 @@ int main(int argc, char* argv[]){
 
   //printf("===================================\n");
 
-  printf("======== index : %d \n", digi->FindIndex(PHA::CH::ChannelEnable));
+  //printf("======== index : %d \n", digi->FindIndex(PHA::CH::ChannelEnable));
 
   //digi->LoadSettingsFromFile("settings_21245.dat");
   //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());

@@ -32,8 +32,8 @@ class Digitizer2Gen {
     char retValue[256];
 
     unsigned short serialNumber;
-    std::string  FPGAType;
-    unsigned int FPGAVer;
+    std::string  FPGAType; // look the DigitiParameter.h::PHA::DIG::FirwareType, DPP_PHA, DPP_ZLE, DPP_PSD, DPP_DAW, DPP_OPEN, and Scope
+    unsigned int FPGAVer; // for checking copy setting
     unsigned short nChannels;
     unsigned short ch2ns;
     std::string ModelName;
@@ -71,21 +71,23 @@ class Digitizer2Gen {
     Digitizer2Gen();
     ~Digitizer2Gen();
 
-    unsigned short GetSerialNumber() const{return serialNumber;}
-    std::string GetFPGAType() const {return FPGAType;}
-    std::string GetModelName() const {return ModelName;}
-    unsigned int GetFPGAVersion() const {return FPGAVer;}
+    unsigned short GetSerialNumber() const {return serialNumber;}
+    std::string    GetFPGAType()     const {return FPGAType;}
+    std::string    GetModelName()    const {return ModelName;}
+    unsigned int   GetFPGAVersion()  const {return FPGAVer;}
 
     void  SetDummy(unsigned short sn);
-    bool  IsDummy() const {return isDummy;}
+    bool  IsDummy()     const {return isDummy;}
+    bool  IsConnected() const {return isConnected;}
 
-    int OpenDigitizer(const char * url);
-    bool IsConnected() const {return isConnected;}
-    int CloseDigitizer();
+    int  OpenDigitizer(const char * url);
+    int  CloseDigitizer();
 
     int GetRet() const {return ret;};
 
-    int FindIndex(const Reg para); // get index from DIGIPARA
+    uint64_t    GetHandle(const char * parameter);
+    uint64_t    GetParentHandle(uint64_t handle);
+    std::string GetPath(uint64_t handle);
 
     std::string  ReadValue(const char * parameter, bool verbose = false);
     std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
@@ -94,9 +96,9 @@ class Digitizer2Gen {
     void         SendCommand(const char * parameter);
     void         SendCommand(std::string shortPara);
 
-    uint64_t    GetHandle(const char * parameter);
-    uint64_t    GetParentHandle(uint64_t handle);
-    std::string GetPath(uint64_t handle);
+    int FindIndex(const Reg para); // get index from DIGIPARA
+    std::string GetSettingValue(const Reg para, unsigned int ch_index = 0); // read from memory
+
     
     std::string ErrorMsg(const char * funcName);
 
@@ -104,11 +106,8 @@ class Digitizer2Gen {
     void StopACQ();
     bool IsAcqOn() const {return acqON;}
     
-    void SetPHADataFormat(unsigned short dataFormat); // 0 = all data, 
-                                                      // 1 = analog trace-0 only + flags
-                                                      // 2 = no trace, only ch, energy, timestamp, fine_timestamp + flags
-                                                      // 3 = only ch, energy, timestamp, minimum
-                                                      // 15 = raw data
+    void SetDataFormat(unsigned short dataFormat); // dataFormat = namespace DataFormat
+
     int  ReadData();
     int  ReadStat(); // digitizer update it every 500 msec
     void PrintStat();
@@ -138,7 +137,6 @@ class Digitizer2Gen {
     int  ReadAndSaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
     bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
 
-    std::string GetSettingValue(const Reg para, unsigned int ch_index = 0); // read from memory
 };
 
 #endif

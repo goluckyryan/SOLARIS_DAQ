@@ -38,6 +38,7 @@ void Digitizer2Gen::Initialization(){
   acqON = false;
 
   settingFileName = "";
+
   boardSettings = PHA::DIG::AllSettings;
   for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
   for( int index = 0 ; index < 4; index ++) {
@@ -49,7 +50,8 @@ void Digitizer2Gen::Initialization(){
   for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
   for( int i = 0; i < (int) PHA::LVDS::AllSettings.size(); i++) LVDSMap[PHA::LVDS::AllSettings[i].GetPara()] = i;
   for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
-  
+
+
 }
 
 void Digitizer2Gen::SetDummy(unsigned short sn){
@@ -58,7 +60,6 @@ void Digitizer2Gen::SetDummy(unsigned short sn){
   serialNumber = sn;
   nChannels = 64;
   FPGAType = "DPP_PHA";
-
 }
 
 //########################################### Handles functions
@@ -122,7 +123,6 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
 
 std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose){
   std:: string ans = ReadValue(para.GetFullPara(ch_index).c_str(), verbose); 
-  //printf("%s | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str());
 
   int index = FindIndex(para);
   switch( para.GetType()){
@@ -131,6 +131,8 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
     case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
     case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
   }
+  
+  //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
 
   return ans;
 }
@@ -219,28 +221,64 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   isConnected = true;
 
   printf("#################################################\n");
-  ReadAllSettings();
 
-  serialNumber = atoi(GetSettingValue(PHA::DIG::SerialNumber).c_str());
-  FPGAType = GetSettingValue(PHA::DIG::FirmwareType);
-  FPGAVer = atoi(GetSettingValue(PHA::DIG::CupVer).c_str());
-  nChannels = atoi(GetSettingValue(PHA::DIG::NumberOfChannel).c_str());
-  ModelName = GetSettingValue(PHA::DIG::ModelName);
-  int adcRate = atoi(GetSettingValue(PHA::DIG::ADC_SampleRate).c_str());
+  //========== PHA and PSD are the same
+  serialNumber = atoi(ReadValue(PHA::DIG::SerialNumber).c_str());
+  FPGAType = ReadValue(PHA::DIG::FirmwareType);
+  FPGAVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
+  nChannels = atoi(ReadValue(PHA::DIG::NumberOfChannel).c_str());
+  ModelName = ReadValue(PHA::DIG::ModelName);
+  int adcRate = atoi(ReadValue(PHA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
   
-  printf("   IP address : %s\n", GetSettingValue(PHA::DIG::IPAddress).c_str());
-  printf("     Net Mask : %s\n", GetSettingValue(PHA::DIG::NetMask).c_str());
-  printf("      Gateway : %s\n", GetSettingValue(PHA::DIG::Gateway).c_str());
-  
+  printf("   IP address : %s\n", ReadValue(PHA::DIG::IPAddress).c_str());
+  printf("     Net Mask : %s\n", ReadValue(PHA::DIG::NetMask).c_str());
+  printf("      Gateway : %s\n", ReadValue(PHA::DIG::Gateway).c_str());
   printf("   Model name : %s\n", ModelName.c_str());
-  printf("  CUP version : %s\n", GetSettingValue(PHA::DIG::CupVer).c_str());
-  printf("     DPP Type : %s\n", GetSettingValue(PHA::DIG::FirmwareType).c_str());
+  printf("     DPP Type : %s (%d)\n", FPGAType.c_str(), FPGAVer);
   printf("Serial number : %d\n", serialNumber);
-  printf("     ADC bits : %s\n", GetSettingValue(PHA::DIG::ADC_bit).c_str());
+  printf("     ADC bits : %s\n", ReadValue(PHA::DIG::ADC_bit).c_str());
   printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
   printf("     Channels : %d\n", nChannels);
 
+  if( FPGAType == DPPType::PHA) {
+
+    printf("========== defining setting arrays for %s \n", FPGAType.c_str());
+
+    boardSettings = PHA::DIG::AllSettings;
+    for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
+    for( int index = 0 ; index < 4; index ++) {
+      VGASetting[index] = PHA::VGA::VGAGain;
+      LVDSSettings[index] = PHA::LVDS::AllSettings;
+    }
+
+    //build map
+    for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PHA::LVDS::AllSettings.size(); i++) LVDSMap[PHA::LVDS::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
+
+  }else if (FPGAType == DPPType::PSD){
+
+    printf("========== defining setting arrays for %s \n", FPGAType.c_str());
+
+    boardSettings = PSD::DIG::AllSettings;
+    for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PSD::CH::AllSettings;
+    for( int index = 0 ; index < 4; index ++) {
+      VGASetting[index] = PSD::VGA::VGAGain;
+      LVDSSettings[index] = PSD::LVDS::AllSettings;
+    }
+
+    //build map
+    for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++) boardMap[PSD::DIG::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PSD::LVDS::AllSettings.size(); i++) LVDSMap[PSD::LVDS::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PSD::CH::AllSettings.size(); i++) chMap[PSD::CH::AllSettings[i].GetPara()] = i;
+
+  }else{
+    printf(" DPP Type %s is not supported.\n", FPGAType.c_str());
+    return -303;
+  }
+
+  ReadAllSettings();
   //------ set default setting file name
   settingFileName = "settings_"+ std::to_string(serialNumber) + ".dat";
 
@@ -283,30 +321,25 @@ void Digitizer2Gen::StopACQ(){
   acqON = false;
 }
 
-//================ Data Format 
-//------- PHA
-// 0 = all
-// 1 = 1 trace
-// 2 = no trace
-// 3 = minimum (only energy and timestamp)
-// 15 = raw buffer
-//------- PSD
-//?? 4 = all
-//?? 5 = 1 trace
-//?? 6 = no trace
-//?? 7 = only energy + timestamp
-//?? 16 = raw buffer
-
-void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
+void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   
   printf("%s : %d\n", __func__, dataFormat);
 
   ///========== get endpoint and endpoint folder handle
-  if( dataFormat < 15 ){
+  if( dataFormat != DataFormat::RAW ){
 
-    ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha", &ep_handle);
-    ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
-    ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "dpppha");
+    if( FPGAType == DPPType::PHA ){
+      ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha", &ep_handle);
+      ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
+      ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "dpppha");
+    }else if(FPGAType == DPPType::PSD) {
+      ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppsd", &ep_handle);
+      ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
+      ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "dpppsd");
+    }else{
+      ErrorMsg("DPP-Type not supported.");
+      return;
+    }
 
     if (ret != CAEN_FELib_Success) {
       ErrorMsg("Set active endpoint");
@@ -326,89 +359,177 @@ void Digitizer2Gen::SetPHADataFormat(unsigned short dataFormat){
 
   if( evt ) delete evt;
   evt = new Event();
-  evt->SetDataType(dataFormat);
-  dataStartIndetifier = 0xAAA0 + dataFormat;
+  evt->SetDataType(dataFormat, FPGAType);
+  dataStartIndetifier = 0xAA00 + dataFormat;
+  if(FPGAType == DPPType::PSD ) dataStartIndetifier += 0x0010;
 
-  if( dataFormat == 0 ){  
-    ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
-    "[ \
-      { \"name\" : \"CHANNEL\",              \"type\" : \"U8\" }, \
-      { \"name\" : \"TIMESTAMP\",            \"type\" : \"U64\" }, \
-      { \"name\" : \"FINE_TIMESTAMP\",       \"type\" : \"U16\" }, \
-      { \"name\" : \"ENERGY\",               \"type\" : \"U16\" }, \
-      { \"name\" : \"ANALOG_PROBE_1\",       \"type\" : \"I32\", \"dim\" : 1 }, \
-      { \"name\" : \"ANALOG_PROBE_2\",       \"type\" : \"I32\", \"dim\" : 1 }, \
-      { \"name\" : \"DIGITAL_PROBE_1\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
-      { \"name\" : \"DIGITAL_PROBE_2\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
-      { \"name\" : \"DIGITAL_PROBE_3\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
-      { \"name\" : \"DIGITAL_PROBE_4\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
-      { \"name\" : \"ANALOG_PROBE_1_TYPE\",  \"type\" : \"U8\" }, \
-      { \"name\" : \"ANALOG_PROBE_2_TYPE\",  \"type\" : \"U8\" }, \
-      { \"name\" : \"DIGITAL_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
-      { \"name\" : \"DIGITAL_PROBE_2_TYPE\", \"type\" : \"U8\" }, \
-      { \"name\" : \"DIGITAL_PROBE_3_TYPE\", \"type\" : \"U8\" }, \
-      { \"name\" : \"DIGITAL_PROBE_4_TYPE\", \"type\" : \"U8\" }, \
-      { \"name\" : \"WAVEFORM_SIZE\",        \"type\" : \"SIZE_T\" }, \
-      { \"name\" : \"FLAGS_LOW_PRIORITY\",   \"type\" : \"U16\"}, \
-      { \"name\" : \"FLAGS_HIGH_PRIORITY\",  \"type\" : \"U16\" }, \
-      { \"name\" : \"TRIGGER_THR\",          \"type\" : \"U16\" }, \
-      { \"name\" : \"TIME_RESOLUTION\",      \"type\" : \"U8\" }, \
-      { \"name\" : \"BOARD_FAIL\",           \"type\" : \"BOOL\" }, \
-      { \"name\" : \"FLUSH\",                \"type\" : \"BOOL\" }, \
-      { \"name\" : \"AGGREGATE_COUNTER\",    \"type\" : \"U32\" }, \
-      { \"name\" : \"EVENT_SIZE\",           \"type\" : \"SIZE_T\" } \
-    ]");
+  if( FPGAType == DPPType::PHA) {
+    if( dataFormat == DataFormat::ALL ){  
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",              \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",            \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",       \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",               \"type\" : \"U16\" }, \
+        { \"name\" : \"ANALOG_PROBE_1\",       \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_2\",       \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_1\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_2\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_3\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_4\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_1_TYPE\",  \"type\" : \"U8\" }, \
+        { \"name\" : \"ANALOG_PROBE_2_TYPE\",  \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_2_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_3_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_4_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"WAVEFORM_SIZE\",        \"type\" : \"SIZE_T\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",   \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\",  \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",          \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",      \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",           \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",                \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",    \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",           \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::OneTrace ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"ANALOG_PROBE_1\",      \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"WAVEFORM_SIZE\",       \"type\" : \"SIZE_T\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::NoTrace ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::Minimum ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",   \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\", \"type\" : \"U64\" }, \
+        { \"name\" : \"ENERGY\",    \"type\" : \"U16\" } \
+      ]");
+    }
+  }else if ( FPGAType == DPPType::PSD ){
+
+    if( dataFormat == DataFormat::ALL ){  
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",              \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",            \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",       \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",               \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",         \"type\" : \"U16\" }, \
+        { \"name\" : \"ANALOG_PROBE_1\",       \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_2\",       \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_1\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_2\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_3\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"DIGITAL_PROBE_4\",      \"type\" : \"U8\",  \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_1_TYPE\",  \"type\" : \"U8\" }, \
+        { \"name\" : \"ANALOG_PROBE_2_TYPE\",  \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_2_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_3_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"DIGITAL_PROBE_4_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"WAVEFORM_SIZE\",        \"type\" : \"SIZE_T\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",   \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\",  \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",          \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",      \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",           \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",                \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",    \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",           \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::OneTrace ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" }, \
+        { \"name\" : \"ANALOG_PROBE_1\",      \"type\" : \"I32\", \"dim\" : 1 }, \
+        { \"name\" : \"ANALOG_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
+        { \"name\" : \"WAVEFORM_SIZE\",       \"type\" : \"SIZE_T\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::NoTrace ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" }, \
+        { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
+        { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
+        { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
+        { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
+        { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
+        { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
+        { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
+        { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::Minimum ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",      \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",    \"type\" : \"U64\" }, \
+        { \"name\" : \"ENERGY\",       \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\", \"type\" : \"U16\" }, \
+      ]");
+    }
+
   }
 
-  if( dataFormat == 1 ){
-    ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
-    "[ \
-      { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
-      { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
-      { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
-      { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
-      { \"name\" : \"ANALOG_PROBE_1\",      \"type\" : \"I32\", \"dim\" : 1 }, \
-      { \"name\" : \"ANALOG_PROBE_1_TYPE\", \"type\" : \"U8\" }, \
-      { \"name\" : \"WAVEFORM_SIZE\",       \"type\" : \"SIZE_T\" }, \
-      { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
-      { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
-      { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
-      { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
-      { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
-      { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
-      { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
-      { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
-    ]");
-  }
-
-  if( dataFormat == 2 ){
-    ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
-    "[ \
-      { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
-      { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
-      { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
-      { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
-      { \"name\" : \"FLAGS_LOW_PRIORITY\",  \"type\" : \"U16\"}, \
-      { \"name\" : \"FLAGS_HIGH_PRIORITY\", \"type\" : \"U16\" }, \
-      { \"name\" : \"TRIGGER_THR\",         \"type\" : \"U16\" }, \
-      { \"name\" : \"TIME_RESOLUTION\",     \"type\" : \"U8\" }, \
-      { \"name\" : \"BOARD_FAIL\",          \"type\" : \"BOOL\" }, \
-      { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
-      { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
-      { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
-    ]");
-  }
-
-  if( dataFormat == 3 ){
-    ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
-    "[ \
-      { \"name\" : \"CHANNEL\",   \"type\" : \"U8\" }, \
-      { \"name\" : \"TIMESTAMP\", \"type\" : \"U64\" }, \
-      { \"name\" : \"ENERGY\",    \"type\" : \"U16\" } \
-    ]");
-  }
-
-  if( dataFormat == 15 ){
+  if( dataFormat == DataFormat::RAW ){
     ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       " [ \
          { \"name\": \"DATA\",     \"type\": \"U8\", \"dim\": 1 }, \
@@ -469,81 +590,173 @@ void Digitizer2Gen::PrintStat(){
 int Digitizer2Gen::ReadData(){
   //printf("========= %s \n", __func__);
 
-  if( evt->dataType == 0){
-    ret = CAEN_FELib_ReadData(ep_handle, 100,
-      &evt->channel,
-      &evt->timestamp,
-      &evt->fine_timestamp,
-      &evt->energy,
-      evt->analog_probes[0],
-      evt->analog_probes[1],
-      evt->digital_probes[0],
-      evt->digital_probes[1],
-      evt->digital_probes[2],
-      evt->digital_probes[3],
-      &evt->analog_probes_type[0],
-      &evt->analog_probes_type[1],
-      &evt->digital_probes_type[0],
-      &evt->digital_probes_type[1],
-      &evt->digital_probes_type[2],
-      &evt->digital_probes_type[3],
-      &evt->traceLenght,
-      &evt->flags_low_priority,
-      &evt->flags_high_priority,
-      &evt->trigger_threashold,
-      &evt->downSampling,
-      &evt->board_fail,
-      &evt->flush,
-      &evt->aggCounter,
-      &evt->event_size
-    );
-  }else if( evt->dataType == 1){
-    ret = CAEN_FELib_ReadData(ep_handle, 100,
-      &evt->channel,
-      &evt->timestamp,
-      &evt->fine_timestamp,
-      &evt->energy,
-      evt->analog_probes[0],
-      &evt->analog_probes_type[0],
-      &evt->traceLenght,
-      &evt->flags_low_priority,
-      &evt->flags_high_priority,
-      &evt->trigger_threashold,
-      &evt->downSampling,
-      &evt->board_fail,
-      &evt->flush,
-      &evt->aggCounter,
-      &evt->event_size
-    );
-  }else if( evt->dataType == 2){
-    ret = CAEN_FELib_ReadData(ep_handle, 100,
-      &evt->channel,
-      &evt->timestamp,
-      &evt->fine_timestamp,
-      &evt->energy,
-      &evt->flags_low_priority,
-      &evt->flags_high_priority,
-      &evt->trigger_threashold,
-      &evt->downSampling,
-      &evt->board_fail,
-      &evt->flush,
-      &evt->aggCounter,
-      &evt->event_size
-    );
-  }else if( evt->dataType == 3){
-    ret = CAEN_FELib_ReadData(ep_handle, 100,
-      &evt->channel,
-      &evt->timestamp,
-      &evt->energy
-    );
-  }else if( evt->dataType == 15){
+  if( FPGAType != DPPType::PHA || FPGAType != DPPType::PSD ) return -404;
+
+  if( evt->dataType == DataFormat::ALL ){
+    if( FPGAType == DPPType::PHA ){
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        evt->analog_probes[0],
+        evt->analog_probes[1],
+        evt->digital_probes[0],
+        evt->digital_probes[1],
+        evt->digital_probes[2],
+        evt->digital_probes[3],
+        &evt->analog_probes_type[0],
+        &evt->analog_probes_type[1],
+        &evt->digital_probes_type[0],
+        &evt->digital_probes_type[1],
+        &evt->digital_probes_type[2],
+        &evt->digital_probes_type[3],
+        &evt->traceLenght,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }else{
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        &evt->energy_short,
+        evt->analog_probes[0],
+        evt->analog_probes[1],
+        evt->digital_probes[0],
+        evt->digital_probes[1],
+        evt->digital_probes[2],
+        evt->digital_probes[3],
+        &evt->analog_probes_type[0],
+        &evt->analog_probes_type[1],
+        &evt->digital_probes_type[0],
+        &evt->digital_probes_type[1],
+        &evt->digital_probes_type[2],
+        &evt->digital_probes_type[3],
+        &evt->traceLenght,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }
+
+    evt->isTraceAllZero = false;
+
+  }else if( evt->dataType == DataFormat::OneTrace){
+    if( FPGAType == DPPType::PHA ){
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        evt->analog_probes[0],
+        &evt->analog_probes_type[0],
+        &evt->traceLenght,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }else{
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        &evt->energy_short,
+        evt->analog_probes[0],
+        &evt->analog_probes_type[0],
+        &evt->traceLenght,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }
+
+    evt->isTraceAllZero = false;
+
+  }else if( evt->dataType == DataFormat::NoTrace){
+    if( FPGAType == DPPType::PHA ){
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }else{
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->fine_timestamp,
+        &evt->energy,
+        &evt->energy_short,
+        &evt->flags_low_priority,
+        &evt->flags_high_priority,
+        &evt->trigger_threashold,
+        &evt->downSampling,
+        &evt->board_fail,
+        &evt->flush,
+        &evt->aggCounter,
+        &evt->event_size
+      );
+    }
+
+    evt->isTraceAllZero = true;
+
+  }else if( evt->dataType == DataFormat::Minimum){
+    if( FPGAType == DPPType::PHA ){
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->energy
+      );
+    }else{
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &evt->channel,
+        &evt->timestamp,
+        &evt->energy,
+        &evt->energy_short
+      );
+    }
+
+    evt->isTraceAllZero = true;
+  }else if( evt->dataType == DataFormat::RAW){
     ret = CAEN_FELib_ReadData(ep_handle, 100, evt->data, &evt->dataSize, &evt->n_events );
     //printf("data size: %lu byte\n", evt.dataSize);
+
+    evt->isTraceAllZero = true; //assume no trace, as the trace need to be extracted.
   }else{
     return CAEN_FELib_UNKNOWN;
   }
-
-  evt->isTraceAllZero = false;
 
   if( ret != CAEN_FELib_Success) {
     //ErrorMsg("ReadData()");
@@ -582,56 +795,60 @@ void Digitizer2Gen::SaveDataToFile(){
     outFile = fopen(outFileName, "wb"); //overwrite binary
   }
 
-  if( evt->dataType == 0){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->channel, 1, 1, outFile);
-    fwrite(&evt->energy, 2, 1, outFile);
-    fwrite(&evt->timestamp, 6, 1, outFile);
-    fwrite(&evt->fine_timestamp, 2, 1, outFile);
+  if( evt->dataType == DataFormat::ALL){
+    fwrite(&dataStartIndetifier,      2, 1, outFile);
+    fwrite(&evt->channel,             1, 1, outFile);
+    fwrite(&evt->energy,              2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
+    fwrite(&evt->timestamp,           6, 1, outFile);
+    fwrite(&evt->fine_timestamp,      2, 1, outFile);
     fwrite(&evt->flags_high_priority, 1, 1, outFile);
-    fwrite(&evt->flags_low_priority, 2, 1, outFile);
-    fwrite(&evt->downSampling, 1, 1, outFile);
-    fwrite(&evt->board_fail, 1, 1, outFile);
-    fwrite(&evt->flush, 1, 1, outFile);
-    fwrite(&evt->trigger_threashold, 2, 1, outFile);
-    fwrite(&evt->event_size, 8, 1, outFile);
-    fwrite(&evt->aggCounter, 4, 1, outFile);
-    fwrite(&evt->traceLenght, 8, 1, outFile);
-    fwrite(evt->analog_probes_type, 2, 1, outFile);
-    fwrite(evt->digital_probes_type, 4, 1, outFile);
+    fwrite(&evt->flags_low_priority,  2, 1, outFile);
+    fwrite(&evt->downSampling,        1, 1, outFile);
+    fwrite(&evt->board_fail,          1, 1, outFile);
+    fwrite(&evt->flush,               1, 1, outFile);
+    fwrite(&evt->trigger_threashold,  2, 1, outFile);
+    fwrite(&evt->event_size,          8, 1, outFile);
+    fwrite(&evt->aggCounter,          4, 1, outFile);
+    fwrite(&evt->traceLenght,         8, 1, outFile);
+    fwrite(evt->analog_probes_type,   2, 1, outFile);
+    fwrite(evt->digital_probes_type,  4, 1, outFile);
     fwrite(evt->analog_probes[0], evt->traceLenght*4, 1, outFile);
     fwrite(evt->analog_probes[1], evt->traceLenght*4, 1, outFile);
     fwrite(evt->digital_probes[0], evt->traceLenght, 1, outFile);
     fwrite(evt->digital_probes[1], evt->traceLenght, 1, outFile);
     fwrite(evt->digital_probes[2], evt->traceLenght, 1, outFile);
     fwrite(evt->digital_probes[3], evt->traceLenght, 1, outFile);
-  }else if( evt->dataType == 1){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->channel, 1, 1, outFile);
-    fwrite(&evt->energy, 2, 1, outFile);
-    fwrite(&evt->timestamp, 6, 1, outFile);
-    fwrite(&evt->fine_timestamp, 2, 1, outFile);
-    fwrite(&evt->flags_high_priority, 1, 1, outFile);
-    fwrite(&evt->flags_low_priority, 2, 1, outFile);
-    fwrite(&evt->traceLenght, 8, 1, outFile);
+  }else if( evt->dataType == DataFormat::OneTrace){
+    fwrite(&dataStartIndetifier,        2, 1, outFile);
+    fwrite(&evt->channel,               1, 1, outFile);
+    fwrite(&evt->energy,                2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
+    fwrite(&evt->timestamp,             6, 1, outFile);
+    fwrite(&evt->fine_timestamp,        2, 1, outFile);
+    fwrite(&evt->flags_high_priority,   1, 1, outFile);
+    fwrite(&evt->flags_low_priority,    2, 1, outFile);
+    fwrite(&evt->traceLenght,           8, 1, outFile);
     fwrite(&evt->analog_probes_type[0], 1, 1, outFile);
     fwrite(evt->analog_probes[0], evt->traceLenght*4, 1, outFile);
-  }else if( evt->dataType == 2){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->channel, 1, 1, outFile);
-    fwrite(&evt->energy, 2, 1, outFile);
-    fwrite(&evt->timestamp, 6, 1, outFile);
-    fwrite(&evt->fine_timestamp, 2, 1, outFile);
+  }else if( evt->dataType == DataFormat::NoTrace ){
+    fwrite(&dataStartIndetifier,      2, 1, outFile);
+    fwrite(&evt->channel,             1, 1, outFile);
+    fwrite(&evt->energy,              2, 1, outFile);
+   if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
+    fwrite(&evt->timestamp,           6, 1, outFile);
+    fwrite(&evt->fine_timestamp,      2, 1, outFile);
     fwrite(&evt->flags_high_priority, 1, 1, outFile);
-    fwrite(&evt->flags_low_priority, 2, 1, outFile);
-  }else if( evt->dataType == 3){
+    fwrite(&evt->flags_low_priority,  2, 1, outFile);
+  }else if( evt->dataType == DataFormat::Minimum ){
     fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->channel, 1, 1, outFile);
-    fwrite(&evt->energy, 2, 1, outFile);
-    fwrite(&evt->timestamp, 6, 1, outFile);
-  }else if( evt->dataType == 15){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->dataSize, 8, 1, outFile);
+    fwrite(&evt->channel,        1, 1, outFile);
+    fwrite(&evt->energy,         2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
+    fwrite(&evt->timestamp,      6, 1, outFile);
+  }else if( evt->dataType == DataFormat::RAW){
+    fwrite(&dataStartIndetifier,  2, 1, outFile);
+    fwrite(&evt->dataSize,        8, 1, outFile);
     fwrite(evt->data, evt->dataSize, 1, outFile);
   }
   
@@ -825,9 +1042,14 @@ std::string Digitizer2Gen::ErrorMsg(const char * funcName){
 //^===================================================== Settings
 void Digitizer2Gen::ReadAllSettings(){
   if( !isConnected ) return;
+
+  printf("Digitizer2Gen::%s | %s \n", __func__, FPGAType.c_str());
+
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
-    if( !(ModelName == "VX2745" && FPGAType == "DPP_PHA") && 
+
+    // here TempSens is same for PHA and PSD
+    if( !(ModelName == "VX2745") && 
      (boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
       boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
       boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
@@ -839,7 +1061,7 @@ void Digitizer2Gen::ReadAllSettings(){
     ReadValue(boardSettings[i]);
   }
 
-  if( ModelName == "VX2745" && FPGAType == "DPP_PHA") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
+  if( ModelName == "VX2745") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
   for( int index = 0; index < 4; index++){
     for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
@@ -855,6 +1077,7 @@ void Digitizer2Gen::ReadAllSettings(){
       ReadValue(chSettings[ch][i], ch);
     }
   }
+
 }
 
 int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnly){
@@ -867,7 +1090,28 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
     for(int i = 0; i < (int) boardSettings.size(); i++){
       if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
       totCount ++;
-      if( boardSettings[i].GetValue() == "" && boardSettings[i].GetPara() != "Gateway") break;
+      //--- exclude Gateway
+      if( boardSettings[i].GetPara() == PHA::DIG::Gateway.GetPara()) {
+        totCount --;
+        continue;
+      }
+
+      //--- exclude some TempSens for Not VX2745
+      if( ModelName != "VX2745" && 
+         ( boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara() ) ) {
+        totCount --;
+        continue;
+      }
+
+      if( boardSettings[i].GetValue() == "") {
+        printf(" No value for %s \n", boardSettings[i].GetPara().c_str());
+        continue;
+      }
       fprintf(saveFile, "%-45s!%d!%4d!%s\n", boardSettings[i].GetFullPara().c_str(),  
                                              boardSettings[i].ReadWrite(),
                                              8000 + i, 
@@ -875,10 +1119,13 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       count ++;
     }
 
-    if( ModelName == "VX2745" && FPGAType == "DPP_PHA") {
+    if( ModelName == "VX2745" && FPGAType == DPPType::PHA) {
       for(int i = 0; i < 4 ; i ++){
         totCount ++;
-        if( VGASetting[i].GetValue() == "" ) break;
+        if( VGASetting[i].GetValue() == "" ) {
+          printf(" No value for %s \n", VGASetting[i].GetPara().c_str());
+          continue;
+        }
         fprintf(saveFile, "%-45s!%d!%4d!%s\n", VGASetting[i].GetFullPara(i).c_str(), 
                                               VGASetting[i].ReadWrite(), 
                                               9000 + i,
@@ -891,7 +1138,10 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       for( int index = 0; index < 4; index++){
         if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
         totCount ++;
-        if( LVDSSettings[index][i].GetValue() == "") break;
+        if( LVDSSettings[index][i].GetValue() == "") {
+          printf(" No value for %s \n", LVDSSettings[index][i].GetPara().c_str());
+          continue;
+        }
         fprintf(saveFile, "%-45s!%d!%4d!%s\n", LVDSSettings[index][i].GetFullPara(index).c_str(), 
                                                LVDSSettings[index][i].ReadWrite(),
                                                7000 + 4 * index + i,
@@ -904,7 +1154,10 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       for(int ch = 0; ch < nChannels ; ch++ ){
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
         totCount ++;
-        if( chSettings[ch][i].GetValue() == "") break;
+        if( chSettings[ch][i].GetValue() == "") {
+          printf("[%i] No value for %s , ch-%02d\n", i, chSettings[ch][i].GetPara().c_str(), ch);
+          continue;
+        }
         fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
                                                chSettings[ch][i].ReadWrite(),
                                                ch*100 + i,

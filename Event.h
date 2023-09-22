@@ -7,27 +7,46 @@
 
 #define MaxTraceLenght 8100
 
+enum DataFormat{
+
+  ALL      = 0,
+  OneTrace = 1,
+  NoTrace  = 2,
+  Minimum  = 3,
+  RAW      = 0x0A,
+  
+};
+
+namespace DPPType{
+
+  const std::string PHA = "DPP_PHA";
+  const std::string PSD = "DPP_PSD";
+
+};
+
 class Event {
   public:
 
     unsigned short dataType; 
+    std::string DPPType;
 
     ///============= for dpp-pha
-    uint8_t  channel;    //  6 bit
-    uint16_t energy;   // 16 bit
-    uint64_t timestamp;  // 48 bit
+    uint8_t  channel;        //  6 bit
+    uint16_t energy;         // 16 bit
+    uint16_t energy_short;   // 16 bit, only for PSD
+    uint64_t timestamp;      // 48 bit
     uint16_t fine_timestamp; // 16 bit
     uint16_t flags_low_priority; // 12 bit
     uint16_t flags_high_priority; // 8 bit
-    size_t   traceLenght; // 64 bit
-    uint8_t downSampling; // 8 bit
+    size_t   traceLenght;     // 64 bit
+    uint8_t downSampling;     // 8 bit
     bool board_fail;
     bool flush; 
-    uint8_t  analog_probes_type[2];  // 3 bit
-    uint8_t  digital_probes_type[4]; // 4 bit
-    int32_t * analog_probes[2];  // 18 bit
-    uint8_t * digital_probes[4]; // 1 bit
-    uint16_t trigger_threashold; // 16 bit
+    uint8_t  analog_probes_type[2];  // 3 bit for PHA, 4 bit for PSD
+    uint8_t  digital_probes_type[4]; // 4 bit for PHA, 5 bit for PSD
+    int32_t * analog_probes[2];      // 18 bit
+    uint8_t * digital_probes[4];     // 1 bit
+    uint16_t trigger_threashold;     // 16 bit
     size_t   event_size;  // 64 bit
     uint32_t aggCounter; // 32 bit
 
@@ -47,8 +66,12 @@ class Event {
     }
 
     void Init(){
+      DPPType =  DPPType::PHA;
+      dataType = DataFormat::ALL;
+
       channel = 0;
       energy = 0;
+      energy_short = 0;
       timestamp = 0;
       fine_timestamp = 0;
       downSampling = 0;
@@ -91,11 +114,12 @@ class Event {
       isTraceAllZero = true;
     }
 
-    void SetDataType(unsigned int type){
+    void SetDataType(unsigned int type, std::string dppType){
       dataType = type;
+      DPPType = dppType;
       ClearMemory();
 
-      if( dataType == 0xF){
+      if( dataType == DataFormat::RAW){
         data = new uint8_t[20*1024*1024];
       }else{
         analog_probes[0] = new int32_t[MaxTraceLenght];
@@ -131,30 +155,46 @@ class Event {
     }
 
     std::string AnaProbeType(uint8_t probeType){
-      switch(probeType){
-        case 0: return "ADC";
-        case 1: return "Time filter";
-        case 2: return "Energy filter";
-        default : return "none";
+
+      if( DPPType == DPPType::PHA){
+        switch(probeType){
+          case 0: return "ADC";
+          case 1: return "Time filter";
+          case 2: return "Energy filter";
+          default : return "none";
+        }
+      }else if (DPPType == DPPType::PSD){
+
+
+      }else{
+        return "none";
       }
     }
 
     std::string DigiProbeType(uint8_t probeType){
-      switch(probeType){
-        case  0: return "Trigger";
-        case  1: return "Time filter armed";
-        case  2: return "Re-trigger guard";
-        case  3: return "Energy filter baseline freeze";
-        case  4: return "Energy filter peaking";
-        case  5: return "Energy filter peaking ready";
-        case  6: return "Energy filter pile-up guard";
-        case  7: return "Event pile-up";
-        case  8: return "ADC saturation";
-        case  9: return "ADC saturation protection";
-        case 10: return "Post-saturation event";
-        case 11: return "Energy filter saturation";
-        case 12: return "Signal inhibit";
-        default : return "none";
+
+      if( DPPType == DPPType::PHA){
+        switch(probeType){
+          case  0: return "Trigger";
+          case  1: return "Time filter armed";
+          case  2: return "Re-trigger guard";
+          case  3: return "Energy filter baseline freeze";
+          case  4: return "Energy filter peaking";
+          case  5: return "Energy filter peaking ready";
+          case  6: return "Energy filter pile-up guard";
+          case  7: return "Event pile-up";
+          case  8: return "ADC saturation";
+          case  9: return "ADC saturation protection";
+          case 10: return "Post-saturation event";
+          case 11: return "Energy filter saturation";
+          case 12: return "Signal inhibit";
+          default : return "none";
+        }
+      }else if (DPPType == DPPType::PSD){
+
+
+      }else{
+        return "none";
       }
     }
 
