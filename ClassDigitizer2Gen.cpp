@@ -584,7 +584,8 @@ int Digitizer2Gen::ReadStat(){
 void Digitizer2Gen::PrintStat(){
   printf("ch | Real Time[ns] | Dead Time[ns] | Live Time[ns] | Trigger |  Saved  | Rate[Hz] | Self Trig Rate [Hz] \n");
   for( int i = 0; i < nChannels; i++){
-    if( triggerCount[i] == 0 ) continue;
+    //if( triggerCount[i] == 0 ) continue;
+    if( atoi(chSettings[i][0].GetValue().c_str()) == 0 ) continue;
     printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %8.3f | %d\n", 
          i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i], atoi(chSettings[i][0].GetValue().c_str()));
   }

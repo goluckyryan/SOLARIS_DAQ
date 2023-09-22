@@ -101,7 +101,7 @@ int main(int argc, char* argv[]){
   digi->PrintChannelSettings(0);
 
   
-  digi->SetDataFormat(DataFormat::OneTrace); 
+  digi->SetDataFormat(DataFormat::ALL); 
 
   digi->OpenOutFile("haha");
 
