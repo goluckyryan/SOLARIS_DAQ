@@ -1980,8 +1980,8 @@ void DigiSettingsPanel::LoadSettings(){
 
 void DigiSettingsPanel::SetDefaultPHASettigns(){
   SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
-  digi[ID]->ProgramDPPBoard();
-  digi[ID]->ProgramPHAChannels();
+  digi[ID]->ProgramBoard();
+  digi[ID]->ProgramChannels();
   RefreshSettings();
 }
 

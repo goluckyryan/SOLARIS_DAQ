@@ -20,11 +20,13 @@ InfluxDB * influx = new InfluxDB("https://fsunuc.physics.fsu.edu/influx/", false
 
 unsigned int readCount = 0;
 
+bool ThreadStop = false;
 timespec ta, tb;
+
 static void ReadDataLoop(){
   clock_gettime(CLOCK_REALTIME, &ta);
   //while(digi->IsAcqOn() && readCount < maxRead){
-  while(true){
+  while(!ThreadStop){
     digiMTX.lock();
     int ret = digi->ReadData();
     digiMTX.unlock();
@@ -35,7 +37,7 @@ static void ReadDataLoop(){
       digi->ErrorMsg("No more data");
       break;
     }else{
-      digi->ErrorMsg("ReadDataLoop()");
+      //digi->ErrorMsg("ReadDataLoop()");
     }
     //if( readCount % 1000 == 0 ) {
     //  clock_gettime(CLOCK_REALTIME, &tb);
@@ -56,21 +58,20 @@ static void StatLoop(){
     digiMTX.lock();
 
     digi->ReadStat();
-    for(int i = 0; i < 64; i++){
-      sprintf(cmdStr, "/ch/%d/par/SelfTrgRate", i);
-      std::string haha = digi->ReadValue( cmdStr, false);
-      influx->AddDataPoint("Rate,Bd=0,Ch=" + std::to_string(i) + " value=" + haha);
-    }
-    //digi->ReadValue("/ch/4/par/ChRealtimeMonitor", true);
-    //digi->ReadValue("/ch/4/par/ChDeadtimeMonitor", true);
-    //digi->ReadValue("/ch/4/par/ChTriggerCnt", true);
-    //digi->ReadValue("/ch/4/par/ChSavedEventCnt", true);
-    //digi->ReadValue("/ch/4/par/ChWaveCnt", true);
+    // for(int i = 0; i < 64; i++){
+    //   digi->ReadValue( PHA::CH::SelfTrgRate, i, false);
+    //   //influx->AddDataPoint("Rate,Bd=0,Ch=" + std::to_string(i) + " value=" + haha);
+    // }
+    // digi->ReadValue("/ch/4/par/ChRealtimeMonitor", true);
+    // digi->ReadValue("/ch/4/par/ChDeadtimeMonitor", true);
+    // digi->ReadValue("/ch/4/par/ChTriggerCnt", true);
+    // digi->ReadValue("/ch/4/par/ChSavedEventCnt", true);
+    // digi->ReadValue("/ch/4/par/ChWaveCnt", true);
     digiMTX.unlock();
 
     //influx->PrintDataPoints();
-    influx->WriteData("testing");
-    influx->ClearDataPointsBuffer();
+    //influx->WriteData("testing");
+    //influx->ClearDataPointsBuffer();
     digi->PrintStat();
     usleep(1000*1000); // every 1000 msec    
   }
@@ -90,63 +91,17 @@ int main(int argc, char* argv[]){
   const char * url = "dig2://192.168.0.254/";
 
   digi->OpenDigitizer(url);
-  digi->Reset();
-  //digi->ReadValue(PSD::DIG::CupVer, -1, true);
-  digi->ReadAllSettings();
+  //digi->Reset();
+  //digi->ReadAllSettings();
 
-  for( int ch = 0; ch < 64; ch++ ) {
-    printf( "|%s| \n", digi->GetSettingValue(PSD::CH::TimeFilterRetriggerGuard, ch).c_str());
-  }
+  //digi->ProgramBoard();
 
+  //digi->WriteValue(PSD::CH::TriggerThreshold, "1000", -1);
 
-  digi->SaveSettingsToFile("test_setting.txt");
+  digi->PrintChannelSettings(0);
 
-
-  //digi->ProgramDPPBoard(false);
   
-  //printf("--------%s \n", digi->ReadChValue("0..63", "WaveAnalogprobe0", true).c_str());
-
-  //digi->SaveSettingsToFile(("settings_" + std::to_string(digi->GetSerialNumber()) + ".dat").c_str());
-
-  //printf("===================================\n");
-
-  //printf("======== index : %d \n", digi->FindIndex(PHA::CH::ChannelEnable));
-
-  //digi->LoadSettingsFromFile("settings_21245.dat");
-  //printf("%s \n", digi->ReadValue("/ch/0/par/ChRealtimeMonitor").c_str());
-  //printf("%s \n", digi->ReadValue("/ch/0/par/Energy_Nbit").c_str());
-  //printf("%s \n", digi->ReadValue("/par/MaxRawDataSize").c_str());
-  
-  
-  /*///======================= Play with handle
-  uint64_t parHandle;
-  
-  parHandle = digi->GetHandle("/ch/0/par/ChRealtimeMonitor"); printf("%lu|%lX\n", parHandle, parHandle);
-  parHandle = digi->GetHandle("/ch/1/par/ChRealtimeMonitor"); printf("%lu|%lX\n", parHandle, parHandle);
-  
-  
-  printf("%s\n", digi->GetPath(parHandle).c_str());
-  
-  
-  parHandle = digi->GetParentHandle(parHandle); printf("%lu|%lX\n", parHandle, parHandle);
-  printf("%s\n", digi->GetPath(parHandle).c_str());
-
-  parHandle = digi->GetParentHandle(parHandle); printf("%lu|%lX\n", parHandle, parHandle);
-  printf("%s\n", digi->GetPath(parHandle).c_str());    
-
-  parHandle = digi->GetParentHandle(parHandle); printf("%lu|%lX\n", parHandle, parHandle);
-  printf("%s\n", digi->GetPath(parHandle).c_str());    
-
-  parHandle = digi->GetParentHandle(parHandle); printf("%lu|%lX\n", parHandle, parHandle);
-  printf("%s\n", digi->GetPath(parHandle).c_str());    
-  */
-
-  /*
-  digi->ReadDigitizerSettings();
-
-  digi->SetPHADataFormat(1);
-
-  //printf("0x%X \n", atoi(digi->ReadValue("/par/AcquisitionStatus").c_str()) & 0x3F );
+  digi->SetDataFormat(DataFormat::OneTrace); 
 
   digi->OpenOutFile("haha");
 
@@ -164,6 +119,8 @@ int main(int argc, char* argv[]){
     c = getchar();
   }while( c != 'q');
 
+  ThreadStop = true;
+
   digiMTX.lock();
   digi->StopACQ();
   digiMTX.unlock();
@@ -176,9 +133,7 @@ int main(int argc, char* argv[]){
             t1.tv_nsec-t0.tv_nsec + t1.tv_sec*1e+9 - t0.tv_sec*1e+9,
             (t1.tv_nsec-t0.tv_nsec + t1.tv_sec*1e+9 - t0.tv_sec*1e+9)*1.0/1e9);
 
-  digi->CloseOutFile();  
-
-  */
+  digi->CloseOutFile(); 
 
   digi->CloseDigitizer();
   

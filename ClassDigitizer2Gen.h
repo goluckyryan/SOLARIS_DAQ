@@ -115,9 +115,11 @@ class Digitizer2Gen {
     uint64_t GetRealTime(int ch) const {return realTime[ch];}
 
     void Reset();
-    void ProgramDPPBoard();
-    void ProgramPHAChannels(bool testPulse = false);
-    void ProgramPSDChannels(bool testPulse = false);
+    void ProgramBoard();
+    void ProgramChannels(bool testPulse = false);
+
+    void PrintBoardSettings();
+    void PrintChannelSettings(unsigned short ch);
     
     unsigned short GetNChannels() const {return nChannels;}
     unsigned short GetCh2ns()     const {return ch2ns;}

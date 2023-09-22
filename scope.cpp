@@ -22,6 +22,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   setWindowFlags( this->windowFlags() & ~Qt::WindowCloseButtonHint );
 
   allowChange = false;
+  originalValueSet = false;
 
   plot = new Trace();
   for( int i = 0; i < 6; i++) {
@@ -112,7 +113,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     //digi[iDigi]->Reset();
-    digi[iDigi]->ProgramPHAChannels();
+    digi[iDigi]->ProgramChannels();
     //SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
     ReadScopeSettings();
     UpdateOtherPanels();
@@ -474,7 +475,9 @@ void Scope::StartScope(){
 
     }
 
-    digi[iDigi]->SetDataFormat(0); //TODO Should be only trace?
+    originalValueSet = true;
+
+    digi[iDigi]->SetDataFormat(DataFormat::ALL); 
     digi[iDigi]->StartACQ();
 
     readDataThread[iDigi]->SetSaveData(false);
@@ -507,12 +510,15 @@ void Scope::StopScope(){
 
       digiMTX[i].lock();
       digi[i]->StopACQ();
-      for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
-        digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
-      }
-      if( i == cbScopeDigi->currentIndex() ) {
-        digi[i]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, cbScopeCh->currentIndex());
-        digi[i]->WriteValue(PHA::CH::WaveSaving, waveSaving, cbScopeCh->currentIndex());
+      if( originalValueSet ){
+        for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
+          digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
+        }
+        if( i == cbScopeDigi->currentIndex() ) {
+          digi[i]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, cbScopeCh->currentIndex());
+          digi[i]->WriteValue(PHA::CH::WaveSaving, waveSaving, cbScopeCh->currentIndex());
+        }
+        originalValueSet = false;
       }
       digiMTX[i].unlock();
     }

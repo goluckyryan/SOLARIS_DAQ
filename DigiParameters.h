@@ -588,25 +588,40 @@ namespace PHA{
     const Reg ITLConnect             ("ITLConnect",    RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},{"ITLA", "ITLA"}, {"ITLB", "ITLB"}});
 
     const std::vector<Reg> AllSettings = {
-      SelfTrgRate                ,
-      ChannelStatus              ,
-      GainFactor                 ,
-      ADCToVolts                 ,
-      Energy_Nbit                ,
-      ChannelRealtime            ,
-      ChannelDeadtime            ,
-      ChannelTriggerCount        ,
-      ChannelSavedCount          ,
-      ChannelWaveCount           ,
-      ChannelEnable              ,
-      DC_Offset                  ,
-      TriggerThreshold           ,
-      Polarity                   ,
-      WaveDataSource             ,
-      RecordLength               ,
-      WaveSaving                 ,
-      WaveResolution             ,
-      PreTrigger                 ,
+      SelfTrgRate                , //  0
+      ChannelStatus              , //  1
+      GainFactor                 , //  2
+      ADCToVolts                 , //  3
+      Energy_Nbit                , //  4
+      ChannelRealtime            , //  5
+      ChannelDeadtime            , //  6
+      ChannelTriggerCount        , //  7
+      ChannelSavedCount          , //  8
+      ChannelWaveCount           , //  9
+
+      ChannelEnable              , //  0
+      DC_Offset                  , //  1
+      TriggerThreshold           , //  2
+      Polarity                   , //  3
+      WaveDataSource             , //  4
+      RecordLength               , //  5
+      PreTrigger                 , //  6
+      WaveSaving                 , //  7
+      WaveResolution             , //  8
+      EventTriggerSource         , //  9
+      ChannelsTriggerMask        , // 10
+      ChannelVetoSource          , // 11
+      WaveTriggerSource          , // 12
+      EventSelector              , // 13
+      WaveSelector               , // 14
+      CoincidenceMask            , // 15
+      AntiCoincidenceMask        , // 16
+      CoincidenceLength          , // 17
+      ADCVetoWidth               , // 18
+      EnergySkimLowDiscriminator , // 19
+      EnergySkimHighDiscriminator, // 20
+      ITLConnect                 , // 21
+ 
       TimeFilterRiseTime         ,
       TimeFilterRetriggerGuard   ,
       EnergyFilterRiseTime       ,
@@ -625,19 +640,8 @@ namespace PHA{
       WaveDigitalProbe1          ,
       WaveDigitalProbe2          ,
       WaveDigitalProbe3          ,
-      EventTriggerSource         ,
-      ChannelsTriggerMask        ,
-      ChannelVetoSource          ,
-      WaveTriggerSource          ,
-      EventSelector              ,
-      WaveSelector               ,
-      CoincidenceMask            ,
-      AntiCoincidenceMask        ,
-      CoincidenceLength          ,
+
       CoincidenceLengthSample    ,
-      ADCVetoWidth               ,
-      EnergySkimLowDiscriminator ,
-      EnergySkimHighDiscriminator,
       RecordLengthSample         ,
       PreTriggerSample           ,
       TimeFilterRiseTimeSample   ,
@@ -646,8 +650,7 @@ namespace PHA{
       EnergyFilterFlatTopSample        ,
       EnergyFilterPoleZeroSample       ,
       EnergyFilterBaselineGuardSample  ,
-      EnergyFilterPileUpGuardSample    ,
-      ITLConnect
+      EnergyFilterPileUpGuardSample    
     };
 
   }
@@ -657,7 +660,7 @@ namespace PHA{
 
 namespace PSD{
 
-  namespace DIG{
+  namespace DIG{ // the PSD::DIG are identical to PHA::DIG
 
     ///============== read only
     const Reg CupVer                   = PHA::DIG::CupVer;
@@ -870,7 +873,6 @@ namespace PSD{
       //LVDSTrgMask              
     };
 
-
   }
 
   namespace VGA{
@@ -1049,64 +1051,69 @@ namespace PSD{
 
     const std::vector<Reg> AllSettings = {
       SelfTrgRate                , //  0  
-      ChannelStatus              , //  1
-      GainFactor                 , //  2
-      ADCToVolts                 , //  3
-      ChannelRealtime            , //  4
-      ChannelDeadtime            , //  5
-      ChannelTriggerCount        , //  6
-      ChannelSavedCount          , //  7
-      ChannelWaveCount           , //  8
-      ChannelEnable              , //  9
-      DC_Offset                  , // 10
-      TriggerThreshold           , // 11
-      Polarity                   , // 12
-      WaveDataSource             , // 13
-      RecordLength               , // 14
-      WaveSaving                 , // 15
-      WaveResolution             , // 16
-      PreTrigger                 , // 17
-      WaveAnalogProbe0           , // 18
-      WaveAnalogProbe1           , // 19
-      WaveDigitalProbe0          , // 20
-      WaveDigitalProbe1          , // 21
-      WaveDigitalProbe2          , // 22
-      WaveDigitalProbe3          , // 23
-      EventTriggerSource         , // 24
-      ChannelsTriggerMask        , // 25
-      ChannelVetoSource          , // 26
-      WaveTriggerSource          , // 27
-      EventSelector              , // 28
-      WaveSelector               , // 29
-      CoincidenceMask            , // 30
-      AntiCoincidenceMask        , // 31
-      CoincidenceLength          , // 32
-      CoincidenceLengthSample    , // 33
-      ADCVetoWidth               , // 34
-      EnergySkimLowDiscriminator , // 35
-      EnergySkimHighDiscriminator, // 36
-      RecordLengthSample         , // 37
-      PreTriggerSample           , // 38
-      ITLConnect                 , // 39
-      ADCInputBaselineAvg        , // 40
-      AbsoluteBaseline           , // 41
-      ADCInputBaselineGuard      , // 42
-      SmoothingFactor            , // 43
-      ChargeSmoothing            , // 44
-      TimeFilterSmoothing        , // 45
-      TriggerFilterSelection     , // 46
-      CFDDelay                   , // 47
-      CFDFraction                , // 48
-      TimeFilterRetriggerGuard   , // 49
-      TriggerHysteresis          , // 50
-      PileupGap                  , // 51
-      GateLongLength             , // 52
-      GateShortLength            , // 53
-      GateOffset                 , // 54
+      ChannelStatus              , //  1  
+      GainFactor                 , //  2  
+      ADCToVolts                 , //  3  
+      ChannelRealtime            , //  4  
+      ChannelDeadtime            , //  5  
+      ChannelTriggerCount        , //  6  
+      ChannelSavedCount          , //  7  
+      ChannelWaveCount           , //  8  
+
+      ChannelEnable              , //  0  
+      DC_Offset                  , //  1 
+      TriggerThreshold           , //  2 
+      Polarity                   , //  3 
+      WaveDataSource             , //  4 
+      RecordLength               , //  5 
+      PreTrigger                 , //  6 
+      WaveSaving                 , //  7 
+      WaveResolution             , //  8 
+      EventTriggerSource         , //  9 
+      ChannelsTriggerMask        , // 10  
+      ChannelVetoSource          , // 11  
+      WaveTriggerSource          , // 12  
+      EventSelector              , // 13  
+      WaveSelector               , // 14  
+      CoincidenceMask            , // 15  
+      AntiCoincidenceMask        , // 16  
+      CoincidenceLength          , // 17  
+      ADCVetoWidth               , // 18  
+      EnergySkimLowDiscriminator , // 19  
+      EnergySkimHighDiscriminator, // 20  
+      ITLConnect                 , // 21 
+
+      EventNeutronReject         ,
+      WaveNeutronReject          ,
+      ADCInputBaselineAvg        , 
+      AbsoluteBaseline           , 
+      ADCInputBaselineGuard      , 
+      SmoothingFactor            , 
+      ChargeSmoothing            , 
+      TimeFilterSmoothing        , 
+      TriggerFilterSelection     , 
+      CFDDelay                   , 
+      CFDFraction                , 
+      TimeFilterRetriggerGuard   , 
+      TriggerHysteresis          , 
+      PileupGap                  , 
+      GateLongLength             , 
+      GateShortLength            , 
+      GateOffset                 , 
       LongChargeIntegratorPedestal,  // 
       ShortChargeIntegratorPedestal, // 
       EnergyGain                 ,
       NeutronThreshold           ,
+      WaveAnalogProbe0           , //  
+      WaveAnalogProbe1           , //  
+      WaveDigitalProbe0          , //  
+      WaveDigitalProbe1          , //  
+      WaveDigitalProbe2          , //  
+      WaveDigitalProbe3          , //  
+
+      RecordLengthSample         , // 21  
+      PreTriggerSample           , // 22  
+      CoincidenceLengthSample    , //   
       ADCInputBaselineGuardSample,
       CFDDelaySample             ,
       TimeFilterRetriggerGuardSample,

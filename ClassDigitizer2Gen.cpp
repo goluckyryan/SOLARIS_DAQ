@@ -545,7 +545,8 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   }
 
   //TODO Statistic handle and endpoint
-  ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha/stats", &stat_handle);
+  if( FPGAType == DPPType::PHA ) ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha/stats", &stat_handle);
+  if( FPGAType == DPPType::PSD ) ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppsd/stats", &stat_handle);
   ret |= CAEN_FELib_SetReadDataFormat(stat_handle, 
     " [ \
         { \"name\": \"REAL_TIME_NS\",    \"type\": \"U64\", \"dim\": 1 }, \
@@ -575,22 +576,24 @@ int Digitizer2Gen::ReadStat(){
 
   if (ret != CAEN_FELib_Success) ErrorMsg("Read Statistics");
 
+  for( int ch = 0; ch < nChannels; ch++) ReadValue( PHA::CH::SelfTrgRate, ch);
+
   return ret;
 }
 
 void Digitizer2Gen::PrintStat(){
-  printf("ch | Real Time[ns] | Dead Time[ns] | Live Time[ns] | Trigger |  Saved  | Rate[Hz] \n");
-  for( int i = 0; i < MaxNumberOfChannel; i++){
+  printf("ch | Real Time[ns] | Dead Time[ns] | Live Time[ns] | Trigger |  Saved  | Rate[Hz] | Self Trig Rate [Hz] \n");
+  for( int i = 0; i < nChannels; i++){
     if( triggerCount[i] == 0 ) continue;
-    printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %.3f\n", 
-         i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i]);
+    printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %8.3f | %d\n", 
+         i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i], atoi(chSettings[i][0].GetValue().c_str()));
   }
 }
 
 int Digitizer2Gen::ReadData(){
-  //printf("========= %s \n", __func__);
+  //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), evt->dataType);
 
-  if( FPGAType != DPPType::PHA || FPGAType != DPPType::PSD ) return -404;
+  if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
 
   if( evt->dataType == DataFormat::ALL ){
     if( FPGAType == DPPType::PHA ){
@@ -621,6 +624,8 @@ int Digitizer2Gen::ReadData(){
         &evt->aggCounter,
         &evt->event_size
       );
+
+      //printf("ch:%02d, trace Length %ld \n", evt->channel, evt->traceLenght);
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &evt->channel,
@@ -860,7 +865,7 @@ void Digitizer2Gen::SaveDataToFile(){
 //###########################################
 void Digitizer2Gen::Reset(){ SendCommand("/cmd/Reset"); }
 
-void Digitizer2Gen::ProgramDPPBoard(){
+void Digitizer2Gen::ProgramBoard(){
   if( !isConnected ) return ;
 
   //============= Board
@@ -880,21 +885,14 @@ void Digitizer2Gen::ProgramDPPBoard(){
 
   WriteValue("/par/EnAutoDisarmAcq" , "true");
   WriteValue("/par/EnStatEvents"    , "true");
+  WriteValue("/par/EnAutoDisarmAcq"    , "False");
   
   WriteValue("/par/BoardVetoWidth"    , "0");
   WriteValue("/par/VolatileClockOutDelay"    , "0");
   WriteValue("/par/PermanentClockOutDelay"    , "0");
 
   WriteValue("/par/DACoutMode"         , "ChInput");
-  WriteValue("/par/DACoutStaticLevel"  , "8192");
   WriteValue("/par/DACoutChSelect"     , "0");
-
-
-  //============== Test pulse
-  //WriteValue("/par/TestPulsePeriod"    , "1000000"); // 1.0 msec = 1000Hz, tested, 1 trace recording
-  //WriteValue("/par/TestPulseWidth"     , "1000"); // nsec
-  //WriteValue("/par/TestPulseLowLevel"  , "0");
-  //WriteValue("/par/TestPulseHighLevel" , "10000");
 
   //============== ITL
   WriteValue("/par/ITLAMainLogic"    , "OR"); 
@@ -909,10 +907,9 @@ void Digitizer2Gen::ProgramDPPBoard(){
   WriteValue("/par/ITLBPolarity"     , "Direct"); 
   WriteValue("/par/ITLBGateWidth"    , "100"); 
 
-
 }
 
-void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
+void Digitizer2Gen::ProgramChannels(bool testPulse){
 
 
   // Channel setting  
@@ -932,39 +929,84 @@ void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
   }else{
 
     //======== Self trigger for each channel 
-    WriteValue("/ch/0..63/par/ChEnable"                 , "true");
-    WriteValue("/ch/0..63/par/WaveDaatSource"           , "ADC_DATA");
+    WriteValue("/ch/0..63/par/ChEnable"                     ,  "True");
+    WriteValue("/ch/0..63/par/DCOffset"                     ,  "50");
+    WriteValue("/ch/0..63/par/TriggerThr"                   ,  "1000");
+    WriteValue("/ch/0..63/par/WaveDataSource"               ,  "ADC_DATA");
+    WriteValue("/ch/0..63/par/PulsePolarity"                ,  "Positive");
+    WriteValue("/ch/0..63/par/ChRecordLengthT"              ,  "4096");      /// 4096 ns, S and T are not Sync
+    WriteValue("/ch/0..63/par/ChPreTriggerT"                ,  "1000");
 
-    WriteValue("/ch/0..63/par/WaveResolution"           , "RES8");  /// 8 ns 
-    WriteValue("/ch/0..63/par/WaveSaving"               , "OnRequest");
-    WriteValue("/ch/0..63/par/PulsePolarity"            , "Positive");
-    WriteValue("/ch/0..63/par/EnergyFilterLFLimitation" , "Off");
-    WriteValue("/ch/0..63/par/DCOffset"                 , "10");  /// 10% 
-    WriteValue("/ch/0..63/par/TriggerThr"               , "1000"); 
+    WriteValue("/ch/0..63/par/WaveSaving"                   ,  "OnRequest");
+    WriteValue("/ch/0..63/par/WaveResolution"               ,  "RES8");
 
-    WriteValue("/ch/0..63/par/TimeFilterRiseTimeS"       , "10");   // 80 ns
-    WriteValue("/ch/0..63/par/TimeFilterRetriggerGuardS" , "10");   // 80 ns
-    WriteValue("/ch/0..63/par/ChRecordLengthT"           , "4096");  /// 4096 ns, S and T are not Sync
-    WriteValue("/ch/0..63/par/ChPreTriggerT"             , "1000");  /// 1000 ns
+    if( FPGAType == DPPType::PHA){
 
-    //======== Trapezoid setting
-    WriteValue("/ch/0..63/par/EnergyFilterRiseTimeS"       , "62");   //  496 ns
-    WriteValue("/ch/0..63/par/EnergyFilterFlatTopS"        , "200");  // 1600 ns
-    WriteValue("/ch/0..63/par/EnergyFilterPoleZeroS"       , "6250"); // 50 us
-    WriteValue("/ch/0..63/par/EnergyFilterPeakingPosition" , "20");   // 20 % = Flatup * 20% = 320 ns
-    WriteValue("/ch/0..63/par/EnergyFilterBaselineGuardS"  , "100");  // 800 ns
-    WriteValue("/ch/0..63/par/EnergyFilterPileupGuardS"    , "10");   // 80 ns
-    WriteValue("/ch/0..63/par/EnergyFilterBaselineAvg"     , "Medium"); // 1024 sample
-    WriteValue("/ch/0..63/par/EnergyFilterFineGain"        , "1.0");
-    WriteValue("/ch/0..63/par/EnergyFilterPeakingAvg"      , "LowAVG");
+      WriteValue("/ch/0..63/par/TimeFilterRiseTimeT"       , "80");   // 80 ns
+      WriteValue("/ch/0..63/par/TimeFilterRetriggerGuardT" , "80");   // 80 ns
 
-    //======== Probe Setting
-    WriteValue("/ch/0..63/par/WaveAnalogProbe0"  , "ADCInput");
-    WriteValue("/ch/0..63/par/WaveAnalogProbe1"  , "EnergyFilterMinusBaseline");
-    WriteValue("/ch/0..63/par/WaveDigitalProbe0" , "Trigger");
-    WriteValue("/ch/0..63/par/WaveDigitalProbe1" , "EnergyFilterPeaking");
-    WriteValue("/ch/0..63/par/WaveDigitalProbe2" , "TimeFilterArmed");
-    WriteValue("/ch/0..63/par/WaveDigitalProbe3" , "EnergyFilterPeakReady");
+      WriteValue("/ch/0..63/par/EnergyFilterLFLimitation" , "Off");
+  
+      //======== Trapezoid setting
+      WriteValue("/ch/0..63/par/EnergyFilterRiseTimeT"       , "496");   //  496 ns
+      WriteValue("/ch/0..63/par/EnergyFilterFlatTopT"        , "1600");  // 1600 ns
+      WriteValue("/ch/0..63/par/EnergyFilterPoleZeroT"       , "50000"); // 50 us
+      WriteValue("/ch/0..63/par/EnergyFilterPeakingPosition" , "20");   // 20 % = Flatup * 20% = 320 ns
+      WriteValue("/ch/0..63/par/EnergyFilterBaselineGuardT"   , "800");  // 800 ns
+      WriteValue("/ch/0..63/par/EnergyFilterPileupGuardT"     , "80");   // 80 ns
+      WriteValue("/ch/0..63/par/EnergyFilterBaselineAvg"     , "Medium"); // 1024 sample
+      WriteValue("/ch/0..63/par/EnergyFilterFineGain"        , "1.0");
+      WriteValue("/ch/0..63/par/EnergyFilterPeakingAvg"      , "LowAVG");
+
+      //======== Probe Setting
+      WriteValue("/ch/0..63/par/WaveAnalogProbe0"  , "ADCInput");
+      WriteValue("/ch/0..63/par/WaveAnalogProbe1"  , "EnergyFilterMinusBaseline");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe0" , "Trigger");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe1" , "EnergyFilterPeaking");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe2" , "TimeFilterArmed");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe3" , "EnergyFilterPeakReady");
+
+    }
+
+    if( FPGAType == DPPType::PSD ){
+
+      WriteValue("/ch/0..63/par/WaveAnalogProbe0"             ,  "ADCInput");
+      WriteValue("/ch/0..63/par/WaveAnalogProbe1"             ,  "CFDFilter");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe0"            ,  "Trigger");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe1"            ,  "LongGate");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe2"            ,  "ShortGate");
+      WriteValue("/ch/0..63/par/WaveDigitalProbe3"            ,  "ChargeReady");
+
+      //=========== QDC
+      WriteValue("/ch/0..63/par/GateLongLengthT"                ,  "400");
+      WriteValue("/ch/0..63/par/GateShortLengthT"               ,  "100");
+      WriteValue("/ch/0..63/par/GateOffsetT"                    ,  "50");
+      WriteValue("/ch/0..63/par/LongChargeIntegratorPedestal"   ,  "0");
+      WriteValue("/ch/0..63/par/ShortChargeIntegratorPedestal"  ,  "0");
+      WriteValue("/ch/0..63/par/EnergyGain"                     ,  "x1");
+
+      //=========== Discrimination
+      WriteValue("/ch/0..63/par/TriggerFilterSelection"         ,  "LeadingEdge");
+      WriteValue("/ch/0..63/par/CFDDelayT"                      ,  "32");
+      WriteValue("/ch/0..63/par/CFDFraction"                    ,  "25");
+      WriteValue("/ch/0..63/par/TimeFilterSmoothing"            ,  "Disabled");
+      WriteValue("/ch/0..63/par/ChargeSmoothing"                ,  "Disabled");
+      WriteValue("/ch/0..63/par/SmoothingFactor"                ,  "1");
+      WriteValue("/ch/0..63/par/PileupGap"                      ,  "1000");
+
+      //=========== Input
+      WriteValue("/ch/0..63/par/ADCInputBaselineAvg"            ,  "MediumHigh");
+      WriteValue("/ch/0..63/par/AbsoluteBaseline"               ,  "1000");
+      WriteValue("/ch/0..63/par/ADCInputBaselineGuardT"         ,  "0");
+      WriteValue("/ch/0..63/par/TimeFilterRetriggerGuardT"      ,  "0");
+      WriteValue("/ch/0..63/par/TriggerHysteresis"              ,  "Enabled");
+      
+      //========== Other
+      WriteValue("/ch/0..63/par/NeutronThreshold"               ,  "0");
+      WriteValue("/ch/0..63/par/EventNeutronReject"             ,  "Disabled");
+      WriteValue("/ch/0..63/par/WaveNeutronReject"              ,  "Disabled");
+
+    }
 
     //======== Trigger setting
     WriteValue("/ch/0..63/par/EventTriggerSource"  , "ChSelfTrigger");
@@ -983,46 +1025,58 @@ void Digitizer2Gen::ProgramPHAChannels(bool testPulse){
     WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "0");
     WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
 
+
   }
 }
 
-void Digitizer2Gen::ProgramPSDChannels(bool testPulse){
-  if( testPulse){
-    WriteValue("/ch/0..63/par/ChEnable"   , "false");
-    WriteValue("/ch/0..63/par/ChEnable"   , "true");
+void Digitizer2Gen::PrintBoardSettings(){
 
-    WriteValue("/ch/0..63/par/EventTriggerSource", "GlobalTriggerSource");
-    WriteValue("/ch/0..63/par/WaveTriggerSource" , "GlobalTriggerSource"); // EventTriggerSource enought
+  for(int i = 0; i < (int) boardSettings.size(); i++){
+    if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
+    
+    //--- exclude some TempSens for Not VX2745
+    if( ModelName != "VX2745" && 
+        ( boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
+          boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
+          boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
+          boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
+          boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
+          boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara() ) ) {
+      continue;
+    }
 
-    WriteValue("/par/GlobalTriggerSource", "SwTrg | TestPulse");
-    WriteValue("/par/TestPulsePeriod"    , "1000000"); // 1.0 msec = 1000Hz, tested, 1 trace recording
-    WriteValue("/par/TestPulseWidth"     , "1000"); // nsec
-    WriteValue("/par/TestPulseLowLevel"  , "0");
-    WriteValue("/par/TestPulseHighLevel" , "10000");
-
-  }else{
-
-    //TODO not finished.
-
-    //======== Self trigger for each channel 
-    WriteValue("/ch/0..63/par/ChEnable"                 , "true");
-    WriteValue("/ch/0..63/par/WaveDaatSource"           , "ADC_DATA");
-    WriteValue("/ch/0..63/par/WaveResolution"           , "RES8");  /// 8 ns 
-    WriteValue("/ch/0..63/par/WaveSaving"               , "OnRequest");
-    WriteValue("/ch/0..63/par/PulsePolarity"            , "Positive");
-    WriteValue("/ch/0..63/par/DCOffset"                 , "20");  /// 20% 
-    WriteValue("/ch/0..63/par/TriggerThr"               , "1000"); 
-
-    WriteValue("/ch/0..63/par/EventNeutronReject", "Disabled");
-    WriteValue("/ch/0..63/par/WaveNeutronReject", "Disabled");
-
-    WriteValue("/ch/0..63/par/WaveAnalogProbe0"         , "ADCInput");
-
-    WriteValue("/ch/0..63/par/ChRecordLengthT"           , "4096");  /// 4096 ns, S and T are not Sync
-    WriteValue("/ch/0..63/par/ChPreTriggerT"             , "1000");  /// 1000 ns
-
+    printf("%-45s  %d  %s\n", boardSettings[i].GetFullPara().c_str(),  
+                              boardSettings[i].ReadWrite() ,
+                              boardSettings[i].GetValue().c_str());
   }
 
+  if( ModelName == "VX2745" && FPGAType == DPPType::PHA) {
+    for(int i = 0; i < 4 ; i ++){
+      printf("%-45s  %d  %s\n", VGASetting[i].GetFullPara(i).c_str(), 
+                                VGASetting[i].ReadWrite(), 
+                                VGASetting[i].GetValue().c_str());
+    }
+  }
+
+  for( int i = 0; i < (int) LVDSSettings[0].size(); i++){
+    for( int index = 0; index < 4; index++){
+      if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
+      printf("%-45s  %d  %s\n", LVDSSettings[index][i].GetFullPara(index).c_str(), 
+                                LVDSSettings[index][i].ReadWrite(),
+                                LVDSSettings[index][i].GetValue().c_str());
+    }
+  }
+
+}
+
+void Digitizer2Gen::PrintChannelSettings(unsigned short ch){
+
+  for( int i = 0; i < (int) chSettings[0].size(); i++){
+    if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+    printf("%-45s  %d  %s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
+                              chSettings[ch][i].ReadWrite(),
+                              chSettings[ch][i].GetValue().c_str());
+  }
 }
 
 std::string Digitizer2Gen::ErrorMsg(const char * funcName){
