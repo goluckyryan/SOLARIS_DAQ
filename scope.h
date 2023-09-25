@@ -8,6 +8,7 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QGroupBox>
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QComboBox>
@@ -164,6 +165,12 @@ private:
   ReadDataThread ** readDataThread;   
   TimingThread * updateTraceThread;
 
+  QGroupBox * settingBox;
+  QGridLayout * bLayout; // for wave setting 
+
+  std::vector<Reg> anaProbeList;
+  std::vector<Reg> digiProbeList;
+
   QChart      * plot;
   QLineSeries * dataTrace[6];
   RComboBox   * cbScopeDigi;
@@ -175,37 +182,69 @@ private:
   QPushButton * bnScopeStart;
   QPushButton * bnScopeStop;
   
+  QLineEdit * leTriggerRate;
+  
   RComboBox   * cbAnaProbe[2];
   RComboBox   * cbDigProbe[4];
+
   RSpinBox * sbRL; // record length
+  RSpinBox * sbThreshold;
+  RComboBox * cbPolarity;
+  RComboBox * cbWaveRes;
   RSpinBox * sbPT; // pre trigger
   RSpinBox * sbDCOffset;
-  RSpinBox * sbThreshold;
+  
+  //-------- PHA
   RSpinBox * sbTimeRiseTime;
   RSpinBox * sbTimeGuard;
+  RComboBox * cbLowFreqFilter;
+
   RSpinBox * sbTrapRiseTime;
   RSpinBox * sbTrapFlatTop;
   RSpinBox * sbTrapPoleZero;
-  RSpinBox * sbEnergyFineGain;
+
   RSpinBox * sbTrapPeaking;
-  RComboBox * cbPolarity;
-  RComboBox * cbWaveRes;
-  RComboBox * cbTrapPeakAvg;
-
-  QLineEdit * leTriggerRate;
-
   RSpinBox * sbBaselineGuard;
   RSpinBox * sbPileUpGuard;
+ 
   RComboBox * cbBaselineAvg;
-  RComboBox * cbLowFreqFilter;
+  RComboBox * cbTrapPeakAvg;
+  RSpinBox * sbEnergyFineGain;
+
+  //--------- PSD
+
+  RComboBox * cbbADCInputBaselineAvg;
+  RSpinBox  * spbADCInputBaselineGuard;
+
+  RSpinBox  * spbCFDDelay;
+  RSpinBox  * spbCFDFraction;
+  RComboBox * cbbSmoothingFactor;
+  RSpinBox  * spbAbsBaseline;
+
+  RComboBox * cbbTriggerFilter;
+  RComboBox * cbbTimeFilterSmoothing;
+  RSpinBox  * spbTimeFilterReTriggerGuard;
+  RSpinBox  * spbPileupGap;
+
+  RSpinBox  * spbGateLong;
+  RSpinBox  * spbGateShort;
+  RSpinBox  * spbGateOffset;
+  RComboBox * cbbEnergyGain;
 
   bool allowChange;
+
+  void ChangeDigitizer();
+
+  void CleanUpSettingsGroupBox();
+  void SetupPHA();
+  void SetupPSD();
 
   // remembee setting, once the scope stop, restore it.
   bool originalValueSet;
   std::string channelEnable[MaxNumberOfDigitizer][MaxNumberOfChannel];
   std::string waveSaving;
   std::string waveTriggerSource; 
+
 };
 
 #endif

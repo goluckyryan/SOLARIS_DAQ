@@ -197,7 +197,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
          RefreshSettings();
       });
       
-      bnDefaultSetting[iDigi] = new QPushButton("Set Default PHA Settings", digiTab[iDigi]);
+      bnDefaultSetting[iDigi] = new QPushButton("Set Default Settings", digiTab[iDigi]);
       bnLayout->addWidget(bnDefaultSetting[iDigi], rowId, 4, 1, 2);
       connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::SetDefaultPHASettigns);
 

@@ -1033,11 +1033,11 @@ namespace PSD{
     const Reg LongChargeIntegratorPedestal  ("LongChargeIntegratorPedestal", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
     const Reg ShortChargeIntegratorPedestal ("ShortChargeIntegratorPedestal", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
 
-    const Reg EnergyGain ("EnergyGain", RW::ReadWrite, TYPE::CH, {{"1",   "No Gain"},
-                                                                  {"4",   "x4"},
-                                                                  {"16",  "x16"},
-                                                                  {"64",  "x64"},
-                                                                  {"256", "x256"}});
+    const Reg EnergyGain ("EnergyGain", RW::ReadWrite, TYPE::CH, {{"x1",   "No Gain"},
+                                                                  {"x4",   "x4"},
+                                                                  {"x16",  "x16"},
+                                                                  {"x64",  "x64"},
+                                                                  {"x256", "x256"}});
 
     const Reg NeutronThreshold ("NeutronThreshold", RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "count");
 

@@ -40,7 +40,7 @@ public:
         break;
       }else{
         //digi->ErrorMsg("ReadDataLoop()");
-        digi->evt->ClearTrace();
+        //digi->evt->ClearTrace();
       }
 
       if( isSaveData ){

@@ -73,39 +73,24 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(cbScopeDigi, rowID, 0);
   layout->addWidget(cbScopeCh, rowID, 1);
 
-  connect(cbScopeDigi, &RComboBox::currentIndexChanged, this, [=](){
-    int index = cbScopeDigi->currentIndex();
-    if( index == -1 ) return;
-    allowChange = false;
-    cbScopeCh->clear();
-    for( int i = 0; i < digi[index]->GetNChannels(); i++){
-      cbScopeCh->addItem("ch-" + QString::number(i), i);
-    }
-    digiMTX[index].lock();
-    ReadScopeSettings();
-    digiMTX[index].unlock();
-    allowChange = true;
-  });
-
-  connect(cbScopeCh, &RComboBox::currentIndexChanged, this, [=](){
-    if( !allowChange ) return;
-    int iDigi = cbScopeDigi->currentIndex();
-    int ch = cbScopeCh->currentIndex();
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
-    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-    ReadScopeSettings();
-    digiMTX[iDigi].unlock();
-  });
-
   allowChange = false;
   cbScopeDigi->clear(); ///this will also trigger RComboBox::currentIndexChanged
   cbScopeCh->clear();
   for( unsigned int i = 0 ; i < nDigi; i++) {
     cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
   }
+  cbScopeDigi->setCurrentIndex(1);
   allowChange = true;
 
+  connect(cbScopeDigi, &RComboBox::currentIndexChanged, this, &Scope::ChangeDigitizer);
+
+  connect(cbScopeCh, &RComboBox::currentIndexChanged, this, [=](){
+    if( !allowChange ) return;
+    int iDigi = cbScopeDigi->currentIndex();
+    digiMTX[iDigi].lock();
+    ReadScopeSettings();
+    digiMTX[iDigi].unlock();
+  });
 
   bnScopeReset = new QPushButton("ReProgram Channels", this);
   layout->addWidget(bnScopeReset, rowID, 2);
@@ -134,22 +119,17 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   //------------ Probe selection
   rowID ++;
-  //TODO --- add None
-  cbAnaProbe[0] = new RComboBox(this);
-  for( int i = 0; i < (int) PHA::CH::WaveAnalogProbe0.GetAnswers().size(); i++ ) {
-    cbAnaProbe[0]->addItem(QString::fromStdString((PHA::CH::WaveAnalogProbe0.GetAnswers())[i].second), 
-                           QString::fromStdString((PHA::CH::WaveAnalogProbe0.GetAnswers())[i].first));
-  }
 
+  //TODO --- add None for probel selection
+  cbAnaProbe[0] = new RComboBox(this);
   cbAnaProbe[1] = new RComboBox(this);
-  for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
+  cbDigProbe[0] = new RComboBox(this);
+  cbDigProbe[1] = new RComboBox(this);
+  cbDigProbe[2] = new RComboBox(this);
+  cbDigProbe[3] = new RComboBox(this);
 
   connect(cbAnaProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
   connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbAnaProbe, 2);});
-
-  cbAnaProbe[0]->setCurrentIndex(1); ///trigger the AnaProbeChange
-  cbAnaProbe[0]->setCurrentIndex(0);
-  cbAnaProbe[1]->setCurrentIndex(4);
 
   connect(cbAnaProbe[0], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
@@ -157,7 +137,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe0, (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(anaProbeList[0], (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
   
@@ -167,36 +147,14 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveAnalogProbe1, (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(anaProbeList[1], (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
-
-  //TODO --- add None
-  cbDigProbe[0] = new RComboBox(this);
-  for( int i = 0; i < (int) PHA::CH::WaveDigitalProbe0.GetAnswers().size(); i++ ) {
-    cbDigProbe[0]->addItem(QString::fromStdString((PHA::CH::WaveDigitalProbe0.GetAnswers())[i].second), 
-                           QString::fromStdString((PHA::CH::WaveDigitalProbe0.GetAnswers())[i].first));
-  }
-
-  cbDigProbe[1] = new RComboBox(this);
-  cbDigProbe[2] = new RComboBox(this);
-  cbDigProbe[3] = new RComboBox(this);
-  for( int i = 0; i < cbDigProbe[0]->count() ; i++) {
-    cbDigProbe[1]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
-    cbDigProbe[2]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
-    cbDigProbe[3]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
-  }
 
   connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
-
-  cbDigProbe[0]->setCurrentIndex(1); ///trigger the DigProbeChange
-  cbDigProbe[0]->setCurrentIndex(0);
-  cbDigProbe[1]->setCurrentIndex(4);
-  cbDigProbe[2]->setCurrentIndex(5);
-  cbDigProbe[3]->setCurrentIndex(6);
 
   connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
@@ -204,7 +162,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe0, (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(digiProbeList[0], (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -213,7 +171,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe1, (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(digiProbeList[1], (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -222,7 +180,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe2, (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(digiProbeList[2], (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -231,7 +189,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(PHA::CH::WaveDigitalProbe3, (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
+    digi[iDigi]->WriteValue(digiProbeList[3], (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
     digiMTX[iDigi].unlock();
   });
 
@@ -246,41 +204,24 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   for( int i = 0; i < 6; i++) layout->setColumnStretch(i, 1);
 
   rowID ++;
-  {//------------ wave settings
-    QGroupBox * box = new QGroupBox("Channel Settings (need ACQ stop)", this);
-    layout->addWidget(box, rowID, 0, 1, 6);
 
-    QGridLayout * bLayout = new QGridLayout(box);
+  {//------------ wave settings
+    settingBox = new QGroupBox("Channel Settings (need ACQ stop)", this);
+    layout->addWidget(settingBox, rowID, 0, 1, 6);
+
+    bLayout = new QGridLayout(settingBox);
     bLayout->setSpacing(0);
 
-    ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, PHA::CH::RecordLength);
-    ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, PHA::CH::TriggerThreshold);
-    ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, PHA::CH::Polarity);
-    ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, PHA::CH::WaveResolution);
-
-    //------------------ next row
-    ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, PHA::CH::PreTrigger);
-    ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  PHA::CH::DC_Offset);
-    ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, PHA::CH::TimeFilterRiseTime);
-    ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, PHA::CH::TimeFilterRetriggerGuard);
-
-    //----------------- next row
-    ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, PHA::CH::EnergyFilterRiseTime);
-    ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, PHA::CH::EnergyFilterFlatTop);
-    ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, PHA::CH::EnergyFilterPoleZero);
-    ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, PHA::CH::EnergyFilterFineGain);
-
-    //----------------- next row
-    ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, PHA::CH::EnergyFilterPeakingPosition);
-    ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, PHA::CH::EnergyFilterPeakingAvg);
-    ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, PHA::CH::EnergyFilterBaselineGuard);
-    ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, PHA::CH::EnergyFilterBaselineAvg);
-
-    //----------------- next row
-    ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, PHA::CH::EnergyFilterPileUpGuard);
-    ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, PHA::CH::EnergyFilterLowFreqFilter);
+    if( digi[0]->GetFPGAType() == DPPType::PHA ) SetupPHA();
+    
+    if( digi[0]->GetFPGAType() == DPPType::PSD ) SetupPSD();
 
   }
+
+  //Trigger the ChangeDigitizer()
+  cbScopeDigi->setCurrentIndex(0);
+  cbScopeCh->setCurrentIndex(1);
+  cbScopeCh->setCurrentIndex(0);
 
   //------------ plot view
   rowID ++;
@@ -346,42 +287,157 @@ Scope::~Scope(){
   printf("------- end of %s \n", __func__);
 }
 
+void Scope::ChangeDigitizer(){
+
+  int index = cbScopeDigi->currentIndex();
+  if( index == -1 ) return;
+  allowChange = false;
+
+  cbScopeCh->clear();
+  for( int i = 0; i < digi[index]->GetNChannels(); i++){
+    cbScopeCh->addItem("ch-" + QString::number(i), i);
+  }
+  cbScopeCh->setCurrentIndex(0);
+
+  anaProbeList.clear();
+  digiProbeList.clear();
+  if( digi[index]->GetFPGAType() == DPPType::PHA ) {
+    anaProbeList.push_back(PHA::CH::WaveAnalogProbe0);
+    anaProbeList.push_back(PHA::CH::WaveAnalogProbe1);
+    digiProbeList.push_back(PHA::CH::WaveDigitalProbe0);
+    digiProbeList.push_back(PHA::CH::WaveDigitalProbe1);
+    digiProbeList.push_back(PHA::CH::WaveDigitalProbe2);
+    digiProbeList.push_back(PHA::CH::WaveDigitalProbe3);
+  } 
+  if( digi[index]->GetFPGAType() == DPPType::PSD){
+    anaProbeList.push_back(PSD::CH::WaveAnalogProbe0);
+    anaProbeList.push_back(PSD::CH::WaveAnalogProbe1);
+    digiProbeList.push_back(PSD::CH::WaveDigitalProbe0);
+    digiProbeList.push_back(PSD::CH::WaveDigitalProbe1);
+    digiProbeList.push_back(PSD::CH::WaveDigitalProbe2);
+    digiProbeList.push_back(PSD::CH::WaveDigitalProbe3);    }
+
+  cbAnaProbe[0]->clear();
+  cbAnaProbe[1]->clear();
+
+  for( int i = 0; i < (int) anaProbeList[0].GetAnswers().size(); i++ ) {
+    cbAnaProbe[0]->addItem(QString::fromStdString((anaProbeList[0].GetAnswers())[i].second), 
+                          QString::fromStdString((anaProbeList[0].GetAnswers())[i].first));
+  }
+  for( int i = 0; i < cbAnaProbe[0]->count() ; i++) cbAnaProbe[1]->addItem(cbAnaProbe[0]->itemText(i), cbAnaProbe[0]->itemData(i));
+
+  cbDigProbe[0]->clear();
+  cbDigProbe[1]->clear();
+  cbDigProbe[2]->clear();
+  cbDigProbe[3]->clear();
+  for( int i = 0; i < (int) digiProbeList[0].GetAnswers().size(); i++ ) {
+    cbDigProbe[0]->addItem(QString::fromStdString((digiProbeList[0].GetAnswers())[i].second), 
+                          QString::fromStdString((digiProbeList[0].GetAnswers())[i].first));
+  }
+  for( int i = 0; i < cbDigProbe[0]->count() ; i++) {
+    cbDigProbe[1]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+    cbDigProbe[2]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+    cbDigProbe[3]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
+  }
+
+  if( digi[index]->GetFPGAType() == DPPType::PHA ) SetupPHA();
+
+  if( digi[index]->GetFPGAType() == DPPType::PSD ) SetupPSD();
+
+
+  digiMTX[index].lock();
+  ReadScopeSettings();
+  digiMTX[index].unlock();
+  allowChange = true;
+
+}
+
+void Scope::CleanUpSettingsGroupBox(){
+  QList<QLabel *> labelChildren1 = settingBox->findChildren<QLabel *>();
+  for( int i = 0; i < labelChildren1.size(); i++) delete labelChildren1[i];
+  
+  QList<RComboBox *> labelChildren2 = settingBox->findChildren<RComboBox *>();
+  for( int i = 0; i < labelChildren2.size(); i++) delete labelChildren2[i];
+  
+  QList<RSpinBox *> labelChildren3 = settingBox->findChildren<RSpinBox *>();
+  for( int i = 0; i < labelChildren3.size(); i++) delete labelChildren3[i];
+}
+
+void Scope::SetupPHA(){
+
+  CleanUpSettingsGroupBox();
+
+  ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, PHA::CH::RecordLength);
+  ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, PHA::CH::TriggerThreshold);
+  ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, PHA::CH::Polarity);
+  ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, PHA::CH::WaveResolution);
+
+  //------------------ next row
+  ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, PHA::CH::PreTrigger);
+  ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  PHA::CH::DC_Offset);
+  ScopeMakeSpinBox(sbTimeRiseTime, "Trigger Rise Time [ns] ", bLayout, 1, 4, PHA::CH::TimeFilterRiseTime);
+  ScopeMakeSpinBox(sbTimeGuard, "Trigger Guard [ns] ", bLayout, 1, 6, PHA::CH::TimeFilterRetriggerGuard);
+
+  //----------------- next row
+  ScopeMakeSpinBox(sbTrapRiseTime, "Trap. Rise Time [ns] ", bLayout, 2, 0, PHA::CH::EnergyFilterRiseTime);
+  ScopeMakeSpinBox(sbTrapFlatTop, "Trap. Flat Top [ns] ", bLayout, 2, 2, PHA::CH::EnergyFilterFlatTop);
+  ScopeMakeSpinBox(sbTrapPoleZero, "Trap. Pole Zero [ns] ", bLayout, 2, 4, PHA::CH::EnergyFilterPoleZero);
+  ScopeMakeSpinBox(sbEnergyFineGain, "Energy Fine Gain ", bLayout, 2, 6, PHA::CH::EnergyFilterFineGain);
+
+  //----------------- next row
+  ScopeMakeSpinBox(sbTrapPeaking, "Trap. Peaking [%] ", bLayout, 3, 0, PHA::CH::EnergyFilterPeakingPosition);
+  ScopeMakeComoBox(cbTrapPeakAvg, "Trap. Peaking ", bLayout, 3, 2, PHA::CH::EnergyFilterPeakingAvg);
+  ScopeMakeSpinBox(sbBaselineGuard, "Baseline Guard [ns] ", bLayout, 3, 4, PHA::CH::EnergyFilterBaselineGuard);
+  ScopeMakeComoBox(cbBaselineAvg, "Baseline Avg ", bLayout, 3, 6, PHA::CH::EnergyFilterBaselineAvg);
+
+  //----------------- next row
+  ScopeMakeSpinBox(sbPileUpGuard, "Pile-up Guard [ns] ", bLayout, 4, 0, PHA::CH::EnergyFilterPileUpGuard);
+  ScopeMakeComoBox(cbLowFreqFilter, "Low Freq. Filter ", bLayout, 4, 2, PHA::CH::EnergyFilterLowFreqFilter);
+
+}
+
+void Scope::SetupPSD(){
+
+  CleanUpSettingsGroupBox();
+
+  ScopeMakeSpinBox(sbRL, "Record Lenght [ns] ", bLayout, 0, 0, PSD::CH::RecordLength);
+  ScopeMakeSpinBox(sbThreshold, "Threshold [LSB] ", bLayout, 0, 2, PSD::CH::TriggerThreshold);
+  ScopeMakeComoBox(cbPolarity, "Polarity ", bLayout, 0, 4, PSD::CH::Polarity);
+  ScopeMakeComoBox(cbWaveRes, "Wave Re. ", bLayout, 0, 6, PSD::CH::WaveResolution);
+
+  //------------------ next row
+  ScopeMakeSpinBox(sbPT, "Pre Trigger [ns] ", bLayout, 1, 0, PSD::CH::PreTrigger);
+  ScopeMakeSpinBox(sbDCOffset, "DC offset [%] ", bLayout, 1, 2,  PSD::CH::DC_Offset);
+  ScopeMakeComoBox(cbbADCInputBaselineAvg, "ADC BL Avg. ", bLayout, 1, 4, PSD::CH::ADCInputBaselineAvg);
+  ScopeMakeSpinBox(spbADCInputBaselineGuard, "ADC BL Guard [ns] ", bLayout, 1, 6, PSD::CH::ADCInputBaselineGuard);
+
+  //------------------ next row
+  ScopeMakeSpinBox(spbCFDDelay, "CFD Delay [ns] ", bLayout, 2, 0, PSD::CH::CFDDelay);
+  ScopeMakeSpinBox(spbCFDFraction, "CFD Frac. [%] ", bLayout, 2, 2, PSD::CH::CFDFraction);
+  ScopeMakeComoBox(cbbSmoothingFactor, "Smoothing ", bLayout, 2, 4, PSD::CH::SmoothingFactor);
+  ScopeMakeSpinBox(spbAbsBaseline, "Abs. BL ", bLayout, 2, 6, PSD::CH::AbsoluteBaseline);
+
+  //------------------ next row
+  ScopeMakeComoBox(cbbTriggerFilter, "Trig. Filter ", bLayout, 3, 0, PSD::CH::TriggerFilterSelection);
+  ScopeMakeComoBox(cbbTimeFilterSmoothing, "Trig. Smooth ", bLayout, 3, 2, PSD::CH::TimeFilterSmoothing);
+  ScopeMakeSpinBox(spbTimeFilterReTriggerGuard, "Trig. Guard [ns] ", bLayout, 3, 4, PSD::CH::TimeFilterRetriggerGuard);
+  ScopeMakeSpinBox(spbPileupGap, "PileUp Gap [ns] ", bLayout, 3, 6, PSD::CH::PileupGap);
+
+  //------------------ next row
+  ScopeMakeSpinBox(spbGateLong, "Long Gate [ns] ", bLayout, 4, 0, PSD::CH::GateLongLength);
+  ScopeMakeSpinBox(spbGateShort, "Shart Gate [ns] ", bLayout, 4, 2, PSD::CH::GateLongLength);
+  ScopeMakeSpinBox(spbGateOffset, "Gate offset [ns] ", bLayout, 4, 4, PSD::CH::GateLongLength);
+  ScopeMakeComoBox(cbbEnergyGain, "Energy Gain ", bLayout, 4, 6, PSD::CH::EnergyGain);
+
+
+}
+
 void Scope::ReadScopeSettings(){
 
   if( !isVisible() ) return;
 
   int iDigi = cbScopeDigi->currentIndex();
   if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
-
-  // int ch = cbScopeCh->currentIndex();
-  // digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe0, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveAnalogProbe1, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe0, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe1, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe2, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveDigitalProbe3, ch);
-
-  // digi[iDigi]->ReadValue(PHA::CH::Polarity, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::WaveResolution, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingAvg, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineAvg, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterLowFreqFilter, ch);
-
-  // digi[iDigi]->ReadValue(PHA::CH::RecordLength, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::PreTrigger, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::DC_Offset, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::TriggerThreshold, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::TimeFilterRiseTime, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::TimeFilterRetriggerGuard, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterRiseTime, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFlatTop, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPoleZero, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterFineGain, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPeakingPosition, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterBaselineGuard, ch);
-  // digi[iDigi]->ReadValue(PHA::CH::EnergyFilterPileUpGuard, ch);
-
-  // digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
 
   UpdateSettingsFromMemeory();
 
@@ -400,45 +456,98 @@ void Scope::UpdateSettingsFromMemeory(){
   int ch = cbScopeCh->currentIndex();
 
   for( int i = 0 ; i < 2; i++){
-    ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
+    if( digi[iDigi]->GetFPGAType() == DPPType::PHA ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
+    if( digi[iDigi]->GetFPGAType() == DPPType::PSD ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PSD::CH::AnalogProbe[i]);
   }
 
   for( int i = 0 ; i < 4; i++){
-    ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PHA::CH::DigitalProbe[i]);
+    if( digi[iDigi]->GetFPGAType() == DPPType::PHA )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PHA::CH::DigitalProbe[i]);
+    if( digi[iDigi]->GetFPGAType() == DPPType::PSD )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PSD::CH::DigitalProbe[i]);
   }
 
-  ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PHA::CH::Polarity);
-  ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PHA::CH::WaveResolution);
-  ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, PHA::CH::EnergyFilterPeakingAvg);
-  ScopeReadComboBoxValue(iDigi, ch, cbBaselineAvg, PHA::CH::EnergyFilterBaselineAvg);
-  ScopeReadComboBoxValue(iDigi, ch, cbLowFreqFilter, PHA::CH::EnergyFilterLowFreqFilter);
+  if(  digi[iDigi]->GetFPGAType() == DPPType::PHA ){
+    ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PHA::CH::Polarity);
+    ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PHA::CH::WaveResolution);
+    ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, PHA::CH::EnergyFilterPeakingAvg);
+    ScopeReadComboBoxValue(iDigi, ch, cbBaselineAvg, PHA::CH::EnergyFilterBaselineAvg);
+    ScopeReadComboBoxValue(iDigi, ch, cbLowFreqFilter, PHA::CH::EnergyFilterLowFreqFilter);
 
-  ScopeReadSpinBoxValue(iDigi, ch, sbRL, PHA::CH::RecordLength);
-  ScopeReadSpinBoxValue(iDigi, ch, sbPT, PHA::CH::PreTrigger);
-  ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset, PHA::CH::DC_Offset);
-  ScopeReadSpinBoxValue(iDigi, ch, sbThreshold, PHA::CH::TriggerThreshold);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTimeRiseTime, PHA::CH::TimeFilterRiseTime);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTimeGuard, PHA::CH::TimeFilterRetriggerGuard);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapRiseTime, PHA::CH::EnergyFilterRiseTime);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapFlatTop, PHA::CH::EnergyFilterFlatTop);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, PHA::CH::EnergyFilterPoleZero);
-  ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, PHA::CH::EnergyFilterFineGain);
-  ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, PHA::CH::EnergyFilterPeakingPosition);
-  ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, PHA::CH::EnergyFilterBaselineGuard);
-  ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, PHA::CH::EnergyFilterPileUpGuard);
+    ScopeReadSpinBoxValue(iDigi, ch, sbRL, PHA::CH::RecordLength);
+    ScopeReadSpinBoxValue(iDigi, ch, sbPT, PHA::CH::PreTrigger);
+    ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset, PHA::CH::DC_Offset);
+    ScopeReadSpinBoxValue(iDigi, ch, sbThreshold, PHA::CH::TriggerThreshold);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTimeRiseTime, PHA::CH::TimeFilterRiseTime);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTimeGuard, PHA::CH::TimeFilterRetriggerGuard);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTrapRiseTime, PHA::CH::EnergyFilterRiseTime);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTrapFlatTop, PHA::CH::EnergyFilterFlatTop);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTrapPoleZero, PHA::CH::EnergyFilterPoleZero);
+    ScopeReadSpinBoxValue(iDigi, ch, sbEnergyFineGain, PHA::CH::EnergyFilterFineGain);
+    ScopeReadSpinBoxValue(iDigi, ch, sbTrapPeaking, PHA::CH::EnergyFilterPeakingPosition);
+    ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, PHA::CH::EnergyFilterBaselineGuard);
+    ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, PHA::CH::EnergyFilterPileUpGuard);
 
-  sbRL->setStyleSheet("");
-  sbPT->setStyleSheet("");
-  sbThreshold->setStyleSheet("");
-  sbTimeRiseTime->setStyleSheet("");
-  sbTimeGuard->setStyleSheet("");
-  sbTrapRiseTime->setStyleSheet("");
-  sbTrapFlatTop->setStyleSheet("");
-  sbTrapPoleZero->setStyleSheet("");
-  sbEnergyFineGain->setStyleSheet("");
-  sbTrapPeaking->setStyleSheet("");
-  sbBaselineGuard->setStyleSheet("");
-  sbPileUpGuard->setStyleSheet("");
+    sbRL->setStyleSheet("");
+    sbPT->setStyleSheet("");
+    sbThreshold->setStyleSheet("");
+    sbTimeRiseTime->setStyleSheet("");
+    sbTimeGuard->setStyleSheet("");
+    sbTrapRiseTime->setStyleSheet("");
+    sbTrapFlatTop->setStyleSheet("");
+    sbTrapPoleZero->setStyleSheet("");
+    sbEnergyFineGain->setStyleSheet("");
+    sbTrapPeaking->setStyleSheet("");
+    sbBaselineGuard->setStyleSheet("");
+    sbPileUpGuard->setStyleSheet("");
+  }
+
+  if(  digi[iDigi]->GetFPGAType() == DPPType::PSD ){
+
+    ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PSD::CH::Polarity);
+    ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PSD::CH::WaveResolution);
+    ScopeReadComboBoxValue(iDigi, ch, cbbADCInputBaselineAvg, PSD::CH::ADCInputBaselineAvg);
+    ScopeReadComboBoxValue(iDigi, ch, cbbSmoothingFactor,  PSD::CH::SmoothingFactor);
+    ScopeReadComboBoxValue(iDigi, ch, cbbTriggerFilter,  PSD::CH::TriggerFilterSelection);
+    ScopeReadComboBoxValue(iDigi, ch, cbbTimeFilterSmoothing, PSD::CH::TimeFilterSmoothing);
+    ScopeReadComboBoxValue(iDigi, ch, cbbEnergyGain, PSD::CH::EnergyGain);
+
+
+    ScopeReadSpinBoxValue(iDigi, ch, sbRL, PSD::CH::RecordLength);
+    ScopeReadSpinBoxValue(iDigi, ch, sbThreshold,  PSD::CH::TriggerThreshold);
+    ScopeReadSpinBoxValue(iDigi, ch, sbPT,  PSD::CH::PreTrigger);
+    ScopeReadSpinBoxValue(iDigi, ch, sbDCOffset,  PSD::CH::DC_Offset);
+    ScopeReadSpinBoxValue(iDigi, ch, spbADCInputBaselineGuard,  PSD::CH::ADCInputBaselineGuard);
+    ScopeReadSpinBoxValue(iDigi, ch, spbCFDDelay,  PSD::CH::CFDDelay);
+    ScopeReadSpinBoxValue(iDigi, ch, spbCFDFraction, PSD::CH::CFDFraction);
+    ScopeReadSpinBoxValue(iDigi, ch, spbAbsBaseline,  PSD::CH::AbsoluteBaseline);
+    ScopeReadSpinBoxValue(iDigi, ch, spbTimeFilterReTriggerGuard,  PSD::CH::TimeFilterRetriggerGuard);
+    ScopeReadSpinBoxValue(iDigi, ch, spbPileupGap,  PSD::CH::PileupGap);
+    ScopeReadSpinBoxValue(iDigi, ch, spbGateLong, PSD::CH::GateLongLength);
+    ScopeReadSpinBoxValue(iDigi, ch, spbGateShort, PSD::CH::GateShortLength);
+    ScopeReadSpinBoxValue(iDigi, ch, spbGateOffset, PSD::CH::GateOffset);
+
+    cbPolarity->setStyleSheet("");
+    cbWaveRes->setStyleSheet("");
+    cbbADCInputBaselineAvg->setStyleSheet("");
+    cbbSmoothingFactor->setStyleSheet("");
+    cbbTriggerFilter->setStyleSheet("");
+    cbbTimeFilterSmoothing->setStyleSheet("");
+    cbbEnergyGain->setStyleSheet("");
+
+    sbRL->setStyleSheet("");
+    sbThreshold->setStyleSheet("");
+    sbPT->setStyleSheet("");
+    sbDCOffset->setStyleSheet("");
+    spbADCInputBaselineGuard->setStyleSheet("");
+    spbCFDDelay->setStyleSheet("");
+    spbCFDFraction->setStyleSheet("");
+    spbAbsBaseline->setStyleSheet("");
+    spbTimeFilterReTriggerGuard->setStyleSheet("");
+    spbPileupGap->setStyleSheet("");
+    spbGateLong->setStyleSheet("");
+    spbGateShort->setStyleSheet("");
+    spbGateOffset->setStyleSheet("");
+
+  }
 
 
   allowChange = true;
@@ -459,6 +568,8 @@ void Scope::StartScope(){
 
     ReadScopeSettings();
 
+    /// the settings are the same for PHA and PSD
+
     for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
       channelEnable[iDigi][ch2] = digi[iDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
     }
@@ -472,7 +583,6 @@ void Scope::StartScope(){
 
       waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
       digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
-
     }
 
     originalValueSet = true;
@@ -499,6 +609,8 @@ void Scope::StopScope(){
   updateTraceThread->Stop();
   updateTraceThread->quit();
   updateTraceThread->wait();
+
+  /// the settings are the same for PHA and PSD
 
   if(digi){
     for(int i = 0; i < nDigi; i++){
@@ -541,6 +653,8 @@ void Scope::UpdateScope(){
 
   emit UpdateScalar();
 
+  /// the settings are the same for PHA and PSD
+
   if( digi ){
 
     digiMTX[iDigi].lock();    
@@ -563,6 +677,8 @@ void Scope::UpdateScope(){
       return;
     }
     
+    printf("%s, traceLength : %d , %d\n", __func__, traceLength, digi[iDigi]->evt->analog_probes[0][10]);
+
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
       for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->evt->analog_probes[j][i]));
@@ -570,9 +686,10 @@ void Scope::UpdateScope(){
     }
     for( int j = 0; j < 4; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*1000 + 4000*digi[iDigi]->evt->digital_probes[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digi[iDigi]->evt->digital_probes[j][i]));
       dataTrace[j+2]->replace(points);
     }
+    //digi[iDigi]->evt->ClearTrace();
     digiMTX[iDigi].unlock();
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 
@@ -581,6 +698,9 @@ void Scope::UpdateScope(){
 }
 
 void Scope::ProbeChange(RComboBox * cb[], const int size ){
+
+  if( allowChange == false ) return;
+
   //printf("%s\n", __func__);
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
@@ -619,25 +739,55 @@ void Scope::ScopeControlOnOff(bool on){
   bnScopeReset->setEnabled(on);
   bnScopeReadSettings->setEnabled(on);
 
-  sbRL->setEnabled(on);
-  sbPT->setEnabled(on);
-  sbTimeRiseTime->setEnabled(on);
-  sbTimeGuard->setEnabled(on);
-  sbTrapRiseTime->setEnabled(on);
-  sbTrapFlatTop->setEnabled(on);
-  sbTrapPoleZero->setEnabled(on);
-  sbEnergyFineGain->setEnabled(on);
-  sbTrapPeaking->setEnabled(on);
-  cbPolarity->setEnabled(on);
-  cbWaveRes->setEnabled(on);
-  cbTrapPeakAvg->setEnabled(on);
-  cbBaselineAvg->setEnabled(on);
+  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PHA ){ 
+    sbRL->setEnabled(on);
+    sbPT->setEnabled(on);
+    sbTimeRiseTime->setEnabled(on);
+    sbTimeGuard->setEnabled(on);
+    sbTrapRiseTime->setEnabled(on);
+    sbTrapFlatTop->setEnabled(on);
+    sbTrapPoleZero->setEnabled(on);
+    sbEnergyFineGain->setEnabled(on);
+    sbTrapPeaking->setEnabled(on);
+    cbPolarity->setEnabled(on);
+    cbWaveRes->setEnabled(on);
+    cbTrapPeakAvg->setEnabled(on);
+    cbBaselineAvg->setEnabled(on);
 
-  //sbDCOffset->setEnabled(on);
-  //sbThreshold->setEnabled(on);
-  //sbBaselineGuard->setEnabled(on);
-  //sbPileUpGuard->setEnabled(on);
-  //cbLowFreqFilter->setEnabled(on);
+    //sbDCOffset->setEnabled(on);
+    //sbThreshold->setEnabled(on);
+    //sbBaselineGuard->setEnabled(on);
+    //sbPileUpGuard->setEnabled(on);
+    //cbLowFreqFilter->setEnabled(on);
+  }
+
+  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PSD ){
+
+    cbPolarity->setEnabled(on);
+    cbWaveRes->setEnabled(on);
+    cbbADCInputBaselineAvg->setEnabled(on);
+    cbbSmoothingFactor->setEnabled(on);
+    cbbTriggerFilter->setEnabled(on);
+    cbbTimeFilterSmoothing->setEnabled(on);
+    cbbEnergyGain->setEnabled(on);
+
+    sbRL->setEnabled(on);
+    sbPT->setEnabled(on);
+    
+    //sbThreshold->setEnabled(on);
+    //sbDCOffset->setEnabled(on);
+    
+    //spbADCInputBaselineGuard->setEnabled(on);
+    //spbCFDDelay->setEnabled(on);
+    //spbCFDFraction->setEnabled(on);
+    //spbAbsBaseline->setEnabled(on);
+    //spbTimeFilterReTriggerGuard->setEnabled(on);
+    //spbPileupGap->setEnabled(on);
+    //spbGateLong->setEnabled(on);
+    //spbGateShort->setEnabled(on);
+    //spbGateOffset->setEnabled(on);
+
+  }
 
 }
 
@@ -658,10 +808,10 @@ void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg d
 
 void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
   //printf("%s\n", __func__);
-  QLabel * lb = new QLabel(str, this);
+  QLabel * lb = new QLabel(str, settingBox);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
-  sb = new RSpinBox(this);
+  sb = new RSpinBox(settingBox);
   sb->setMinimum(atof(digPara.GetAnswers()[0].first.c_str()));
   sb->setMaximum(atof(digPara.GetAnswers()[1].first.c_str()));
   sb->setSingleStep(atof(digPara.GetAnswers()[2].first.c_str()));
@@ -699,11 +849,11 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
 }
 
 void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, int row, int col, const Reg digPara){
-  QLabel * lb = new QLabel(str, this);
+  QLabel * lb = new QLabel(str, settingBox);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
 
-  cb = new RComboBox(this);
+  cb = new RComboBox(settingBox);
   for( int i = 0 ; i < (int) digPara.GetAnswers().size(); i++){
     cb->addItem(QString::fromStdString((digPara.GetAnswers())[i].second), QString::fromStdString((digPara.GetAnswers())[i].first));
   }
