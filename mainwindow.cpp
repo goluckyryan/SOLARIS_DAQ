@@ -698,9 +698,7 @@ void MainWindow::OpenDigitizers(){
         //digi[i]->Reset();
         //digi[i]->ProgramBoard(false);
       }
-
-      digi[i]->ReadAllSettings();
-
+      
       nDigiConnected ++;
 
       for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch++) {

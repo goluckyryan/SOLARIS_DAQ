@@ -81,6 +81,9 @@ private:
   QTabWidget * triggerTab[MaxNumberOfDigitizer];
   QTabWidget * triggerMapTab[MaxNumberOfDigitizer];
 
+  QTabWidget * chTabWidget[MaxNumberOfDigitizer];
+  QWidget * digiTab[MaxNumberOfDigitizer];
+
   bool enableSignalSlot;
 
   //---------------- Inquiry and copy
@@ -217,8 +220,35 @@ private:
   RComboBox * cbbWaveRes[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RComboBox * cbbWaveSave[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
+  RComboBox * cbbEvtTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbWaveTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  RComboBox * cbbCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbAntiCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbCoinLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  QLineEdit * leTriggerMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  RComboBox * cbbChVetoSrc[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  RComboBox * cbbEventSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbWaveSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbEnergySkimLow[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbEnergySkimHigh[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  RComboBox * cbbAnaProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbAnaProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  RComboBox * cbbDigProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbDigProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbDigProbe2[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbDigProbe3[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+
+  //........... PHA
   RSpinBox  * spbInputRiseTime[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbTriggerGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbLowFilter[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   RSpinBox  * spbTrapRiseTime[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbTrapFlatTop[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
@@ -228,37 +258,35 @@ private:
   RSpinBox  * spbBaselineGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbPileupGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
-  RComboBox * cbbPeakingAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RComboBox * cbbBaselineAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbFineGain[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbLowFilter[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbPeakingAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
-  RComboBox * cbbAnaProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbAnaProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  //.............. PSD
+  RComboBox * cbbADCInputBaselineAvg[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbAbsBaseline[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbADCInputBaselineGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbTimeFilterReTriggerGuard[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbTriggerHysteresis[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
-  RComboBox * cbbDigProbe0[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbDigProbe1[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbDigProbe2[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbDigProbe3[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  
-  RComboBox * cbbEvtTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbWaveTrigger[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbChVetoSrc[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbTriggerFilter[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbCFDDelay[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbCFDFraction[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbSmoothingFactor[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbChargeSmooting[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbTimeFilterSmoothing[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbPileupGap[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
-  RComboBox * cbbEventSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbWaveSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbGateLong[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbGateShort[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbGateOffset[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbLongChargeIntergratorPedestal[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbShortChargeIntergratorPedestal[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbEnergyGain[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
-  RComboBox * cbbCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RComboBox * cbbAntiCoinMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-
-  QLineEdit * leTriggerMask[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-
-  RSpinBox  * spbCoinLength[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RSpinBox  * spbADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-
-  RSpinBox  * spbEnergySkimLow[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-  RSpinBox  * spbEnergySkimHigh[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
-
+  RSpinBox  * spbNeutronThreshold[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbEventNeutronReject[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RComboBox * cbbWaveNeutronReject[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   //-------------------------
   QLineEdit * leSettingFile[MaxNumberOfDigitizer];
@@ -280,6 +308,9 @@ private:
 
   void FillComboBoxValueFromMemory(RComboBox * &cbb, const Reg para, int ch_index = -1);
   void FillSpinBoxValueFromMemory(RSpinBox * &spb, const Reg para, int ch_index = -1 );
+
+  void SetupPHAChannels(unsigned short digiID);
+  void SetupPSDChannels(unsigned short digiID);
 
   void ReadBoardSetting(int cbIndex);
   void ReadChannelSetting(int cbIndex);

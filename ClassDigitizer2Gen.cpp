@@ -941,6 +941,23 @@ void Digitizer2Gen::ProgramChannels(bool testPulse){
     WriteValue("/ch/0..63/par/WaveSaving"                   ,  "OnRequest");
     WriteValue("/ch/0..63/par/WaveResolution"               ,  "RES8");
 
+    //======== Trigger setting
+    WriteValue("/ch/0..63/par/EventTriggerSource"  , "ChSelfTrigger");
+    WriteValue("/ch/0..63/par/WaveTriggerSource"   , "Disabled"); 
+    WriteValue("/ch/0..63/par/ChannelVetoSource"   , "Disabled"); 
+    WriteValue("/ch/0..63/par/ChannelsTriggerMask" , "0x0");
+    WriteValue("/ch/0..63/par/CoincidenceMask"     , "Disabled");
+    WriteValue("/ch/0..63/par/AntiCoincidenceMask" , "Disabled");
+    WriteValue("/ch/0..63/par/CoincidenceLengthT"  , "0");
+    WriteValue("/ch/0..63/par/ADCVetoWidth"        , "0");
+
+    //======== Other Setting
+    WriteValue("/ch/0..63/par/EventSelector"               , "All");
+    WriteValue("/ch/0..63/par/WaveSelector"                , "All");
+    WriteValue("/ch/0..63/par/EnergySkimLowDiscriminator"  , "0");
+    WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "0");
+    WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
+
     if( FPGAType == DPPType::PHA){
 
       WriteValue("/ch/0..63/par/TimeFilterRiseTimeT"       , "80");   // 80 ns
@@ -1008,24 +1025,6 @@ void Digitizer2Gen::ProgramChannels(bool testPulse){
       WriteValue("/ch/0..63/par/WaveNeutronReject"              ,  "Disabled");
 
     }
-
-    //======== Trigger setting
-    WriteValue("/ch/0..63/par/EventTriggerSource"  , "ChSelfTrigger");
-    WriteValue("/ch/0..63/par/WaveTriggerSource"   , "Disabled"); 
-    WriteValue("/ch/0..63/par/ChannelVetoSource"   , "Disabled"); 
-    WriteValue("/ch/0..63/par/ChannelsTriggerMask" , "0x0");
-    WriteValue("/ch/0..63/par/CoincidenceMask"     , "Disabled");
-    WriteValue("/ch/0..63/par/AntiCoincidenceMask" , "Disabled");
-    WriteValue("/ch/0..63/par/CoincidenceLengthT"  , "0");
-    WriteValue("/ch/0..63/par/ADCVetoWidth"        , "0");
-
-    //======== Other Setting
-    WriteValue("/ch/0..63/par/EventSelector"               , "All");
-    WriteValue("/ch/0..63/par/WaveSelector"                , "All");
-    WriteValue("/ch/0..63/par/EnergySkimLowDiscriminator"  , "0");
-    WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "0");
-    WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
-
 
   }
 }

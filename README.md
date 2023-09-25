@@ -85,3 +85,4 @@ then  ` make`
 - LVDSTrgMask cannot acess.
 - The CoincidenceLengthT not loaded. 
 - Sometime, the digitizer halt after sent the /cmd/armacquisition command. This is CAEN library problem.
+- Event/Wave trig. Source cannot set as SWTrigger. 
