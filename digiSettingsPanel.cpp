@@ -786,7 +786,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       //chBox->setSizePolicy(sizePolicy);
       tabLayout_V2->addWidget(chBox);
       QGridLayout * chLayout = new QGridLayout(chBox); //chBox->setLayout(chLayout);
-      chBox->setFixedWidth(950);
+      chBox->setFixedWidth(900);
 
       chTabWidget[iDigi] = new QTabWidget(digiTab[iDigi]); chLayout->addWidget(chTabWidget[iDigi]);
 
@@ -978,13 +978,43 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         ID = index;
         cbIQCh->clear();
         for( int i = 0; i < digi[index]->GetNChannels() ; i++ ) cbIQCh->addItem( "Ch-" + QString::number(i), i);
+
+        cbBdSettings->clear();
+        cbChSettings->clear();
+        if( digi[ID]->GetFPGAType() == DPPType::PHA ){
+          for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++ ){
+            cbBdSettings->addItem( QString::fromStdString( PHA::DIG::AllSettings[i].GetPara() ), i);
+          }
+          for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++ ){
+            cbChSettings->addItem( QString::fromStdString( PHA::CH::AllSettings[i].GetPara() ), i);
+          }
+        }
+        if( digi[ID]->GetFPGAType() == DPPType::PSD ){
+          for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++ ){
+            cbBdSettings->addItem( QString::fromStdString( PSD::DIG::AllSettings[i].GetPara() ), i);
+          }
+          for( int i = 0; i < (int) PSD::CH::AllSettings.size(); i++ ){
+            cbChSettings->addItem( QString::fromStdString( PSD::CH::AllSettings[i].GetPara() ), i);
+          }
+        }
+
+
+
         enableSignalSlot = true;
       });
 
       cbBdSettings = new RComboBox(ICTab);
-      for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++ ){
-        cbBdSettings->addItem( QString::fromStdString( PHA::DIG::AllSettings[i].GetPara() ), i);
+      if( digi[0]->GetFPGAType() == DPPType::PHA ){
+        for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++ ){
+          cbBdSettings->addItem( QString::fromStdString( PHA::DIG::AllSettings[i].GetPara() ), i);
+        }
       }
+      if( digi[ID]->GetFPGAType() == DPPType::PSD ){
+        for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++ ){
+          cbBdSettings->addItem( QString::fromStdString( PSD::DIG::AllSettings[i].GetPara() ), i);
+        }
+      }
+
       inquiryLayout->addWidget(cbBdSettings, rowID, 1);
       connect(cbBdSettings, &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::ReadBoardSetting);
 
@@ -1103,8 +1133,15 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(cbIQCh, &RComboBox::currentIndexChanged, this, [=](){ ReadChannelSetting(cbChSettings->currentIndex()); });
 
       cbChSettings = new RComboBox(ICTab);
-      for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++ ){
-        cbChSettings->addItem( QString::fromStdString( PHA::CH::AllSettings[i].GetPara() ), i);
+      if( digi[0]->GetFPGAType() == DPPType::PHA){
+        for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++ ){
+          cbChSettings->addItem( QString::fromStdString( PHA::CH::AllSettings[i].GetPara() ), i);
+        }
+      }
+      if( digi[0]->GetFPGAType() == DPPType::PSD){
+        for( int i = 0; i < (int) PSD::CH::AllSettings.size(); i++ ){
+          cbChSettings->addItem( QString::fromStdString( PSD::CH::AllSettings[i].GetPara() ), i);
+        }
       }
       inquiryLayout->addWidget(cbChSettings, rowID, 1);
       connect(cbChSettings, &RComboBox::currentIndexChanged, this, &DigiSettingsPanel::ReadChannelSetting);
@@ -3029,18 +3066,34 @@ void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg par
 }
 
 void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
+
+  if( enableSignalSlot == false ) return;
+
   enableSignalSlot = false;
 
+  // PHA and PSD has same board setting, but for furture extension
+  int ID = cbIQDigi->currentIndex();
+  std::vector<Reg> bdSettings ;
+
+  if( digi[ID]->GetFPGAType() == DPPType::PHA ) {
+    bdSettings = PHA::DIG::AllSettings;
+  }else if( digi[ID]->GetFPGAType() == DPPType::PSD ) {
+    bdSettings = PSD::DIG::AllSettings;
+  }else{
+    enableSignalSlot = true;
+    return;
+  }
+
   QString type;
-  switch (PHA::DIG::AllSettings[cbIndex].ReadWrite()) {
+  switch (bdSettings[cbIndex].ReadWrite()) {
     case RW::ReadOnly : type ="Read Only"; break;
     case RW::WriteOnly : type ="Write Only"; break;
     case RW::ReadWrite : type ="Read/Write"; break;
   }
   leBdSettingsType->setText(type);
 
-  QString ans = QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::DIG::AllSettings[cbIndex]));
-  ANSTYPE haha = PHA::DIG::AllSettings[cbIndex].GetAnswerType();
+  QString ans = QString::fromStdString(digi[ID]->ReadValue(bdSettings[cbIndex]));
+  ANSTYPE haha = bdSettings[cbIndex].GetAnswerType();
 
   if( haha == ANSTYPE::BYTE){
     leBdSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
@@ -3049,9 +3102,9 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
   }else{
     leBdSettingsRead->setText(ans);
   }
-  leBdSettingsUnit->setText(QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetUnit()));
+  leBdSettingsUnit->setText(QString::fromStdString(bdSettings[cbIndex].GetUnit()));
 
-  if( PHA::DIG::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
+  if( bdSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
 
     //===== spin box
     if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
@@ -3060,9 +3113,9 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
       leBdSettingsWrite->setEnabled(false);
       leBdSettingsWrite->clear();
       sbBdSettingsWrite->setEnabled(true);
-      sbBdSettingsWrite->setMinimum(atof(PHA::DIG::AllSettings[cbIndex].GetAnswers()[0].first.c_str()));
-      sbBdSettingsWrite->setMaximum(atof(PHA::DIG::AllSettings[cbIndex].GetAnswers()[1].first.c_str()));
-      sbBdSettingsWrite->setSingleStep(atof(PHA::DIG::AllSettings[cbIndex].GetAnswers()[2].first.c_str()));
+      sbBdSettingsWrite->setMinimum(atof(bdSettings[cbIndex].GetAnswers()[0].first.c_str()));
+      sbBdSettingsWrite->setMaximum(atof(bdSettings[cbIndex].GetAnswers()[1].first.c_str()));
+      sbBdSettingsWrite->setSingleStep(atof(bdSettings[cbIndex].GetAnswers()[2].first.c_str()));
       sbBdSettingsWrite->setValue(00);
       sbBdSettingsWrite->setDecimals(0);
     }
@@ -3073,13 +3126,13 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
       cbBdAns->clear();
       int ansIndex = -1;
       QString ans2 = "";
-      for( int i = 0; i < (int) PHA::DIG::AllSettings[cbIndex].GetAnswers().size(); i++){
-        cbBdAns->addItem(QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].second),
-                        QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].first));
+      for( int i = 0; i < (int) bdSettings[cbIndex].GetAnswers().size(); i++){
+        cbBdAns->addItem(QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].second),
+                        QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].first));
 
-        if( ans == QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].first)) {
+        if( ans == QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].first)) {
           ansIndex = i;
-          ans2 = QString::fromStdString(PHA::DIG::AllSettings[cbIndex].GetAnswers()[i].second);
+          ans2 = QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].second);
         }
       }
       cbBdAns->setCurrentIndex(ansIndex);
@@ -3110,8 +3163,8 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
     leBdSettingsWrite->clear();
   }
 
-  if(   PHA::DIG::AllSettings[cbIndex].GetPara() == PHA::DIG::StartSource.GetPara()
-     || PHA::DIG::AllSettings[cbIndex].GetPara() == PHA::DIG::GlobalTriggerSource.GetPara() ){
+  if(   bdSettings[cbIndex].GetPara() == PHA::DIG::StartSource.GetPara()
+     || bdSettings[cbIndex].GetPara() == PHA::DIG::GlobalTriggerSource.GetPara() ){
 
     leBdSettingsWrite->setEnabled(true);
     leBdSettingsWrite->clear();
@@ -3121,18 +3174,32 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
 }
 
 void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
+
+  if( enableSignalSlot == false ) return;
   enableSignalSlot = false;
 
+  int ID = cbIQDigi->currentIndex();
+  std::vector<Reg> chSettings ;
+
+  if( digi[ID]->GetFPGAType() == DPPType::PHA ) {
+    chSettings = PHA::CH::AllSettings;
+  }else if( digi[ID]->GetFPGAType() == DPPType::PSD ) {
+    chSettings = PSD::CH::AllSettings;
+  }else{
+    enableSignalSlot = true;
+    return;
+  }
+  
   QString type;
-  switch (PHA::CH::AllSettings[cbIndex].ReadWrite()) {
+  switch (chSettings[cbIndex].ReadWrite()) {
     case RW::ReadOnly : type ="Read Only"; break;
     case RW::WriteOnly : type ="Write Only"; break;
     case RW::ReadWrite : type ="Read/Write"; break;
   }
   leChSettingsType->setText(type);
 
-  QString ans = QString::fromStdString(digi[cbIQDigi->currentIndex()]->ReadValue(PHA::CH::AllSettings[cbIndex], cbIQCh->currentData().toInt()));
-  ANSTYPE haha = PHA::CH::AllSettings[cbIndex].GetAnswerType();
+  QString ans = QString::fromStdString(digi[ID]->ReadValue(chSettings[cbIndex], cbIQCh->currentData().toInt()));
+  ANSTYPE haha = chSettings[cbIndex].GetAnswerType();
 
   if( haha == ANSTYPE::BYTE){
     leChSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
@@ -3142,10 +3209,10 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
     leChSettingsRead->setText(ans);
   }
 
-  leChSettingsUnit->setText(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetUnit()));
+  leChSettingsUnit->setText(QString::fromStdString(chSettings[cbIndex].GetUnit()));
 
 
-  if( PHA::CH::AllSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
+  if( chSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
 
     if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
       cbChSettingsWrite->clear();
@@ -3153,9 +3220,9 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       leChSettingsWrite->setEnabled(false);
       leChSettingsWrite->clear();
       sbChSettingsWrite->setEnabled(true);
-      sbChSettingsWrite->setMinimum(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[0].first.c_str()));
-      sbChSettingsWrite->setMaximum(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[1].first.c_str()));
-      sbChSettingsWrite->setSingleStep(atof(PHA::CH::AllSettings[cbIndex].GetAnswers()[2].first.c_str()));
+      sbChSettingsWrite->setMinimum(atof(chSettings[cbIndex].GetAnswers()[0].first.c_str()));
+      sbChSettingsWrite->setMaximum(atof(chSettings[cbIndex].GetAnswers()[1].first.c_str()));
+      sbChSettingsWrite->setSingleStep(atof(chSettings[cbIndex].GetAnswers()[2].first.c_str()));
       sbChSettingsWrite->setValue(ans.toFloat());
       sbChSettingsWrite->setDecimals(3);
     }
@@ -3165,13 +3232,13 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       cbChSettingsWrite->clear();
       int ansIndex = -1;
       QString ans2 = "";
-      for( int i = 0; i < (int) PHA::CH::AllSettings[cbIndex].GetAnswers().size(); i++){
-        cbChSettingsWrite->addItem(QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second),
-                        QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first));
+      for( int i = 0; i < (int) chSettings[cbIndex].GetAnswers().size(); i++){
+        cbChSettingsWrite->addItem(QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].second),
+                        QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].first));
         
-        if( ans == QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].first)) {
+        if( ans == QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].first)) {
           ansIndex = i;
-          ans2 = QString::fromStdString(PHA::CH::AllSettings[cbIndex].GetAnswers()[i].second);
+          ans2 = QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].second);
         }      
       }
       cbChSettingsWrite->setCurrentIndex(ansIndex);
@@ -3233,7 +3300,7 @@ void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
   for( int i = 0 ; i < MaxNumberOfChannel ; i++){
     if( chkChTo[i]->isChecked() ){
       isToIndexCleicked = true;
-      chkChTo[i]->setStyleSheet("color : red;");
+      chkChTo[i]->setStyleSheet("color : blue;");
     }else{
       chkChTo[i]->setStyleSheet("");
     }
