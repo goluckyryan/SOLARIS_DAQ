@@ -677,7 +677,7 @@ void Scope::UpdateScope(){
       return;
     }
     
-    printf("%s, traceLength : %d , %d\n", __func__, traceLength, digi[iDigi]->evt->analog_probes[0][10]);
+    //printf("%s, traceLength : %d , %d\n", __func__, traceLength, digi[iDigi]->evt->analog_probes[0][10]);
 
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;

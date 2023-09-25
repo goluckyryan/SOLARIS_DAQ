@@ -656,6 +656,9 @@ int Digitizer2Gen::ReadData(){
         &evt->aggCounter,
         &evt->event_size
       );
+
+      //printf("ch:%02d, energy: %d, trace Length %ld \n", evt->channel, evt->energy, evt->traceLenght);
+
     }
 
     evt->isTraceAllZero = false;
@@ -885,7 +888,8 @@ void Digitizer2Gen::ProgramBoard(){
   WriteValue("/par/IOlevel"   , "NIM");
 
   WriteValue("/par/EnAutoDisarmAcq" , "true");
-  WriteValue("/par/EnStatEvents"    , "true");
+  if( FPGAType == DPPType::PHA ) WriteValue("/par/EnStatEvents"    , "true");
+  if( FPGAType == DPPType::PSD ) WriteValue("/par/EnStatEvents"    , "false");
   WriteValue("/par/EnAutoDisarmAcq"    , "False");
   
   WriteValue("/par/BoardVetoWidth"    , "0");
@@ -955,7 +959,7 @@ void Digitizer2Gen::ProgramChannels(bool testPulse){
     WriteValue("/ch/0..63/par/EventSelector"               , "All");
     WriteValue("/ch/0..63/par/WaveSelector"                , "All");
     WriteValue("/ch/0..63/par/EnergySkimLowDiscriminator"  , "0");
-    WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "0");
+    WriteValue("/ch/0..63/par/EnergySkimHighDiscriminator" , "65534");
     WriteValue("/ch/0..63/par/ITLConnect"                  , "Disabled");
 
     if( FPGAType == DPPType::PHA){
