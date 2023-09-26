@@ -526,7 +526,7 @@ void MainWindow::StopACQ(){
   }
 
   //=============== Stop digitizer
-  for( int i = 0; i < nDigi; i++){
+  for( int i = nDigi - 1; i >= 0; i--){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
 
