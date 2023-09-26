@@ -1393,6 +1393,8 @@ void MainWindow::ProgramSettingsPanel(){
   layout->setColumnStretch(2, 2);
   layout->setColumnStretch(3, 1);
 
+  button1->setFocus();
+
   dialog.exec();
 }
 
