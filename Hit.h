@@ -1,9 +1,10 @@
-#ifndef EVENT_H
-#define EVENT_H
+#ifndef HIT_H
+#define HIT_H
 
 #include <stdio.h> 
 #include <cstdlib>
 #include <stdint.h>
+#include <string>
 
 #define MaxTraceLenght 8100
 
@@ -24,7 +25,7 @@ namespace DPPType{
 
 };
 
-class Event {
+class Hit {
   public:
 
     unsigned short dataType; 
@@ -57,11 +58,11 @@ class Event {
 
     bool isTraceAllZero;
 
-    Event(){
+    Hit(){
       Init();
     }
 
-    ~Event(){
+    ~Hit(){
       ClearMemory();
     }
 

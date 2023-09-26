@@ -15,7 +15,7 @@ test : test.cpp ClassDigitizer2Gen.o influxdb.o
 	@echo "------- test"
 	$(CC) $(COPTS) $(OBJS) -o test test.cpp  $(CAENLIBS) $(CURLLIBS)
 #
-ClassDigitizer2Gen.o : ClassDigitizer2Gen.cpp ClassDigitizer2Gen.h Event.h DigiParameters.h
+ClassDigitizer2Gen.o : ClassDigitizer2Gen.cpp ClassDigitizer2Gen.h Hit.h DigiParameters.h 
 	@echo "------- ClassDigitizer2Gen.o"
 	$(CC) $(COPTS) -c ClassDigitizer2Gen.cpp $(CAENLIBS)
 #

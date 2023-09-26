@@ -33,7 +33,7 @@ void Digitizer2Gen::Initialization(){
   outFile = NULL;
   outFileSize = 0;
 
-  evt = NULL;
+  hit = NULL;
 
   acqON = false;
 
@@ -357,9 +357,9 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
     }
   }
 
-  if( evt ) delete evt;
-  evt = new Event();
-  evt->SetDataType(dataFormat, FPGAType);
+  if( hit ) delete hit;
+  hit = new Hit();
+  hit->SetDataType(dataFormat, FPGAType);
   dataStartIndetifier = 0xAA00 + dataFormat;
   if(FPGAType == DPPType::PSD ) dataStartIndetifier += 0x0010;
 
@@ -592,177 +592,177 @@ void Digitizer2Gen::PrintStat(){
 }
 
 int Digitizer2Gen::ReadData(){
-  //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), evt->dataType);
+  //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
 
   if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
 
-  if( evt->dataType == DataFormat::ALL ){
+  if( hit->dataType == DataFormat::ALL ){
     if( FPGAType == DPPType::PHA ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        evt->analog_probes[0],
-        evt->analog_probes[1],
-        evt->digital_probes[0],
-        evt->digital_probes[1],
-        evt->digital_probes[2],
-        evt->digital_probes[3],
-        &evt->analog_probes_type[0],
-        &evt->analog_probes_type[1],
-        &evt->digital_probes_type[0],
-        &evt->digital_probes_type[1],
-        &evt->digital_probes_type[2],
-        &evt->digital_probes_type[3],
-        &evt->traceLenght,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        hit->analog_probes[0],
+        hit->analog_probes[1],
+        hit->digital_probes[0],
+        hit->digital_probes[1],
+        hit->digital_probes[2],
+        hit->digital_probes[3],
+        &hit->analog_probes_type[0],
+        &hit->analog_probes_type[1],
+        &hit->digital_probes_type[0],
+        &hit->digital_probes_type[1],
+        &hit->digital_probes_type[2],
+        &hit->digital_probes_type[3],
+        &hit->traceLenght,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
 
-      //printf("ch:%02d, trace Length %ld \n", evt->channel, evt->traceLenght);
+      //printf("ch:%02d, trace Length %ld \n", hit->channel, hit->traceLenght);
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        &evt->energy_short,
-        evt->analog_probes[0],
-        evt->analog_probes[1],
-        evt->digital_probes[0],
-        evt->digital_probes[1],
-        evt->digital_probes[2],
-        evt->digital_probes[3],
-        &evt->analog_probes_type[0],
-        &evt->analog_probes_type[1],
-        &evt->digital_probes_type[0],
-        &evt->digital_probes_type[1],
-        &evt->digital_probes_type[2],
-        &evt->digital_probes_type[3],
-        &evt->traceLenght,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        &hit->energy_short,
+        hit->analog_probes[0],
+        hit->analog_probes[1],
+        hit->digital_probes[0],
+        hit->digital_probes[1],
+        hit->digital_probes[2],
+        hit->digital_probes[3],
+        &hit->analog_probes_type[0],
+        &hit->analog_probes_type[1],
+        &hit->digital_probes_type[0],
+        &hit->digital_probes_type[1],
+        &hit->digital_probes_type[2],
+        &hit->digital_probes_type[3],
+        &hit->traceLenght,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
 
-      //printf("ch:%02d, energy: %d, trace Length %ld \n", evt->channel, evt->energy, evt->traceLenght);
+      //printf("ch:%02d, energy: %d, trace Length %ld \n", hit->channel, hit->energy, hit->traceLenght);
 
     }
 
-    evt->isTraceAllZero = false;
+    hit->isTraceAllZero = false;
 
-  }else if( evt->dataType == DataFormat::OneTrace){
+  }else if( hit->dataType == DataFormat::OneTrace){
     if( FPGAType == DPPType::PHA ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        evt->analog_probes[0],
-        &evt->analog_probes_type[0],
-        &evt->traceLenght,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        hit->analog_probes[0],
+        &hit->analog_probes_type[0],
+        &hit->traceLenght,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        &evt->energy_short,
-        evt->analog_probes[0],
-        &evt->analog_probes_type[0],
-        &evt->traceLenght,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        &hit->energy_short,
+        hit->analog_probes[0],
+        &hit->analog_probes_type[0],
+        &hit->traceLenght,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
     }
 
-    evt->isTraceAllZero = false;
+    hit->isTraceAllZero = false;
 
-  }else if( evt->dataType == DataFormat::NoTrace){
+  }else if( hit->dataType == DataFormat::NoTrace){
     if( FPGAType == DPPType::PHA ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->fine_timestamp,
-        &evt->energy,
-        &evt->energy_short,
-        &evt->flags_low_priority,
-        &evt->flags_high_priority,
-        &evt->trigger_threashold,
-        &evt->downSampling,
-        &evt->board_fail,
-        &evt->flush,
-        &evt->aggCounter,
-        &evt->event_size
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        &hit->energy_short,
+        &hit->flags_low_priority,
+        &hit->flags_high_priority,
+        &hit->trigger_threashold,
+        &hit->downSampling,
+        &hit->board_fail,
+        &hit->flush,
+        &hit->aggCounter,
+        &hit->event_size
       );
     }
 
-    evt->isTraceAllZero = true;
+    hit->isTraceAllZero = true;
 
-  }else if( evt->dataType == DataFormat::Minimum){
+  }else if( hit->dataType == DataFormat::Minimum){
     if( FPGAType == DPPType::PHA ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->energy
+        &hit->channel,
+        &hit->timestamp,
+        &hit->energy
       );
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
-        &evt->channel,
-        &evt->timestamp,
-        &evt->energy,
-        &evt->energy_short
+        &hit->channel,
+        &hit->timestamp,
+        &hit->energy,
+        &hit->energy_short
       );
     }
 
-    evt->isTraceAllZero = true;
-  }else if( evt->dataType == DataFormat::RAW){
-    ret = CAEN_FELib_ReadData(ep_handle, 100, evt->data, &evt->dataSize, &evt->n_events );
+    hit->isTraceAllZero = true;
+  }else if( hit->dataType == DataFormat::RAW){
+    ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events );
     //printf("data size: %lu byte\n", evt.dataSize);
 
-    evt->isTraceAllZero = true; //assume no trace, as the trace need to be extracted.
+    hit->isTraceAllZero = true; //assume no trace, as the trace need to be extracted.
   }else{
     return CAEN_FELib_UNKNOWN;
   }
@@ -804,61 +804,61 @@ void Digitizer2Gen::SaveDataToFile(){
     outFile = fopen(outFileName, "wb"); //overwrite binary
   }
 
-  if( evt->dataType == DataFormat::ALL){
+  if( hit->dataType == DataFormat::ALL){
     fwrite(&dataStartIndetifier,      2, 1, outFile);
-    fwrite(&evt->channel,             1, 1, outFile);
-    fwrite(&evt->energy,              2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
-    fwrite(&evt->timestamp,           6, 1, outFile);
-    fwrite(&evt->fine_timestamp,      2, 1, outFile);
-    fwrite(&evt->flags_high_priority, 1, 1, outFile);
-    fwrite(&evt->flags_low_priority,  2, 1, outFile);
-    fwrite(&evt->downSampling,        1, 1, outFile);
-    fwrite(&evt->board_fail,          1, 1, outFile);
-    fwrite(&evt->flush,               1, 1, outFile);
-    fwrite(&evt->trigger_threashold,  2, 1, outFile);
-    fwrite(&evt->event_size,          8, 1, outFile);
-    fwrite(&evt->aggCounter,          4, 1, outFile);
-    fwrite(&evt->traceLenght,         8, 1, outFile);
-    fwrite(evt->analog_probes_type,   2, 1, outFile);
-    fwrite(evt->digital_probes_type,  4, 1, outFile);
-    fwrite(evt->analog_probes[0], evt->traceLenght*4, 1, outFile);
-    fwrite(evt->analog_probes[1], evt->traceLenght*4, 1, outFile);
-    fwrite(evt->digital_probes[0], evt->traceLenght, 1, outFile);
-    fwrite(evt->digital_probes[1], evt->traceLenght, 1, outFile);
-    fwrite(evt->digital_probes[2], evt->traceLenght, 1, outFile);
-    fwrite(evt->digital_probes[3], evt->traceLenght, 1, outFile);
-  }else if( evt->dataType == DataFormat::OneTrace){
+    fwrite(&hit->channel,             1, 1, outFile);
+    fwrite(&hit->energy,              2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,           6, 1, outFile);
+    fwrite(&hit->fine_timestamp,      2, 1, outFile);
+    fwrite(&hit->flags_high_priority, 1, 1, outFile);
+    fwrite(&hit->flags_low_priority,  2, 1, outFile);
+    fwrite(&hit->downSampling,        1, 1, outFile);
+    fwrite(&hit->board_fail,          1, 1, outFile);
+    fwrite(&hit->flush,               1, 1, outFile);
+    fwrite(&hit->trigger_threashold,  2, 1, outFile);
+    fwrite(&hit->event_size,          8, 1, outFile);
+    fwrite(&hit->aggCounter,          4, 1, outFile);
+    fwrite(&hit->traceLenght,         8, 1, outFile);
+    fwrite(hit->analog_probes_type,   2, 1, outFile);
+    fwrite(hit->digital_probes_type,  4, 1, outFile);
+    fwrite(hit->analog_probes[0], hit->traceLenght*4, 1, outFile);
+    fwrite(hit->analog_probes[1], hit->traceLenght*4, 1, outFile);
+    fwrite(hit->digital_probes[0], hit->traceLenght, 1, outFile);
+    fwrite(hit->digital_probes[1], hit->traceLenght, 1, outFile);
+    fwrite(hit->digital_probes[2], hit->traceLenght, 1, outFile);
+    fwrite(hit->digital_probes[3], hit->traceLenght, 1, outFile);
+  }else if( hit->dataType == DataFormat::OneTrace){
     fwrite(&dataStartIndetifier,        2, 1, outFile);
-    fwrite(&evt->channel,               1, 1, outFile);
-    fwrite(&evt->energy,                2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
-    fwrite(&evt->timestamp,             6, 1, outFile);
-    fwrite(&evt->fine_timestamp,        2, 1, outFile);
-    fwrite(&evt->flags_high_priority,   1, 1, outFile);
-    fwrite(&evt->flags_low_priority,    2, 1, outFile);
-    fwrite(&evt->traceLenght,           8, 1, outFile);
-    fwrite(&evt->analog_probes_type[0], 1, 1, outFile);
-    fwrite(evt->analog_probes[0], evt->traceLenght*4, 1, outFile);
-  }else if( evt->dataType == DataFormat::NoTrace ){
+    fwrite(&hit->channel,               1, 1, outFile);
+    fwrite(&hit->energy,                2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,             6, 1, outFile);
+    fwrite(&hit->fine_timestamp,        2, 1, outFile);
+    fwrite(&hit->flags_high_priority,   1, 1, outFile);
+    fwrite(&hit->flags_low_priority,    2, 1, outFile);
+    fwrite(&hit->traceLenght,           8, 1, outFile);
+    fwrite(&hit->analog_probes_type[0], 1, 1, outFile);
+    fwrite(hit->analog_probes[0], hit->traceLenght*4, 1, outFile);
+  }else if( hit->dataType == DataFormat::NoTrace ){
     fwrite(&dataStartIndetifier,      2, 1, outFile);
-    fwrite(&evt->channel,             1, 1, outFile);
-    fwrite(&evt->energy,              2, 1, outFile);
-   if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
-    fwrite(&evt->timestamp,           6, 1, outFile);
-    fwrite(&evt->fine_timestamp,      2, 1, outFile);
-    fwrite(&evt->flags_high_priority, 1, 1, outFile);
-    fwrite(&evt->flags_low_priority,  2, 1, outFile);
-  }else if( evt->dataType == DataFormat::Minimum ){
+    fwrite(&hit->channel,             1, 1, outFile);
+    fwrite(&hit->energy,              2, 1, outFile);
+   if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,           6, 1, outFile);
+    fwrite(&hit->fine_timestamp,      2, 1, outFile);
+    fwrite(&hit->flags_high_priority, 1, 1, outFile);
+    fwrite(&hit->flags_low_priority,  2, 1, outFile);
+  }else if( hit->dataType == DataFormat::Minimum ){
     fwrite(&dataStartIndetifier, 2, 1, outFile);
-    fwrite(&evt->channel,        1, 1, outFile);
-    fwrite(&evt->energy,         2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&evt->energy_short, 2, 1, outFile);
-    fwrite(&evt->timestamp,      6, 1, outFile);
-  }else if( evt->dataType == DataFormat::RAW){
+    fwrite(&hit->channel,        1, 1, outFile);
+    fwrite(&hit->energy,         2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,      6, 1, outFile);
+  }else if( hit->dataType == DataFormat::RAW){
     fwrite(&dataStartIndetifier,  2, 1, outFile);
-    fwrite(&evt->dataSize,        8, 1, outFile);
-    fwrite(evt->data, evt->dataSize, 1, outFile);
+    fwrite(&hit->dataSize,        8, 1, outFile);
+    fwrite(hit->data, hit->dataSize, 1, outFile);
   }
   
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB

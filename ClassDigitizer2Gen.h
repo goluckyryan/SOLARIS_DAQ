@@ -7,7 +7,7 @@
 #include <string>
 #include <map>
 
-#include "Event.h"
+#include "Hit.h"
 
 #define MaxOutFileSize 2*1024*1024*1024  //2GB
 //#define MaxOutFileSize 20*1024*1024  //20MB
@@ -125,7 +125,7 @@ class Digitizer2Gen {
     unsigned short GetCh2ns()     const {return ch2ns;}
     uint64_t       GetHandle()    const {return handle;}
     
-    Event *evt;  // should be evt[MaxNumber], when full or stopACQ, save into file
+    Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
     void CloseOutFile();
     void SaveDataToFile();

@@ -20,7 +20,7 @@ LIBS += -lcurl -lCAEN_FELib -lX11
 
 # Input
 HEADERS += ClassDigitizer2Gen.h \
-           Event.h \
+           Hit.h \
 					 influxdb.h \
 					 mainwindow.h \
 					 digiSettingsPanel.h \

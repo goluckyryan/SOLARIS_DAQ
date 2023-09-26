@@ -10,7 +10,7 @@
 void script(std::string fileName){ 
 
   SolReader * reader = new SolReader(fileName);
-  Event * evt = reader->evt;
+  Hit * hit = reader->hit;
 
   printf("----------file size: %u Byte\n", reader->GetFileSize());
 
@@ -20,9 +20,9 @@ void script(std::string fileName){
   
   unsigned long startTime, endTime;
   reader->ReadBlock(0);
-  startTime = evt->timestamp;
+  startTime = hit->timestamp;
   reader->ReadBlock(reader->GetTotalNumBlock() - 1);
-  endTime = evt->timestamp;
+  endTime = hit->timestamp;
 
   double duration = double(endTime - startTime)*8./1e9;
   printf("============== %lu ns = %.4f sec.\n", (endTime - startTime)*8, duration);
@@ -52,23 +52,23 @@ void script(std::string fileName){
       printf("########################## nBlock : %u, %u/%u\n", reader->GetNumBlock(), 
                                                                 reader->GetFilePos(), 
                                                                 reader->GetFileSize());
-      evt->PrintAll();
-      //evt->PrintAllTrace();
+      hit->PrintAll();
+      //hit->PrintAllTrace();
     }
 
-    hid->Fill(evt->channel);
-    if( evt->channel == 0 ) h1->Fill(evt->timestamp*8/1e9);
-    h2->Fill(evt->timestamp*8/1e9, i);
+    hid->Fill(hit->channel);
+    if( hit->channel == 0 ) h1->Fill(hit->timestamp*8/1e9);
+    h2->Fill(hit->timestamp*8/1e9, i);
     
     
     if( i == 0){
-      for( int i = 0; i < evt->traceLenght; i++){
-        g1->AddPoint(i*8, evt->analog_probes[0][i]);
-        g2->AddPoint(i*8, evt->analog_probes[1][i]);
-        ga->AddPoint(i*8, 10000+5000*evt->digital_probes[0][i]);
-        gb->AddPoint(i*8, 20000+5000*evt->digital_probes[1][i]);
-        gc->AddPoint(i*8, 30000+5000*evt->digital_probes[2][i]);
-        gd->AddPoint(i*8, 40000+5000*evt->digital_probes[3][i]);
+      for( int i = 0; i < hit->traceLenght; i++){
+        g1->AddPoint(i*8, hit->analog_probes[0][i]);
+        g2->AddPoint(i*8, hit->analog_probes[1][i]);
+        ga->AddPoint(i*8, 10000+5000*hit->digital_probes[0][i]);
+        gb->AddPoint(i*8, 20000+5000*hit->digital_probes[1][i]);
+        gc->AddPoint(i*8, 30000+5000*hit->digital_probes[2][i]);
+        gd->AddPoint(i*8, 40000+5000*hit->digital_probes[3][i]);
       }
     }
   }
@@ -87,17 +87,17 @@ void script(std::string fileName){
   gb->Draw("same");
   gc->Draw("same");
   gd->Draw("same");
-  //printf("reader traceLength : %lu \n", evt->traceLenght);
+  //printf("reader traceLength : %lu \n", hit->traceLenght);
 
   /*
-  for( int i = 0; i < evt->traceLenght; i++){
+  for( int i = 0; i < hit->traceLenght; i++){
 
-    printf("%4d| %d\n", i, evt->analog_probes[0][i]);
+    printf("%4d| %d\n", i, hit->analog_probes[0][i]);
 
   }
   */
 
-  evt = NULL;
+  hit = NULL;
   delete reader;
 
 }

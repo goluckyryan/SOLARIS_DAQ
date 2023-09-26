@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <time.h> // time in nano-sec
 
-#include "Event.h"
+#include "Hit.h"
 
 class SolReader {
   private:
@@ -43,7 +43,7 @@ class SolReader {
     
     void RewindFile(); 
 
-    Event * evt;
+    Hit * hit;
 
 };
 
@@ -52,7 +52,7 @@ void SolReader::init(){
   numBlock = 0;
   filePos = 0;
   totNumBlock = 0;
-  evt = new Event();
+  hit = new Hit();
 
   isScanned = false;
 
@@ -67,12 +67,12 @@ SolReader::SolReader(){
 SolReader::SolReader(std::string fileName, unsigned short dataType = 0){
   init();
   OpenFile(fileName);
-  evt->SetDataType(dataType, DPPType::PHA);
+  hit->SetDataType(dataType, DPPType::PHA);
 }
 
 SolReader::~SolReader(){
   if( !inFile ) fclose(inFile);
-  delete evt;
+  delete hit;
 }
 
 inline void SolReader::OpenFile(std::string fileName){
@@ -113,88 +113,88 @@ inline int SolReader::ReadNextBlock(int opt){
   } 
 
   if( ( blockStartIdentifier & 0xF ) == DataFormat::RAW ){
-    evt->SetDataType(DataFormat::RAW, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
+    hit->SetDataType(DataFormat::RAW, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
   }
-  evt->dataType = blockStartIdentifier & 0xF;
-  evt->DPPType = ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+  hit->dataType = blockStartIdentifier & 0xF;
+  hit->DPPType = ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
 
-  if( evt->dataType == DataFormat::ALL){
+  if( hit->dataType == DataFormat::ALL){
     if( opt == 0 ){
-      fread(&evt->channel,             1, 1, inFile);
-      fread(&evt->energy,              2, 1, inFile);
-      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
-      fread(&evt->timestamp,           6, 1, inFile);
-      fread(&evt->fine_timestamp,      2, 1, inFile);
-      fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority,  2, 1, inFile);
-      fread(&evt->downSampling,        1, 1, inFile);
-      fread(&evt->board_fail,          1, 1, inFile);
-      fread(&evt->flush,               1, 1, inFile);
-      fread(&evt->trigger_threashold,  2, 1, inFile);
-      fread(&evt->event_size,          8, 1, inFile);
-      fread(&evt->aggCounter,          4, 1, inFile);
+      fread(&hit->channel,             1, 1, inFile);
+      fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
+      fread(&hit->timestamp,           6, 1, inFile);
+      fread(&hit->fine_timestamp,      2, 1, inFile);
+      fread(&hit->flags_high_priority, 1, 1, inFile);
+      fread(&hit->flags_low_priority,  2, 1, inFile);
+      fread(&hit->downSampling,        1, 1, inFile);
+      fread(&hit->board_fail,          1, 1, inFile);
+      fread(&hit->flush,               1, 1, inFile);
+      fread(&hit->trigger_threashold,  2, 1, inFile);
+      fread(&hit->event_size,          8, 1, inFile);
+      fread(&hit->aggCounter,          4, 1, inFile);
     }else{
-      fseek(inFile, evt->DPPType == DPPType::PHA ? 31 : 33, SEEK_CUR);
+      fseek(inFile, hit->DPPType == DPPType::PHA ? 31 : 33, SEEK_CUR);
     }
-    fread(&evt->traceLenght, 8, 1, inFile);
+    fread(&hit->traceLenght, 8, 1, inFile);
     if( opt == 0){
-      fread(evt->analog_probes_type,     2, 1, inFile);
-      fread(evt->digital_probes_type,    4, 1, inFile);
-      fread(evt->analog_probes[0],  evt->traceLenght*4, 1, inFile);
-      fread(evt->analog_probes[1],  evt->traceLenght*4, 1, inFile);
-      fread(evt->digital_probes[0], evt->traceLenght, 1, inFile);
-      fread(evt->digital_probes[1], evt->traceLenght, 1, inFile);
-      fread(evt->digital_probes[2], evt->traceLenght, 1, inFile);
-      fread(evt->digital_probes[3], evt->traceLenght, 1, inFile);
+      fread(hit->analog_probes_type,     2, 1, inFile);
+      fread(hit->digital_probes_type,    4, 1, inFile);
+      fread(hit->analog_probes[0],  hit->traceLenght*4, 1, inFile);
+      fread(hit->analog_probes[1],  hit->traceLenght*4, 1, inFile);
+      fread(hit->digital_probes[0], hit->traceLenght, 1, inFile);
+      fread(hit->digital_probes[1], hit->traceLenght, 1, inFile);
+      fread(hit->digital_probes[2], hit->traceLenght, 1, inFile);
+      fread(hit->digital_probes[3], hit->traceLenght, 1, inFile);
     }else{
-      fseek(inFile, 6 + evt->traceLenght*(12), SEEK_CUR);
+      fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
     } 
-  }else if( evt->dataType == DataFormat::OneTrace){
+  }else if( hit->dataType == DataFormat::OneTrace){
     if( opt == 0 ){
-      fread(&evt->channel,             1, 1, inFile);
-      fread(&evt->energy,              2, 1, inFile);
-      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
-      fread(&evt->timestamp,           6, 1, inFile);
-      fread(&evt->fine_timestamp,      2, 1, inFile);
-      fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority,  2, 1, inFile);
+      fread(&hit->channel,             1, 1, inFile);
+      fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
+      fread(&hit->timestamp,           6, 1, inFile);
+      fread(&hit->fine_timestamp,      2, 1, inFile);
+      fread(&hit->flags_high_priority, 1, 1, inFile);
+      fread(&hit->flags_low_priority,  2, 1, inFile);
     }else{
-      fseek(inFile, evt->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
+      fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
-    fread(&evt->traceLenght, 8, 1, inFile);
+    fread(&hit->traceLenght, 8, 1, inFile);
     if( opt == 0){
-      fread(&evt->analog_probes_type[0], 1, 1, inFile);
-      fread(evt->analog_probes[0], evt->traceLenght*4, 1, inFile);
+      fread(&hit->analog_probes_type[0], 1, 1, inFile);
+      fread(hit->analog_probes[0], hit->traceLenght*4, 1, inFile);
     }else{
-      fseek(inFile, 1 + evt->traceLenght*4, SEEK_CUR);
+      fseek(inFile, 1 + hit->traceLenght*4, SEEK_CUR);
     }
-  }else if( evt->dataType == DataFormat::NoTrace){
+  }else if( hit->dataType == DataFormat::NoTrace){
     if( opt == 0 ){
-      fread(&evt->channel,             1, 1, inFile);
-      fread(&evt->energy,              2, 1, inFile);
-      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
-      fread(&evt->timestamp,           6, 1, inFile);
-      fread(&evt->fine_timestamp,      2, 1, inFile);
-      fread(&evt->flags_high_priority, 1, 1, inFile);
-      fread(&evt->flags_low_priority,  2, 1, inFile);
+      fread(&hit->channel,             1, 1, inFile);
+      fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
+      fread(&hit->timestamp,           6, 1, inFile);
+      fread(&hit->fine_timestamp,      2, 1, inFile);
+      fread(&hit->flags_high_priority, 1, 1, inFile);
+      fread(&hit->flags_low_priority,  2, 1, inFile);
     }else{
-      fseek(inFile, evt->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
+      fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
-  }else if( evt->dataType == DataFormat::Minimum){
+  }else if( hit->dataType == DataFormat::Minimum){
     if( opt == 0 ){
-      fread(&evt->channel,   1, 1, inFile);
-      fread(&evt->energy,    2, 1, inFile);
-      if( evt->DPPType == DPPType::PSD ) fread(&evt->energy_short, 2, 1, inFile);
-      fread(&evt->timestamp, 6, 1, inFile);
+      fread(&hit->channel,   1, 1, inFile);
+      fread(&hit->energy,    2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
+      fread(&hit->timestamp, 6, 1, inFile);
     }else{
-      fseek(inFile, evt->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
+      fseek(inFile, hit->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
     }
-  }else if( evt->dataType == DataFormat::RAW){
-      fread(&evt->dataSize, 8, 1, inFile);
+  }else if( hit->dataType == DataFormat::RAW){
+      fread(&hit->dataSize, 8, 1, inFile);
     if( opt == 0){
-      fread(evt->data, evt->dataSize, 1, inFile);
+      fread(hit->data, hit->dataSize, 1, inFile);
     }else{
-      fseek(inFile, evt->dataSize, SEEK_CUR);
+      fseek(inFile, hit->dataSize, SEEK_CUR);
     }
   }
 
