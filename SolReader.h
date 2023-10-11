@@ -116,7 +116,7 @@ inline int SolReader::ReadNextBlock(int opt){
     hit->SetDataType(DataFormat::RAW, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
   }
   hit->dataType = blockStartIdentifier & 0xF;
-  hit->DPPType = ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+  hit->DPPType = ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
 
   if( hit->dataType == DataFormat::ALL){
     if( opt == 0 ){
