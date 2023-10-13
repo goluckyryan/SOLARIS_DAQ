@@ -12,6 +12,7 @@ screenshot.*
 *.dat
 Logs
 *.png
+.gdb_history
 
 *~
 *.autosave

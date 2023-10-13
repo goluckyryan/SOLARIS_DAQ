@@ -8,8 +8,12 @@ INCLUDEPATH += .
 
 QT += widgets charts
 
-QMAKE_CXXFLAGS += -g  # for gdb debug
 LIBS += -lcurl -lCAEN_FELib -lX11
+
+#=========== for GDB debug
+#QMAKE_CXXFLAGS += -g  # for gdb debug
+#QMAKE_CXXFLAGS_RELEASE = -O0
+#QMAKE_CFLAGS_RELEASE = -O0
 
 # You can make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.

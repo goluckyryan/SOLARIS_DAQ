@@ -112,8 +112,8 @@ inline int SolReader::ReadNextBlock(int opt){
     return -2 ;
   } 
 
-  if( ( blockStartIdentifier & 0xF ) == DataFormat::RAW ){
-    hit->SetDataType(DataFormat::RAW, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
+  if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw ){
+    hit->SetDataType(DataFormat::Raw, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
   }
   hit->dataType = blockStartIdentifier & 0xF;
   hit->DPPType = ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
@@ -189,7 +189,7 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
     }
-  }else if( hit->dataType == DataFormat::RAW){
+  }else if( hit->dataType == DataFormat::Raw){
       fread(&hit->dataSize, 8, 1, inFile);
     if( opt == 0){
       fread(hit->data, hit->dataSize, 1, inFile);

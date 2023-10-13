@@ -10,11 +10,11 @@
 
 enum DataFormat{
 
-  ALL      = 0,
-  OneTrace = 1,
-  NoTrace  = 2,
-  Minimum  = 3,
-  RAW      = 0x0A,
+  ALL      = 0x00,
+  OneTrace = 0x01,
+  NoTrace  = 0x02,
+  Minimum  = 0x03,
+  Raw      = 0x0A,
   
 };
 
@@ -120,7 +120,7 @@ class Hit {
       DPPType = dppType;
       ClearMemory();
 
-      if( dataType == DataFormat::RAW){
+      if( dataType == DataFormat::Raw){
         data = new uint8_t[20*1024*1024];
       }else{
         analog_probes[0] = new int32_t[MaxTraceLenght];
@@ -241,7 +241,7 @@ class Hit {
         case DataFormat::OneTrace : printf("============= Type : OneTrace\n"); break;
         case DataFormat::NoTrace :  printf("============= Type : NoTrace\n"); break;
         case DataFormat::Minimum :  printf("============= Type : Minimum\n"); break;
-        case DataFormat::RAW :      printf("============= Type : RAW\n"); return; break;
+        case DataFormat::Raw :      printf("============= Type : Raw\n"); return; break;
         default : return;
       }
 

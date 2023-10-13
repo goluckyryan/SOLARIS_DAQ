@@ -54,13 +54,19 @@ When run stop, it will run the bash script under the directory scripts/endRUnScr
 
 Ubuntu 22.04
 
-CAEN_DIG2_v1.5.3
+CAEN_FELIB_v1.2.2 + (install first)
 
-CAEN_FELIB_v1.2.2
+CAEN_DIG2_v1.5.3 + 
 
 `sudo apt install qt6-base-dev libcurl4-openssl-dev libqt6charts6-dev`
 
 Digitizer firmware V2745-dpp-pha-2022092903.cup
+
+## Developer is using these at 2023-Oct-13
+
+CAEN_FELIB_v1.2.5
+
+CAEN_DIG2_v1.5.10
 
 # Compile
 
@@ -86,3 +92,4 @@ then  ` make`
 - The CoincidenceLengthT not loaded. 
 - Sometime, the digitizer halt after sent the /cmd/armacquisition command. This is CAEN library problem.
 - Event/Wave trig. Source cannot set as SWTrigger. 
+- For PSD, it cannot use minimum dataformat.

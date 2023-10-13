@@ -323,10 +323,21 @@ void Digitizer2Gen::StopACQ(){
 
 void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   
-  printf("%s : %d\n", __func__, dataFormat);
+  printf("%s : %d for digi-%d %s\n", __func__, dataFormat, serialNumber, FPGAType.c_str() );
 
   ///========== get endpoint and endpoint folder handle
-  if( dataFormat != DataFormat::RAW ){
+  if( dataFormat == DataFormat::Raw ){
+
+    ret  = CAEN_FELib_GetHandle(handle, "/endpoint/raw", &ep_handle);
+    ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
+    ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "raw");
+    
+    if (ret != CAEN_FELib_Success) {
+      ErrorMsg("Set active endpoint");
+      return;
+    }
+
+  }else{
 
     if( FPGAType == DPPType::PHA ){
       ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha", &ep_handle);
@@ -345,16 +356,6 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       ErrorMsg("Set active endpoint");
       return;
     }
-
-  }else{
-    ret  = CAEN_FELib_GetHandle(handle, "/endpoint/raw", &ep_handle);
-    ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
-    ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "raw");
-    
-    if (ret != CAEN_FELib_Success) {
-      ErrorMsg("Set active endpoint");
-      return;
-    }
   }
 
   if( hit ) delete hit;
@@ -363,6 +364,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   dataStartIndetifier = 0xAA00 + dataFormat;
   if(FPGAType == DPPType::PSD ) dataStartIndetifier += 0x0010;
 
+  //^===================================================== PSD
   if( FPGAType == DPPType::PHA) {
     if( dataFormat == DataFormat::ALL ){  
       ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
@@ -442,6 +444,8 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
         { \"name\" : \"ENERGY\",    \"type\" : \"U16\" } \
       ]");
     }
+
+  //^===================================================== PSD
   }else if ( FPGAType == DPPType::PSD ){
 
     if( dataFormat == DataFormat::ALL ){  
@@ -520,16 +524,16 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
     if( dataFormat == DataFormat::Minimum ){
       ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       "[ \
-        { \"name\" : \"CHANNEL\",      \"type\" : \"U8\" }, \
-        { \"name\" : \"TIMESTAMP\",    \"type\" : \"U64\" }, \
-        { \"name\" : \"ENERGY\",       \"type\" : \"U16\" }, \
-        { \"name\" : \"ENERGY_SHORT\", \"type\" : \"U16\" }, \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" }, \
       ]");
     }
 
   }
 
-  if( dataFormat == DataFormat::RAW ){
+  if( dataFormat == DataFormat::Raw ){
     ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       " [ \
          { \"name\": \"DATA\",     \"type\": \"U8\", \"dim\": 1 }, \
@@ -758,7 +762,7 @@ int Digitizer2Gen::ReadData(){
     }
 
     hit->isTraceAllZero = true;
-  }else if( hit->dataType == DataFormat::RAW){
+  }else if( hit->dataType == DataFormat::Raw){
     ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events );
     //printf("data size: %lu byte\n", evt.dataSize);
 
@@ -855,7 +859,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->energy,         2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,      6, 1, outFile);
-  }else if( hit->dataType == DataFormat::RAW){
+  }else if( hit->dataType == DataFormat::Raw){
     fwrite(&dataStartIndetifier,  2, 1, outFile);
     fwrite(&hit->dataSize,        8, 1, outFile);
     fwrite(hit->data, hit->dataSize, 1, outFile);
