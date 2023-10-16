@@ -68,6 +68,15 @@ CAEN_FELIB_v1.2.5
 
 CAEN_DIG2_v1.5.10
 
+with these new API, Digitizer firmwares 
+
+* V2745-dpp-pha-1G-2023091800.cup
+* V2745-dpp-psd-1G-2023091901.cup
+* V2740-dpp-pha-1G-2023091800.cup
+* V2740-dpp-psd-1G-2023091901.cup 
+
+are supported.
+
 # Compile
 
 ## if *.pro does not exist
