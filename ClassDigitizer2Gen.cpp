@@ -527,7 +527,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
         { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
         { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
         { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
-        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" } \
       ]");
     }
 
