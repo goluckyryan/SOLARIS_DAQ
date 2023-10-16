@@ -104,6 +104,7 @@ int Digitizer2Gen::FindIndex(const Reg para){
     case TYPE::DIG: return boardMap[para.GetPara()];
     case TYPE::VGA: return 0;
     case TYPE::LVDS: return LVDSMap[para.GetPara()];
+    case TYPE::GROUP : return 0;
   }
   return -1;
 }
@@ -130,6 +131,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
     case TYPE::DIG : boardSettings[index].SetValue(ans); break;
     case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
     case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
+    case TYPE::GROUP: break; //^ GROUP is not implemented
   }
   
   //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
@@ -180,7 +182,9 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
           //                     boardSettings[index].GetFullPara(ch_index).c_str(), 
           //                     boardSettings[index].GetValue().c_str()); 
         }break;
-        case TYPE::LVDS : break;
+        case TYPE::LVDS : LVDSSettings[ch_index][index].SetValue(value); break;
+        case TYPE::GROUP : break;
+
       }
     }
     return true;

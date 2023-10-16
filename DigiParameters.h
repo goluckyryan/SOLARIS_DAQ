@@ -6,7 +6,7 @@
 #include <vector>
 
 enum ANSTYPE {INTEGER, FLOAT, LIST, STR, BYTE, BINARY, NONE};
-enum TYPE {CH, DIG, LVDS, VGA};
+enum TYPE {CH, DIG, LVDS, VGA, GROUP};
 enum RW { ReadOnly, WriteOnly, ReadWrite};
 
 //^==================== Register Class
@@ -92,6 +92,14 @@ class Reg {
               return "/vga/" + std::to_string(ch_index) + "/par/"+ name;
             }
           }; break;
+        case TYPE::GROUP:{
+           if( ch_index == -1 ){ 
+              return "/group/0..16/par/" + name;
+            }else{
+             return "/group/" + std::to_string(ch_index) + "/par/" + name;
+            }
+          break;
+        }
         default: 
           return "invalid"; break; 
       }
@@ -164,6 +172,11 @@ namespace PHA{
     const Reg SpeedSensFan2            ("SpeedSensFan2", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::INTEGER, "rpm");
     const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::BINARY, "byte");
     const Reg BoardReady               ("BoardReady", RW::ReadOnly, TYPE::DIG, {{"True", "No Error"}, {"False", "Error"}});
+
+    //^ not impletemented
+    const Reg SPFLinkPresence          ("SPFLinkPresence", RW::ReadOnly, TYPE::DIG, {{"True", "Inserted"}, {"False", "Disconnected"}});
+    const Reg SPFLinkActive            ("SPFLinkActive",   RW::ReadOnly, TYPE::DIG, {{"True", "Active"}, {"False", "Deactive"}});
+    const Reg SPFLinkProtocol          ("SPFLinkProtocal", RW::ReadOnly, TYPE::DIG, {{"Eth1G", "1 GB/s"}, {"Eth10G", "10 GB/s"}, {"CONET2", "Conet2"}});
   
     ///============= read write
     const Reg ClockSource              ("ClockSource", RW::ReadWrite, TYPE::DIG, {{"Internal", "Internal Clock 62.5 MHz"},
@@ -286,6 +299,7 @@ namespace PHA{
     const Reg SoftwareStopACQ     ("SwStopAcquisition", RW::WriteOnly, TYPE::DIG, {}, ANSTYPE::NONE, "", true); // stop ACQ, whatever start source
     const Reg SendSoftwareTrigger ("SendSWTrigger", RW::WriteOnly, TYPE::DIG, {}, ANSTYPE::NONE, "", true); // only work when Swtrg in the GlobalTriggerSource
     const Reg ReloadCalibration   ("ReloadCalibration", RW::WriteOnly, TYPE::DIG, {}, ANSTYPE::NONE, "", true); 
+    const Reg Reboot              ("Reboot", RW::WriteOnly, TYPE::DIG, {}, ANSTYPE::NONE, "", true); //^ not implemented
 
 
     const std::vector<Reg> AllSettings = {
@@ -387,6 +401,10 @@ namespace PHA{
 
   }
 
+  namespace GROUP{
+    const Reg InputDelay ("InputDelay", RW::ReadWrite, TYPE::GROUP, {}, ANSTYPE::INTEGER, "S"); //^ Not impletemented.
+  }
+
   namespace VGA{
     const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::INTEGER, "dB"); // VX2745 only
   }
@@ -422,6 +440,12 @@ namespace PHA{
     const Reg ChannelWaveCount     ("ChWaveCnt", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
 
     /// ======= read write
+    //^ not impletemented
+    const Reg SelfTriggerWidh  ("SelfTriggerWidth", RW::ReadWrite, TYPE::CH, {{"0", ""},{"6000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns"); // not sure the max 
+    const Reg SignalOffset     ("SignalOffset",     RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "uV"); // not sure the max
+
+
+    //^ impletemented
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite, TYPE::CH, {{"True", "Enabled"}, {"False", "Disabled"}});
     const Reg DC_Offset        ("DCOffset", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"100", ""}, {"1",""}}, ANSTYPE::INTEGER, "%"); 
     const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}, {"1",""}}, ANSTYPE::INTEGER);
