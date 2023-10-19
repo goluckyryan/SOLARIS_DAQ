@@ -663,18 +663,18 @@ namespace PHA{
       WaveDigitalProbe0          ,
       WaveDigitalProbe1          ,
       WaveDigitalProbe2          ,
-      WaveDigitalProbe3          ,
+      WaveDigitalProbe3         
 
-      CoincidenceLengthSample    ,
-      RecordLengthSample         ,
-      PreTriggerSample           ,
-      TimeFilterRiseTimeSample   ,
-      TimeFilterRetriggerGuardSample   ,
-      EnergyFilterRiseTimeSample       ,
-      EnergyFilterFlatTopSample        ,
-      EnergyFilterPoleZeroSample       ,
-      EnergyFilterBaselineGuardSample  ,
-      EnergyFilterPileUpGuardSample    
+      // CoincidenceLengthSample    ,
+      // RecordLengthSample         ,
+      // PreTriggerSample           ,
+      // TimeFilterRiseTimeSample   ,
+      // TimeFilterRetriggerGuardSample   ,
+      // EnergyFilterRiseTimeSample       ,
+      // EnergyFilterFlatTopSample        ,
+      // EnergyFilterPoleZeroSample       ,
+      // EnergyFilterBaselineGuardSample  ,
+      // EnergyFilterPileUpGuardSample    
     };
 
   }
@@ -1133,17 +1133,17 @@ namespace PSD{
       WaveDigitalProbe0          , //  
       WaveDigitalProbe1          , //  
       WaveDigitalProbe2          , //  
-      WaveDigitalProbe3          , //  
+      WaveDigitalProbe3          //,   
 
-      RecordLengthSample         , // 21  
-      PreTriggerSample           , // 22  
-      CoincidenceLengthSample    , //   
-      ADCInputBaselineGuardSample,
-      CFDDelaySample             ,
-      TimeFilterRetriggerGuardSample,
-      GateLongLengthSample       ,
-      GateShortLengthSample      ,
-      GateOffsetSample      
+      // RecordLengthSample         , // 21  
+      // PreTriggerSample           , // 22  
+      // CoincidenceLengthSample    , //   
+      // ADCInputBaselineGuardSample,
+      // CFDDelaySample             ,
+      // TimeFilterRetriggerGuardSample,
+      // GateLongLengthSample       ,
+      // GateShortLengthSample      ,
+      // GateOffsetSample      
     };
 
   }
