@@ -89,6 +89,10 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     digiMTX[iDigi].lock();
     ReadScopeSettings();
+    if( digi[iDigi]->IsAcqOn()){
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
+    }
     digiMTX[iDigi].unlock();
   });
 
