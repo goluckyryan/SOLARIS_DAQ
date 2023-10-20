@@ -569,10 +569,10 @@ void Scope::StartScope(){
     ReadScopeSettings();
 
     /// the settings are the same for PHA and PSD
-
     for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
       channelEnable[iDigi][ch2] = digi[iDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
     }
+
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
 
     if( iDigi == cbScopeDigi->currentIndex() ){
@@ -630,7 +630,6 @@ void Scope::StopScope(){
           digi[i]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, cbScopeCh->currentIndex());
           digi[i]->WriteValue(PHA::CH::WaveSaving, waveSaving, cbScopeCh->currentIndex());
         }
-        originalValueSet = false;
       }
       digiMTX[i].unlock();
     }
@@ -638,6 +637,7 @@ void Scope::StopScope(){
     emit TellACQOnOff(false);
   }
 
+  originalValueSet = false;
 
   ScopeControlOnOff(true);
   emit TellSettingsPanelControlOnOff();

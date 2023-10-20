@@ -58,6 +58,8 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
                        "Time-energy event free space status (1 = time-energy can be written)",
                        "Waveform event free space status (1 = waveform can be written)"};
 
+QColor orangeColor(255, 165, 0);
+
 DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent) : QWidget(parent){
 
   setWindowTitle("Digitizers Settings");
@@ -1672,12 +1674,12 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
 
     for( int ch = 0; ch < digi[digiID]->GetNChannels(); ch++){
       //Set color of some combox
-      cbbOnOff[digiID][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-      connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
-      cbbParity[digiID][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-      connect(cbbParity[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ?  "color : green;" : "");});
-      cbbLowFilter[digiID][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-      connect(cbbLowFilter[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : green;": "");});
+      cbbOnOff[digiID][ch]->setItemData(1, QBrush(orangeColor), Qt::ForegroundRole);
+      connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : orange;" : "");});
+      cbbParity[digiID][ch]->setItemData(1, QBrush(orangeColor), Qt::ForegroundRole);
+      connect(cbbParity[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ?  "color : orange;" : "");});
+      cbbLowFilter[digiID][ch]->setItemData(1, QBrush(orangeColor), Qt::ForegroundRole);
+      connect(cbbLowFilter[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbLowFilter[ID][ch]->setStyleSheet(index == 1 ? "color : orange;": "");});
     }
 
   }
@@ -2093,10 +2095,10 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
 
     for( int ch = 0; ch < digi[digiID]->GetNChannels(); ch++){
       //Set color of some combox
-      cbbOnOff[digiID][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-      connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : green;" : "");});
-      cbbParity[digiID][ch]->setItemData(1, QBrush(Qt::green), Qt::ForegroundRole);
-      connect(cbbParity[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ?  "color : green;" : "");});
+      cbbOnOff[digiID][ch]->setItemData(1, QBrush(orangeColor), Qt::ForegroundRole);
+      connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbOnOff[ID][ch]->setStyleSheet(index == 1 ? "color : orange;" : "");});
+      cbbParity[digiID][ch]->setItemData(1, QBrush(orangeColor), Qt::ForegroundRole);
+      connect(cbbParity[digiID][ch], &RComboBox::currentIndexChanged, this, [=](int index){ cbbParity[ID][ch]->setStyleSheet(index == 1 ?  "color : orange;" : "");});
     }
 
   }
