@@ -351,6 +351,10 @@ void Scope::ChangeDigitizer(){
 
   digiMTX[index].lock();
   ReadScopeSettings();
+  if( digi[index]->IsAcqOn() ){
+    digi[index]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+    digi[index]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
+  }
   digiMTX[index].unlock();
   allowChange = true;
 
