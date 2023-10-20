@@ -963,8 +963,12 @@ bool MainWindow::CheckSOLARISpanelOK(){
   QTextStream in(&file);
   while (!in.atEnd()) {
     QString line = in.readLine();
+
     if( line.contains("//^")) continue;
-    if( line.contains("//C=")){
+    if( line.contains("// //")) continue;
+    if( line.contains("////")) continue;
+
+    if( line.contains("//C=")){ // detType
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
@@ -975,7 +979,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
       }
     }
-    if( line.contains("//C%")){
+    if( line.contains("//C%")){ // groupName
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
@@ -986,7 +990,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
       }
     }
-    if( line.contains("//C&")){
+    if( line.contains("//C&")){ //groupID
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
@@ -998,7 +1002,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
         return false;
     }
       }
-    if( line.contains("//C#")){
+    if( line.contains("//C#")){ //detMaxID
       int in1 = line.indexOf("{");
       int in2 = line.lastIndexOf("}");
       if( in2 > in1){
