@@ -65,6 +65,7 @@ private:
   QWidget * bdVGA[MaxNumberOfDigitizer];
   QWidget * bdLVDS[MaxNumberOfDigitizer];
   QWidget * bdITL[MaxNumberOfDigitizer];
+  QWidget * bdGroup[MaxNumberOfDigitizer];
 
 
   QGroupBox * box0[MaxNumberOfDigitizer];
@@ -205,6 +206,9 @@ private:
   QPushButton * chStatus[MaxNumberOfDigitizer][MaxNumberOfChannel][9];
   QLineEdit   * chGainFactor[MaxNumberOfDigitizer][MaxNumberOfChannel];
   QLineEdit   * chADCToVolts[MaxNumberOfDigitizer][MaxNumberOfChannel];
+
+  //--------------- Group settings
+  RSpinBox * spbInputDelay[MaxNumberOfDigitizer][MaxNumberOfGroup];
 
   //--------------- Channel settings
   RComboBox * cbChPick[MaxNumberOfDigitizer];

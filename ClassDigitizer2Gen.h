@@ -12,6 +12,7 @@
 #define MaxOutFileSize 2*1024*1024*1024  //2GB
 //#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
+#define MaxNumberOfGroup 16
 
 #include "DigiParameters.h"
 
@@ -62,6 +63,7 @@ class Digitizer2Gen {
     std::vector<Reg> chSettings[MaxNumberOfChannel];
     std::vector<Reg> LVDSSettings[4];
     Reg VGASetting[4]; 
+    Reg InputDelay[16];
 
     std::map<std::string, int> boardMap;
     std::map<std::string, int> LVDSMap;

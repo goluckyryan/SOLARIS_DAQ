@@ -45,6 +45,9 @@ void Digitizer2Gen::Initialization(){
     VGASetting[index] = PHA::VGA::VGAGain;
     LVDSSettings[index] = PHA::LVDS::AllSettings;
   }
+  for( int idx = 0; idx < 16; idx ++){
+    InputDelay[idx] = PHA::GROUP::InputDelay;
+  }
 
   //build map
   for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
@@ -131,7 +134,7 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
     case TYPE::DIG : boardSettings[index].SetValue(ans); break;
     case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
     case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
-    case TYPE::GROUP: break; //^ GROUP is not implemented
+    case TYPE::GROUP: InputDelay[ch_index].SetValue(ans); break; 
   }
   
   //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
@@ -183,7 +186,7 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
           //                     boardSettings[index].GetValue().c_str()); 
         }break;
         case TYPE::LVDS : LVDSSettings[ch_index][index].SetValue(value); break;
-        case TYPE::GROUP : break;
+        case TYPE::GROUP : InputDelay[ch_index].SetValue(value); break;
 
       }
     }
@@ -255,6 +258,9 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
       VGASetting[index] = PHA::VGA::VGAGain;
       LVDSSettings[index] = PHA::LVDS::AllSettings;
     }
+    for( int idx = 0; idx < 16; idx ++ ){
+      InputDelay[idx] = PHA::GROUP::InputDelay;
+    }
 
     //build map
     for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
@@ -270,6 +276,9 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     for( int index = 0 ; index < 4; index ++) {
       VGASetting[index] = PSD::VGA::VGAGain;
       LVDSSettings[index] = PSD::LVDS::AllSettings;
+    }
+    for( int idx = 0; idx < 16; idx ++ ){
+      InputDelay[idx] = PSD::GROUP::InputDelay;
     }
 
     //build map
@@ -1070,6 +1079,12 @@ void Digitizer2Gen::PrintBoardSettings(){
     }
   }
 
+  for(int idx = 0; idx < 16 ; idx ++ ){
+    printf("%-45s  %d  %s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
+                              InputDelay[idx].ReadWrite(), 
+                              InputDelay[idx].GetValue().c_str());
+  }
+
   for( int i = 0; i < (int) LVDSSettings[0].size(); i++){
     for( int index = 0; index < 4; index++){
       if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
@@ -1129,6 +1144,8 @@ void Digitizer2Gen::ReadAllSettings(){
 
   if( ModelName == "VX2745") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
+  for( int idx = 0; idx < 16; idx++) ReadValue(InputDelay[idx], idx, false);
+
   for( int index = 0; index < 4; index++){
     for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
       if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
@@ -1183,6 +1200,20 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
                                              8000 + i, 
                                              boardSettings[i].GetValue().c_str());
       count ++;
+    }
+
+    for( int idx = 0; idx < 16; idx ++){
+      totCount ++;
+      if( InputDelay[idx].GetValue() == "" ) {
+        printf(" No value for %s \n", InputDelay[idx].GetPara().c_str());
+        continue;
+      }
+      fprintf(saveFile, "%-45s!%d!%4d!%s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
+                                             InputDelay[idx].ReadWrite(), 
+                                             9050 + idx,
+                                             InputDelay[idx].GetValue().c_str());
+    count ++;
+      
     }
 
     if( ModelName == "VX2745" && FPGAType == DPPType::PHA) {
@@ -1316,8 +1347,10 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         //printf("%s|%d|%d|%s\n", boardSettings[id-8000].GetFullPara().c_str(),
         //                        boardSettings[id-8000].ReadWrite(), id,
         //                        boardSettings[id-8000].GetValue().c_str());
-      }else{ // vga
+      }else if ( 9000 <= id && id < 9050){ // vga
         VGASetting[id - 9000].SetValue(value);
+      }else{ // group
+        InputDelay[id - 9050].SetValue(value);
       }
       //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
       if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value, false);
@@ -1340,10 +1373,11 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 std::string Digitizer2Gen::GetSettingValue(const Reg para, unsigned int ch_index) {
   int index = FindIndex(para);
   switch (para.GetType()){
-    case TYPE::DIG:  return boardSettings[index].GetValue();
-    case TYPE::CH:   return chSettings[ch_index][index].GetValue();
-    case TYPE::VGA:  return VGASetting[ch_index].GetValue();
-    case TYPE::LVDS: return LVDSSettings[ch_index][index].GetValue();
+    case TYPE::DIG:   return boardSettings[index].GetValue();
+    case TYPE::CH:    return chSettings[ch_index][index].GetValue();
+    case TYPE::VGA:   return VGASetting[ch_index].GetValue();
+    case TYPE::LVDS:  return LVDSSettings[ch_index][index].GetValue();
+    case TYPE::GROUP: return InputDelay[ch_index].GetValue();
     default : return "invalid";
   }
   return "no such parameter";
