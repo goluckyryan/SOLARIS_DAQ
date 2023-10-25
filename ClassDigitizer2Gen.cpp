@@ -26,6 +26,7 @@ void Digitizer2Gen::Initialization(){
   FPGAType = "";
   nChannels = 0;
   ch2ns = 0;
+  CupVer = 0;
 
   outFileIndex = 0;
   FinishedOutFilesSize = 0;
@@ -235,6 +236,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   FPGAVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   nChannels = atoi(ReadValue(PHA::DIG::NumberOfChannel).c_str());
   ModelName = ReadValue(PHA::DIG::ModelName);
+  CupVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   int adcRate = atoi(ReadValue(PHA::DIG::ADC_SampleRate).c_str());
   ch2ns = 1000/adcRate;
   
@@ -1079,10 +1081,12 @@ void Digitizer2Gen::PrintBoardSettings(){
     }
   }
 
-  for(int idx = 0; idx < 16 ; idx ++ ){
-    printf("%-45s  %d  %s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
-                              InputDelay[idx].ReadWrite(), 
-                              InputDelay[idx].GetValue().c_str());
+  if( CupVer >= 2023091800 ){
+    for(int idx = 0; idx < 16 ; idx ++ ){
+      printf("%-45s  %d  %s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
+                                InputDelay[idx].ReadWrite(), 
+                                InputDelay[idx].GetValue().c_str());
+    }
   }
 
   for( int i = 0; i < (int) LVDSSettings[0].size(); i++){
@@ -1144,7 +1148,7 @@ void Digitizer2Gen::ReadAllSettings(){
 
   if( ModelName == "VX2745") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
-  for( int idx = 0; idx < 16; idx++) ReadValue(InputDelay[idx], idx, false);
+  if( CupVer >= 2023091800 ) for( int idx = 0; idx < 16; idx++) ReadValue(InputDelay[idx], idx, false);
 
   for( int index = 0; index < 4; index++){
     for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
@@ -1202,18 +1206,19 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       count ++;
     }
 
-    for( int idx = 0; idx < 16; idx ++){
-      totCount ++;
-      if( InputDelay[idx].GetValue() == "" ) {
-        printf(" No value for %s \n", InputDelay[idx].GetPara().c_str());
-        continue;
+    if( CupVer >= 2023091800 ){
+      for( int idx = 0; idx < 16; idx ++){
+        totCount ++;
+        if( InputDelay[idx].GetValue() == "" ) {
+          printf(" No value for %s \n", InputDelay[idx].GetPara().c_str());
+          continue;
+        }
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
+                                              InputDelay[idx].ReadWrite(), 
+                                              9050 + idx,
+                                              InputDelay[idx].GetValue().c_str());
+        count ++;
       }
-      fprintf(saveFile, "%-45s!%d!%4d!%s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
-                                             InputDelay[idx].ReadWrite(), 
-                                             9050 + idx,
-                                             InputDelay[idx].GetValue().c_str());
-    count ++;
-      
     }
 
     if( ModelName == "VX2745" && FPGAType == DPPType::PHA) {
@@ -1350,7 +1355,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       }else if ( 9000 <= id && id < 9050){ // vga
         VGASetting[id - 9000].SetValue(value);
       }else{ // group
-        InputDelay[id - 9050].SetValue(value);
+        if( CupVer >= 2023091800 ) InputDelay[id - 9050].SetValue(value);
       }
       //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
       if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value, false);

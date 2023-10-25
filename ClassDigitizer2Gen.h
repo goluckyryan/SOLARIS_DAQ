@@ -33,6 +33,7 @@ class Digitizer2Gen {
     char retValue[256];
 
     unsigned short serialNumber;
+    unsigned int CupVer;
     std::string  FPGAType; // look the DigitiParameter.h::PHA::DIG::FirwareType, DPP_PHA, DPP_ZLE, DPP_PSD, DPP_DAW, DPP_OPEN, and Scope
     unsigned int FPGAVer; // for checking copy setting
     unsigned short nChannels;
@@ -77,6 +78,7 @@ class Digitizer2Gen {
     std::string    GetFPGAType()     const {return FPGAType;}
     std::string    GetModelName()    const {return ModelName;}
     unsigned int   GetFPGAVersion()  const {return FPGAVer;}
+    unsigned int   GetCupVer()       const {return CupVer;}
 
     void  SetDummy(unsigned short sn);
     bool  IsDummy()     const {return isDummy;}
