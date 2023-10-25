@@ -788,7 +788,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       }
 
-      {//^====================== Group = InputDelay
+      if( digi[iDigi]->GetCupVer() >= 2023091800 ){
+        //^====================== Group = InputDelay
         bdGroup[iDigi] = new QWidget(this);
         bdTab->addTab(bdGroup[iDigi], "Input Delay");
         QGridLayout * groupLayout = new QGridLayout(bdGroup[iDigi]);
@@ -799,8 +800,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [s] ", groupLayout, k/4, 2*(k%4));
           spbInputDelay[iDigi][k]->setDecimals(6);
         }
-
-
+      
+      }else{
+        bdGroup[iDigi] = nullptr;
       }
 
     }
