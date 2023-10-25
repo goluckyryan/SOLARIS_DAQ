@@ -952,6 +952,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
 
     return false;
   }
+  LogMsg("Found <b>" + file.fileName() + "</b>. Setting up SOLARIS panel.");
   mapping.clear();
   std::vector<int> singleDigiMap;
   detType.clear();

@@ -70,7 +70,7 @@ class Reg {
         case TYPE::CH:{
             std::string haha = "/par/";
             if( isCmd ){
-              haha = "/cmd/";
+              haha = "/cmd/"; // for SendChSWTrigger, not in GUI
             }
             if( ch_index == -1 ){ 
               return "/ch/0..63" + haha + name;
@@ -94,7 +94,7 @@ class Reg {
           }; break;
         case TYPE::GROUP:{
            if( ch_index == -1 ){ 
-              return "/group/0..16/par/" + name;
+              return "/group/0..15/par/" + name;
             }else{
              return "/group/" + std::to_string(ch_index) + "/par/" + name;
             }
@@ -173,7 +173,6 @@ namespace PHA{
     const Reg ErrorFlags               ("ErrorFlags", RW::ReadOnly, TYPE::DIG, {}, ANSTYPE::BINARY, "byte");
     const Reg BoardReady               ("BoardReady", RW::ReadOnly, TYPE::DIG, {{"True", "No Error"}, {"False", "Error"}});
 
-    //^ not impletemented
     const Reg SPFLinkPresence          ("SPFLinkPresence", RW::ReadOnly, TYPE::DIG, {{"True", "Inserted"}, {"False", "Disconnected"}});
     const Reg SPFLinkActive            ("SPFLinkActive",   RW::ReadOnly, TYPE::DIG, {{"True", "Active"}, {"False", "Deactive"}});
     const Reg SPFLinkProtocol          ("SPFLinkProtocal", RW::ReadOnly, TYPE::DIG, {{"Eth1G", "1 GB/s"}, {"Eth10G", "10 GB/s"}, {"CONET2", "Conet2"}});
@@ -353,6 +352,9 @@ namespace PHA{
       SpeedSensFan2            ,
       ErrorFlags               ,
       BoardReady               ,
+      // SPFLinkPresence          ,
+      // SPFLinkActive            ,
+      // SPFLinkProtocol          ,
       ClockSource              ,
       IO_Level                 ,
       StartSource              ,
@@ -402,7 +404,7 @@ namespace PHA{
   }
 
   namespace GROUP{
-    const Reg InputDelay ("InputDelay", RW::ReadWrite, TYPE::GROUP, {}, ANSTYPE::INTEGER, "S"); //^ Not impletemented.
+    const Reg InputDelay ("InputDelay", RW::ReadWrite, TYPE::GROUP, {{"0",""}, {"100", ""}, {"0.000001", ""}}, ANSTYPE::INTEGER, "sec");
   }
 
   namespace VGA{
@@ -427,6 +429,9 @@ namespace PHA{
 
   namespace CH{
 
+    /// ========= command
+    const Reg SendChSWTrigger      ("SendChSWrigger", RW::WriteOnly, TYPE::CH, {}, ANSTYPE::NONE, "", true);
+
     /// ========= red only
     const Reg SelfTrgRate          ("SelfTrgRate", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::INTEGER, "Hz");
     const Reg ChannelStatus        ("ChStatus", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
@@ -441,8 +446,8 @@ namespace PHA{
 
     /// ======= read write
     //^ not impletemented
-    const Reg SelfTriggerWidh  ("SelfTriggerWidth", RW::ReadWrite, TYPE::CH, {{"0", ""},{"6000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns"); // not sure the max 
-    const Reg SignalOffset     ("SignalOffset",     RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "uV"); // not sure the max
+    const Reg SelfTriggerWidth  ("SelfTriggerWidth", RW::ReadWrite, TYPE::CH, {{"0", ""},{"6000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns"); // not sure the max 
+    const Reg SignalOffset      ("SignalOffset",     RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "uV"); // not sure the max
 
 
     //^ impletemented
@@ -742,6 +747,11 @@ namespace PSD{
     const Reg ErrorFlags               = PHA::DIG::ErrorFlags;
     const Reg BoardReady               = PHA::DIG::BoardReady;
 
+    const Reg SPFLinkPresence          = PHA::DIG::SPFLinkPresence;
+    const Reg SPFLinkActive            = PHA::DIG::SPFLinkActive;
+    const Reg SPFLinkProtocol          = PHA::DIG::SPFLinkProtocol;
+  
+
 ///============= read write
     //const Reg EnableClockOutBackplane  ("EnClockOutP0", RW::ReadWrite, TYPE::DIG);
     const Reg ClockSource              = PHA::DIG::ClockSource;
@@ -852,6 +862,9 @@ namespace PSD{
       SpeedSensFan2            ,
       ErrorFlags               ,
       BoardReady               ,
+      // SPFLinkPresence          ,
+      // SPFLinkActive            ,
+      // SPFLinkProtocol          ,
       ClockSource              ,
       IO_Level                 ,
       StartSource              ,
@@ -899,6 +912,10 @@ namespace PSD{
 
   }
 
+  namespace GROUP{
+    const Reg InputDelay = PHA::GROUP::InputDelay;
+  }
+
   namespace VGA{
     const Reg VGAGain = PHA::VGA::VGAGain;
   }
@@ -917,6 +934,9 @@ namespace PSD{
 
   namespace CH{
 
+    /// ========= command
+    const Reg SendChSWTrigger      ("SendChSWrigger", RW::WriteOnly, TYPE::CH, {}, ANSTYPE::NONE, "", true);
+
     /// ========= red only
     const Reg SelfTrgRate          = PHA::CH::SelfTrgRate;
     const Reg ChannelStatus        = PHA::CH::ChannelStatus;
@@ -929,6 +949,11 @@ namespace PSD{
     const Reg ChannelWaveCount     = PHA::CH::ChannelWaveCount;
 
     /// ======= read write
+    //^ not impletemented
+    const Reg SelfTriggerWidth  = PHA::CH::SelfTriggerWidth; 
+    const Reg SignalOffset     = PHA::CH::SignalOffset;
+
+    //^ impletemented
     const Reg ChannelEnable    = PHA::CH::ChannelEnable;
     const Reg DC_Offset        = PHA::CH::DC_Offset;
     const Reg TriggerThreshold = PHA::CH::TriggerThreshold;

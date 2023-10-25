@@ -107,7 +107,14 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         lab->setAlignment(Qt::AlignRight | Qt::AlignCenter);
         leInfo[iDigi][j] = new QLineEdit(digiTab[iDigi]);
         leInfo[iDigi][j]->setReadOnly(true);
-        leInfo[iDigi][j]->setText(QString::fromStdString(digi[iDigi]->ReadValue(infoIndex[j].second)));
+
+        Reg reg = infoIndex[j].second;
+        QString text = QString::fromStdString(digi[iDigi]->ReadValue(reg));
+        if( reg.GetPara() == PHA::DIG::ADC_SampleRate.GetPara() ) {
+          short tick2ns = 1000/ text.toInt();
+          text += " = " + QString::number(tick2ns, 'f', 1) + " ns" ;
+        }
+        leInfo[iDigi][j]->setText(text);
         infoLayout->addWidget(lab, j%nRow, 2*(j/nRow));
         infoLayout->addWidget(leInfo[iDigi][j], j%nRow, 2*(j/nRow) +1);
       }
@@ -778,6 +785,21 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             leLVDSIOReg[iDigi]->setStyleSheet("color:red;");
           }
         });
+
+      }
+
+      {//^====================== Group = InputDelay
+        bdGroup[iDigi] = new QWidget(this);
+        bdTab->addTab(bdGroup[iDigi], "Input Delay");
+        QGridLayout * groupLayout = new QGridLayout(bdGroup[iDigi]);
+        groupLayout->setAlignment(Qt::AlignTop );
+        //LVDSLayout->setSpacing(2);
+
+        for(int k = 0; k < MaxNumberOfGroup; k ++){
+          SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [s] ", groupLayout, k/4, 2*(k%4));
+          spbInputDelay[iDigi][k]->setDecimals(6);
+        }
+
 
       }
 
@@ -2586,6 +2608,11 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     sbDACoutChSelect[ID]->setEnabled(true);
   }else{
     sbDACoutChSelect[ID]->setEnabled(false);
+  }
+
+  //------------ Group
+  for( int k = 0 ; k < MaxNumberOfGroup; k++){
+    FillSpinBoxValueFromMemory(spbInputDelay[ID][k], PHA::GROUP::InputDelay, k); // PHA = PSD
   }
 
 
