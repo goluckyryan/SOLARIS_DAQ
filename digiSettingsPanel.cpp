@@ -787,8 +787,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       }
 
-      if( digi[iDigi]->GetCupVer() >= 2023091800 ){
-        //^====================== Group = InputDelay
+      {//^====================== Group = InputDelay
         bdGroup[iDigi] = new QWidget(this);
         bdTab->addTab(bdGroup[iDigi], "Input Delay");
         QGridLayout * groupLayout = new QGridLayout(bdGroup[iDigi]);
@@ -798,9 +797,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         for(int k = 0; k < MaxNumberOfGroup; k ++){
           SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [ns] ", groupLayout, k/4, 2*(k%4));
         }
-      
-      }else{
-        bdGroup[iDigi] = nullptr;
+
+        bdGroup[iDigi]->setEnabled(digi[iDigi]->GetCupVer() >= MIN_VERSION_GROUP);
       }
 
     }
@@ -2616,8 +2614,10 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   }
 
   //------------ Group
-  for( int k = 0 ; k < MaxNumberOfGroup; k++){
-    FillSpinBoxValueFromMemory(spbInputDelay[ID][k], PHA::GROUP::InputDelay, k); // PHA = PSD
+  if( digi[ID]->GetCupVer() >= MIN_VERSION_GROUP ){
+    for( int k = 0 ; k < MaxNumberOfGroup; k++){
+      FillSpinBoxValueFromMemory(spbInputDelay[ID][k], PHA::GROUP::InputDelay, k); // PHA = PSD
+    }
   }
 
 
@@ -3114,7 +3114,7 @@ void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg par
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
 
-  if( para.GetPara() == PHA::GROUP::InputDelay.GetPara()) {
+  if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() && digi[ID]->GetCupVer() >= MIN_VERSION_GROUP) {
     spb->setValue(result.toInt()*8);
   }else{
     spb->setValue(result.toDouble());

@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#define MIN_VERSION_GROUP 2022122300
+
 enum ANSTYPE {INTEGER, FLOAT, LIST, STR, BYTE, BINARY, NONE};
 enum TYPE {CH, DIG, LVDS, VGA, GROUP};
 enum RW { ReadOnly, WriteOnly, ReadWrite};
