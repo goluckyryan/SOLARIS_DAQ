@@ -404,7 +404,7 @@ namespace PHA{
   }
 
   namespace GROUP{
-    const Reg InputDelay ("InputDelay", RW::ReadWrite, TYPE::GROUP, {{"0",""}, {"100", ""}, {"0.000001", ""}}, ANSTYPE::INTEGER, "sec");
+    const Reg InputDelay ("InputDelay", RW::ReadWrite, TYPE::GROUP, {{"0",""}, {"32768", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
   }
 
   namespace VGA{

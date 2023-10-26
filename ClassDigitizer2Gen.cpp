@@ -25,7 +25,7 @@ void Digitizer2Gen::Initialization(){
   serialNumber = 0;
   FPGAType = "";
   nChannels = 0;
-  ch2ns = 0;
+  tick2ns = 0;
   CupVer = 0;
 
   outFileIndex = 0;
@@ -238,7 +238,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   ModelName = ReadValue(PHA::DIG::ModelName);
   CupVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   int adcRate = atoi(ReadValue(PHA::DIG::ADC_SampleRate).c_str());
-  ch2ns = 1000/adcRate;
+  tick2ns = 1000/adcRate;
   
   printf("   IP address : %s\n", ReadValue(PHA::DIG::IPAddress).c_str());
   printf("     Net Mask : %s\n", ReadValue(PHA::DIG::NetMask).c_str());
@@ -247,7 +247,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("     DPP Type : %s (%d)\n", FPGAType.c_str(), FPGAVer);
   printf("Serial number : %d\n", serialNumber);
   printf("     ADC bits : %s\n", ReadValue(PHA::DIG::ADC_bit).c_str());
-  printf("     ADC rate : %d Msps, ch2ns : %d ns\n", adcRate, ch2ns);
+  printf("     ADC rate : %d Msps, tick2ns : %d ns\n", adcRate, tick2ns);
   printf("     Channels : %d\n", nChannels);
 
   if( FPGAType == DPPType::PHA) {

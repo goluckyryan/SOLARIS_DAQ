@@ -11,7 +11,6 @@
 #include "ClassDigitizer2Gen.h"
 #include "influxdb.h"
 
-
 #define maxRead 400
 
 std::mutex digiMTX;
@@ -78,6 +77,9 @@ static void StatLoop(){
 
 }
 
+#include <CAENDig2.h>
+
+int CAENDig2_GetLibVersion(char* version);
 
 int main(int argc, char* argv[]){
   
@@ -87,8 +89,20 @@ int main(int argc, char* argv[]){
 
   remove("haha_000.sol");
 
-  //const char * url = "dig2://192.168.0.100/";
-  const char * url = "dig2://192.168.0.254/";
+  char version[16];
+  CAENDig2_GetLibVersion(version);
+  puts(version);
+
+  char haha[100];
+  CAEN_FELib_GetLibInfo(haha, 100);
+  puts(haha);
+
+  CAEN_FELib_GetLibVersion(version);
+  puts(version);
+
+/*
+  const char * url = "dig2://192.168.0.100/";
+  //const char * url = "dig2://192.168.0.254/";
 
   digi->OpenDigitizer(url);
   //digi->Reset();
@@ -100,7 +114,8 @@ int main(int argc, char* argv[]){
 
   digi->PrintChannelSettings(0);
 
-  
+  digi->ReadValue(PHA::CH::ADCToVolts, 0, true);
+
   digi->SetDataFormat(DataFormat::ALL); 
 
   digi->OpenOutFile("haha");
@@ -135,9 +150,13 @@ int main(int argc, char* argv[]){
 
   digi->CloseOutFile(); 
 
+
+
   digi->CloseDigitizer();
   
   delete digi;
+*/
+
   delete influx;
   
 }

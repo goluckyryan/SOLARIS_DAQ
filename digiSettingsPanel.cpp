@@ -111,8 +111,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         Reg reg = infoIndex[j].second;
         QString text = QString::fromStdString(digi[iDigi]->ReadValue(reg));
         if( reg.GetPara() == PHA::DIG::ADC_SampleRate.GetPara() ) {
-          short tick2ns = 1000/ text.toInt();
-          text += " = " + QString::number(tick2ns, 'f', 1) + " ns" ;
+          text += " = " + QString::number(digi[iDigi]->GetTick2ns(), 'f', 1) + " ns" ;
         }
         leInfo[iDigi][j]->setText(text);
         infoLayout->addWidget(lab, j%nRow, 2*(j/nRow));
@@ -797,8 +796,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         //LVDSLayout->setSpacing(2);
 
         for(int k = 0; k < MaxNumberOfGroup; k ++){
-          SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [s] ", groupLayout, k/4, 2*(k%4));
-          spbInputDelay[iDigi][k]->setDecimals(6);
+          SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [ns] ", groupLayout, k/4, 2*(k%4));
         }
       
       }else{
@@ -2524,7 +2522,12 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   }
 
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
-    leInfo[ID][j]->setText(QString::fromStdString(digi[ID]->GetSettingValue(infoIndex[j].second)));
+    Reg reg = infoIndex[j].second;
+    QString text = QString::fromStdString(digi[ID]->ReadValue(reg));
+    if( reg.GetPara() == PHA::DIG::ADC_SampleRate.GetPara() ) {
+      text += " = " + QString::number(digi[ID]->GetTick2ns(), 'f', 1) + " ns" ;
+    }
+    leInfo[ID][j]->setText(text);
   } 
 
   //-------- board settings
@@ -2983,14 +2986,31 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
     msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara()) ;
     if( para.GetType() == TYPE::CH ) msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
     msg += " = " + QString::number(spb->value());
-    if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){
-      SendLogMsg(msg + "|OK.");
-      spb->setStyleSheet("");
-      UpdatePanelFromMemory();
-      UpdateOtherPanels();
+
+    if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() ){
+
+      if( digi[ID]->WriteValue(para, std::to_string(spb->value()/8), index)){
+        SendLogMsg(msg + "|OK.");
+        spb->setStyleSheet("");
+        UpdatePanelFromMemory();
+        UpdateOtherPanels();
+      }else{
+        SendLogMsg(msg + "|Fail.");
+        spb->setStyleSheet("color:red;");
+      }
+
+
+
     }else{
-      SendLogMsg(msg + "|Fail.");
-      spb->setStyleSheet("color:red;");
+      if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){
+        SendLogMsg(msg + "|OK.");
+        spb->setStyleSheet("");
+        UpdatePanelFromMemory();
+        UpdateOtherPanels();
+      }else{
+        SendLogMsg(msg + "|Fail.");
+        spb->setStyleSheet("color:red;");
+      }
     }
   });
 }
@@ -3093,7 +3113,12 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg p
 void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){
   QString result = QString::fromStdString(digi[ID]->GetSettingValue(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
-  spb->setValue(result.toDouble());
+
+  if( para.GetPara() == PHA::GROUP::InputDelay.GetPara()) {
+    spb->setValue(result.toInt()*8);
+  }else{
+    spb->setValue(result.toDouble());
+  }
 }
 
 void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
