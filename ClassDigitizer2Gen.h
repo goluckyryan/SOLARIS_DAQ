@@ -37,7 +37,7 @@ class Digitizer2Gen {
     std::string  FPGAType; // look the DigitiParameter.h::PHA::DIG::FirwareType, DPP_PHA, DPP_ZLE, DPP_PSD, DPP_DAW, DPP_OPEN, and Scope
     unsigned int FPGAVer; // for checking copy setting
     unsigned short nChannels;
-    unsigned short ch2ns;
+    unsigned short tick2ns;
     std::string ModelName;
 
     void Initialization();
@@ -126,7 +126,7 @@ class Digitizer2Gen {
     void PrintChannelSettings(unsigned short ch);
     
     unsigned short GetNChannels() const {return nChannels;}
-    unsigned short GetCh2ns()     const {return ch2ns;}
+    unsigned short GetTick2ns()     const {return tick2ns;}
     uint64_t       GetHandle()    const {return handle;}
     
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file

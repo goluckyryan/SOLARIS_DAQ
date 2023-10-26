@@ -94,6 +94,17 @@ run ` qmake6 *.pro` it will generate Makefile
 
 then  ` make`
 
+# Using the CAENDig2.h
+
+The CAENDig2.h is not copied to system include path as the CAEN+FELib.h. But we can copy it from the source. In the caen_dig2-vXXXX folder, go to the include folder, copy the CAENDig2.h to /usr/local/include/.
+
+This enable us to compile code with -lCAEN_Dig2. For example, we can use the following to get the CAEN Dig2 Library version.
+```
+ char version[16];
+ CAENDig2_GetLibVersion(version);
+ puts(version);
+```
+
 # Known Issues
 
 - The "Trig." Rate in the Scaler does not included the coincident condition. This is related to the ChSavedEventCnt from the firmware.
@@ -101,3 +112,4 @@ then  ` make`
 - The CoincidenceLengthT not loaded. 
 - Sometime, the digitizer halt after sent the /cmd/armacquisition command. This is CAEN library problem.
 - Event/Wave trig. Source cannot set as SWTrigger. 
+- After update to CAEN_FELIB_v1.2.5 and CAEN_DIG2_v1.5.10, old firmware version before 202309XXXX is not supported.

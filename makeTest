@@ -1,6 +1,6 @@
 CC       = g++
 COPTS    = -fPIC -DLINUX -O2 -std=c++17 -lpthread -g
-CAENLIBS = -lCAEN_FELib
+CAENLIBS = -lCAEN_FELib -lCAEN_Dig2
 CURLLIBS = -lcurl
 
 OBJS= ClassDigitizer2Gen.o influxdb.o
@@ -8,7 +8,7 @@ OBJS= ClassDigitizer2Gen.o influxdb.o
 #
 #
 ################################################################
-all : test windowID
+all : test
 
 #
 test : test.cpp ClassDigitizer2Gen.o influxdb.o
