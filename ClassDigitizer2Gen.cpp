@@ -462,12 +462,22 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       ]");
     }
 
-    if( dataFormat == DataFormat::Minimum ){
+    if( dataFormat == DataFormat::MiniWithFineTime ){
       ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       "[ \
         { \"name\" : \"CHANNEL\",   \"type\" : \"U8\" }, \
         { \"name\" : \"TIMESTAMP\", \"type\" : \"U64\" }, \
         { \"name\" : \"ENERGY\",    \"type\" : \"U16\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::Minimum ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",           \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",         \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",    \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",            \"type\" : \"U16\" } \
       ]");
     }
 
@@ -544,6 +554,17 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
         { \"name\" : \"FLUSH\",               \"type\" : \"BOOL\" }, \
         { \"name\" : \"AGGREGATE_COUNTER\",   \"type\" : \"U32\" }, \
         { \"name\" : \"EVENT_SIZE\",          \"type\" : \"SIZE_T\" } \
+      ]");
+    }
+
+    if( dataFormat == DataFormat::MiniWithFineTime ){
+      ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
+      "[ \
+        { \"name\" : \"CHANNEL\",             \"type\" : \"U8\" }, \
+        { \"name\" : \"TIMESTAMP\",           \"type\" : \"U64\" }, \
+        { \"name\" : \"FINE_TIMESTAMP\",      \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY\",              \"type\" : \"U16\" }, \
+        { \"name\" : \"ENERGY_SHORT\",        \"type\" : \"U16\" } \
       ]");
     }
 
@@ -771,6 +792,26 @@ int Digitizer2Gen::ReadData(){
 
     hit->isTraceAllZero = true;
 
+  }else if( hit->dataType == DataFormat::MiniWithFineTime){
+    if( FPGAType == DPPType::PHA ){
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy
+      );
+    }else{
+      ret = CAEN_FELib_ReadData(ep_handle, 100,
+        &hit->channel,
+        &hit->timestamp,
+        &hit->fine_timestamp,
+        &hit->energy,
+        &hit->energy_short
+      );
+    }
+
+    hit->isTraceAllZero = true;
+
   }else if( hit->dataType == DataFormat::Minimum){
     if( FPGAType == DPPType::PHA ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
@@ -788,6 +829,7 @@ int Digitizer2Gen::ReadData(){
     }
 
     hit->isTraceAllZero = true;
+
   }else if( hit->dataType == DataFormat::Raw){
     ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events );
     //printf("data size: %lu byte\n", evt.dataSize);
@@ -858,6 +900,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(hit->digital_probes[1], hit->traceLenght, 1, outFile);
     fwrite(hit->digital_probes[2], hit->traceLenght, 1, outFile);
     fwrite(hit->digital_probes[3], hit->traceLenght, 1, outFile);
+
   }else if( hit->dataType == DataFormat::OneTrace){
     fwrite(&dataStartIndetifier,        2, 1, outFile);
     fwrite(&hit->channel,               1, 1, outFile);
@@ -870,21 +913,32 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->traceLenght,           8, 1, outFile);
     fwrite(&hit->analog_probes_type[0], 1, 1, outFile);
     fwrite(hit->analog_probes[0], hit->traceLenght*4, 1, outFile);
+
   }else if( hit->dataType == DataFormat::NoTrace ){
     fwrite(&dataStartIndetifier,      2, 1, outFile);
     fwrite(&hit->channel,             1, 1, outFile);
     fwrite(&hit->energy,              2, 1, outFile);
-   if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,           6, 1, outFile);
     fwrite(&hit->fine_timestamp,      2, 1, outFile);
     fwrite(&hit->flags_high_priority, 1, 1, outFile);
     fwrite(&hit->flags_low_priority,  2, 1, outFile);
+
+  }else if( hit->dataType == DataFormat::MiniWithFineTime ){
+    fwrite(&dataStartIndetifier, 2, 1, outFile);
+    fwrite(&hit->channel,        1, 1, outFile);
+    fwrite(&hit->energy,         2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,      6, 1, outFile);
+    fwrite(&hit->fine_timestamp, 2, 1, outFile);
+
   }else if( hit->dataType == DataFormat::Minimum ){
     fwrite(&dataStartIndetifier, 2, 1, outFile);
     fwrite(&hit->channel,        1, 1, outFile);
     fwrite(&hit->energy,         2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,      6, 1, outFile);
+
   }else if( hit->dataType == DataFormat::Raw){
     fwrite(&dataStartIndetifier,  2, 1, outFile);
     fwrite(&hit->dataSize,        8, 1, outFile);
