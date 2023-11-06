@@ -101,7 +101,7 @@ class Digitizer2Gen {
     void         SendCommand(std::string shortPara);
 
     int FindIndex(const Reg para); // get index from DIGIPARA
-    std::string GetSettingValue(const Reg para, unsigned int ch_index = 0); // read from memory
+    std::string GetSettingValueFromMemory(const Reg para, unsigned int ch_index = 0); // read from memory
 
     
     std::string ErrorMsg(const char * funcName);

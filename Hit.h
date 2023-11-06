@@ -14,6 +14,7 @@ enum DataFormat{
   OneTrace = 0x01,
   NoTrace  = 0x02,
   Minimum  = 0x03,
+  MiniWithFineTime = 0x04,
   Raw      = 0x0A,
   
 };

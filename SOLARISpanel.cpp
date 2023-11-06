@@ -567,17 +567,17 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       for( int chID = 0; chID < (int) mapping[DigiID].size(); chID++){
         if( mapping[DigiID][chID] < 0 ) continue;
 
-        std::string haha = digi[DigiID]->GetSettingValue(SettingItems[SettingID], chID);
+        std::string haha = digi[DigiID]->GetSettingValueFromMemory(SettingItems[SettingID], chID);
         sbSetting[SettingID][DigiID][chID]->setValue( atof(haha.c_str()));
 
         if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara() ){
-          std::string haha =  digi[DigiID]->GetSettingValue(PHA::CH::SelfTrgRate, chID);
+          std::string haha =  digi[DigiID]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, chID);
           leDisplay[SettingID][DigiID][chID]->setText(QString::number(atof(haha.c_str()), 'f', 2) );
         }else{
           leDisplay[SettingID][DigiID][chID]->setText(QString::number(atof(haha.c_str()), 'f', 2) );
         }
 
-        haha = digi[DigiID]->GetSettingValue(PHA::CH::ChannelEnable, chID);
+        haha = digi[DigiID]->GetSettingValueFromMemory(PHA::CH::ChannelEnable, chID);
         chkOnOff[SettingID][DigiID][chID]->setChecked( haha == "True" ? true : false);
         leDisplay[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
         sbSetting[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
@@ -609,11 +609,11 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       }
 
       int chID = (detIDArrayList[k][h] & 0xFF);
-      triggerMap.push_back(Utility::TenBase(digi[digiID]->GetSettingValue(PHA::CH::ChannelsTriggerMask, chID)));
-      coincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::CoincidenceMask, chID));
-      antiCoincidentMask.push_back(digi[digiID]->GetSettingValue(PHA::CH::AntiCoincidenceMask, chID));
-      eventTriggerSource.push_back(digi[digiID]->GetSettingValue(PHA::CH::EventTriggerSource, chID));
-      waveTriggerSource.push_back(digi[digiID]->GetSettingValue(PHA::CH::WaveTriggerSource, chID));
+      triggerMap.push_back(Utility::TenBase(digi[digiID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, chID)));
+      coincidentMask.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::CoincidenceMask, chID));
+      antiCoincidentMask.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::AntiCoincidenceMask, chID));
+      eventTriggerSource.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::EventTriggerSource, chID));
+      waveTriggerSource.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::WaveTriggerSource, chID));
     }
 
     if(skipFlag) continue;
@@ -704,7 +704,7 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       int chID = (detIDArrayList[i][j] & 0xFF);
       if( digiID >= nDigi ) continue;
       if( digi[digiID]->IsDummy() || !digi[digiID]->IsConnected() ) continue;
-      coinTime.push_back( atoi(digi[digiID]->GetSettingValue(PHA::CH::CoincidenceLength, chID).c_str()));
+      coinTime.push_back( atoi(digi[digiID]->GetSettingValueFromMemory(PHA::CH::CoincidenceLength, chID).c_str()));
     }
   }
 
@@ -738,7 +738,7 @@ void SOLARISpanel::UpdateThreshold(){
 
         if( mapping[DigiID][chID] < 0 ) continue;
         
-        std::string haha =  digi[DigiID]->GetSettingValue(PHA::CH::SelfTrgRate, chID);
+        std::string haha =  digi[DigiID]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, chID);
         leDisplay[SettingID][DigiID][chID]->setText(QString::fromStdString(haha));
         
         ///printf("====== %d %d %d |%s|\n", SettingID, DigiID, chID, haha.c_str());
