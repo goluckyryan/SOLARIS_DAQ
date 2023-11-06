@@ -173,6 +173,7 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
           //                     chSettings[ch_index][index].GetFullPara(ch_index).c_str(), 
           //                     chSettings[ch_index][index].GetValue().c_str());
         }break;
+        
         case TYPE::VGA : {
           VGASetting[ch_index].SetValue(value); 
 
@@ -180,14 +181,24 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
           //                      VGASetting[ch_index].GetFullPara(ch_index).c_str(), 
           //                      VGASetting[ch_index].GetValue().c_str());
         }break;
+
         case TYPE::DIG : {
           boardSettings[index].SetValue(value);
           //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
           //                     boardSettings[index].GetFullPara(ch_index).c_str(), 
           //                     boardSettings[index].GetValue().c_str()); 
         }break;
-        case TYPE::LVDS : LVDSSettings[ch_index][index].SetValue(value); break;
-        case TYPE::GROUP : InputDelay[ch_index].SetValue(value); break;
+        
+        case TYPE::LVDS : {
+          LVDSSettings[ch_index][index].SetValue(value); 
+        }break;
+        
+        case TYPE::GROUP : {
+          InputDelay[ch_index].SetValue(value); 
+          // printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
+          //                     InputDelay[ch_index].GetFullPara(ch_index).c_str(), 
+          //                     InputDelay[ch_index].GetValue().c_str()); 
+        }break;
 
       }
     }
@@ -1375,7 +1386,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
   
 }
 
-std::string Digitizer2Gen::GetSettingValue(const Reg para, unsigned int ch_index) {
+std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned int ch_index) {
   int index = FindIndex(para);
   switch (para.GetType()){
     case TYPE::DIG:   return boardSettings[index].GetValue();

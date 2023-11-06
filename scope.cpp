@@ -671,7 +671,7 @@ void Scope::UpdateScope(){
     leTriggerRate->setText(QString::fromStdString(haha));
 
     //unsigned int traceLength = qMin((int) digi[iDigi]->hit->traceLenght, MaxDisplayTraceDataLength);
-    unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValue(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
+    unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValueFromMemory(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
 
     if( atoi(haha.c_str()) == 0 ) {
       digiMTX[iDigi].unlock();
@@ -800,12 +800,12 @@ void Scope::ScopeControlOnOff(bool on){
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
-  std::string ans = digi[iDigi]->GetSettingValue(digPara, ch);
+  std::string ans = digi[iDigi]->GetSettingValueFromMemory(digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
 void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
-  std::string ans = digi[iDigi]->GetSettingValue(digPara, ch);
+  std::string ans = digi[iDigi]->GetSettingValueFromMemory(digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
     cb->setCurrentIndex(index);
