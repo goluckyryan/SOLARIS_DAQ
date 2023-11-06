@@ -198,10 +198,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     cbAutoRun->setEnabled(false);
 
     cbDataFormat = new QComboBox(this);
-    cbDataFormat->addItem("Everything", 0);
-    cbDataFormat->addItem("1 trace", 1);
-    cbDataFormat->addItem("No trace", 2);
-    cbDataFormat->addItem("Minimum", 3);
+    cbDataFormat->addItem("Everything", DataFormat::ALL);
+    cbDataFormat->addItem("1 trace", DataFormat::OneTrace);
+    cbDataFormat->addItem("No trace", DataFormat::NoTrace);
+    cbDataFormat->addItem("Minimum", DataFormat::Minimum);
+    cbDataFormat->addItem("Min + fineTimestamp", DataFormat::MiniWithFineTime);
     cbDataFormat->setCurrentIndex(3);
     cbDataFormat->setEnabled(false);
 

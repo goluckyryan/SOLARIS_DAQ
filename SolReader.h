@@ -31,15 +31,17 @@ class SolReader {
     ~SolReader();
 
     void OpenFile(std::string fileName);
-    int  ReadNextBlock(int opt = 0); // opt = 0, noraml, 1, fast
-    int  ReadBlock(unsigned int index);
+    int  ReadNextBlock(int isSkip = 0); // opt = 0, noraml, 1, fast
+    int  ReadBlock(unsigned int index, bool verbose = false);
 
     void ScanNumBlock();
 
-    unsigned int GetNumBlock()      {return numBlock;}
-    unsigned int GetTotalNumBlock() {return totNumBlock;}
-    unsigned int GetFilePos()       {return filePos;}
-    unsigned int GetFileSize()      {return inFileSize;}
+    bool         IsEndOfFile()      const {return (filePos >= inFileSize ? true : false);}
+    unsigned int GetBlockID()       const {return numBlock - 1;}
+    unsigned int GetNumBlock()      const {return numBlock;}
+    unsigned int GetTotalNumBlock() const {return totNumBlock;}
+    unsigned int GetFilePos()       const {return filePos;}
+    unsigned int GetFileSize()      const {return inFileSize;}
     
     void RewindFile(); 
 
@@ -86,21 +88,23 @@ inline void SolReader::OpenFile(std::string fileName){
   }
 }
 
-inline int SolReader::ReadBlock(unsigned int index){
+inline int SolReader::ReadBlock(unsigned int index, bool verbose){
   if( isScanned == false) return -1;
   if( index >= totNumBlock )return -1;
   fseek(inFile, 0L, SEEK_SET);
 
-  printf("-----------%u, %u\n", index, blockPos[index]);
+  if( verbose ) printf("Block index: %u, File Pos: %u byte\n", index, blockPos[index]);
 
   fseek(inFile, blockPos[index], SEEK_CUR);
+
+  filePos = blockPos[index];
 
   numBlock = index;
 
   return ReadNextBlock();
 }
 
-inline int SolReader::ReadNextBlock(int opt){
+inline int SolReader::ReadNextBlock(int isSkip){
   if( inFile == NULL ) return -1;
   if( feof(inFile) ) return -1;
   if( filePos >= inFileSize) return -1;
@@ -119,7 +123,7 @@ inline int SolReader::ReadNextBlock(int opt){
   hit->DPPType = ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
 
   if( hit->dataType == DataFormat::ALL){
-    if( opt == 0 ){
+    if( isSkip == 0 ){
       fread(&hit->channel,             1, 1, inFile);
       fread(&hit->energy,              2, 1, inFile);
       if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
@@ -137,7 +141,7 @@ inline int SolReader::ReadNextBlock(int opt){
       fseek(inFile, hit->DPPType == DPPType::PHA ? 31 : 33, SEEK_CUR);
     }
     fread(&hit->traceLenght, 8, 1, inFile);
-    if( opt == 0){
+    if( isSkip == 0){
       fread(hit->analog_probes_type,     2, 1, inFile);
       fread(hit->digital_probes_type,    4, 1, inFile);
       fread(hit->analog_probes[0],  hit->traceLenght*4, 1, inFile);
@@ -149,8 +153,9 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
     } 
+
   }else if( hit->dataType == DataFormat::OneTrace){
-    if( opt == 0 ){
+    if( isSkip == 0 ){
       fread(&hit->channel,             1, 1, inFile);
       fread(&hit->energy,              2, 1, inFile);
       if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
@@ -162,14 +167,15 @@ inline int SolReader::ReadNextBlock(int opt){
       fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
     fread(&hit->traceLenght, 8, 1, inFile);
-    if( opt == 0){
+    if( isSkip == 0){
       fread(&hit->analog_probes_type[0], 1, 1, inFile);
       fread(hit->analog_probes[0], hit->traceLenght*4, 1, inFile);
     }else{
       fseek(inFile, 1 + hit->traceLenght*4, SEEK_CUR);
     }
+
   }else if( hit->dataType == DataFormat::NoTrace){
-    if( opt == 0 ){
+    if( isSkip == 0 ){
       fread(&hit->channel,             1, 1, inFile);
       fread(&hit->energy,              2, 1, inFile);
       if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
@@ -180,8 +186,20 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
+
+  }else if( hit->dataType == DataFormat::MiniWithFineTime){
+    if( isSkip == 0 ){
+      fread(&hit->channel,             1, 1, inFile);
+      fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
+      fread(&hit->timestamp,           6, 1, inFile);
+      fread(&hit->fine_timestamp,      2, 1, inFile);
+    }else{
+      fseek(inFile, hit->DPPType == DPPType::PHA ? 11 : 13, SEEK_CUR);
+    }
+
   }else if( hit->dataType == DataFormat::Minimum){
-    if( opt == 0 ){
+    if( isSkip == 0 ){
       fread(&hit->channel,   1, 1, inFile);
       fread(&hit->energy,    2, 1, inFile);
       if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
@@ -189,9 +207,10 @@ inline int SolReader::ReadNextBlock(int opt){
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
     }
+
   }else if( hit->dataType == DataFormat::Raw){
       fread(&hit->dataSize, 8, 1, inFile);
-    if( opt == 0){
+    if( isSkip == 0){
       fread(hit->data, hit->dataSize, 1, inFile);
     }else{
       fseek(inFile, hit->dataSize, SEEK_CUR);
