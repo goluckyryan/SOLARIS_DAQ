@@ -462,7 +462,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       ]");
     }
 
-    if( dataFormat == DataFormat::MiniWithFineTime ){
+    if( dataFormat == DataFormat::Minimum ){
       ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       "[ \
         { \"name\" : \"CHANNEL\",   \"type\" : \"U8\" }, \
@@ -471,7 +471,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       ]");
     }
 
-    if( dataFormat == DataFormat::Minimum ){
+    if( dataFormat == DataFormat::MiniWithFineTime ){
       ret = CAEN_FELib_SetReadDataFormat(ep_handle, 
       "[ \
         { \"name\" : \"CHANNEL\",           \"type\" : \"U8\" }, \
