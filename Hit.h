@@ -37,7 +37,7 @@ class Hit {
     uint16_t energy;         // 16 bit
     uint16_t energy_short;   // 16 bit, only for PSD
     uint64_t timestamp;      // 48 bit
-    uint16_t fine_timestamp; // 16 bit
+    uint16_t fine_timestamp; // 10 bit
     uint16_t flags_low_priority; // 12 bit
     uint16_t flags_high_priority; // 8 bit
     size_t   traceLenght;     // 64 bit
