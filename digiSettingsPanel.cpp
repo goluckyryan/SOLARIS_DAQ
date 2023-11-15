@@ -2471,7 +2471,7 @@ void DigiSettingsPanel::LoadSettings(){
 }
 
 void DigiSettingsPanel::SetDefaultPHASettigns(){
-  SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default PHA.");
+  SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default " + QString::fromStdString(digi[ID]->GetFPGAType()));
   digi[ID]->ProgramBoard();
   digi[ID]->ProgramChannels();
   RefreshSettings();
