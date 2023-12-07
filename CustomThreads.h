@@ -19,10 +19,13 @@ public:
     this->ID = digiID;
     isSaveData = false;
     stop = false;
+    canSendMsg = true;
   }
+  void SuppressFileSizeMsg() {canSendMsg = false;}
   void Stop(){ this->stop = true;}
   void SetSaveData(bool onOff) {this->isSaveData = onOff;}
   void run(){
+    canSendMsg = true;
     stop = false;
     clock_gettime(CLOCK_REALTIME, &ta);
     emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " ReadDataThread started.");
@@ -43,7 +46,7 @@ public:
         digi->hit->ClearTrace();
       }
 
-      if( isSaveData ){
+      if( isSaveData && canSendMsg ){
         clock_gettime(CLOCK_REALTIME, &tb);
         if( tb.tv_sec - ta.tv_sec > 2 ) {
           emit sendMsg("FileSize ("+ QString::number(digi->GetSerialNumber()) +"): " +  QString::number(digi->GetTotalFilesSize()/1024./1024.) + " MB");
@@ -66,7 +69,7 @@ private:
   Digitizer2Gen * digi; 
   int ID;
   timespec ta, tb;
-  bool isSaveData, stop;
+  bool isSaveData, stop, canSendMsg;
 };
 
 //^#======================================================= Timing Thread, for some action need to be done periodically

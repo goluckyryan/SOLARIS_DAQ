@@ -86,7 +86,7 @@ private slots:
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
 
-  void WriteRunTimeStampDat(bool isStartRun);
+  void WriteRunTimeStampDat(bool isStartRun, QString timeStr);
 
 signals :
 
@@ -144,7 +144,7 @@ private:
   QString stopComment;
   QString appendComment;
   bool needManualComment;
-  bool isRunning;
+  bool isACQRunning;
   QTimer * runTimer;
   QElapsedTimer elapsedTimer;
   unsigned int autoRunStartRunID;

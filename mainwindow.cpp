@@ -42,7 +42,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   runTimer = new QTimer();
   needManualComment = true;
-  isRunning = false;
+  isACQRunning = false;
 
   {
     scalarOutputInflux = false;
@@ -219,7 +219,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
       runTimer->stop();
       StopACQ();
 
-      if( !isRunning ){
+      if( !isACQRunning ){
         bnStartACQ->setEnabled(true);
         bnStopACQ->setEnabled(false);
         bnComment->setEnabled(false);
@@ -415,16 +415,6 @@ int MainWindow::StartACQ(){
       startComment = "AutoRun for " + cbAutoRun->currentText();
       leRunComment->setText(startComment);
     }  
-    // ============ elog
-    QString elogMsg = "=============== Run-" + runIDStr + "<br />"
-                    +  QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />"
-                    + "comment : " + startComment + "<br />" + 
-                    + "----------------------------------------------";
-    WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
-    // ============ update expName.sh
-    WriteExpNameSh();
-
-    WriteRunTimeStampDat(true);
 
   }else{
     LogMsg("=========================== Start no-save Run");
@@ -461,7 +451,21 @@ int MainWindow::StartACQ(){
     //TODO ========================== Sync start.
     readDataThread[i]->SetSaveData(chkSaveRun->isChecked());
     readDataThread[i]->start();
+  }
 
+  if(chkSaveRun->isChecked() ){
+    QString startTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+    LogMsg("<font style=\"color : blue;\"> All Digitizers started. </font>");
+    // ============ elog
+    QString elogMsg = "=============== Run-" + runIDStr + "<br />"
+                    +  startTimeStr + "<br />"
+                    + "comment : " + startComment + "<br />" + 
+                    + "----------------------------------------------";
+    WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
+    // ============ update expName.sh
+    WriteExpNameSh();
+
+    WriteRunTimeStampDat(true, startTimeStr);
   }
 
   if( influx ){
@@ -477,7 +481,7 @@ int MainWindow::StartACQ(){
     scalar->show();
     if( !scalarThread->isRunning() ) scalarThread->start();
   }
-  isRunning = True;
+  isACQRunning = True;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   //scalarThread->start();
   scalarOutputInflux = true;
@@ -487,6 +491,10 @@ int MainWindow::StartACQ(){
 }
 
 void MainWindow::StopACQ(){
+
+  if( !isACQRunning ) return;
+
+  bnStopACQ->setEnabled(false);
 
   if( chkSaveRun->isChecked() ){
     //============ stop comment
@@ -531,9 +539,32 @@ void MainWindow::StopACQ(){
   for( int i = nDigi - 1; i >= 0; i--){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
+    readDataThread[i]->SuppressFileSizeMsg();
   }
+  isACQRunning = false;
+  lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
+  QString stopTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
   scalarOutputInflux = false;
+
+  if( chkSaveRun->isChecked() ){   
+    LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
+    LogMsg("<font style=\"color : blue;\">Please wait for collecting all remaining data.</font>");
+    WriteRunTimeStampDat(false, stopTimeStr);
+
+    // ============= elog
+    QString msg = stopTimeStr + "<br />";
+    for( int i = 0; i < nDigi; i++){
+      if( digi[i]->IsDummy () ) continue;
+      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
+    }
+    msg += "comment : " + stopComment + "<br />"
+        + "======================";
+    AppendElog(msg, chromeWindowID);
+
+  }else{
+    LogMsg("===========================  no-Save Run stopped.");
+  }
 
   if( influx ){
     influx->ClearDataPointsBuffer();
@@ -543,31 +574,6 @@ void MainWindow::StopACQ(){
     influx->AddDataPoint("StartStop value=0");
     influx->WriteData(DatabaseName.toStdString());
   }
-
-  if( chkSaveRun->isChecked() ){   
-    LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
-    LogMsg("Please wait for collecting all remaining data.");
-    WriteRunTimeStampDat(false);
-
-    // ============= elog
-    QString msg = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.z") + "<br />";
-    for( int i = 0; i < nDigi; i++){
-      if( digi[i]->IsDummy () ) continue;
-      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
-    }
-    msg += "comment : " + stopComment + "<br />"
-        + "======================";
-    AppendElog(msg, chromeWindowID);
-
-    LogMsg("Run " + programSettingsPath + "/scripts/endRunScript.sh" );
-    QProcess::startDetached(programSettingsPath + "/scripts/endRunScript.sh");
-
-  }else{
-    LogMsg("===========================  no-Save Run stopped.");
-  }
-
-  isRunning = false;
-  lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
   if( !chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
   for( int i = nDigi -1; i >=0; i--){
@@ -581,6 +587,13 @@ void MainWindow::StopACQ(){
        LogMsg("Digi-" + QString::number(digi[i]->GetSerialNumber()) + " is done collecting all data.");
     }
   }
+
+  if( chkSaveRun->isChecked() ){
+    LogMsg("Run " + programSettingsPath + "/scripts/endRunScript.sh" );
+    QProcess::startDetached(programSettingsPath + "/scripts/endRunScript.sh");
+  }
+  
+  LogMsg("<b><font style=\"color : green;\">SOLARIS DAQ is ready for next run.</font></b>");
 
 }
 
@@ -1097,7 +1110,7 @@ void MainWindow::UpdateAllPanel(int panelID){
 //^###################################################################### Open Scaler, when DAQ is running
 void MainWindow::OpenScaler(){
   scalar->show();
-  if( isRunning ) {
+  if( isACQRunning ) {
     lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   }else{
     lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
@@ -2247,17 +2260,16 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
 }
 
-void MainWindow::WriteRunTimeStampDat(bool isStartRun){
+void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
   
   QFile file(dataPath + "/" + expName + "/RunTimeStamp.dat");
   
-  QString dateTime = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
   if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
     if( isStartRun ){
-      file.write(("Start Run | " + QString::number(runID) + " | " + dateTime + " | " + startComment + "\n").toStdString().c_str());
+      file.write(("Start Run | " + QString::number(runID) + " | " + timeStr + " | " + startComment + "\n").toStdString().c_str());
     }else{
-      file.write((" Stop Run | " + QString::number(runID) + " | " + dateTime + " | " + stopComment + "\n").toStdString().c_str());
+      file.write((" Stop Run | " + QString::number(runID) + " | " + timeStr + " | " + stopComment + "\n").toStdString().c_str());
     }
     
     file.close();
@@ -2271,9 +2283,9 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun){
     QTextStream out(&fileCSV);
 
     if( isStartRun){
-      out << QString::number(runID) + "," + dateTime + "," + startComment;
+      out << QString::number(runID) + "," + timeStr + "," + startComment;
     }else{
-      out << "," + dateTime + "," + stopComment + "\n";
+      out << "," + timeStr + "," + stopComment + "\n";
     }
 
     fileCSV.close();
