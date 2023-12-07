@@ -185,6 +185,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     cbAutoRun = new QComboBox(this);
     cbAutoRun->addItem("Single infinte",  0);
+    cbAutoRun->addItem("Single 1 min",    1);
     cbAutoRun->addItem("Single 30 mins", 30);
     cbAutoRun->addItem("Single 60 mins", 60);
     cbAutoRun->addItem("Single 2 hrs",  120);
@@ -530,20 +531,8 @@ void MainWindow::StopACQ(){
   for( int i = nDigi - 1; i >= 0; i--){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
-
-    if( readDataThread[i]->isRunning()){
-      readDataThread[i]->Stop();
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-    }
-    if( chkSaveRun->isChecked() ) digi[i]->CloseOutFile();
   }
 
-  // if( scalarThread->isRunning()){
-    // scalarThread->Stop();
-    // scalarThread->quit();
-    // scalarThread->wait();
-  // }
   scalarOutputInflux = false;
 
   if( influx ){
@@ -557,6 +546,7 @@ void MainWindow::StopACQ(){
 
   if( chkSaveRun->isChecked() ){   
     LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
+    LogMsg("Please wait for collecting all remaining data.");
     WriteRunTimeStampDat(false);
 
     // ============= elog
@@ -578,6 +568,19 @@ void MainWindow::StopACQ(){
 
   isRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
+
+  if( !chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
+  for( int i = nDigi -1; i >=0; i--){
+    if( readDataThread[i]->isRunning()){
+      if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop();
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+    }
+    if( chkSaveRun->isChecked() ) {
+       digi[i]->CloseOutFile();
+       LogMsg("Digi-" + QString::number(digi[i]->GetSerialNumber()) + " is done collecting all data.");
+    }
+  }
 
 }
 
