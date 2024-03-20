@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <time.h> // time in nano-sec
 
-#include "Hit.h"
+#include "../Hit.h"
 
 class SolReader {
   private:
