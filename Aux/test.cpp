@@ -8,8 +8,8 @@
 #include <thread>
 #include <mutex>
 
-#include "ClassDigitizer2Gen.h"
-#include "influxdb.h"
+#include "../ClassDigitizer2Gen.h"
+#include "../influxdb.h"
 
 #define maxRead 400
 

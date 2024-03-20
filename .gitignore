@@ -86,3 +86,4 @@ CMakeLists.txt.user*
 *.dll
 *.exe
 
+EventBuilder
