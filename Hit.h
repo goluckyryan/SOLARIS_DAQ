@@ -271,14 +271,22 @@ class Hit {
       }
     }
 
-    void PrintAllTrace(){
-      for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){
-        printf("%4d| %6d  %6d   %1d  %1d   %1d  %1d\n", i, analog_probes[0][i], 
-                                                analog_probes[1][i], 
-                                                digital_probes[0][i], 
-                                                digital_probes[1][i], 
-                                                digital_probes[2][i], 
-                                                digital_probes[3][i]);
+    void PrintTrace(){
+      printf("---------- trace length : %zu\n", traceLenght);
+      if( dataType == DataFormat::OneTrace ){
+        for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){  
+          printf("%4d| %6d\n", i, analog_probes[0][i]);
+        }
+      }
+      if( dataType == DataFormat::ALL){
+        for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){  
+          printf("%4d| %6d  %6d   %1d  %1d   %1d  %1d\n", i, analog_probes[0][i], 
+                                                  analog_probes[1][i], 
+                                                  digital_probes[0][i], 
+                                                  digital_probes[1][i], 
+                                                  digital_probes[2][i], 
+                                                  digital_probes[3][i]);
+        }
       }
     }
 
