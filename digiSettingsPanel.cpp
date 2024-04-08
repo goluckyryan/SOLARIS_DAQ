@@ -609,7 +609,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         vgaLayout->setAlignment(Qt::AlignTop| Qt::AlignLeft);
 
         for( int k = 0; k < 4; k ++){
-          SetupSpinBox(VGA[iDigi][k], PHA::VGA::VGAGain, -1, false, "VGA-" + QString::number(k) + " [dB] :", vgaLayout, k, 0);
+          SetupSpinBox(VGA[iDigi][k], PHA::VGA::VGAGain, k, false, "VGA-" + QString::number(k) + " [dB] :", vgaLayout, k, 0);
           VGA[iDigi][k]->setSingleStep(0.5);
           VGA[iDigi][k]->setFixedWidth(100);
           VGA[iDigi][k]->SetToolTip();
