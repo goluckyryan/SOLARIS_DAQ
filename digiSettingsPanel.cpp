@@ -2361,7 +2361,7 @@ void DigiSettingsPanel::EnableControl(){
     //if( ckbGlbTrgSource[id][3]->isChecked() ) testPulseBox[id]->setEnabled(enable);
 
     bdCfg[id]->setEnabled(enable);
-    bdTestPulse[id]->setEnabled(enable);
+    // bdTestPulse[id]->setEnabled(enable);
     bdVGA[id]->setEnabled(enable);
     bdLVDS[id]->setEnabled(enable);
     bdITL[id]->setEnabled(enable);
