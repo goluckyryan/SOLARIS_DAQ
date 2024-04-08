@@ -117,7 +117,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSOLSettings->setEnabled(false);
     connect(bnSOLSettings, &QPushButton::clicked, this, &MainWindow::OpenSOLARISpanel);
 
-    bnSyncHelper = new QPushButton("Sync Helper", this);
+    bnSyncHelper = new QPushButton("Sync Helper (Not Set)", this);
     bnSyncHelper->setEnabled(false);
     connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
@@ -870,6 +870,8 @@ void MainWindow::OpenSyncHelper(){
 
     if( digiSetting ) digiSetting->UpdatePanelFromMemory();
 
+    bnSyncHelper->setText("Sync Helper (No Sync)");
+
     dialog.accept();
   });
 
@@ -888,6 +890,8 @@ void MainWindow::OpenSyncHelper(){
 
     if( digiSetting ) digiSetting->UpdatePanelFromMemory();
     
+    bnSyncHelper->setText("Sync Helper (Software)");
+
     dialog.accept();
   });
 
