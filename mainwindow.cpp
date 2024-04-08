@@ -121,14 +121,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSyncHelper->setEnabled(false);
     connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
-    QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
-    bnEventBuilder->setEnabled(false);
+    // QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
+    // bnEventBuilder->setEnabled(false);
     
-    QPushButton * bnHVController = new QPushButton("HV Controller", this);
-    bnHVController->setEnabled(false);
+    // QPushButton * bnHVController = new QPushButton("HV Controller", this);
+    // bnHVController->setEnabled(false);
     
-    QPushButton * bnTargetFanController = new QPushButton("Target Fan", this);
-    bnTargetFanController->setEnabled(false);
+    // QPushButton * bnTargetFanController = new QPushButton("Target Fan", this);
+    // bnTargetFanController->setEnabled(false);
 
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
@@ -143,9 +143,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
-    layout1->addWidget(bnEventBuilder, 3, 0);
-    layout1->addWidget(bnHVController, 3, 1);
-    layout1->addWidget(bnTargetFanController, 3, 2, 1, 2);
+    // layout1->addWidget(bnEventBuilder, 3, 0);
+    // layout1->addWidget(bnHVController, 3, 1);
+    // layout1->addWidget(bnTargetFanController, 3, 2, 1, 2);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -430,6 +430,12 @@ int MainWindow::StartACQ(){
     int dataFormatID = cbDataFormat->currentData().toInt();
     digi[i]->SetDataFormat(dataFormatID);
 
+    if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
+      digi[i]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
+    }else{
+      digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
+    }
+
     //Additional settings, it is better user to control
     //if( cbDataFormat->currentIndex() <  2 )  {
     //  digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
@@ -540,6 +546,7 @@ void MainWindow::StopACQ(){
     if( digi[i]->IsDummy () ) continue;
     digi[i]->StopACQ();
     readDataThread[i]->SuppressFileSizeMsg();
+    digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
   }
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
