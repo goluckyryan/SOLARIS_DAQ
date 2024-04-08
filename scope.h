@@ -240,10 +240,18 @@ private:
   void SetupPSD();
 
   // remembee setting, once the scope stop, restore it.
+
+  void RestoreSettings(bool changeBoard); // except channelEnable
   bool originalValueSet;
+
+  short oldCh, oldDigi;
   std::string channelEnable[MaxNumberOfDigitizer][MaxNumberOfChannel];
   std::string waveSaving;
   std::string waveTriggerSource; 
+
+  std::string clockSource;
+  std::string startSource;
+  std::string syncOutMode;
 
 };
 

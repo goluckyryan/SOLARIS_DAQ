@@ -87,13 +87,16 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   connect(cbScopeCh, &RComboBox::currentIndexChanged, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
+    int ch = cbScopeCh->currentIndex();
     digiMTX[iDigi].lock();
     ReadScopeSettings();
+    RestoreSettings(false);
     if( digi[iDigi]->IsAcqOn()){
       digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
     }
     digiMTX[iDigi].unlock();
+
   });
 
   bnScopeReset = new QPushButton("ReProgram Channels", this);
@@ -277,6 +280,18 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   UpdateSettingsFromMemeory();
 
+  oldDigi = cbScopeDigi->currentIndex();
+  oldCh = cbScopeCh->currentIndex();;
+  waveSaving = digi[oldDigi]->ReadValue(PHA::CH::WaveSaving, oldCh);
+  waveTriggerSource = digi[oldDigi]->ReadValue(PHA::CH::WaveTriggerSource, oldCh);
+  clockSource = digi[oldDigi]->ReadValue(PHA::DIG::ClockSource);
+  startSource = digi[oldDigi]->ReadValue(PHA::DIG::StartSource);
+  syncOutMode = digi[oldDigi]->ReadValue(PHA::DIG::SyncOutMode);
+
+  for( int ch2 = 0 ; ch2 < digi[oldDigi]->GetNChannels(); ch2 ++){
+    channelEnable[oldDigi][ch2] = digi[oldDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
+  }
+  originalValueSet = true;
 }
 
 Scope::~Scope(){
@@ -319,7 +334,8 @@ void Scope::ChangeDigitizer(){
     digiProbeList.push_back(PSD::CH::WaveDigitalProbe0);
     digiProbeList.push_back(PSD::CH::WaveDigitalProbe1);
     digiProbeList.push_back(PSD::CH::WaveDigitalProbe2);
-    digiProbeList.push_back(PSD::CH::WaveDigitalProbe3);    }
+    digiProbeList.push_back(PSD::CH::WaveDigitalProbe3);
+  }
 
   cbAnaProbe[0]->clear();
   cbAnaProbe[1]->clear();
@@ -351,6 +367,7 @@ void Scope::ChangeDigitizer(){
 
   digiMTX[index].lock();
   ReadScopeSettings();
+
   if( digi[index]->IsAcqOn() ){
     digi[index]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[index]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
@@ -561,6 +578,34 @@ void Scope::UpdateSettingsFromMemeory(){
   allowChange = true;
 }
 
+void Scope::RestoreSettings(bool changeBoard){
+
+  if( !originalValueSet) return;
+ 
+  //restore for old digi and old ch
+  if( changeBoard ){
+    digi[oldDigi]->WriteValue(PHA::DIG::ClockSource, clockSource);
+    digi[oldDigi]->WriteValue(PHA::DIG::StartSource, startSource);
+    digi[oldDigi]->WriteValue(PHA::DIG::SyncOutMode, syncOutMode);
+  }
+  digi[oldDigi]->WriteValue(PHA::CH::WaveSaving, waveSaving, oldCh);
+  digi[oldDigi]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, oldCh);
+
+  // back up data for new digi and ch
+  int iDigi = cbScopeDigi->currentIndex();
+  int ch = cbScopeCh->currentIndex();
+
+  waveSaving = digi[iDigi]->ReadValue(PHA::CH::WaveSaving, ch);
+  waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
+  if( changeBoard ){
+    clockSource = digi[iDigi]->ReadValue(PHA::DIG::ClockSource);
+    startSource = digi[iDigi]->ReadValue(PHA::DIG::StartSource);
+    syncOutMode = digi[iDigi]->ReadValue(PHA::DIG::SyncOutMode);
+  }
+  oldDigi = iDigi;
+  oldCh = ch;
+}
+
 void Scope::StartScope(){
 
   if( !digi ) return; 
@@ -580,20 +625,26 @@ void Scope::StartScope(){
     for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
       channelEnable[iDigi][ch2] = digi[iDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
     }
-
     digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
 
     if( iDigi == cbScopeDigi->currentIndex() ){
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-
+      clockSource = digi[iDigi]->ReadValue(PHA::DIG::ClockSource);
+      startSource = digi[iDigi]->ReadValue(PHA::DIG::StartSource);
+      syncOutMode = digi[iDigi]->ReadValue(PHA::DIG::SyncOutMode);
       waveSaving =  digi[iDigi]->ReadValue(PHA::CH::WaveSaving, ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
-
       waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
-    }
+      oldDigi = iDigi;
+      oldCh = ch;
 
-    originalValueSet = true;
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
+
+      digi[iDigi]->WriteValue(PHA::DIG::ClockSource, "Internal");
+      digi[iDigi]->WriteValue(PHA::DIG::StartSource, "SWcmd");
+      digi[iDigi]->WriteValue(PHA::DIG::SyncOutMode, "Disabled");
+
+    }
 
     digi[iDigi]->SetDataFormat(DataFormat::ALL); 
     digi[iDigi]->StartACQ();
@@ -630,22 +681,15 @@ void Scope::StopScope(){
 
       digiMTX[i].lock();
       digi[i]->StopACQ();
-      if( originalValueSet ){
-        for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
-          digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
-        }
-        if( i == cbScopeDigi->currentIndex() ) {
-          digi[i]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, cbScopeCh->currentIndex());
-          digi[i]->WriteValue(PHA::CH::WaveSaving, waveSaving, cbScopeCh->currentIndex());
-        }
+      for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
+        digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
       }
+      RestoreSettings(true);
       digiMTX[i].unlock();
     }
     
     emit TellACQOnOff(false);
   }
-
-  originalValueSet = false;
 
   ScopeControlOnOff(true);
   emit TellSettingsPanelControlOnOff();
