@@ -65,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     leTrigger = nullptr;
     leAccept = nullptr;
+    lbFileSize = nullptr;
 
     scalarThread = new TimingThread();
     connect(scalarThread, &TimingThread::TimeUp, this, &MainWindow::UpdateScalar);
@@ -549,9 +550,11 @@ void MainWindow::StopACQ(){
   //=============== Stop digitizer
   for( int i = nDigi - 1; i >= 0; i--){
     if( digi[i]->IsDummy () ) continue;
+    digiMTX[i].lock();
     digi[i]->StopACQ();
-    readDataThread[i]->SuppressFileSizeMsg();
+    // readDataThread[i]->SuppressFileSizeMsg();
     digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
+    digiMTX[i].unlock();
   }
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
@@ -587,10 +590,10 @@ void MainWindow::StopACQ(){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-  if( !chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
+  if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
   for( int i = nDigi -1; i >=0; i--){
     if( readDataThread[i]->isRunning()){
-      if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop();
+      if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
       readDataThread[i]->quit();
       readDataThread[i]->wait();
     }
@@ -1160,7 +1163,7 @@ void MainWindow::SetUpScalar(){
   // connect(bnUpdateScaler, &QPushButton::clicked, this, &MainWindow::UpdateScalar);
 
   ///==== create the 1st row
-  int rowID = 4;
+  int rowID = 5;
   for( int ch = 0; ch < MaxNumberOfChannel; ch++){
 
     if( ch == 0 ){
@@ -1177,8 +1180,11 @@ void MainWindow::SetUpScalar(){
   ///===== create the trigger and accept
   leTrigger = new QLineEdit**[nDigi];
   leAccept = new QLineEdit**[nDigi];
+  lbFileSize = new QLabel *[nDigi];
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
     rowID = 3;
+    lbFileSize[iDigi] = new QLabel("file Size", scalar);
+    lbFileSize[iDigi]->setAlignment(Qt::AlignCenter);
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
@@ -1187,7 +1193,9 @@ void MainWindow::SetUpScalar(){
           QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
           lbDigi->setAlignment(Qt::AlignCenter);
           scalarLayout->addWidget(lbDigi, rowID, 2*iDigi+1, 1, 2);
+          rowID ++;
 
+          scalarLayout->addWidget(lbFileSize[iDigi], rowID, 2*iDigi+1, 1, 2);
           rowID ++;
 
           QLabel * lbA = new QLabel("Input [Hz]", scalar);
@@ -1225,10 +1233,14 @@ void MainWindow::CleanUpScalar(){
       delete leTrigger[i][ch];
       delete leAccept[i][ch];
     }
+    delete lbFileSize[i];
     delete [] leTrigger[i];
     delete [] leAccept[i];
   }
+  delete [] lbFileSize;
   delete [] leTrigger;
+  delete [] leAccept;
+  lbFileSize = nullptr;
   leTrigger = nullptr;
   leAccept = nullptr;
 
@@ -1251,14 +1263,6 @@ void MainWindow::UpdateScalar(){
   unsigned long totalFileSize  = 0;
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
     if( digi[iDigi]->IsDummy() ) return;
-    
-    //=========== use ReadStat to get the trigger rate
-    //digiMTX.lock();
-    //digi[iDigi]->ReadStat(); // digitizer update it every 500 msec;
-    //digiMTX.unlock();
-    //for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
-    //  leTrigger[iDigi][ch]->setText(QString::number(digi[iDigi]->GetTriggerCount(ch)*1e9*1.0/ digi[iDigi]->GetRealTime(ch)));
-    //}
 
     //=========== another method, directly readValue
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
@@ -1272,7 +1276,6 @@ void MainWindow::UpdateScalar(){
       unsigned long time = std::stoul(timeStr.c_str()) ;
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
 
-
       if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
@@ -1284,6 +1287,9 @@ void MainWindow::UpdateScalar(){
       oldTimeStamp[iDigi][ch] = time; 
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
+
+      lbFileSize[iDigi]->setText(QString::number(digi[iDigi]->GetTotalFilesSize()/1024./1024.) + " MB");
+
     }
 
     ///============== push the trigger, acceptRate rate database

@@ -122,6 +122,7 @@ private:
   QGridLayout  * scalarLayout;
   TimingThread * scalarThread;
   QPushButton  * bnOpenScalar;
+  QLabel      ** lbFileSize;// need to delete manually
   QLineEdit  *** leTrigger; // need to delete manually
   QLineEdit  *** leAccept; // need to delete manually
   QLabel       * lbLastUpdateTime;
