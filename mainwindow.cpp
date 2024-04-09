@@ -42,6 +42,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   runTimer = new QTimer();
   needManualComment = true;
+  ACQStopButtonPressed = false;
   isACQRunning = false;
 
   {
@@ -185,12 +186,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     cbAutoRun = new QComboBox(this);
     cbAutoRun->addItem("Single infinte",  0);
-    cbAutoRun->addItem("Single 1 min",    1);
+    cbAutoRun->addItem("Single  1 min",   1);
     cbAutoRun->addItem("Single 30 mins", 30);
     cbAutoRun->addItem("Single 60 mins", 60);
     cbAutoRun->addItem("Single 2 hrs",  120);
     cbAutoRun->addItem("Single 3 hrs",  180);
     cbAutoRun->addItem("Single 5 hrs",  300);
+    cbAutoRun->addItem("Every  1 mins",  -1);
     cbAutoRun->addItem("Every 30 mins", -30);
     cbAutoRun->addItem("Every 60 mins", -60);
     cbAutoRun->addItem("Every 2 hrs",  -120);
@@ -215,6 +217,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnStopACQ = new QPushButton("Stop ACQ", this);
     bnStopACQ->setEnabled(false);
     connect(bnStopACQ, &QPushButton::clicked, this, [=](){
+
+      LogMsg("@@@@@@@@@ Stop ACQ Button Pressed.");
+      ACQStopButtonPressed = true;
       needManualComment = true;
       runTimer->stop();
       StopACQ();
@@ -364,6 +369,8 @@ MainWindow::~MainWindow(){
 //*################################################################ ACQ control 
 int MainWindow::StartACQ(){
 
+  ACQStopButtonPressed = false;
+
   if( chkSaveRun->isChecked() ){
     runID ++;
     leRunID->setText(QString::number(runID));
@@ -499,8 +506,6 @@ int MainWindow::StartACQ(){
 void MainWindow::StopACQ(){
 
   if( !isACQRunning ) return;
-
-  bnStopACQ->setEnabled(false);
 
   if( chkSaveRun->isChecked() ){
     //============ stop comment
@@ -640,12 +645,16 @@ void MainWindow::AutoRun(){
         cbDataFormat->setEnabled(true);
         if( digiSetting ) digiSetting->EnableControl();
       }else{
-
         LogMsg("Wait for 10 sec for next Run....");
         elapsedTimer.invalidate();
         elapsedTimer.start();
-        while(elapsedTimer.elapsed() < 10000) QCoreApplication::processEvents();
-
+        while(elapsedTimer.elapsed() < 10000) {
+          QCoreApplication::processEvents();
+          if( ACQStopButtonPressed ) {
+            ACQStopButtonPressed = false;
+            return;
+          }
+        }
         StartACQ();
       } 
     });
@@ -665,7 +674,7 @@ void MainWindow::AutoRun(){
   ///=========== infinite timed run
   if( cbAutoRun->currentData().toInt() < 0 ){
     runTimer->setSingleShot(false);
-    runTimer->start(timeMiliSec);
+    runTimer->start(abs(timeMiliSec));
     needManualComment = false;
   }
 

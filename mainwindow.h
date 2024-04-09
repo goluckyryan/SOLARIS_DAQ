@@ -149,6 +149,8 @@ private:
   QElapsedTimer elapsedTimer;
   unsigned int autoRunStartRunID;
 
+  bool ACQStopButtonPressed;
+
   //@----- digi Setting panel
   DigiSettingsPanel * digiSetting;
 
