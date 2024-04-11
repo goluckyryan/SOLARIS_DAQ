@@ -3178,7 +3178,7 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
     }
     if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
     //===== combo Box
-    if( haha == ANSTYPE::LIST){
+    if( haha == ANSTYPE::COMBOX){
       cbBdAns->setEnabled(true);
       cbBdAns->clear();
       int ansIndex = -1;
@@ -3284,7 +3284,7 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
       sbChSettingsWrite->setDecimals(3);
     }
     if( haha == ANSTYPE::INTEGER) sbBdSettingsWrite->setDecimals(0);
-    if( haha == ANSTYPE::LIST){
+    if( haha == ANSTYPE::COMBOX){
       cbChSettingsWrite->setEnabled(true);
       cbChSettingsWrite->clear();
       int ansIndex = -1;
