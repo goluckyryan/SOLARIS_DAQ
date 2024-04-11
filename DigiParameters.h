@@ -7,7 +7,7 @@
 
 #define MIN_VERSION_GROUP 2022122300
 
-enum ANSTYPE {INTEGER, FLOAT, LIST, STR, BYTE, BINARY, NONE};
+enum ANSTYPE {INTEGER, FLOAT, COMBOX, STR, BYTE, BINARY, NONE};
 enum TYPE {CH, DIG, LVDS, VGA, GROUP};
 enum RW { ReadOnly, WriteOnly, ReadWrite};
 
@@ -30,14 +30,14 @@ class Reg {
       type = TYPE::CH;
       isCmd = false;
       value = "";
-      ansType = ANSTYPE::LIST;
+      ansType = ANSTYPE::COMBOX;
       answerUnit = "";
       answer.clear();
     }
     Reg(std::string para, RW readwrite, 
         TYPE type = TYPE::CH,
         std::vector<std::pair<std::string,std::string>> answer = {},
-        ANSTYPE ansType = ANSTYPE::LIST,
+        ANSTYPE ansType = ANSTYPE::COMBOX,
         std::string ansUnit = "",
         bool isCmd = false){
       this->name = para;
@@ -51,7 +51,7 @@ class Reg {
     }
     ~Reg(){};
 
-    void        SetValue(std::string sv) { this->value = sv;}
+    void        SetValue(std::string sv) { value = sv;}
     std::string GetValue() const { return value;}
     RW          ReadWrite() const {return readWrite;}
     TYPE        GetType() const {return type;}
