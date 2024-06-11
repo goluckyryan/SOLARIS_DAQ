@@ -5,7 +5,7 @@
 #include <CAEN_FELib.h>
 #include <cstdlib>
 #include <string>
-#include <map>
+#include <unordered_map>
 
 #include "Hit.h"
 
@@ -66,9 +66,9 @@ class Digitizer2Gen {
     Reg VGASetting[4]; 
     Reg InputDelay[16];
 
-    std::map<std::string, int> boardMap;
-    std::map<std::string, int> LVDSMap;
-    std::map<std::string, int> chMap;
+    std::unordered_map<std::string, int> boardMap;
+    std::unordered_map<std::string, int> LVDSMap;
+    std::unordered_map<std::string, int> chMap;
 
   public:
     Digitizer2Gen();

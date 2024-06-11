@@ -1366,6 +1366,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
   FILE * loadFile = fopen(settingFileName.c_str(), "r");
 
   if( loadFile ){
+    printf("Opened %s\n", settingFileName.c_str());
     char * para      = new char[100];
     char * readWrite = new char[100];
     char * idStr     = new char[100];
@@ -1433,7 +1434,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
     return true;
   }else{
-    //printf("Fail to load file %s\n", loadFileName);
+    printf("Fail to opened %s\n", settingFileName.c_str());
   }
 
   return false;
