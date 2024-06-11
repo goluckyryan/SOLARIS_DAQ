@@ -721,8 +721,8 @@ void MainWindow::OpenDigitizers(){
       readDataThread[i] = new ReadDataThread(digi[i], i, this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
-      //*------ search for settings_XXXX.dat
-      QString settingFile = analysisPath + "/working/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
+      QString settingFile = analysisPath + "/working/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
         LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());

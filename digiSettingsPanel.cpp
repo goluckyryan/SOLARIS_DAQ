@@ -2414,7 +2414,12 @@ void DigiSettingsPanel::SaveSettings(){
   QDir dir(digiSettingPath);
   if( !dir.exists() ) dir.mkpath(".");
 
-  QString filePath = QFileDialog::getSaveFileName(this, "Save Settings File", digiSettingPath, "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
+  QString defaultFileName = "setting_" +  QString::number(digi[ID]->GetSerialNumber()) + "_" + QString::fromStdString(digi[ID]->GetFPGAType().substr(4)) + ".dat";
+
+  QString filePath = QFileDialog::getSaveFileName(this, 
+                                                  "Save Settings File", 
+                                                  QDir::toNativeSeparators(digiSettingPath + "/" + defaultFileName),  
+                                                  "Data file (*.dat);;Text files (*.txt);;All files (*.*)");
 
   if (!filePath.isEmpty()) {
 
