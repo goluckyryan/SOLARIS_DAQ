@@ -295,7 +295,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   
   LogMsg("<font style=\"color: blue;\"><b>Welcome to SOLARIS DAQ.</b></font>");
 
-  if( LoadProgramSettings() )  LoadExpSettings();
+  if( LoadProgramSettings() )  LoadExpNameSh();
 
 }
 
@@ -452,11 +452,11 @@ int MainWindow::StartACQ(){
 
     if( chkSaveRun->isChecked() ){
       //Save setting to raw data with run ID
-      QString fileSetting = rawDataFolder + "/" + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
+      QString fileSetting = rawDataPath + "/" + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
 
       // name should be [ExpName]_[runID]_[digiID]_[digiSerialNumber]_[acculmulate_count].sol
-      QString outFileName = rawDataFolder + "/" + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
+      QString outFileName = rawDataPath + "/" + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
       qDebug() << outFileName;
       digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
     }
@@ -1187,7 +1187,7 @@ void MainWindow::SetUpScalar(){
     lbFileSize[iDigi]->setAlignment(Qt::AlignCenter);
     leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
     leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
-    for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+    for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
 
       if( ch == 0 ){
           QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
@@ -1340,15 +1340,17 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("These setting will be saved at the <font style=\"color : blue;\"> \
                             Settings Save Path </font> as <b>programSettings.txt</b>. \
                         If no such file exist, the program will create it.");
+  
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
-                           the folder of the analysis code. e.g. /home/<user>/analysis/");
+                           the folder of the analysis code. Can be omitted.");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
-                             <b>parents folder</b> of Raw data will store. e.g. /mnt/data0/, \
+                             <b>parents folder</b> of data will store. e.g. /mnt/data0/, \
                           experiment data will be saved under this folder. e.g. /mnt/data0/exp1");  
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Root Data Path  </font> is the path of the \
-                             <b>parents folder</b> of Root data will store. e.g. /mnt/data1/, \
-                          root data will be saved under this folder. e.g. /mnt/data1/exp1");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Temp Exp Name  </font> is the name of the experiment. \
+                         This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
+                         This will override by <b>New/Change/Reload Exp</b>");
+
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
@@ -1357,6 +1359,8 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
 
+  helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml(" * items can be ommitted");
 
   layout->addWidget(helpInfo, rowID, 0, 1, 4);
 
@@ -1372,7 +1376,7 @@ void MainWindow::ProgramSettingsPanel(){
 
   //-------- analysis Path
   rowID ++;
-  QLabel *lbAnalysisPath = new QLabel("Analysis Path", &dialog);
+  QLabel *lbAnalysisPath = new QLabel("Analysis Path *", &dialog);
   lbAnalysisPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbAnalysisPath, rowID, 0);
   lAnalysisPath = new QLineEdit(analysisPath, &dialog); layout->addWidget(lAnalysisPath, rowID, 1, 1, 2);
@@ -1385,20 +1389,27 @@ void MainWindow::ProgramSettingsPanel(){
   QLabel *lbDataPath = new QLabel("Data Path", &dialog); 
   lbDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDataPath, rowID, 0);
-  lDataPath = new QLineEdit(dataPath, &dialog); layout->addWidget(lDataPath, rowID, 1, 1, 2);
+  lExpDataPath = new QLineEdit(expDataPath, &dialog); layout->addWidget(lExpDataPath, rowID, 1, 1, 2);
 
   QPushButton * bnDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnDataPath, rowID, 3);
   connect(bnDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(2);});
 
   //-------- root data Path
-  rowID ++;
-  QLabel *lbRootDataPath = new QLabel("Root Data Path", &dialog); 
-  lbRootDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-  layout->addWidget(lbRootDataPath, rowID, 0);
-  lRootDataPath = new QLineEdit(rootDataPath, &dialog); layout->addWidget(lRootDataPath, rowID, 1, 1, 2);
+  // rowID ++;
+  // QLabel *lbRootDataPath = new QLabel("Root Data Path", &dialog); 
+  // lbRootDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  // layout->addWidget(lbRootDataPath, rowID, 0);
+  // lRootDataPath = new QLineEdit(rootDataPath, &dialog); layout->addWidget(lRootDataPath, rowID, 1, 1, 2);
 
-  QPushButton * bnRootDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnRootDataPath, rowID, 3);
-  connect(bnRootDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(3);});
+  // QPushButton * bnRootDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnRootDataPath, rowID, 3);
+  // connect(bnRootDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(3);});
+
+  //-------- Exp Name Temp
+  rowID ++;
+  QLabel *lbExpNameTemp = new QLabel("Temp. Exp Name *", &dialog); 
+  lbExpNameTemp->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbExpNameTemp, rowID, 0);
+  lExpNameTemp = new QLineEdit(expName, &dialog); layout->addWidget(lExpNameTemp, rowID, 1, 1, 2);
 
   //-------- IP Domain
   rowID ++;
@@ -1408,19 +1419,19 @@ void MainWindow::ProgramSettingsPanel(){
   lIPDomain = new QLineEdit(IPListStr, &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
   //-------- DataBase IP
   rowID ++;
-  QLabel *lbDatbaseIP = new QLabel("Database IP", &dialog); 
+  QLabel *lbDatbaseIP = new QLabel("Database IP *", &dialog); 
   lbDatbaseIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDatbaseIP, rowID, 0);
   lDatbaseIP = new QLineEdit(DatabaseIP, &dialog); layout->addWidget(lDatbaseIP, rowID, 1, 1, 2);
   //-------- DataBase name
   rowID ++;
-  QLabel *lbDatbaseName = new QLabel("Database Name", &dialog);
+  QLabel *lbDatbaseName = new QLabel("Database Name *", &dialog);
   lbDatbaseName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDatbaseName, rowID, 0);
   lDatbaseName = new QLineEdit(DatabaseName, &dialog); layout->addWidget(lDatbaseName, rowID, 1, 1, 2);
   //-------- Elog IP
   rowID ++;
-  QLabel *lbElogIP = new QLabel("Elog IP", &dialog);
+  QLabel *lbElogIP = new QLabel("Elog IP *", &dialog);
   lbElogIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbElogIP, rowID, 0);
   lElogIP = new QLineEdit(ElogIP, &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
@@ -1471,8 +1482,8 @@ bool MainWindow::LoadProgramSettings(){
       switch (count){
         case 0 : programSettingsPath = line; break;
         case 1 : analysisPath    = line; break;
-        case 2 : dataPath        = line; break;
-        case 3 : rootDataPath    = line; break;
+        case 2 : expDataPath     = line; break;
+        case 3 : expName         = line; break;
         case 4 : IPListStr       = line; break;
         case 5 : DatabaseIP      = line; break;
         case 6 : DatabaseName    = line; break;
@@ -1487,13 +1498,16 @@ bool MainWindow::LoadProgramSettings(){
       logMsgHTMLMode = false;
       LogMsg("Setting File Path : " + programSettingsPath);
       LogMsg("    Analysis Path : " + analysisPath);
-      LogMsg("        Data Path : " + dataPath);
-      LogMsg("   Root Data Path : " + rootDataPath);
+      LogMsg("    Exp Data Path : " + expDataPath);
+      LogMsg("   Temp Exp. Name : " + expName);
       LogMsg("    Digi. IP List : " + IPListStr);
       LogMsg("      Database IP : " + DatabaseIP);
       LogMsg("    Database Name : " + DatabaseName);
       LogMsg("           ElogIP : " + ElogIP);
       logMsgHTMLMode = true;
+
+      rawDataPath = expDataPath + "/" + expName + "/data_raw/";
+      rootDataPath = expDataPath + "/" + expName + "/root_data/";
       
       ret = true;
     }else{
@@ -1502,11 +1516,17 @@ bool MainWindow::LoadProgramSettings(){
     }
   }
 
-
   if( ret ){
 
     DecodeIPList();
     SetupInflux();
+    CheckElog();
+
+    leRawDataPath->setText(rawDataPath);
+    leExpName->setText(expName);
+
+    if(analysisPath.isEmpty()) bnNewExp->setEnabled(false);
+
     return true;
 
   }else{
@@ -1527,8 +1547,8 @@ void MainWindow::SaveProgramSettings(){
 
   programSettingsPath = lSaveSettingPath->text();
   analysisPath = lAnalysisPath->text();
-  dataPath = lDataPath->text();
-  rootDataPath = lRootDataPath->text();
+  expDataPath = lExpDataPath->text();
+  expName = leExpName->text();
 
   QFile file(programSettingsPath + "/programSettings.txt");
   
@@ -1536,8 +1556,8 @@ void MainWindow::SaveProgramSettings(){
 
   file.write((programSettingsPath+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
-  file.write((dataPath+"\n").toStdString().c_str());
-  file.write((rootDataPath+"\n").toStdString().c_str());
+  file.write((expDataPath+"\n").toStdString().c_str());
+  file.write((expName+"\n").toStdString().c_str());
   file.write((IPListStr+"\n").toStdString().c_str());
   file.write((DatabaseIP+"\n").toStdString().c_str());
   file.write((DatabaseName+"\n").toStdString().c_str());
@@ -1553,8 +1573,16 @@ void MainWindow::SaveProgramSettings(){
 
   DecodeIPList();
   SetupInflux();
+  CheckElog();
 
-  LoadExpSettings();
+  rawDataPath = expDataPath + "/" + expName + "/data_raw/";
+  rootDataPath = expDataPath + "/" + expName + "/root_data/";
+  leRawDataPath->setText(rawDataPath);
+  leExpName->setText(expName);
+
+  if(analysisPath.isEmpty()) bnNewExp->setEnabled(false);
+
+  // LoadExpNameSh();
 
 }
 
@@ -1568,8 +1596,8 @@ void MainWindow::OpenDirectory(int id){
   switch (id){
     case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
-    case 2 : lDataPath->setText(fileDialog.selectedFiles().at(0)); break;
-    case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+    case 2 : lExpDataPath->setText(fileDialog.selectedFiles().at(0)); break;
+    // case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
   }
 }
 
@@ -1641,25 +1669,25 @@ void MainWindow::SetupNewExpPanel(){
   le1->setReadOnly(true);
   layout->addWidget(le1, rowID, 1, 1, 3);
 
-  //------- Data Path
-  rowID ++;
-  QLabel * l2 = new QLabel("Data Path ", &dialog);
-  l2->setAlignment(Qt::AlignCenter | Qt::AlignRight);
-  layout->addWidget(l2, rowID, 0);
+  // //------- Data Path
+  // rowID ++;
+  // QLabel * l2 = new QLabel("Raw Data Path ", &dialog);
+  // l2->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  // layout->addWidget(l2, rowID, 0);
 
-  QLineEdit * le2 = new QLineEdit(dataPath, &dialog);
-  le2->setReadOnly(true);
-  layout->addWidget(le2, rowID, 1, 1, 3);
+  // QLineEdit * le2 = new QLineEdit(rawDataPath, &dialog);
+  // le2->setReadOnly(true);
+  // layout->addWidget(le2, rowID, 1, 1, 3);
 
-  //------- Root Data Path
-  rowID ++;
-  QLabel * l2a = new QLabel("Root Data Path ", &dialog);
-  l2a->setAlignment(Qt::AlignCenter | Qt::AlignRight);
-  layout->addWidget(l2a, rowID, 0);
+  // //------- Root Data Path
+  // rowID ++;
+  // QLabel * l2a = new QLabel("Root Data Path ", &dialog);
+  // l2a->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  // layout->addWidget(l2a, rowID, 0);
 
-  QLineEdit * le2a = new QLineEdit(rootDataPath, &dialog);
-  le2a->setReadOnly(true);
-  layout->addWidget(le2a, rowID, 1, 1, 3);
+  // QLineEdit * le2a = new QLineEdit(rootDataPath, &dialog);
+  // le2a->setReadOnly(true);
+  // layout->addWidget(le2a, rowID, 1, 1, 3);
 
   //------- get harddisk space;
   rowID ++;
@@ -1851,19 +1879,19 @@ void MainWindow::SetupNewExpPanel(){
   layout->setRowStretch(0, 1);
   for( int i = 1; i < rowID; i++) layout->setRowStretch(i, 2);
 
-  LoadExpSettings();
+  LoadExpNameSh();
 
   dialog.exec();
 
 }
  
-bool MainWindow::LoadExpSettings(){
+bool MainWindow::LoadExpNameSh(){
   //this method set the analysis setting ann symbloic link to raw data
   //ONLY load file, not check the git
 
-  if( analysisPath == "") return false;
+  if( rawDataPath == "") return false;
 
-  QString settingFile = analysisPath + "/working/expName.sh";
+  QString settingFile = rawDataPath + "/expName.sh";
 
   LogMsg("Loading <b>" + settingFile + "</b> for Experiment.");
 
@@ -1892,23 +1920,23 @@ bool MainWindow::LoadExpSettings(){
 
     switch (count){
       case 0 : expName = haha; break;
-      case 1 : rawDataFolder = haha; break;
-      case 2 : rootDataFolder = haha; break;
-      case 3 : runID = haha.toInt(); break;
-      case 4 : elogID = haha.toInt(); break;
+      // case 1 : expDataPath = haha; break;
+      case 1 : runID = haha.toInt(); break;
+      case 2 : elogID = haha.toInt(); break;
     }
 
     count ++;
     line = in.readLine();
   }
 
-  leRawDataPath->setText(rawDataFolder);
+  rawDataPath = expDataPath + "/" + expName + "/data_raw/";
+  rootDataPath = expDataPath + "/" + expName + "/root_data/";
+
+  leRawDataPath->setText(rawDataPath);
   leExpName->setText(expName);
   leRunID->setText(QString::number(runID));
 
   bnOpenDigitizers->setStyleSheet("color:red;");
-
-  CheckElog();
 
   return true;
 
@@ -1916,21 +1944,20 @@ bool MainWindow::LoadExpSettings(){
 
 void MainWindow::WriteExpNameSh(){
 
-  QDir dir(analysisPath + "/working/");
+  QDir dir(rawDataPath);
   if( !dir.exists() ) dir.mkpath(".");
 
   //----- create the expName.sh
-  QFile file2(analysisPath + "/working/expName.sh");
+  QFile file2(rawDataPath + "/expName.sh");
   
   file2.open(QIODevice::Text | QIODevice::WriteOnly);
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
-  file2.write(("rawDataPath="+ rawDataFolder + "\n").toStdString().c_str());
-  file2.write(("rootDataPath="+ rootDataFolder + "\n").toStdString().c_str());
+  // file2.write(("ExpDataPath="+ expDataPath + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
   file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
   file2.write("#------------end of file.");
   file2.close();
-  LogMsg("Saved expName.sh to <b>"+ analysisPath + "/working/expName.sh<b>.");
+  LogMsg("Saved expName.sh to <b>"+ rawDataPath + "/expName.sh<b>.");
 
 }
 
@@ -1997,7 +2024,10 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   logMsgHTMLMode = true;
   LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
 
-  leRawDataPath->setText(rawDataFolder);
+  rawDataPath = expDataPath + "/" + newExpName + "/raw_data/"; 
+  rootDataPath = expDataPath + "/" + newExpName + "/root_data/"; 
+
+  leRawDataPath->setText(rawDataPath);
   leExpName->setText(expName);
   leRunID->setText(QString::number(runID));
 
@@ -2033,7 +2063,7 @@ void MainWindow::ChangeExperiment(const QString newExpName){
   LogMsg("Swicted to branch : <b>" + expName + "</b>");
 
   CreateRawDataFolderAndLink();
-  LoadExpSettings();
+  LoadExpNameSh();
 
   if( influx ){
     influx->ClearDataPointsBuffer();
@@ -2047,29 +2077,27 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 void MainWindow::CreateRawDataFolderAndLink(){
 
   //----- create data folder
-  rawDataFolder = dataPath + "/" + expName;
   QDir dir;
-  if( !dir.exists(rawDataFolder)){
-    if( dir.mkdir(rawDataFolder)){
-      LogMsg("Created folder <b>" + rawDataFolder + "</b> for storing raw data." );
+  if( !dir.exists(rawDataPath)){
+    if( dir.mkdir(rawDataPath)){
+      LogMsg("Created folder <b>" + rawDataPath + "</b> for storing raw data." );
     }else{
-      LogMsg("<font style=\"color:red;\"><b>" + rawDataFolder + "</b> cannot be created. Access right problem? </font>" );
+      LogMsg("<font style=\"color:red;\"><b>" + rawDataPath + "</b> cannot be created. Access right problem? </font>" );
     }
   }else{
-      LogMsg("<b>" + rawDataFolder + "</b> already exist." );
+      LogMsg("<b>" + rawDataPath + "</b> already exist." );
   }
 
   //----- create root data folder
-  rootDataFolder = rootDataPath + "/" + expName;
   QDir rootDir;
-  if( !rootDir.exists(rootDataFolder)) {
-   if( rootDir.mkdir(rootDataFolder) ){
-      LogMsg("Created folder <b>" + rootDataFolder + "</b> for storing root files.");
+  if( !rootDir.exists(rootDataPath)) {
+   if( rootDir.mkdir(rootDataPath) ){
+      LogMsg("Created folder <b>" + rootDataPath + "</b> for storing root files.");
    }else{
-      LogMsg("<font style=\"color:red;\"><b>" + rootDataFolder + "</b> cannot be created. Access right problem? </font>" );
+      LogMsg("<font style=\"color:red;\"><b>" + rootDataPath + "</b> cannot be created. Access right problem? </font>" );
    }
   }else{
-    LogMsg("<b>" + rootDataFolder + "</b> already exist." );
+    LogMsg("<b>" + rootDataPath + "</b> already exist." );
   }
 
   //----- create analysis Folder
@@ -2093,10 +2121,10 @@ void MainWindow::CreateRawDataFolderAndLink(){
     LogMsg("removing existing Link");
   }
 
-  if (file.link(rawDataFolder, linkName)) {
-      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " created.");
+  if (file.link(rawDataPath, linkName)) {
+      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " created.");
   } else {
-      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataFolder + " cannot be created. </font>");
+      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " cannot be created. </font>");
   }
 
   linkName = analysisPath + "/root_data";
@@ -2105,10 +2133,10 @@ void MainWindow::CreateRawDataFolderAndLink(){
     LogMsg("removing existing Link");
   }
 
-  if (file.link(rawDataFolder, linkName)) {
-      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rootDataFolder + " created.");
+  if (file.link(rootDataPath, linkName)) {
+      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " created.");
   } else {
-      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rootDataFolder + " cannot be created. </font>");
+      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " cannot be created. </font>");
   }
 
 }
@@ -2135,6 +2163,12 @@ void MainWindow::SetupInflux(){
     delete influx;
     influx = NULL;
   }
+
+  if( DatabaseIP.isEmpty() || DatabaseName.isEmpty() ){
+    LogMsg("No Database IP or Name. No database will be used.");
+    return;
+  }
+
   if( DatabaseIP != ""){
     influx = new InfluxDB(DatabaseIP.toStdString(), false);
 
@@ -2179,6 +2213,11 @@ void MainWindow::SetupInflux(){
 }
 
 void MainWindow::CheckElog(){
+
+  if( ElogIP.isEmpty() ) {
+    LogMsg("No Elog IP. No elog will be used.");
+    return;
+  }
 
   WriteElog("Checking elog writing", "Testing communication", "checking");
 
@@ -2288,7 +2327,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
 void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
   
-  QFile file(dataPath + "/" + expName + "/RunTimeStamp.dat");
+  QFile file(expDataPath + "/" + expName + "/data_raw/RunTimeStamp.dat");
   
   if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
@@ -2302,7 +2341,7 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
   }
 
 
-  QFile fileCSV(dataPath + "/" + expName + "/RunTimeStamp.csv");
+  QFile fileCSV(expDataPath + "/" + expName + "/data_raw/RunTimeStamp.csv");
 
   if( fileCSV.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 

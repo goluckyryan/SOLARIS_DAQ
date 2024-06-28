@@ -266,7 +266,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     printf("========== defining setting arrays for %s \n", FPGAType.c_str());
 
     boardSettings = PHA::DIG::AllSettings;
-    for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
+    for( int ch = 0; ch < nChannels ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
     for( int index = 0 ; index < 4; index ++) {
       VGASetting[index] = PHA::VGA::VGAGain;
       LVDSSettings[index] = PHA::LVDS::AllSettings;
@@ -285,7 +285,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     printf("========== defining setting arrays for %s \n", FPGAType.c_str());
 
     boardSettings = PSD::DIG::AllSettings;
-    for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PSD::CH::AllSettings;
+    for( int ch = 0; ch < nChannels ; ch ++) chSettings[ch] = PSD::CH::AllSettings;
     for( int index = 0 ; index < 4; index ++) {
       VGASetting[index] = PSD::VGA::VGAGain;
       LVDSSettings[index] = PSD::LVDS::AllSettings;
