@@ -70,7 +70,7 @@ private slots:
   void OpenDirectory(int id);
 
   void SetupNewExpPanel();
-  bool LoadExpSettings();
+  bool LoadExpNameSh();
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
   void WriteExpNameSh();
@@ -164,10 +164,11 @@ private:
   QStringList detGroupName;
 
   //@----- Program settings
-  QLineEdit * lSaveSettingPath; // only live in ProgramSettigns()
-  QLineEdit * lAnalysisPath; // only live in ProgramSettigns()
-  QLineEdit * lDataPath; // only live in ProgramSettigns()
-  QLineEdit * lRootDataPath; // only live in ProgramSettigns()
+  QLineEdit * lSaveSettingPath; 
+  QLineEdit * lAnalysisPath; //for git
+  QLineEdit * lExpDataPath; 
+
+  QLineEdit * lExpNameTemp;
 
   QLineEdit * lIPDomain;
   QLineEdit * lDatbaseIP;
@@ -176,7 +177,8 @@ private:
 
   QString programSettingsPath;
   QString analysisPath;
-  QString dataPath;
+  QString expDataPath;
+  QString rawDataPath;
   QString rootDataPath;
   QString IPListStr;
   QStringList IPList;
@@ -188,8 +190,6 @@ private:
   bool isGitExist;
   bool useGit;
   QString expName;
-  QString rawDataFolder;
-  QString rootDataFolder;
   int runID;
   QString runIDStr;
   int elogID;  // 0 = ready, -1 = disable, >1 = elogID

@@ -28,7 +28,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   this->digi = digi;
   this->nDigi = nDigi;
   if( this->nDigi > MaxNumberOfDigitizer ) {
-    this->nDigi = MaxNumberOfChannel;
+    this->nDigi = MaxNumberOfDigitizer;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
   this->mapping = mapping;
@@ -301,6 +301,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
 
     leDisplay[SettingID][digiID][chID] = new QLineEdit(this);
     leDisplay[SettingID][digiID][chID]->setFixedWidth(70);
+    leDisplay[SettingID][digiID][chID]->setReadOnly(true);
+    leDisplay[SettingID][digiID][chID]->setStyleSheet("color : green;");
     layout0->addWidget(leDisplay[SettingID][digiID][chID], 2*chIndex, 2);
 
     sbSetting[SettingID][digiID][chID] = new RSpinBox(this);
@@ -470,6 +472,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
     //*========== connection
     connect(cbTrigger[detGroup][detID], &RComboBox::currentIndexChanged, this , [=](int index){
       if( !enableSignalSlot) return;
+
+      if( cbTrigger[detGroup][detID]->itemData(index).toInt() == -999 ) return;
 
       if( chkAll[detGroup][SettingID]->isChecked() ){
 

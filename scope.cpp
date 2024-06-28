@@ -12,7 +12,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   this->digi = digi;
   this->nDigi = nDigi;
   if( nDigi > MaxNumberOfDigitizer ) {
-    this->nDigi = MaxNumberOfChannel;
+    this->nDigi = MaxNumberOfDigitizer;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
   this->readDataThread = readDataThread;
