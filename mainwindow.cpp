@@ -305,10 +305,10 @@ MainWindow::~MainWindow(){
 
   LogMsg("Closing SOLARIS DAQ.");
 
-  QDir dir(analysisPath + "/working/Logs/");
+  QDir dir(rawDataPath + "/Logs/");
   if( !dir.exists() ) dir.mkpath(".");
 
-  QFile file(analysisPath + "/working/Logs/Log_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat");
+  QFile file(rawDataPath + "/Logs/Log_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat");
   printf("-------- Save log msg to %s\n", file.fileName().toStdString().c_str());
   if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
     QTextStream stream(&file);
@@ -1324,7 +1324,7 @@ void MainWindow::ProgramSettingsPanel(){
 
   QDialog dialog(this);
   dialog.setWindowTitle("Program Settings");
-  dialog.setGeometry(0, 0, 700, 530);
+  dialog.setGeometry(0, 0, 700, 600);
   dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
@@ -1344,6 +1344,8 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
                            the folder of the analysis code. Can be omitted.");
+
+  helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of data will store. e.g. /mnt/data0/, \
                           experiment data will be saved under this folder. e.g. /mnt/data0/exp1");  
@@ -1351,8 +1353,6 @@ void MainWindow::ProgramSettingsPanel(){
                          This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
                          This will override by <b>New/Change/Reload Exp</b>");
 
-  helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("These 2 paths will be used when <font style=\"color : blue;\">  New/Change/Reload Exp </font>");
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP List </font> is the list of IP \
                            digi of the digitizers IP. Break by \",\", continue by \"-\". e.g. 192.168.0.100,102  for 2 digitizers, or 192.168.0.100-102 for 3 digitizers.");
@@ -1508,6 +1508,8 @@ bool MainWindow::LoadProgramSettings(){
 
       rawDataPath = expDataPath + "/" + expName + "/data_raw/";
       rootDataPath = expDataPath + "/" + expName + "/root_data/";
+
+      leExpName->setText(expName);
       
       ret = true;
     }else{
@@ -1518,14 +1520,47 @@ bool MainWindow::LoadProgramSettings(){
 
   if( ret ){
 
-    DecodeIPList();
-    SetupInflux();
-    CheckElog();
+    //CHeck data path exist
+    QDir dir(rawDataPath);
 
-    leRawDataPath->setText(rawDataPath);
-    leExpName->setText(expName);
+    if (!dir.exists()) {
+      LogMsg("<font style=\"color : red;\">Raw data path " +  rawDataPath + " does not exist.</font>");
+      bnProgramSettings->setStyleSheet("color: red;");
+      bnOpenDigitizers->setEnabled(false);
+      bnNewExp->setEnabled(false);
+      return false;
+    }else{
+      QFileInfo dirInfo(dir.absolutePath());
+      if( !dirInfo.isWritable() ){
+        LogMsg("<font style=\"color : red;\">Raw data path " +  rawDataPath + " is not writable.</font>");
+        bnProgramSettings->setStyleSheet("color: red;");
+        bnOpenDigitizers->setEnabled(false);
+        bnNewExp->setEnabled(false);
+        return false;
+      }else{
+        leRawDataPath->setText(rawDataPath);
+        leExpName->setText(expName);
+      }
+    }
 
-    if(analysisPath.isEmpty()) bnNewExp->setEnabled(false);
+    if( !IPListStr.isEmpty() ){
+      bnOpenDigitizers->setEnabled(true);
+      DecodeIPList();
+      SetupInflux();
+      CheckElog();
+    }else{
+      LogMsg("<font style=\"color : red;\">Digitizer IP list is empty.</font>");
+      bnProgramSettings->setStyleSheet("color: red;");
+      bnOpenDigitizers->setEnabled(false);
+      return false;
+    }
+
+    if(analysisPath.isEmpty()) {
+      LogMsg("Analysis Path is empty.");
+      bnNewExp->setEnabled(false);
+      bnNewExp->setStyleSheet("");
+      return false;
+    }
 
     return true;
 
@@ -1548,7 +1583,9 @@ void MainWindow::SaveProgramSettings(){
   programSettingsPath = lSaveSettingPath->text();
   analysisPath = lAnalysisPath->text();
   expDataPath = lExpDataPath->text();
-  expName = leExpName->text();
+  expName = lExpNameTemp->text();
+
+  if( programSettingsPath.isEmpty() ) return;
 
   QFile file(programSettingsPath + "/programSettings.txt");
   
@@ -1567,22 +1604,56 @@ void MainWindow::SaveProgramSettings(){
   file.close();
   LogMsg("Saved program settings to <b>"+programSettingsPath + "/programSettings.txt<b>.");
 
+
   bnProgramSettings->setStyleSheet("");
   bnNewExp->setEnabled(true);
-  bnOpenDigitizers->setEnabled(true);
 
-  DecodeIPList();
+  if( !IPListStr.isEmpty() ){
+    DecodeIPList();
+    bnOpenDigitizers->setEnabled(true);
+  }else{
+    bnProgramSettings->setStyleSheet("color: red;");
+    LogMsg("<font style=\"color : red;\">Digitizer IP list is empty.</font>");
+  }
+
   SetupInflux();
   CheckElog();
 
   rawDataPath = expDataPath + "/" + expName + "/data_raw/";
   rootDataPath = expDataPath + "/" + expName + "/root_data/";
-  leRawDataPath->setText(rawDataPath);
   leExpName->setText(expName);
+
+  //check rawDataPath exit, if not create
+  QDir dirRawData(rawDataPath);
+  if (!dirRawData.exists()) {
+    // Attempt to create the directory
+    if (dirRawData.mkpath(rawDataPath)) {
+        LogMsg("Create Raw Data Directory : " + rawDataPath);
+        leRawDataPath->setText(rawDataPath);
+    } else {
+        LogMsg("<font style=\"color : red;\">Failed to create Raw Data Directory : " + rawDataPath + "</font>");
+        bnProgramSettings->setStyleSheet("color: red;");
+        leRawDataPath->setText("Cannot create folder : " + rawDataPath + "!!!!");
+        return;
+    }
+  } else {
+    LogMsg("Raw Data Directory : " + rawDataPath + " | already exist.");
+  }
+
+  QDir dirRootData(rootDataPath);
+  if (!dirRootData.exists()) {
+    // Attempt to create the directory
+    if (dirRootData.mkpath(rootDataPath)) {
+        LogMsg("Create Root Data Directory : " + rootDataPath);
+    } else {
+        LogMsg("Failed to create Root Data Directory : " + rootDataPath);
+    }
+  } else {
+    LogMsg("Root Data Directory : " + rootDataPath + " | already exist.");
+  }
 
   if(analysisPath.isEmpty()) bnNewExp->setEnabled(false);
 
-  // LoadExpNameSh();
 
 }
 
@@ -1647,17 +1718,11 @@ void MainWindow::SetupNewExpPanel(){
   instr->appendHtml("<b>0,</b> Check the git repository in <font style=\"color:blue;\">Analysis Path</font>");
   instr->appendHtml("<b>1,</b> Create folder in <font style=\"color:blue;\">Data Path</font> and <font style=\"color:blue;\">Root Data Path</font>");
   instr->appendHtml("<b>2,</b> Create Symbolic links in <font style=\"color:blue;\">Analysis Path</font>");
-  instr->appendHtml("<b>3,</b> Create <b>expName.sh</b> in <font style=\"color:blue;\">Analysis Path</font> ");
   instr->appendHtml("<p></p>");
   instr->appendHtml("If <font style=\"color:blue;\">Use Git</font> is <b>checked</b>, \
                     the repository <b>MUST</b> be clean. \
                     It will then create a new branch with the <font style=\"color:blue;\">New Exp Name </font> \
                     or change to pre-exist branch.");
-  instr->appendHtml("<p></p>");
-  instr->appendHtml("If there is no git repository in <font style=\"color:blue;\">Analysis Path</font>, \
-                    it will create one with a branch name of <font style=\"color:blue;\">New Exp Name </font>.");
-  instr->appendHtml("<p></p>");
-  instr->appendHtml("<b>expName.sh</> stores the exp name, runID, and elogID."); 
 
   //------- Analysis Path
   rowID ++;
@@ -2026,6 +2091,31 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
   rawDataPath = expDataPath + "/" + newExpName + "/raw_data/"; 
   rootDataPath = expDataPath + "/" + newExpName + "/root_data/"; 
+
+  //check rawDataPath exit, if not create
+  QDir dirRawData(rawDataPath);
+  if (!dirRawData.exists()) {
+    // Attempt to create the directory
+    if (dirRawData.mkpath(rawDataPath)) {
+        LogMsg("Create Raw Data Directory : " + rawDataPath);
+    } else {
+        LogMsg("Failed to create Raw Data Directory : " + rawDataPath);
+    }
+  } else {
+    LogMsg("Raw Data Directory : " + rawDataPath + " | already exist.");
+  }
+
+  QDir dirRootData(rootDataPath);
+  if (!dirRootData.exists()) {
+    // Attempt to create the directory
+    if (dirRootData.mkpath(rootDataPath)) {
+        LogMsg("Create Root Data Directory : " + rootDataPath);
+    } else {
+        LogMsg("Failed to create Root Data Directory : " + rootDataPath);
+    }
+  } else {
+    LogMsg("Root Data Directory : " + rootDataPath + " | already exist.");
+  }
 
   leRawDataPath->setText(rawDataPath);
   leExpName->setText(expName);
