@@ -74,7 +74,8 @@ private slots:
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
   void WriteExpNameSh();
-  void CreateRawDataFolderAndLink();
+  void CreateRawDataFolder();
+  void CreateDataSymbolicLink();
 
   void closeEvent(QCloseEvent * event){
     if( digiSetting ) digiSetting->close();
@@ -164,19 +165,20 @@ private:
   QStringList detGroupName;
 
   //@----- Program settings
-  QLineEdit * lSaveSettingPath; 
+  // QLineEdit * lSaveSettingPath; 
   QLineEdit * lAnalysisPath; //for git
   QLineEdit * lExpDataPath; 
 
-  QLineEdit * lExpNameTemp;
+  QLineEdit * lExpName;
 
   QLineEdit * lIPDomain;
   QLineEdit * lDatbaseIP;
   QLineEdit * lDatbaseName;
   QLineEdit * lElogIP;
 
-  QString programSettingsPath;
+  QString programPath;
   QString analysisPath;
+  QString masterExpDataPath;
   QString expDataPath;
   QString rawDataPath;
   QString rootDataPath;
