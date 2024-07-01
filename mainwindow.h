@@ -176,6 +176,8 @@ private:
   QLineEdit * lDatbaseName;
   QLineEdit * lElogIP;
 
+  QStringList existGitBranches;
+
   QString programPath;
   QString analysisPath;
   QString masterExpDataPath;

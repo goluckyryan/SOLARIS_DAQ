@@ -1488,6 +1488,7 @@ void MainWindow::ProgramSettingsPanel(){
     rawDataPath = expDataPath + "/data_raw/";
     rootDataPath = expDataPath + "/root_data/";
     leExpName->setText(expName);
+    leRawDataPath->setText(rawDataPath);
     
     CreateRawDataFolder();
 
@@ -1777,12 +1778,12 @@ void MainWindow::SetupNewExpPanel(){
   git.waitForFinished();
 
   QByteArray output = git.readAllStandardOutput();
-  QStringList branches = (QString::fromLocal8Bit(output)).split("\n");
-  branches.removeAll("");
+  existGitBranches = (QString::fromLocal8Bit(output)).split("\n");
+  existGitBranches.removeAll("");
 
   //qDebug() << branches;
 
-  if( branches.size() == 0) {
+  if( existGitBranches.size() == 0) {
     isGitExist = false;
   }else{
     isGitExist = true;
@@ -1790,9 +1791,9 @@ void MainWindow::SetupNewExpPanel(){
 
   QString presentBranch;
   unsigned short bID = 0; // id of the present branch
-  for( unsigned short i = 0; i < branches.size(); i++){
-    if( branches[i].indexOf("*") != -1 ){
-      presentBranch = branches[i].remove("*").remove(" ");
+  for( unsigned short i = 0; i < existGitBranches.size(); i++){
+    if( existGitBranches[i].indexOf("*") != -1 ){
+      presentBranch = existGitBranches[i].remove("*").remove(" ");
       bID = i;
       break;
     }
@@ -1867,11 +1868,11 @@ void MainWindow::SetupNewExpPanel(){
     cb->setEnabled(false);
     bnChangeBranch->setEnabled(false);
   }else{
-    for( int i = 0; i < branches.size(); i++){
+    for( int i = 0; i < existGitBranches.size(); i++){
       if( i == bID ) continue;
-      if( branches[i].contains("HEAD")) continue;
-      if( branches[i].contains(presentBranch)) continue;
-      cb->addItem(branches[i].remove(" "));
+      if( existGitBranches[i].contains("HEAD")) continue;
+      if( existGitBranches[i].contains(presentBranch)) continue;
+      cb->addItem(existGitBranches[i].remove(" "));
     }
     if ( cb->count() == 0) {
       cb->setEnabled(false);
@@ -2023,6 +2024,27 @@ void MainWindow::WriteExpNameSh(){
 
 void MainWindow::CreateNewExperiment(const QString newExpName){
   
+  if( newExpName == "HEAD" || newExpName == "head") {
+    LogMsg("Cannot name new exp as HEAD or head");
+    return; 
+  }
+
+  if( newExpName == expName ){
+    LogMsg("Already at this branch.");
+    return; 
+  }
+
+  //Check if newExpName already exist, if exist, go to run ChanegExperiment()
+  for( int i = 0; i < existGitBranches.size(); i++){
+    if( existGitBranches[i].contains("HEAD")) continue;
+
+    if( existGitBranches[i] == newExpName ) {
+      ChangeExperiment(newExpName);
+      return;
+    }
+  }
+
+
   LogMsg("======================================");
   LogMsg("Creating new Exp. : <font style=\"color: red;\">" + newExpName + "</font>");
 
