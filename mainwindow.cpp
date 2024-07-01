@@ -2030,6 +2030,10 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   runID = -1;
   elogID = 0;
 
+  expDataPath = masterExpDataPath + "/" + expName;
+  rawDataPath = expDataPath + "/data_raw/";
+  rootDataPath = expDataPath + "/root_data/";
+
   CreateRawDataFolder();
   WriteExpNameSh();
 
@@ -2048,6 +2052,19 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
       git.waitForFinished();
 
       LogMsg("Creat name branch : <b>" + newExpName + "</b>");
+    }
+  }
+
+  //check if .gitignore exist
+  QFile gitIgnore(analysisPath + "/.gitignore");
+  if( !gitIgnore.exists() ) {
+    if( gitIgnore.open(QIODevice::Text | QIODevice::WriteOnly) ){
+      gitIgnore.write("data_raw\n");
+      gitIgnore.write("root_data\n");
+      gitIgnore.write("*.root\n");
+      gitIgnore.write("*.d\n");
+      gitIgnore.write("*.so\n");
+      gitIgnore.close();
     }
   }
 
@@ -2127,7 +2144,13 @@ void MainWindow::ChangeExperiment(const QString newExpName){
   LogMsg("=============================================");
   LogMsg("Swicted to branch : <b>" + expName + "</b>");
 
+  expDataPath = masterExpDataPath + "/" + newExpName;
+  rawDataPath = expDataPath + "/data_raw/"; 
+  rootDataPath = expDataPath + "/root_data/"; 
+
   CreateRawDataFolder();
+  CreateDataSymbolicLink();
+  SaveProgramSettings();
   LoadExpNameSh();
 
   if( influx ){
@@ -2144,7 +2167,7 @@ void MainWindow::CreateRawDataFolder(){
   //----- create data folder
   QDir dir(rawDataPath);
   if( !dir.exists()){
-    if( dir.mkdir(rawDataPath)){
+    if( dir.mkpath(rawDataPath)){
       LogMsg("Created folder <b>" + rawDataPath + "</b> for storing raw data." );
     }else{
       LogMsg("<font style=\"color:red;\"><b>" + rawDataPath + "</b> cannot be created. Access right problem? </font>" );
@@ -2156,7 +2179,7 @@ void MainWindow::CreateRawDataFolder(){
   //----- create root data folder
   QDir rootDir(rootDataPath);
   if( !rootDir.exists()) {
-   if( rootDir.mkdir(rootDataPath) ){
+   if( rootDir.mkpath(rootDataPath) ){
       LogMsg("Created folder <b>" + rootDataPath + "</b> for storing root files.");
    }else{
       LogMsg("<font style=\"color:red;\"><b>" + rootDataPath + "</b> cannot be created. Access right problem? </font>" );
@@ -2168,7 +2191,7 @@ void MainWindow::CreateRawDataFolder(){
   //----- create analysis Folder
   QDir anaDir;
   if( !anaDir.exists(analysisPath)){
-    if( anaDir.mkdir(analysisPath)){
+    if( anaDir.mkpath(analysisPath)){
       LogMsg("<b>" + analysisPath + "</b> created." );
     }else{
       LogMsg("<font style=\"color:red;\"><b>" + analysisPath + "</b> cannot be created. Access right problem?</font>" );
