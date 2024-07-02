@@ -219,15 +219,15 @@ int main(int argc, char ** argv){
 
   TTree * tree = new TTree("tree", outFileName);
 
-  tree->Branch("evID",         &evID, "event_ID/l"); 
+  tree->Branch("evID",         &evID, "evID/l"); 
   tree->Branch("multi",       &multi, "multi/i"); 
-  tree->Branch("bd",              bd, "board[multi]/s");
+  tree->Branch("bd",              bd, "bd[multi]/s");
   tree->Branch("sn",              sn, "sn[multi]/s");
-  tree->Branch("ch",              ch, "channel[multi]/s");
-  tree->Branch("e",                e, "energy[multi]/s");
-  tree->Branch("e2",              e2, "energy_short[multi]/s");
-  tree->Branch("e_t",            e_t, "timestamp[multi]/l");
-  tree->Branch("e_f",            e_f, "fine_timestamp[multi]/s");
+  tree->Branch("ch",              ch, "ch[multi]/s");
+  tree->Branch("e",                e, "e[multi]/s");
+  tree->Branch("e2",              e2, "e2[multi]/s");
+  tree->Branch("e_t",            e_t, "e_t[multi]/l");
+  tree->Branch("e_f",            e_f, "e_f[multi]/s");
   tree->Branch("lowFlag",    lowFlag, "lowFlag[multi]/s");
   tree->Branch("highFlag",  highFlag, "highFlag[multi]/s");
 
