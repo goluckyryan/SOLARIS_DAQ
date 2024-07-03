@@ -708,7 +708,7 @@ void MainWindow::OpenDigitizers(){
   nDigiConnected = 0;
 
   //Check path exist
-  QDir dir(analysisPath + "/working/Settings/");
+  QDir dir(expDataPath + "/Settings/");
   if( !dir.exists() ) dir.mkpath(".");
 
   for( int i = 0; i < nDigi; i++){
@@ -726,7 +726,7 @@ void MainWindow::OpenDigitizers(){
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
       //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
-      QString settingFile = analysisPath + "/working/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
+      QString settingFile = expDataPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
         LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());
@@ -967,7 +967,7 @@ void MainWindow::OpenDigitizersSettings(){
   LogMsg("Open digitizers Settings Panel");
 
   if( digiSetting == NULL){
-    digiSetting = new DigiSettingsPanel(digi, nDigi, analysisPath);
+    digiSetting = new DigiSettingsPanel(digi, nDigi, expDataPath + "/Settings/");
     connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
     connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(1);});
 

@@ -10,8 +10,19 @@
 //#include "TClonesArray.h" // plan to save trace as TVector with TClonesArray
 //#include "TVector.h"
 
+#include <sys/time.h> /** struct timeval, select() */
+
+inline unsigned int getTime_us(){
+  unsigned int time_us;
+  struct timeval t1;
+  struct timezone tz;
+  gettimeofday(&t1, &tz);
+  time_us = (t1.tv_sec) * 1000 * 1000 + t1.tv_usec;
+  return time_us;
+}
+
 #define MAX_MULTI 64
-#define MAX_TRACE_LEN 2500
+#define MAX_TRACE_LEN 1250 ///  = 10 us
 
 #define tick2ns 8 // 1 tick = 8 ns
 
@@ -109,9 +120,7 @@ int main(int argc, char ** argv){
     return -1;
   }
 
-  // for( int i = 0; i < argc; i++){
-  //   printf("%d | %s\n", i, argv[i]);
-  // }
+  unsigned int runStartTime = getTime_us();
 
   TString outFileName = argv[1];
   int timeWindow = abs(atoi(argv[2]));
@@ -232,8 +241,9 @@ int main(int argc, char ** argv){
   tree->Branch("highFlag",  highFlag, "highFlag[multi]/s");
 
   if( saveTrace){
-    tree->Branch("tl",        traceLen, "traceLen[multi]/I");
+    tree->Branch("traceLen",  traceLen, "traceLen[multi]/I");
     tree->Branch("trace",        trace, Form("trace[multi][%d]/I", MAX_TRACE_LEN));
+    tree->GetBranch("trace")->SetCompressionSettings(205);
   }
 
   //*=========================================== build event
@@ -331,7 +341,10 @@ int main(int argc, char ** argv){
     numBlock += reader[i]->GetBlockID() + 1;
   }
 
+  unsigned int runEndTime = getTime_us();
+  double runTime = (runEndTime - runStartTime) * 1e-6;
   printf("===================================== done. \n");
+  printf("    event building time : %.2f sec = %.2f min\n", runTime, runTime/60.);
   printf("Number of Block Scanned : %u\n", numBlock);
   printf("  Number of Event Built : %lld\n", evID);
   printf("  Output Root File Size : %.2f MB\n", outRootFile->GetSize()/1024./1024.);

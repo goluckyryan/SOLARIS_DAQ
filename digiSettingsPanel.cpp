@@ -60,7 +60,7 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
 
 QColor orangeColor(255, 165, 0);
 
-DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent) : QWidget(parent){
+DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString settingPath, QWidget * parent) : QWidget(parent){
 
   setWindowTitle("Digitizers Settings");
   setGeometry(0, 0, 1850, 1050);
@@ -72,7 +72,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     this->nDigi = MaxNumberOfDigitizer;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
-  this->digiSettingPath = analysisPath + "/working/Settings/";
+  this->digiSettingPath = settingPath;
 
   ID = 0;
   enableSignalSlot = false;
