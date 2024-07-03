@@ -25,6 +25,8 @@ class SolReader {
 
     std::vector<unsigned int> blockPos;
 
+    size_t dummy;
+
   public:
     SolReader();
     SolReader(std::string fileName, unsigned short dataType);
@@ -73,7 +75,7 @@ SolReader::SolReader(std::string fileName, unsigned short dataType = 0){
 }
 
 SolReader::~SolReader(){
-  if( !inFile ) fclose(inFile);
+  if( inFile ) fclose(inFile);
   delete hit;
 }
 
@@ -109,7 +111,7 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
   if( feof(inFile) ) return -1;
   if( filePos >= inFileSize) return -1;
   
-  fread(&blockStartIdentifier, 2, 1, inFile);
+  dummy = fread(&blockStartIdentifier, 2, 1, inFile);
 
   if( (blockStartIdentifier & 0xAA00) != 0xAA00 ) {
     printf("header fail.\n");
@@ -129,94 +131,94 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
 
   if( hit->dataType == DataFormat::ALL){
     if( !fastRead  ){
-      fread(&hit->channel,             1, 1, inFile);
-      fread(&hit->energy,              2, 1, inFile);
-      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
-      fread(&hit->timestamp,           6, 1, inFile);
-      fread(&hit->fine_timestamp,      2, 1, inFile);
-      fread(&hit->flags_high_priority, 1, 1, inFile);
-      fread(&hit->flags_low_priority,  2, 1, inFile);
-      fread(&hit->downSampling,        1, 1, inFile);
-      fread(&hit->board_fail,          1, 1, inFile);
-      fread(&hit->flush,               1, 1, inFile);
-      fread(&hit->trigger_threashold,  2, 1, inFile);
-      fread(&hit->event_size,          8, 1, inFile);
-      fread(&hit->aggCounter,          4, 1, inFile);
+      dummy = fread(&hit->channel,             1, 1, inFile);
+      dummy = fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) dummy = fread(&hit->energy_short, 2, 1, inFile);
+      dummy = fread(&hit->timestamp,           6, 1, inFile);
+      dummy = fread(&hit->fine_timestamp,      2, 1, inFile);
+      dummy = fread(&hit->flags_high_priority, 1, 1, inFile);
+      dummy = fread(&hit->flags_low_priority,  2, 1, inFile);
+      dummy = fread(&hit->downSampling,        1, 1, inFile);
+      dummy = fread(&hit->board_fail,          1, 1, inFile);
+      dummy = fread(&hit->flush,               1, 1, inFile);
+      dummy = fread(&hit->trigger_threashold,  2, 1, inFile);
+      dummy = fread(&hit->event_size,          8, 1, inFile);
+      dummy = fread(&hit->aggCounter,          4, 1, inFile);
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 31 : 33, SEEK_CUR);
     }
-    fread(&hit->traceLenght, 8, 1, inFile);
+    dummy = fread(&hit->traceLenght, 8, 1, inFile);
     if( !fastRead ){
-      fread(hit->analog_probes_type,     2, 1, inFile);
-      fread(hit->digital_probes_type,    4, 1, inFile);
-      fread(hit->analog_probes[0],  hit->traceLenght*4, 1, inFile);
-      fread(hit->analog_probes[1],  hit->traceLenght*4, 1, inFile);
-      fread(hit->digital_probes[0], hit->traceLenght, 1, inFile);
-      fread(hit->digital_probes[1], hit->traceLenght, 1, inFile);
-      fread(hit->digital_probes[2], hit->traceLenght, 1, inFile);
-      fread(hit->digital_probes[3], hit->traceLenght, 1, inFile);
+      dummy = fread(hit->analog_probes_type,     2, 1, inFile);
+      dummy = fread(hit->digital_probes_type,    4, 1, inFile);
+      dummy = fread(hit->analog_probes[0],  hit->traceLenght*4, 1, inFile);
+      dummy = fread(hit->analog_probes[1],  hit->traceLenght*4, 1, inFile);
+      dummy = fread(hit->digital_probes[0], hit->traceLenght, 1, inFile);
+      dummy = fread(hit->digital_probes[1], hit->traceLenght, 1, inFile);
+      dummy = fread(hit->digital_probes[2], hit->traceLenght, 1, inFile);
+      dummy = fread(hit->digital_probes[3], hit->traceLenght, 1, inFile);
     }else{
-      fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
+      dummy = fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
     } 
 
   }else if( hit->dataType == DataFormat::OneTrace){
     if( !fastRead  ){
-      fread(&hit->channel,             1, 1, inFile);
-      fread(&hit->energy,              2, 1, inFile);
-      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
-      fread(&hit->timestamp,           6, 1, inFile);
-      fread(&hit->fine_timestamp,      2, 1, inFile);
-      fread(&hit->flags_high_priority, 1, 1, inFile);
-      fread(&hit->flags_low_priority,  2, 1, inFile);
+      dummy = fread(&hit->channel,             1, 1, inFile);
+      dummy = fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) dummy = fread(&hit->energy_short, 2, 1, inFile);
+      dummy = fread(&hit->timestamp,           6, 1, inFile);
+      dummy = fread(&hit->fine_timestamp,      2, 1, inFile);
+      dummy = fread(&hit->flags_high_priority, 1, 1, inFile);
+      dummy = fread(&hit->flags_low_priority,  2, 1, inFile);
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
-    fread(&hit->traceLenght, 8, 1, inFile);
+    dummy = fread(&hit->traceLenght, 8, 1, inFile);
     if( !fastRead ){
-      fread(&hit->analog_probes_type[0], 1, 1, inFile);
-      fread(hit->analog_probes[0], hit->traceLenght*4, 1, inFile);
+      dummy = fread(&hit->analog_probes_type[0], 1, 1, inFile);
+      dummy = fread(hit->analog_probes[0], hit->traceLenght*4, 1, inFile);
     }else{
       fseek(inFile, 1 + hit->traceLenght*4, SEEK_CUR);
     }
 
   }else if( hit->dataType == DataFormat::NoTrace){
     if( !fastRead  ){
-      fread(&hit->channel,             1, 1, inFile);
-      fread(&hit->energy,              2, 1, inFile);
-      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
-      fread(&hit->timestamp,           6, 1, inFile);
-      fread(&hit->fine_timestamp,      2, 1, inFile);
-      fread(&hit->flags_high_priority, 1, 1, inFile);
-      fread(&hit->flags_low_priority,  2, 1, inFile);
+      dummy = fread(&hit->channel,             1, 1, inFile);
+      dummy = fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) dummy = fread(&hit->energy_short, 2, 1, inFile);
+      dummy = fread(&hit->timestamp,           6, 1, inFile);
+      dummy = fread(&hit->fine_timestamp,      2, 1, inFile);
+      dummy = fread(&hit->flags_high_priority, 1, 1, inFile);
+      dummy = fread(&hit->flags_low_priority,  2, 1, inFile);
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 14 : 16, SEEK_CUR);
     }
 
   }else if( hit->dataType == DataFormat::MiniWithFineTime){
     if( !fastRead  ){
-      fread(&hit->channel,             1, 1, inFile);
-      fread(&hit->energy,              2, 1, inFile);
-      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
-      fread(&hit->timestamp,           6, 1, inFile);
-      fread(&hit->fine_timestamp,      2, 1, inFile);
+      dummy = fread(&hit->channel,             1, 1, inFile);
+      dummy = fread(&hit->energy,              2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) dummy = fread(&hit->energy_short, 2, 1, inFile);
+      dummy = fread(&hit->timestamp,           6, 1, inFile);
+      dummy = fread(&hit->fine_timestamp,      2, 1, inFile);
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 11 : 13, SEEK_CUR);
     }
 
   }else if( hit->dataType == DataFormat::Minimum){
     if( !fastRead  ){
-      fread(&hit->channel,   1, 1, inFile);
-      fread(&hit->energy,    2, 1, inFile);
-      if( hit->DPPType == DPPType::PSD ) fread(&hit->energy_short, 2, 1, inFile);
-      fread(&hit->timestamp, 6, 1, inFile);
+      dummy = fread(&hit->channel,   1, 1, inFile);
+      dummy = fread(&hit->energy,    2, 1, inFile);
+      if( hit->DPPType == DPPType::PSD ) dummy = fread(&hit->energy_short, 2, 1, inFile);
+      dummy = fread(&hit->timestamp, 6, 1, inFile);
     }else{
       fseek(inFile, hit->DPPType == DPPType::PHA ? 9 : 11, SEEK_CUR);
     }
 
   }else if( hit->dataType == DataFormat::Raw){
-      fread(&hit->dataSize, 8, 1, inFile);
+      dummy = fread(&hit->dataSize, 8, 1, inFile);
     if( !fastRead ){
-      fread(hit->data, hit->dataSize, 1, inFile);
+      dummy = fread(hit->data, hit->dataSize, 1, inFile);
     }else{
       fseek(inFile, hit->dataSize, SEEK_CUR);
     }
