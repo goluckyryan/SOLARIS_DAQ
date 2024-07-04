@@ -1,5 +1,6 @@
 CC=g++
-CFLAG= -g
+# CFLAG= -g
+CFLAG= -O2
 ROOTFLAG=`root-config --cflags --glibs`
 all: EventBuilder
 
