@@ -788,17 +788,19 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
 
       {//^====================== Group = InputDelay
-        bdGroup[iDigi] = new QWidget(this);
-        bdTab->addTab(bdGroup[iDigi], "Input Delay");
-        QGridLayout * groupLayout = new QGridLayout(bdGroup[iDigi]);
-        groupLayout->setAlignment(Qt::AlignTop );
-        //LVDSLayout->setSpacing(2);
+        if( digi[iDigi]->GetModelName() != "VX2730") {
+          bdGroup[iDigi] = new QWidget(this);
+          bdTab->addTab(bdGroup[iDigi], "Input Delay");
+          QGridLayout * groupLayout = new QGridLayout(bdGroup[iDigi]);
+          groupLayout->setAlignment(Qt::AlignTop );
+          //LVDSLayout->setSpacing(2);
 
-        for(int k = 0; k < MaxNumberOfGroup; k ++){
-          SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [ns] ", groupLayout, k/4, 2*(k%4));
+          for(int k = 0; k < MaxNumberOfGroup; k ++){
+            SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [ns] ", groupLayout, k/4, 2*(k%4));
+          }
+
+          bdGroup[iDigi]->setEnabled(digi[iDigi]->GetCupVer() >= MIN_VERSION_GROUP);
         }
-
-        bdGroup[iDigi]->setEnabled(digi[iDigi]->GetCupVer() >= MIN_VERSION_GROUP);
       }
 
     }
@@ -2619,7 +2621,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   }
 
   //------------ Group
-  if( digi[ID]->GetCupVer() >= MIN_VERSION_GROUP ){
+  if( digi[ID]->GetModelName() != "VX2730" && digi[ID]->GetCupVer() >= MIN_VERSION_GROUP ){
     for( int k = 0 ; k < MaxNumberOfGroup; k++){
       FillSpinBoxValueFromMemory(spbInputDelay[ID][k], PHA::GROUP::InputDelay, k); // PHA = PSD
     }
@@ -2748,12 +2750,12 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
       unsigned long haha = Utility::TenBase(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, ch));
       if( mask != haha) {
         isSame = false;
-        leTriggerMask[ID][MaxNumberOfChannel]->setText("Diff. value");
+        leTriggerMask[ID][digi[ID]->GetNChannels()]->setText("Diff. value");
         break;
       }
     }
 
-    if( isSame ) leTriggerMask[ID][MaxNumberOfChannel]->setText("0x" + QString::number(mask, 16).toUpper());
+    if( isSame ) leTriggerMask[ID][digi[ID]->GetNChannels()]->setText("0x" + QString::number(mask, 16).toUpper());
   }else{
     unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
     leTriggerMask[ID][digi[ID]->GetNChannels()]->setText("0x" + QString::number(mask, 16).toUpper());
