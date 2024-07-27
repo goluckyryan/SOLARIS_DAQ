@@ -1208,12 +1208,20 @@ void Digitizer2Gen::ReadAllSettings(){
       boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara()
      )
     ) continue;
+
+    if( ModelName == "VX2730" && 
+      (boardSettings[i].GetPara() == PHA::DIG::FreqSensCore.GetPara() ||  
+       boardSettings[i].GetPara() == PHA::DIG::DutyCycleSensDCDC.GetPara()
+      )
+    ) continue;
     ReadValue(boardSettings[i]);
   }
 
   if( ModelName == "VX2745") for(int i = 0; i < 4 ; i ++) ReadValue(VGASetting[i], i);
 
-  if( CupVer >= 2023091800 ) for( int idx = 0; idx < 16; idx++) ReadValue(InputDelay[idx], idx, false);
+  if( ModelName != "VX2730"){
+    if( CupVer >= 2023091800 ) for( int idx = 0; idx < 16; idx++) ReadValue(InputDelay[idx], idx, false);
+  }
 
   for( int index = 0; index < 4; index++){
     for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
