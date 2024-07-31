@@ -22,7 +22,8 @@
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
-#include "influxdb.h"
+// #include "influxdb.h"
+#include "ClassInfluxDB.h"
 
 #include "CustomThreads.h"
 
@@ -174,6 +175,7 @@ private:
   QLineEdit * lIPDomain;
   QLineEdit * lDatbaseIP;
   QLineEdit * lDatbaseName;
+  QLineEdit * lDatbaseToken;
   QLineEdit * lElogIP;
 
   QStringList existGitBranches;
@@ -188,6 +190,7 @@ private:
   QStringList IPList;
   QString DatabaseIP;
   QString DatabaseName;
+  QString DatabaseToken;
   QString ElogIP;
 
   //@------ experiment settings

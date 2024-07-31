@@ -153,7 +153,7 @@ class Hit {
     }
 
     void PrintEnergyTimeStamp(){
-      printf("ch: %2d, energy: %u, timestamp: %llu ch, traceLenght: %lu\n", channel, energy, timestamp, traceLenght);
+      printf("ch: %2d, energy: %u, timestamp: %lu ch, traceLenght: %lu\n", channel, energy, timestamp, traceLenght);
     }
 
     std::string AnaProbeType(uint8_t probeType){
@@ -248,8 +248,8 @@ class Hit {
       }
 
       printf("ch : %2d (0x%02X), fail: %d, flush: %d\n", channel, channel, board_fail, flush);
-      if( DPPType == DPPType::PHA ) printf("energy: %u, timestamp: %llu, fine_timestamp: %u \n", energy, timestamp, fine_timestamp);
-      if( DPPType == DPPType::PSD ) printf("energy: %u, energy_S : %u, timestamp: %llu, fine_timestamp: %u \n", energy, energy_short, timestamp, fine_timestamp);
+      if( DPPType == DPPType::PHA ) printf("energy: %u, timestamp: %lu, fine_timestamp: %u \n", energy, timestamp, fine_timestamp);
+      if( DPPType == DPPType::PSD ) printf("energy: %u, energy_S : %u, timestamp: %lu, fine_timestamp: %u \n", energy, energy_short, timestamp, fine_timestamp);
       printf("flag (high): 0x%02X, (low): 0x%03X, traceLength: %lu\n", flags_high_priority, flags_low_priority, traceLenght);
       printf("Agg counter : %u, trigger Thr.: %u, downSampling: %u \n", aggCounter, trigger_threashold, downSampling);
       printf("AnaProbe Type: %s(%u), %s(%u)\n", AnaProbeType(analog_probes_type[0]).c_str(), analog_probes_type[0],

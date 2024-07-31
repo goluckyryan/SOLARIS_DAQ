@@ -1448,6 +1448,13 @@ void MainWindow::ProgramSettingsPanel(){
   lbDatbaseName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbDatbaseName, rowID, 0);
   lDatbaseName = new QLineEdit(DatabaseName, &dialog); layout->addWidget(lDatbaseName, rowID, 1, 1, 2);
+  //-------- DataBase Token
+  rowID ++;
+  QLabel *lbDatbaseToken = new QLabel("Database Token *", &dialog);
+  lbDatbaseToken->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbDatbaseToken, rowID, 0);
+  lDatbaseToken = new QLineEdit(DatabaseToken, &dialog); layout->addWidget(lDatbaseToken, rowID, 1, 1, 2);
+
   //-------- Elog IP
   rowID ++;
   QLabel *lbElogIP = new QLabel("Elog IP *", &dialog);
@@ -1463,6 +1470,7 @@ void MainWindow::ProgramSettingsPanel(){
     IPListStr = lIPDomain->text();
     DatabaseIP = lDatbaseIP->text();
     DatabaseName = lDatbaseName->text();
+    DatabaseToken = lDatbaseToken->text();
     ElogIP = lElogIP->text();
     analysisPath = lAnalysisPath->text();
     masterExpDataPath = lExpDataPath->text();
@@ -1544,7 +1552,8 @@ bool MainWindow::LoadProgramSettings(){
         case 3 : analysisPath    = line; break;
         case 4 : DatabaseIP      = line; break;
         case 5 : DatabaseName    = line; break;
-        case 6 : ElogIP          = line; break;
+        case 6 : DatabaseToken   = line; break;
+        case 7 : ElogIP          = line; break;
       }
 
       count ++;
@@ -1557,6 +1566,7 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("    Analysis Path : " + analysisPath);
       LogMsg("      Database IP : " + DatabaseIP);
       LogMsg("    Database Name : " + DatabaseName);
+      LogMsg("   Database Token : " + DatabaseToken);
       LogMsg("           ElogIP : " + ElogIP);
       LogMsg("    Exp Data Path : " + masterExpDataPath);
       LogMsg("   Temp Exp. Name : " + expName);
@@ -1649,6 +1659,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((analysisPath+"\n").toStdString().c_str());
   file.write((DatabaseIP+"\n").toStdString().c_str());
   file.write((DatabaseName+"\n").toStdString().c_str());
+  file.write((DatabaseToken+"\n").toStdString().c_str());
   file.write((ElogIP+"\n").toStdString().c_str());
   file.write("//------------end of file.");
   
@@ -2286,10 +2297,21 @@ void MainWindow::SetupInflux(){
     influx = new InfluxDB(DatabaseIP.toStdString(), false);
 
     if( influx->TestingConnection() ){
-      LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid </font>");
+
+      LogMsg("<font style=\"color : green;\"> InfluxDB URL (<b>"+ DatabaseIP + "</b>) is Valid. Version : " + QString::fromStdString(influx->GetVersionString())+ " </font>");
+
+      if( influx->GetVersionNo() > 1 && DatabaseToken.isEmpty() ) {
+        LogMsg("<font style=\"color : red;\">A Token is required for accessing the database.</font>");
+        delete influx;
+        influx = nullptr;
+        return;
+      }
+      
+      influx->SetToken(DatabaseToken.toStdString());
 
       //==== chck database exist
       LogMsg("List of database:");
+      influx->CheckDatabases();
       std::vector<std::string> databaseList = influx->GetDatabaseList();
       bool foundDatabase = false;
       for( int i = 0; i < (int) databaseList.size(); i++){

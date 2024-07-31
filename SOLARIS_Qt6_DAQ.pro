@@ -25,7 +25,7 @@ QMAKE_CFLAGS_RELEASE = -O0
 # Input
 HEADERS += ClassDigitizer2Gen.h \
            Hit.h \
-					 influxdb.h \
+					 ClassInfluxDB.h \
 					 mainwindow.h \
 					 digiSettingsPanel.h \
 					 Digiparameters.h \
@@ -36,7 +36,7 @@ HEADERS += ClassDigitizer2Gen.h \
 					 SOLARISpanel.h
 
 SOURCES += ClassDigitizer2Gen.cpp \
-           influxdb.cpp \
+           ClassInfluxDB.cpp \
 					 main.cpp \
 					 mainwindow.cpp \
 					 digiSettingsPanel.cpp \

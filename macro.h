@@ -5,6 +5,8 @@
 #define DAQLockFile "DAQLock.dat"
 #define PIDFile  "pid.dat"
 
+#include <QString>
+
 //^=================================
 namespace Utility{
   /// either haha is "0xFFF" or "12435", convert to 10-base 
