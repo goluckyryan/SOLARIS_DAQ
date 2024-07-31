@@ -9,10 +9,10 @@
 #include <mutex>
 
 #include "../ClassDigitizer2Gen.h"
-#include "../influxdb.h"
+#include "../ClassInfluxDB.h"
 
 #define maxRead 400
-
+ß
 std::mutex digiMTX;
 Digitizer2Gen * digi = new Digitizer2Gen();
 InfluxDB * influx = new InfluxDB("https://fsunuc.physics.fsu.edu/influx/", false);
@@ -77,29 +77,26 @@ static void StatLoop(){
 
 }
 
-#include <CAENDig2.h>
+// #include <CAENDig2.h>
+// int CAENDig2_GetLibVersion(char* version);
+// void CAEN_test(){
+//   printf("##########################################\n");
+//   printf("\t   CAEN firmware DPP-PHA testing \n");
+//   printf("##########################################\n");
+//   remove("haha_000.sol");
+//   char version[16];
+//   CAENDig2_GetLibVersion(version);
+//   puts(version);
+//   char haha[100];
+//   CAEN_FELib_GetLibInfo(haha, 100);
+//   puts(haha);
+//   CAEN_FELib_GetLibVersion(version);
+//   puts(version);
 
-int CAENDig2_GetLibVersion(char* version);
+// }
 
 int main(int argc, char* argv[]){
   
-  printf("##########################################\n");
-  printf("\t   CAEN firmware DPP-PHA testing \n");
-  printf("##########################################\n");
-
-  remove("haha_000.sol");
-
-  char version[16];
-  CAENDig2_GetLibVersion(version);
-  puts(version);
-
-  char haha[100];
-  CAEN_FELib_GetLibInfo(haha, 100);
-  puts(haha);
-
-  CAEN_FELib_GetLibVersion(version);
-  puts(version);
-
 /*
   const char * url = "dig2://192.168.0.100/";
   //const char * url = "dig2://192.168.0.254/";
