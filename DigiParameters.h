@@ -60,7 +60,7 @@ class Reg {
     std::vector<std::pair<std::string,std::string>> GetAnswers() const {return answer;}
 
     std::string GetPara()   const {return name;}
-    std::string GetFullPara(int ch_index = -1) const {
+    std::string GetFullPara(int ch_index = -1, int nChannals = MaxNumberOfChannel) const {
       switch (type){
         case TYPE::DIG:{
             if( isCmd){
@@ -75,7 +75,7 @@ class Reg {
               haha = "/cmd/"; // for SendChSWTrigger, not in GUI
             }
             if( ch_index == -1 ){ 
-              return "/ch/0..63" + haha + name;
+              return "/ch/0.." + std::to_string(nChannals) + haha + name;
             }else{
               return "/ch/" + std::to_string(ch_index) + haha + name;
             }
@@ -106,7 +106,6 @@ class Reg {
           return "invalid"; break; 
       }
     }
-
 
     operator std::string () const {return name;} // this allow Reg kaka("XYZ", true); std::string haha = kaka;
 

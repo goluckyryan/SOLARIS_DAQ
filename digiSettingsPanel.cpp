@@ -673,7 +673,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         cLayout->addWidget(horizontalSeparator, 3, 0, 1, 33);
 
 
-        for( int i = 0; i < 64; i++){
+        for( int i = 0; i < digi[iDigi]->GetNChannels() ; i++){
           chITLConnect[iDigi][i][0] = new QPushButton(bdITL[iDigi]);
           chITLConnect[iDigi][i][0]->setFixedSize(15, 15);
           cLayout->addWidget(chITLConnect[iDigi][i][0], 1 + i/32, i%32 + 1);
