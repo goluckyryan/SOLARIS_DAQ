@@ -127,7 +127,7 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
 }
 
 std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose){
-  std:: string ans = ReadValue(para.GetFullPara(ch_index).c_str(), verbose); 
+  std:: string ans = ReadValue(para.GetFullPara(ch_index, nChannels).c_str(), verbose); 
 
   int index = FindIndex(para);
   switch( para.GetType()){
@@ -157,7 +157,7 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
 }
 
 bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
-  if( WriteValue(para.GetFullPara(ch_index).c_str(), value) || isDummy){
+  if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy){
     int index = FindIndex(para);
     if( index != -1 ){    
       switch(para.GetType()){
@@ -1169,7 +1169,7 @@ void Digitizer2Gen::PrintChannelSettings(unsigned short ch){
 
   for( int i = 0; i < (int) chSettings[0].size(); i++){
     if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
-    printf("%-45s  %d  %s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
+    printf("%-45s  %d  %s\n", chSettings[ch][i].GetFullPara(ch, nChannels).c_str(), 
                               chSettings[ch][i].ReadWrite(),
                               chSettings[ch][i].GetValue().c_str());
   }
@@ -1333,7 +1333,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
           printf("[%i] No value for %s , ch-%02d\n", i, chSettings[ch][i].GetPara().c_str(), ch);
           continue;
         }
-        fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettings[ch][i].GetFullPara(ch).c_str(), 
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettings[ch][i].GetFullPara(ch, nChannels).c_str(), 
                                                chSettings[ch][i].ReadWrite(),
                                                ch*100 + i,
                                                chSettings[ch][i].GetValue().c_str());
