@@ -125,15 +125,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSyncHelper->setEnabled(false);
     connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
-    // QPushButton * bnEventBuilder = new QPushButton("Event Builder", this);
-    // bnEventBuilder->setEnabled(false);
-    
-    // QPushButton * bnHVController = new QPushButton("HV Controller", this);
-    // bnHVController->setEnabled(false);
-    
-    // QPushButton * bnTargetFanController = new QPushButton("Target Fan", this);
-    // bnTargetFanController->setEnabled(false);
-
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -146,10 +137,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnOpenScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
-
-    // layout1->addWidget(bnEventBuilder, 3, 0);
-    // layout1->addWidget(bnHVController, 3, 1);
-    // layout1->addWidget(bnTargetFanController, 3, 2, 1, 2);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -169,7 +156,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leRawDataPath = new QLineEdit(this);
     leRawDataPath->setReadOnly(true);
     leRawDataPath->setStyleSheet("background-color: #F3F3F3;");
-
+    
     bnOpenScalar = new QPushButton("Open Scalar", this);
     bnOpenScalar->setEnabled(false);
     connect(bnOpenScalar, &QPushButton::clicked, this, &MainWindow::OpenScaler);
@@ -455,12 +442,20 @@ int MainWindow::StartACQ(){
     //}
 
     if( chkSaveRun->isChecked() ){
-      //Save setting to raw data with run ID
-      QString fileSetting = rawDataPath + "/" + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
-      digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
 
+      QString runFolder = rawDataPath + "/";
+      if( isSaveSubFolder ) {
+        runFolder += "run" + runIDStr + "/";
+        CreateFolder(runFolder, "for " + runIDStr);
+      }
+
+      //Save setting to raw data with run ID
+      QString fileSetting =  runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       // name should be [ExpName]_[runID]_[digiID]_[digiSerialNumber]_[acculmulate_count].sol
-      QString outFileName = rawDataPath + "/" + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
+      QString outFileName =  runFolder + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
+
+
+      digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
       qDebug() << outFileName;
       digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
     }
@@ -1328,7 +1323,7 @@ void MainWindow::ProgramSettingsPanel(){
 
   QDialog dialog(this);
   dialog.setWindowTitle("Program Settings");
-  dialog.setGeometry(0, 0, 700, 500);
+  dialog.setGeometry(0, 0, 700, 800);
   dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
@@ -1356,9 +1351,14 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of data will store. ");  
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment. \
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment and <b>Elog Folder</b>. \
                          This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
-                        The experiment data will be saved under this folder. e.g. <font style=\"color : blue;\">Data Path</font>/<font style=\"color : blue;\">Exp Name</font>");
+                        The experiment data will be saved under this folder. e.g. <font style=\"color : blue;\">Data Path/Exp Name</font>.");
+
+  helpInfo->appendHtml("<p></p>");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Save runs in sub-folders </font> means \
+                            saving each run in indivuial subfolder. e.g. <font style=\"color : blue;\">Data Path/Exp Name/runXXX</font>.");
+
 
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Digitizers IP List </font> is the list of IP \
@@ -1394,15 +1394,11 @@ void MainWindow::ProgramSettingsPanel(){
   QPushButton * bnDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnDataPath, rowID, 3);
   connect(bnDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(2);});
 
-  //-------- root data Path
-  // rowID ++;
-  // QLabel *lbRootDataPath = new QLabel("Root Data Path", &dialog); 
-  // lbRootDataPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-  // layout->addWidget(lbRootDataPath, rowID, 0);
-  // lRootDataPath = new QLineEdit(rootDataPath, &dialog); layout->addWidget(lRootDataPath, rowID, 1, 1, 2);
-
-  // QPushButton * bnRootDataPath = new QPushButton("browser", &dialog); layout->addWidget(bnRootDataPath, rowID, 3);
-  // connect(bnRootDataPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(3);});
+  //-------- Is Save single folder
+  rowID ++;
+  chkSaveSubFolder = new QCheckBox("Save runs in sub-folders", this); 
+  chkSaveSubFolder->setChecked(isSaveSubFolder);
+  layout->addWidget(chkSaveSubFolder, rowID, 1);
 
   //-------- Exp Name Temp
   rowID ++;
@@ -1461,6 +1457,20 @@ void MainWindow::ProgramSettingsPanel(){
   lbElogIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbElogIP, rowID, 0);
   lElogIP = new QLineEdit(ElogIP, &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
+
+  //-------- Elog User
+  rowID ++;
+  QLabel *lbElogUser = new QLabel("Elog User *", &dialog);
+  lbElogUser->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogUser, rowID, 0);
+  lElogUser = new QLineEdit(ElogUser, &dialog); layout->addWidget(lElogUser, rowID, 1, 1, 2);
+
+  //-------- Elog User
+  rowID ++;
+  QLabel *lbElogPWD = new QLabel("Elog Password *", &dialog);
+  lbElogPWD->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogPWD, rowID, 0);
+  lElogPWD = new QLineEdit(ElogPWD, &dialog); layout->addWidget(lElogPWD, rowID, 1, 1, 2);
 
   rowID ++;
   QPushButton *button1 = new QPushButton("OK and Save", &dialog);
@@ -1532,6 +1542,19 @@ bool MainWindow::LoadProgramSettings(){
 
   bool ret = false;
 
+  //initialized
+  masterExpDataPath = "";
+  isSaveSubFolder = false;
+  expName = "";
+  IPListStr = "";
+  analysisPath = "";
+  DatabaseIP = "";
+  DatabaseName = "";
+  DatabaseToken = "";
+  ElogIP = "";
+  ElogUser = "";
+  ElogPWD = "";
+
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found.");
     LogMsg("Please Open the <font style=\"color : red;\">Program Settings </font>");
@@ -1545,32 +1568,38 @@ bool MainWindow::LoadProgramSettings(){
       if( line.left(6) == "//----") break;
 
       switch (count){
-        // case 0 : programSettingsPath = line; break;
-        case 0 : masterExpDataPath     = line; break;
-        case 1 : expName         = line; break;
-        case 2 : IPListStr       = line; break;
-        case 3 : analysisPath    = line; break;
-        case 4 : DatabaseIP      = line; break;
-        case 5 : DatabaseName    = line; break;
-        case 6 : DatabaseToken   = line; break;
-        case 7 : ElogIP          = line; break;
+        case  0 : masterExpDataPath     = line; break;
+        case  1 : isSaveSubFolder = (line == "SubFolder" ?  true : false); break;
+        case  2 : expName         = line; break;
+        case  3 : IPListStr       = line; break;
+        case  4 : analysisPath    = line; break;
+        case  5 : DatabaseIP      = line; break;
+        case  6 : DatabaseName    = line; break;
+        case  7 : DatabaseToken   = line; break;
+        case  8 : ElogIP          = line; break;
+        case  9 : ElogUser        = line; break;
+        case 10 : ElogPWD         = line; break;
       }
 
       count ++;
       line = in.readLine();
+      // printf("%d | %s \n", count, line.toStdString().c_str());
     }
 
-    if( count == 7 ) {
+    if( count >= 3 ) {
       logMsgHTMLMode = false;
       // LogMsg("Setting File Path : " + programSettingsPath);
-      LogMsg("    Analysis Path : " + analysisPath);
-      LogMsg("      Database IP : " + DatabaseIP);
-      LogMsg("    Database Name : " + DatabaseName);
-      LogMsg("   Database Token : " + DatabaseToken);
-      LogMsg("           ElogIP : " + ElogIP);
-      LogMsg("    Exp Data Path : " + masterExpDataPath);
-      LogMsg("   Temp Exp. Name : " + expName);
-      LogMsg("    Digi. IP List : " + IPListStr);
+      LogMsg("          Analysis Path : " + analysisPath);
+      LogMsg("            Database IP : " + DatabaseIP);
+      LogMsg("          Database Name : " + DatabaseName);
+      LogMsg("         Database Token : " + maskText(DatabaseToken));
+      LogMsg("                 ElogIP : " + ElogIP);
+      LogMsg("              Elog User : " + ElogUser);
+      LogMsg("          Elog Password : " + maskText(ElogPWD));
+      LogMsg("          Exp Data Path : " + masterExpDataPath);
+      LogMsg("Save Runs in SubFolders : " +  QString(isSaveSubFolder ? "Yes" : "No") );
+      LogMsg("  Exp. Name (Elog Name) : " + expName);
+      LogMsg("          Digi. IP List : " + IPListStr);
       logMsgHTMLMode = true;
 
       expDataPath = masterExpDataPath + "/" + expName;
@@ -1654,6 +1683,7 @@ void MainWindow::SaveProgramSettings(){
 
   // file.write((programSettingsPath+"\n").toStdString().c_str());
   file.write((masterExpDataPath+"\n").toStdString().c_str());
+  file.write( chkSaveSubFolder->isChecked()  ? "SubFolder\n" : "SingleFolder\n" );
   file.write((expName+"\n").toStdString().c_str());
   file.write((IPListStr+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
@@ -1661,6 +1691,8 @@ void MainWindow::SaveProgramSettings(){
   file.write((DatabaseName+"\n").toStdString().c_str());
   file.write((DatabaseToken+"\n").toStdString().c_str());
   file.write((ElogIP+"\n").toStdString().c_str());
+  file.write((ElogUser+"\n").toStdString().c_str());
+  file.write((ElogPWD+"\n").toStdString().c_str());
   file.write("//------------end of file.");
   
   file.close();
@@ -2195,42 +2227,32 @@ void MainWindow::ChangeExperiment(const QString newExpName){
 
 }
 
+void MainWindow::CreateFolder(QString path, QString AdditionalMsg){
+
+  QDir dir(path);
+  if( !dir.exists()){
+    if( dir.mkpath(path)){
+      LogMsg("Created folder <b>" + path + "</b> " + AdditionalMsg );
+    }else{
+      LogMsg("Folder \"<font style=\"color:red;\"><b>" + rawDataPath + "</b>\" cannot be created. Access right problem? </font>" );
+    }
+  }else{
+      LogMsg("Folder \"<b>" + rawDataPath + "</b>\" already exist." );
+  }
+
+}
+
 void MainWindow::CreateRawDataFolder(){
 
   //----- create data folder
-  QDir dir(rawDataPath);
-  if( !dir.exists()){
-    if( dir.mkpath(rawDataPath)){
-      LogMsg("Created folder <b>" + rawDataPath + "</b> for storing raw data." );
-    }else{
-      LogMsg("<font style=\"color:red;\"><b>" + rawDataPath + "</b> cannot be created. Access right problem? </font>" );
-    }
-  }else{
-      LogMsg("<b>" + rawDataPath + "</b> already exist." );
-  }
+  CreateFolder(rawDataPath, "for storing raw data.");
 
   //----- create root data folder
-  QDir rootDir(rootDataPath);
-  if( !rootDir.exists()) {
-   if( rootDir.mkpath(rootDataPath) ){
-      LogMsg("Created folder <b>" + rootDataPath + "</b> for storing root files.");
-   }else{
-      LogMsg("<font style=\"color:red;\"><b>" + rootDataPath + "</b> cannot be created. Access right problem? </font>" );
-   }
-  }else{
-    LogMsg("<b>" + rootDataPath + "</b> already exist." );
-  }
+  CreateFolder(rootDataPath, "for storing root file.");
 
   //----- create analysis Folder
-  QDir anaDir;
-  if( !anaDir.exists(analysisPath)){
-    if( anaDir.mkpath(analysisPath)){
-      LogMsg("<b>" + analysisPath + "</b> created." );
-    }else{
-      LogMsg("<font style=\"color:red;\"><b>" + analysisPath + "</b> cannot be created. Access right problem?</font>" );
-    }
-  }else{
-    LogMsg("<b>" + analysisPath + "</b> already exist.");
+  if( !analysisPath.isEmpty() ){
+    CreateFolder(analysisPath, "for analysis.");
   }
 
 }
@@ -2380,8 +2402,8 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
   //TODO ===== user name and pwd load from a file.
 
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" 
-      << "-a" << "Author=\'General SOLARIS\'" ;
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD
+      << "-a" << "Author=SOLARIS_DAQ" ;
   if( runNumber > 0 ) arg << "-a" << "RunNo=" + QString::number(runNumber);
   if( category != "" ) arg << "-a" << "Category=" + category;
 
@@ -2410,7 +2432,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
   QProcess elogBash(this);
 
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" << "-w" << QString::number(elogID);
+  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-w" << QString::number(elogID);
 
   //retrevie the elog
   elogBash.start("elog", arg); 
@@ -2427,7 +2449,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
     QString originalHtml = output.mid(index + separator.length());
 
     arg.clear();
-    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << "GeneralSOLARIS" << "solaris" << "-e" << QString::number(elogID)
+    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-e" << QString::number(elogID)
         << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
 
     if( screenID >= 0) {

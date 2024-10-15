@@ -75,6 +75,7 @@ private slots:
   void CreateNewExperiment(const QString newExpName);
   void ChangeExperiment(const QString newExpName);
   void WriteExpNameSh();
+  void CreateFolder(QString path, QString AdditionalMsg);
   void CreateRawDataFolder();
   void CreateDataSymbolicLink();
 
@@ -114,6 +115,7 @@ private:
   
   QPushButton * bnDigiSettings;
   QPushButton * bnSOLSettings;
+
 
   //@-----  scope
   Scope * scope;
@@ -166,7 +168,6 @@ private:
   QStringList detGroupName;
 
   //@----- Program settings
-  // QLineEdit * lSaveSettingPath; 
   QLineEdit * lAnalysisPath; //for git
   QLineEdit * lExpDataPath; 
 
@@ -177,6 +178,11 @@ private:
   QLineEdit * lDatbaseName;
   QLineEdit * lDatbaseToken;
   QLineEdit * lElogIP;
+  QLineEdit * lElogUser;
+  QLineEdit * lElogPWD;
+
+  QCheckBox * chkSaveSubFolder;
+  bool isSaveSubFolder;
 
   QStringList existGitBranches;
 
@@ -192,6 +198,8 @@ private:
   QString DatabaseName;
   QString DatabaseToken;
   QString ElogIP;
+  QString ElogUser;
+  QString ElogPWD;
 
   //@------ experiment settings
   bool isGitExist;
@@ -211,6 +219,18 @@ private:
   //@------ custom comment;
   QPushButton * bnComment;
   void AppendComment();
+
+  QString maskText(const QString &password) {
+    if (password.length() <= 3) {
+      return password; // No masking needed for short passwords
+    } else if (password.length() <= 10) {
+      QString maskedPassword = password.left(3);
+      maskedPassword += QString("*").repeated(password.length() - 3);
+      return maskedPassword;
+    } else {
+      return password.left(3) + QString("*").repeated(7);
+    }
+  }
 
 };
 
