@@ -75,7 +75,7 @@ class Reg {
               haha = "/cmd/"; // for SendChSWTrigger, not in GUI
             }
             if( ch_index == -1 ){ 
-              return "/ch/0.." + std::to_string(nChannals) + haha + name;
+              return "/ch/0.." + std::to_string(nChannals-1) + haha + name;
             }else{
               return "/ch/" + std::to_string(ch_index) + haha + name;
             }
