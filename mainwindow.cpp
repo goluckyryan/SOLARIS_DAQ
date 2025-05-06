@@ -736,6 +736,8 @@ void MainWindow::OpenDigitizers(){
       
       nDigiConnected ++;
 
+      if( maxNumChannelAcrossDigitizer < digi[i]->GetNChannels()) maxNumChannelAcrossDigitizer = digi[i]->GetNChannels();
+
       for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch++) {
         oldTimeStamp[i][ch] = 0;
         oldSavedCount[i][ch] = 0;
@@ -1145,7 +1147,7 @@ void MainWindow::OpenScaler(){
 
 void MainWindow::SetUpScalar(){
 
-  scalar->setGeometry(0, 0, 10 + nDigi * 230, 1500);
+  scalar->setGeometry(0, 0, 10 + nDigi * 230, (maxNumChannelAcrossDigitizer + 5) * 26 );
 
   lbLastUpdateTime = new QLabel("Last update : ", scalar);
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
@@ -1163,7 +1165,8 @@ void MainWindow::SetUpScalar(){
 
   ///==== create the 1st row
   int rowID = 5;
-  for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+
+  for( int ch = 0; ch < maxNumChannelAcrossDigitizer; ch++){
 
     if( ch == 0 ){
       QLabel * lbCH_H = new QLabel("Ch", scalar); 
