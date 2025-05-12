@@ -69,7 +69,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     leAccept = nullptr;
     lbFileSize = nullptr;
 
-    scalarThread = new TimingThread();
+    scalarThread = new TimingThread(); // 2 sec is default
+    //scalarThread->SetWaitTimeSec(2); 
     connect(scalarThread, &TimingThread::TimeUp, this, &MainWindow::UpdateScalar);
 
   }
@@ -1254,6 +1255,8 @@ void MainWindow::CleanUpScalar(){
 
 void MainWindow::UpdateScalar(){
   if( !digi ) return;
+  if( scalar == NULL ) return;
+  if( scalar->isVisible() == false ) return;
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
@@ -1268,22 +1271,32 @@ void MainWindow::UpdateScalar(){
 
     //=========== another method, directly readValue
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
-      digiMTX[iDigi].lock();
+      // digiMTX[iDigi].lock();
       std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
       haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
       std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      digiMTX[iDigi].unlock();
+      // digiMTX[iDigi].unlock();
       
       unsigned long kaka = std::stoul(kakaStr.c_str()) ;
       unsigned long time = std::stoul(timeStr.c_str()) ;
-      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
+      ///* it seems that the ChannelRealtime is not in ns for VX2730
+      if( digi[iDigi]->GetModelName() == "VX2730" ){ time = time / 4;}
 
+      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
+      
       if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
         acceptRate[ch] = 0;
       }
+
       //if( acceptRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
+      // if( ch == 3){
+      //   printf("time: %lu (%lu) = %12.10f, Channel Saved Count %lu (%lu) = %lu | accepted Rate %f\n", 
+      //     time, oldTimeStamp[iDigi][ch], (time - oldTimeStamp[iDigi][ch])/1e9, 
+      //     kaka, oldSavedCount[iDigi][ch], (kaka - oldSavedCount[iDigi][ch]),
+      //     acceptRate[ch]);
+      // }
 
       oldSavedCount[iDigi][ch] = kaka;
       oldTimeStamp[iDigi][ch] = time; 

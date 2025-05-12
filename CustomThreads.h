@@ -78,7 +78,7 @@ class TimingThread : public QThread {
   Q_OBJECT
 public:
   TimingThread(QObject * parent = 0 ) : QThread(parent){
-    waitTime = 20; // 10 x 100 milisec
+    waitTime = 20; // 20 x 100 milisec
     stop = false;
   }
   void Stop() { this->stop = true;}
@@ -88,7 +88,7 @@ public:
     unsigned int count  = 0;
     stop = false;
     do{
-      usleep(100000);
+      usleep(100000); // sleep for 100 ms
       count ++;
       if( count % waitTime == 0){
         emit TimeUp();

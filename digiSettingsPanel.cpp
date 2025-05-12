@@ -119,7 +119,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       }
     }
 
-    {//^====================== Group Board status
+    {//^====================== Group of Board status
       QGroupBox * statusBox = new QGroupBox("Board Status", digiTab[iDigi]);
       QGridLayout * statusLayout = new QGridLayout(statusBox);
       statusLayout->setAlignment(Qt::AlignLeft);
@@ -338,8 +338,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
           ckbGlbTrgSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[i].second), digiTab[iDigi]);
-          boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i);
+          boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i%5);
           connect(ckbGlbTrgSource[iDigi][i], &QCheckBox::stateChanged, this, &DigiSettingsPanel::SetGlobalTriggerSource);
+          if ( i ==  4) rowId++; 
         }
 
         //-------------------------------------
@@ -556,13 +557,13 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           }
         });
 
-        connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "Square" ) {
-            bdTestPulse[iDigi]->setEnabled(true);
-          }else{
-            if( ckbGlbTrgSource[iDigi][3]->isChecked() == false )  bdTestPulse[iDigi]->setEnabled(false);
-          }
-        });
+        // connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+        //   if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "Square" ) {
+        //     bdTestPulse[iDigi]->setEnabled(true);
+        //   }else{
+        //     if( ckbGlbTrgSource[iDigi][3]->isChecked() == false )  bdTestPulse[iDigi]->setEnabled(false);
+        //   }
+        // });
 
       }
       
@@ -584,8 +585,21 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         spbTestPusleLowLevel[iDigi]->setFixedWidth(100);
         spbTestPusleHighLevel[iDigi]->setFixedWidth(100);
 
+        QLabel * lbFreq = new QLabel("", bdTestPulse[iDigi]); lbFreq->setAlignment(Qt::AlignCenter); testPulseLayout->addWidget(lbFreq, 0, 2);
         QLabel * lblow = new QLabel("", bdTestPulse[iDigi]); lblow->setAlignment(Qt::AlignCenter); testPulseLayout->addWidget(lblow, 2, 2);
         QLabel * lbhigh = new QLabel("", bdTestPulse[iDigi]); lbhigh->setAlignment(Qt::AlignCenter); testPulseLayout->addWidget(lbhigh, 3, 2);
+        
+        connect(dsbTestPuslePeriod[iDigi], &RSpinBox::valueChanged, this, [=](){
+          double value = dsbTestPuslePeriod[iDigi]->value();
+          double freq = 1e9/value; // Hz
+          if( 1e3 > freq){
+            lbFreq->setText(" = " + QString::number(freq, 'f', 2) + " Hz");
+          }else if( 1e6 > freq && freq >= 1e3 ) {
+            lbFreq->setText(" = " + QString::number(freq/1e3, 'f', 2) + " KHz");
+          }else if( freq >= 1e6 ) {
+            lbFreq->setText(" = " + QString::number(freq/1e6, 'f', 2) + " MHz");
+          }
+        });
         
         connect(spbTestPusleLowLevel[iDigi], &RSpinBox::valueChanged, this, [=](){
           double value = spbTestPusleLowLevel[iDigi]->value();
@@ -597,6 +611,38 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           lbhigh->setText("approx. " + QString::number(value/0xffff*2 - 1, 'f', 2) + " V");
         });
 
+
+        QPushButton * bnTestPulse = new QPushButton("Set 1 kHz, +1 V Square Pulse", bdTestPulse[iDigi]);
+        testPulseLayout->addWidget(bnTestPulse, 4, 0, 1, 3);
+        connect(bnTestPulse, &QPushButton::clicked, this, [=](){
+
+          SendLogMsg("Digi-" + QString::number(digi[ID]->GetSerialNumber()) + "|Set Test Pulse to 1kHz, +1V, 3000 ns");
+
+          digi[ID]->WriteValue(PHA::DIG::TestPulsePeriod, std::to_string(1e6));
+          digi[ID]->WriteValue(PHA::DIG::TestPulseWidth, std::to_string(3000));
+          digi[ID]->WriteValue(PHA::DIG::TestPulseLowLevel,  std::to_string(24700));
+          digi[ID]->WriteValue(PHA::DIG::TestPulseHighLevel, std::to_string(45000));
+
+          enableSignalSlot = false;
+
+          FillSpinBoxValueFromMemory(dsbTestPuslePeriod[ID], PHA::DIG::TestPulsePeriod);
+          FillSpinBoxValueFromMemory(dsbTestPusleWidth[ID], PHA::DIG::TestPulseWidth);
+          FillSpinBoxValueFromMemory(spbTestPusleLowLevel[ID], PHA::DIG::TestPulseLowLevel);
+          FillSpinBoxValueFromMemory(spbTestPusleHighLevel[ID], PHA::DIG::TestPulseHighLevel);
+
+          enableSignalSlot = true;
+
+        });
+
+        if( digi[iDigi]->GetCupVer() >= 2024041200 && digi[iDigi]->GetFPGAType() == DPPType::PSD ){ // there are expoential test pulse
+          SetupSpinBox(sbIPEAmplitude[iDigi], PSD::DIG::IPEAmplitude, -1, false, "Ampuitude [LSB] :", testPulseLayout, 6, 0);
+          SetupSpinBox(sbIPEBaseline[iDigi], PSD::DIG::IPEBaseline, -1, false, "Base line [LSB] :", testPulseLayout, 7, 0);
+          SetupSpinBox(sbIPEDecayTime[iDigi], PSD::DIG::IPEDecayTime, -1, false, "Decay Time [ns] :", testPulseLayout, 8, 0);
+          SetupSpinBox(sbIPERate[iDigi], PSD::DIG::IPERate, -1, false, "Rate [Hz] :", testPulseLayout, 9, 0);
+          SetupComboBox(cbIPETimeMode[iDigi], PSD::DIG::IPETimeMode, -1, false, "Time Mode :", testPulseLayout, 10, 0);
+
+        }
+        
       }
 
       {//^====================== VGA settings
@@ -1022,8 +1068,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           }
         }
 
-
-
         enableSignalSlot = true;
       });
 
@@ -1062,7 +1106,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       QPushButton * bnRead = new QPushButton("Read", ICTab);
       inquiryLayout->addWidget(bnRead, rowID, 5, 2, 1);
-      connect(bnRead, &QPushButton::clicked, this, [=](){ ReadBoardSetting(cbBdSettings->currentIndex()); ReadChannelSetting(cbChSettings->currentIndex()); });
+      connect(bnRead, &QPushButton::clicked, this, [=](){ 
+        ReadBoardSetting(cbBdSettings->currentIndex()); 
+        ReadChannelSetting(cbChSettings->currentIndex()); 
+      });
 
       cbBdAns = new RComboBox(ICTab);
       cbBdAns->setFixedWidth(200);
@@ -1228,9 +1275,12 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           double value = sbChSettingsWrite->value();
           sbChSettingsWrite->setValue( (std::round(value/step) * step) );
         }
-
-        Reg para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
+        
         ID = cbIQDigi->currentIndex();
+        Reg para ;
+        if ( digi[ID]->GetFPGAType() == DPPType::PHA) para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
+        if ( digi[ID]->GetFPGAType() == DPPType::PSD) para = PSD::CH::AllSettings[cbChSettings->currentIndex()];
+
         int ch_index = cbIQCh->currentIndex();
         QString msg;
         msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
@@ -2339,10 +2389,14 @@ void DigiSettingsPanel::UpdateStatus(){
   digi[ID]->ReadValue(PHA::DIG::LED_status);
   digi[ID]->ReadValue(PHA::DIG::ACQ_status);
 
-  for( int i = 0; i < (int) PHA::DIG::TempSensADC.size(); i++){
-    if( digi[ID]->GetModelName() != "VX2745" && i > 0 ) continue;
-    digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+  if( digi[ID]->GetModelName() == "VX2740" ) {
+    digi[ID]->ReadValue(PHA::DIG::TempSensADC[0]);
+  }else{
+      for( int i = 0; i < (int) PHA::DIG::TempSensADC.size(); i++){
+      digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+    }
   }
+
   for( int i = 0; i < (int) PHA::DIG::TempSensOthers.size(); i++){
     digi[ID]->ReadValue(PHA::DIG::TempSensOthers[i]);
   }
@@ -2384,8 +2438,8 @@ void DigiSettingsPanel::EnableControl(){
     bnDisarmACQ[id]->setEnabled(enable);
     bnSoftwareStart[id]->setEnabled(enable);
     bnSoftwareStop[id]->setEnabled(enable);
-
-    if( digi[id]->GetFPGAType() != "DPP_PHA" || digi[id]->GetModelName() != "VX2745" ) bdVGA[id]->setEnabled(false);
+    
+    if( digi[id]->GetModelName() != "VX2745" ) bdVGA[id]->setEnabled(false);
 
     QVector<QTabWidget*> tempArray = {inputTab[id], trapTab[id], probeTab[id], otherTab[id] };
 
@@ -2518,7 +2572,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   //-------- temperature
   for( int i = 0; i < 8; i++){
-    leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::DIG::TempSensADC[i])));
+    leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::DIG::TempSensADC[i]))); // same for PSD
   }
   
   if( onlyStatus ) {
@@ -2551,13 +2605,13 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   result = QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::DIG::GlobalTriggerSource));
   resultList = result.remove(QChar(' ')).split("|");
-  bdTestPulse[ID]->setEnabled(false);
+  // bdTestPulse[ID]->setEnabled(false);
   for( int j = 0; j < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); j++){
     ckbGlbTrgSource[ID][j]->setChecked(false);
     for( int i = 0; i < resultList.count(); i++){
       if( resultList[i] == QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[j].first) ) {
         ckbGlbTrgSource[ID][j]->setChecked(true);
-        if( resultList[i] == "TestPulse" ||  cbDACoutMode[ID]->currentData().toString().toStdString() == "Square" ) bdTestPulse[ID]->setEnabled(true);
+        // if( resultList[i] == "TestPulse" ||  cbDACoutMode[ID]->currentData().toString().toStdString() == "Square" ) bdTestPulse[ID]->setEnabled(true);
       }
     }
   }
@@ -2885,13 +2939,13 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
   if( !enableSignalSlot ) return;
 
   std::string value = "";
-  if( cbDACoutMode[ID]->currentData().toString().toStdString() != "Square") bdTestPulse[ID]->setEnabled(false);
+  // if( cbDACoutMode[ID]->currentData().toString().toStdString() != "Square") bdTestPulse[ID]->setEnabled(false);
   for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
     if( ckbGlbTrgSource[ID][i]->isChecked() ){
       //printf("----- %s \n", DIGIPARA::DIG::StartSource.GetAnswers()[i].first.c_str());
       if( value != "" ) value += " | ";
       value += PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first;
-      if( PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first == "TestPulse" ) bdTestPulse[ID]->setEnabled(true);
+      // if( PHA::DIG::GlobalTriggerSource.GetAnswers()[i].first == "TestPulse" ) bdTestPulse[ID]->setEnabled(true);
     }
   }
 

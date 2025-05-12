@@ -36,7 +36,7 @@ class Reg {
     }
     Reg(std::string para, RW readwrite, 
         TYPE type = TYPE::CH,
-        std::vector<std::pair<std::string,std::string>> answer = {},
+        std::vector<std::pair<std::string,std::string>> answer = {}, // first = value, second = display
         ANSTYPE ansType = ANSTYPE::COMBOX,
         std::string ansUnit = "",
         bool isCmd = false){
@@ -191,7 +191,12 @@ namespace PHA{
                                                                                          {"SwTrg",      "Software" },
                                                                                          {"GPIO",       "GPIO" },
                                                                                          {"TestPulse",  "Test Pulse" },
-                                                                                         {"LVDS",       "LVDS"}}, ANSTYPE::STR);
+                                                                                         {"LVDS",       "LVDS"},
+                                                                                         {"ITLA",       "ITL-A"},
+                                                                                         {"ITLB",       "ITL-B"},
+                                                                                         {"ITLA_AND_ITLB",       "ITL-A & ITL-B"},
+                                                                                         {"ITLA_OR_ITLB",       "ITL-A || ITL-B"},
+                                                                                         {"UserTrg",       "User custom Trigger"}}, ANSTYPE::STR);
 
     const Reg BusyInSource             ("BusyInSource", RW::ReadWrite, TYPE::DIG, {{"Disabled","Disabled"},
                                                                                    {"SIN", "SIN"},
@@ -217,6 +222,7 @@ namespace PHA{
                                                                                  {"SyncIn",    "SyncIn Signal"}, 
                                                                                  {"SIN",       "S-IN Signal"}, 
                                                                                  {"GPIO",      "GPIO Signal"}, 
+                                                                                 {"LBinClk",      "GPIO Signal"}, 
                                                                                  {"AcceptTrg", "Acceped Trigger Signal"}, 
                                                                                  {"TrgClk",    "Trigger Clock"}});
     const Reg GPIOMode                 ("GPIOMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
@@ -257,8 +263,8 @@ namespace PHA{
     const Reg PermanentClockOutDelay   ("PermanentClockOutDelay", RW::ReadWrite, TYPE::DIG, {{"-18888.888", ""}, {"18888.888", ""}, {"74.074", ""}},  ANSTYPE::FLOAT, "ps");
     const Reg TestPulsePeriod          ("TestPulsePeriod", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg TestPulseWidth           ("TestPulseWidth", RW::ReadWrite, TYPE::DIG,  {{"0", ""},{"34359738360", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
-    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
-    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TestPulseLowLevel        ("TestPulseLowLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ADC counts");
+    const Reg TestPulseHighLevel       ("TestPulseHighLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ADC counts");
     const Reg ErrorFlagMask            ("ErrorFlagMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
     const Reg ErrorFlagDataMask        ("ErrorFlagDataMask", RW::ReadWrite, TYPE::DIG, {}, ANSTYPE::BINARY);
     const Reg DACoutMode               ("DACoutMode", RW::ReadWrite, TYPE::DIG, {{"Static",     "DAC static level"},
@@ -267,6 +273,7 @@ namespace PHA{
                                                                                  {"OverThrSum", "Number of Channels triggered"},
                                                                                  {"Ramp",       "14-bit counter"},
                                                                                  {"Sin5MHz",    "5 MHz Sin wave Vpp = 2V"},
+                                                                                 {"IPE",        "Internal Pulse Emultor"},
                                                                                  {"Square",     "Test Pulse"}});
     const Reg DACoutStaticLevel        ("DACoutStaticLevel", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"16383", ""}, {"1",""}}, ANSTYPE::INTEGER, "units");
     const Reg DACoutChSelect           ("DACoutChSelect", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"64", ""}, {"1",""}}, ANSTYPE::INTEGER);
@@ -446,10 +453,9 @@ namespace PHA{
     const Reg ChannelWaveCount     ("ChWaveCnt", RW::ReadOnly, TYPE::CH, {}, ANSTYPE::STR);
 
     /// ======= read write
-    //^ not impletemented
+    //^ not impletemented in digitizer panel
     const Reg SelfTriggerWidth  ("SelfTriggerWidth", RW::ReadWrite, TYPE::CH, {{"0", ""},{"6000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns"); // not sure the max 
-    const Reg SignalOffset      ("SignalOffset",     RW::ReadWrite, TYPE::CH, {{"0", ""},{"1000", ""},{"1", ""}}, ANSTYPE::INTEGER, "uV"); // not sure the max
-
+    const Reg SignalOffset      ("SignalOffset",     RW::ReadWrite, TYPE::CH, {{"-1000000", ""},{"1000000", ""},{"1", ""}}, ANSTYPE::INTEGER, "uV"); // not sure the max     
 
     //^ impletemented
     const Reg ChannelEnable    ("ChEnable", RW::ReadWrite, TYPE::CH, {{"True", "Enabled"}, {"False", "Disabled"}});
@@ -462,6 +468,7 @@ namespace PHA{
                                                                                        {"ADC_TEST_RAMP",    "ADC produces RAMP signal"}, 
                                                                                        {"ADC_TEST_SIN",     "ADC produce SIN signal"}, 
                                                                                        {"Ramp",             "Ramp generator"}, 
+                                                                                       {"IPE",              "Internal Pulse Emulator"}, 
                                                                                        {"SquareWave",       "Test Pusle (Square Wave)"}  });
     const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
@@ -563,6 +570,9 @@ namespace PHA{
                                                                                        {"SWTrigger",             "Software Trigger"}, 
                                                                                        {"ChSelfTrigger",         "Channel Self-Trigger"}, 
                                                                                        {"Ch64Trigger",           "Channel 64-Trigger"}, 
+                                                                                       {"ITLA",                 "ITL-A"}, 
+                                                                                       {"ITLB",                 "ITL-B"}, 
+                                                                                       {"LVDS",                 "LVDS"}, 
                                                                                        {"Disabled",              "Disabled"}});
     const Reg ChannelsTriggerMask     ("ChannelsTriggerMask", RW::ReadWrite, TYPE::CH, {},  ANSTYPE::BYTE, "64-bit" );
     const Reg ChannelVetoSource       ("ChannelVetoSource", RW::ReadWrite, TYPE::CH, {{"BoardVeto", "Board Veto"},
@@ -577,6 +587,9 @@ namespace PHA{
                                                                                       {"SWTrigger",            "Software Trigger"}, 
                                                                                       {"ChSelfTrigger",        "Channel Self-Trigger"}, 
                                                                                       {"Ch64Trigger",          "Channel 64-Trigger"}, 
+                                                                                      {"ITLA",                 "ITL-A"}, 
+                                                                                      {"ITLB",                 "ITL-B"}, 
+                                                                                      {"LVDS",                 "LVDS"}, 
                                                                                       {"Disabled",             "Disabled"}});
 
     const Reg EventSelector           ("EventSelector", RW::ReadWrite, TYPE::CH, {{"All", "All"},
@@ -669,8 +682,11 @@ namespace PHA{
       WaveDigitalProbe0          ,
       WaveDigitalProbe1          ,
       WaveDigitalProbe2          ,
-      WaveDigitalProbe3         
+      WaveDigitalProbe3          ,
 
+      SelfTriggerWidth       ,
+      SignalOffset
+      
       // CoincidenceLengthSample    ,
       // RecordLengthSample         ,
       // PreTriggerSample           ,
@@ -773,10 +789,20 @@ namespace PSD{
     const Reg EnableStatisticEvents    = PHA::DIG::EnableStatisticEvents;
     const Reg VolatileClockOutDelay    = PHA::DIG::VolatileClockOutDelay;
     const Reg PermanentClockOutDelay   = PHA::DIG::PermanentClockOutDelay;
+
     const Reg TestPulsePeriod          = PHA::DIG::TestPulsePeriod;
     const Reg TestPulseWidth           = PHA::DIG::TestPulseWidth;
     const Reg TestPulseLowLevel        = PHA::DIG::TestPulseLowLevel;
     const Reg TestPulseHighLevel       = PHA::DIG::TestPulseHighLevel;
+
+    // only for version >= 2024041200
+    const Reg IPEAmplitude          ("IPEAmplitude", RW::ReadWrite, TYPE::DIG, {{"0", ""},{"16383", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ADC counts");
+    const Reg IPEBaseline           ("IPEBaseline",  RW::ReadWrite, TYPE::DIG, {{"0", ""},{"16383", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ADC counts");
+    const Reg IPEDecayTime          ("IPEDecayTime", RW::ReadWrite, TYPE::DIG, {{"8", ""},{ "2000", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg IPERate               ("IPERate",      RW::ReadWrite, TYPE::DIG, {{"1", ""},{"60000", ""}, {"1", ""}}, ANSTYPE::INTEGER, "Hz");
+    const Reg IPETimeMode           ("IPETimeMode",  RW::ReadWrite, TYPE::DIG, {{"ConstantRate", "constant rate"},
+                                                                                {"Poissonian", "Poisson"}});
+
     const Reg ErrorFlagMask            = PHA::DIG::ErrorFlagMask;
     const Reg ErrorFlagDataMask        = PHA::DIG::ErrorFlagDataMask;
     const Reg DACoutMode               = PHA::DIG::DACoutMode;
@@ -950,10 +976,16 @@ namespace PSD{
     const Reg ChannelWaveCount     = PHA::CH::ChannelWaveCount;
 
     /// ======= read write
-    //^ not impletemented
+    //^ not impletemented in digitizer panel
+    //--- only for VX2745
     const Reg SelfTriggerWidth  = PHA::CH::SelfTriggerWidth; 
-    const Reg SignalOffset     = PHA::CH::SignalOffset;
+    
+    //--- for VX2730
+    const Reg ChGain   ("ChGain", RW::ReadWrite, TYPE::CH, {{"0", ""},{"29", ""}, {"1", ""}}, ANSTYPE::INTEGER, "dB"); 
 
+    //--- for VX2745 and VX2730
+    const Reg SignalOffset     = PHA::CH::SignalOffset;
+    
     //^ impletemented
     const Reg ChannelEnable    = PHA::CH::ChannelEnable;
     const Reg DC_Offset        = PHA::CH::DC_Offset;
@@ -1073,7 +1105,7 @@ namespace PSD{
     const Reg CFDDelay ("CFDDelayT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"8184", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg CFDFraction ("CFDFraction", RW::ReadWrite, TYPE::CH, {{"25", ""},{"100", ""},{"0", ""}}, ANSTYPE::INTEGER, "%");
 
-    const Reg TimeFilterRetriggerGuard ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
+    const Reg TimeFilterRetriggerGuard ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
 
     const Reg TriggerHysteresis     ("TriggerHysteresis", RW::ReadWrite, TYPE::CH, {{"Enabled", "Enabled"}, {"Disabled", "Disabled"}});
     const Reg PileupGap ("PileupGap", RW::ReadWrite, TYPE::CH, {{"0", ""},{"65535", ""},{"1", ""}}, ANSTYPE::INTEGER, "sample");
@@ -1159,7 +1191,11 @@ namespace PSD{
       WaveDigitalProbe0          , //  
       WaveDigitalProbe1          , //  
       WaveDigitalProbe2          , //  
-      WaveDigitalProbe3          //,   
+      WaveDigitalProbe3          ,
+      
+      SelfTriggerWidth          ,
+      SignalOffset              ,
+      ChGain
 
       // RecordLengthSample         , // 21  
       // PreTriggerSample           , // 22  

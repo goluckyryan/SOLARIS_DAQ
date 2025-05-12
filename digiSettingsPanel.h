@@ -164,6 +164,12 @@ private:
   RSpinBox * spbTestPusleLowLevel[MaxNumberOfDigitizer];
   RSpinBox * spbTestPusleHighLevel[MaxNumberOfDigitizer];
 
+  RSpinBox * sbIPEAmplitude[MaxNumberOfDigitizer];
+  RSpinBox * sbIPEBaseline[MaxNumberOfDigitizer];
+  RSpinBox * sbIPEDecayTime[MaxNumberOfDigitizer];
+  RSpinBox * sbIPERate[MaxNumberOfDigitizer];
+  RComboBox * cbIPETimeMode[MaxNumberOfDigitizer];
+
   //-------------- VGA
   RSpinBox * VGA[MaxNumberOfDigitizer][4];
 

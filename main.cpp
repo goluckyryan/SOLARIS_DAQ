@@ -8,6 +8,8 @@
 
 int main(int argc, char *argv[]){
 
+    printf("######### Starting SOLARIS DAQ....\n");
+
     QApplication a(argc, argv);
 
     bool isLock = false;
@@ -60,6 +62,7 @@ int main(int argc, char *argv[]){
     pidFile.write(  QString::number(QCoreApplication::applicationPid() ).toStdString().c_str() );
     pidFile.close();
 
+    printf("######### Open Main Window...\n");
     MainWindow w;
     w.show();
     return a.exec();

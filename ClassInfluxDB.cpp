@@ -108,7 +108,7 @@ std::string InfluxDB::CheckDatabases(){
   
   Execute();
   
-  printf("|%s|\n", respondStr.c_str());
+  //printf("|%s|\n", respondStr.c_str());
 
   if( respond != CURLE_OK) return "CURL Error.";
 
@@ -118,9 +118,10 @@ std::string InfluxDB::CheckDatabases(){
   std::istringstream iss(respondStr);
   std::vector<std::string> lines;
   std::string line;
+  // printf("==== InfluxDB::CheckDatabases()\n");
   while (std::getline(iss, line)) {
-      printf("%s\n", line.c_str());
-      lines.push_back(line);
+    // printf("%s\n", line.c_str());
+    lines.push_back(line);
   }
 
   // Extract the third column from each line and store it in a vector
