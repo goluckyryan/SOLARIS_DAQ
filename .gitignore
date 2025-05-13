@@ -26,6 +26,7 @@ moc_*
 *.rej
 *.so
 *.so.*
+*.json
 *_pch.h.cpp
 *_resource.rc
 *.qm
