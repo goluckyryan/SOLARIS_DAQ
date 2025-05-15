@@ -2820,84 +2820,89 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   ReadTriggerMap();
 
-  if( cbChPick[ID]->currentData().toInt() >= 0 ) return;
+  // if( cbChPick[ID]->currentData().toInt() >= 0 ) {
+  //   cbChPick[ID]->setCurrentIndex(-1);
+  //   cbChPick[ID]->setCurrentText("All");
+  // }
 
-  SyncComboBox(cbbOnOff       , -1);
-  SyncSpinBox(spbDCOffset     , -1);
-  SyncSpinBox(spbThreshold    , -1);
-  SyncComboBox(cbbParity      , -1);
-  SyncSpinBox(spbRecordLength , -1);
-  SyncSpinBox(spbPreTrigger   , -1);
+  int chIndex = cbChPick[ID]->currentData().toInt();
 
-  SyncComboBox(cbbWaveSource, -1);
-  SyncComboBox(cbbWaveRes,    -1);
-  SyncComboBox(cbbWaveSave,   -1);
+  SyncComboBox(cbbOnOff       , chIndex);
+  SyncSpinBox(spbDCOffset     , chIndex);
+  SyncSpinBox(spbThreshold    , chIndex);
+  SyncComboBox(cbbParity      , chIndex);
+  SyncSpinBox(spbRecordLength , chIndex);
+  SyncSpinBox(spbPreTrigger   , chIndex);
 
-  SyncComboBox(cbbAnaProbe0, -1);
-  SyncComboBox(cbbAnaProbe1, -1);
-  SyncComboBox(cbbDigProbe0, -1);
-  SyncComboBox(cbbDigProbe1, -1);
-  SyncComboBox(cbbDigProbe2, -1);
-  SyncComboBox(cbbDigProbe3, -1);
+  SyncComboBox(cbbWaveSource, chIndex);
+  SyncComboBox(cbbWaveRes,    chIndex);
+  SyncComboBox(cbbWaveSave,   chIndex);
 
-  SyncComboBox(cbbEventSelector, -1);
-  SyncComboBox(cbbWaveSelector , -1);
-  SyncSpinBox(spbEnergySkimHigh, -1);
-  SyncSpinBox(spbEnergySkimLow , -1);
+  SyncComboBox(cbbAnaProbe0, chIndex);
+  SyncComboBox(cbbAnaProbe1, chIndex);
+  SyncComboBox(cbbDigProbe0, chIndex);
+  SyncComboBox(cbbDigProbe1, chIndex);
+  SyncComboBox(cbbDigProbe2, chIndex);
+  SyncComboBox(cbbDigProbe3, chIndex);
 
-  SyncComboBox(cbbEvtTrigger   , -1);
-  SyncComboBox(cbbWaveTrigger  , -1);
-  SyncComboBox(cbbChVetoSrc    , -1);
-  SyncComboBox(cbbCoinMask     , -1);
-  SyncComboBox(cbbAntiCoinMask , -1);
-  SyncSpinBox(spbCoinLength    , -1);
-  SyncSpinBox(spbADCVetoWidth  , -1);
+  SyncComboBox(cbbEventSelector, chIndex);
+  SyncComboBox(cbbWaveSelector , chIndex);
+  SyncSpinBox(spbEnergySkimHigh, chIndex);
+  SyncSpinBox(spbEnergySkimLow , chIndex);
+
+  SyncComboBox(cbbEvtTrigger   , chIndex);
+  SyncComboBox(cbbWaveTrigger  , chIndex);
+  SyncComboBox(cbbChVetoSrc    , chIndex);
+  SyncComboBox(cbbCoinMask     , chIndex);
+  SyncComboBox(cbbAntiCoinMask , chIndex);
+  SyncSpinBox(spbCoinLength    , chIndex);
+  SyncSpinBox(spbADCVetoWidth  , chIndex);
 
   if( digi[ID]->GetFPGAType() == DPPType::PHA){  
-    SyncSpinBox(spbInputRiseTime , -1);
-    SyncSpinBox(spbTriggerGuard  , -1);
-    SyncComboBox(cbbLowFilter    , -1);
+    SyncSpinBox(spbInputRiseTime , chIndex);
+    SyncSpinBox(spbTriggerGuard  , chIndex);
+    SyncComboBox(cbbLowFilter    , chIndex);
 
-    SyncSpinBox(spbTrapRiseTime  , -1);
-    SyncSpinBox(spbTrapFlatTop   , -1);
-    SyncSpinBox(spbTrapPoleZero  , -1);
+    SyncSpinBox(spbTrapRiseTime  , chIndex);
+    SyncSpinBox(spbTrapFlatTop   , chIndex);
+    SyncSpinBox(spbTrapPoleZero  , chIndex);
     
-    SyncSpinBox(spbPeaking       , -1);
-    SyncSpinBox(spbBaselineGuard , -1);
-    SyncSpinBox(spbPileupGuard   , -1);
+    SyncSpinBox(spbPeaking       , chIndex);
+    SyncSpinBox(spbBaselineGuard , chIndex);
+    SyncSpinBox(spbPileupGuard   , chIndex);
     
-    SyncComboBox(cbbBaselineAvg  , -1);
-    SyncComboBox(cbbPeakingAvg   , -1);
-    SyncSpinBox(spbFineGain      , -1);
+    SyncComboBox(cbbBaselineAvg  , chIndex);
+    SyncComboBox(cbbPeakingAvg   , chIndex);
+    SyncSpinBox(spbFineGain      , chIndex);
   }
 
   if( digi[ID]->GetFPGAType() == DPPType::PSD){  
 
 
-    SyncComboBox(cbbADCInputBaselineAvg , -1);
-    SyncSpinBox(spbAbsBaseline          , -1);
-    SyncSpinBox(spbADCInputBaselineGuard, -1);
+    SyncComboBox(cbbADCInputBaselineAvg , chIndex);
+    SyncSpinBox(spbAbsBaseline          , chIndex);
+    SyncSpinBox(spbADCInputBaselineGuard, chIndex);
 
-    SyncComboBox(cbbTriggerFilter          , -1);
-    SyncComboBox(cbbTriggerHysteresis      , -1);
-    SyncSpinBox(spbCFDDelay                , -1);
-    SyncSpinBox(spbCFDFraction             , -1);
-    SyncComboBox(cbbSmoothingFactor        , -1);
-    SyncComboBox(cbbChargeSmooting         , -1);
-    SyncComboBox(cbbTimeFilterSmoothing    , -1);
-    SyncSpinBox(spbTimeFilterReTriggerGuard, -1);
-    SyncSpinBox(spbPileupGap               , -1);
+    SyncComboBox(cbbTriggerFilter          , chIndex);
+    SyncComboBox(cbbTriggerHysteresis      , chIndex);
+    SyncSpinBox(spbCFDDelay                , chIndex);
+    SyncSpinBox(spbCFDFraction             , chIndex);
+    SyncComboBox(cbbSmoothingFactor        , chIndex);
+    SyncComboBox(cbbChargeSmooting         , chIndex);
+    SyncComboBox(cbbTimeFilterSmoothing    , chIndex);
+    SyncSpinBox(spbTimeFilterReTriggerGuard, chIndex);
+    SyncSpinBox(spbPileupGap               , chIndex);
 
-    SyncSpinBox(spbGateLong                      , -1);
-    SyncSpinBox(spbGateShort                     , -1);
-    SyncSpinBox(spbGateOffset                    , -1);
-    SyncSpinBox(spbLongChargeIntergratorPedestal , -1);
-    SyncSpinBox(spbShortChargeIntergratorPedestal, -1);
-    SyncComboBox(cbbEnergyGain                   , -1);
+    SyncSpinBox(spbGateLong                      , chIndex);
+    SyncSpinBox(spbGateShort                     , chIndex);
+    SyncSpinBox(spbGateOffset                    , chIndex);
+    SyncSpinBox(spbLongChargeIntergratorPedestal , chIndex);
+    SyncSpinBox(spbShortChargeIntergratorPedestal, chIndex);
+    SyncComboBox(cbbEnergyGain                   , chIndex);
 
-    SyncSpinBox(spbNeutronThreshold   , -1);
-    SyncComboBox(cbbEventNeutronReject, -1);
-    SyncComboBox(cbbWaveNeutronReject , -1);
+    SyncSpinBox(spbNeutronThreshold   , chIndex);
+    SyncComboBox(cbbEventNeutronReject, chIndex);
+    SyncComboBox(cbbWaveNeutronReject , chIndex);
 
 
   }
@@ -3090,20 +3095,26 @@ void DigiSettingsPanel::SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel + 1]
     for( int i = 0; i < nCh; i++) cbb[ID][i]->setCurrentIndex(index);
     enableSignalSlot = true;
   }else{
-    //check is all ComboBox has same index;
-    int count = 1;
-    const int index = cbb[ID][0]->currentIndex();
-    for( int i = 1; i < nCh; i ++){
-      if( cbb[ID][i]->currentIndex() == index ) count++;
-    }
+    if( ch == -1 ) {
+      //check is all ComboBox has same index;
+      int count = 1;
+      const int index = cbb[ID][0]->currentIndex();
+      for( int i = 1; i < nCh; i ++){
+        if( cbb[ID][i]->currentIndex() == index ) count++;
+      }
 
-    enableSignalSlot = false;
-    if( count != nCh ){
-       cbb[ID][nCh]->setCurrentText("");
+      enableSignalSlot = false;
+      if( count != nCh ){
+        cbb[ID][nCh]->setCurrentText("");
+      }else{
+        cbb[ID][nCh]->setCurrentIndex(index);
+      }
+      enableSignalSlot = true;
     }else{
-       cbb[ID][nCh]->setCurrentIndex(index);
+      enableSignalSlot = false;
+      cbb[ID][nCh]->setCurrentIndex(cbb[ID][ch]->currentIndex());
+      enableSignalSlot = true;
     }
-    enableSignalSlot = true;
   }
 }
 
@@ -3112,28 +3123,37 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
 
   const int nCh = digi[ID]->GetNChannels();
 
-  if( ch == nCh ){
+  if( ch == nCh ){ // set all channels to same value
     const int value = spb[ID][nCh]->value();
     if( spb[ID][nCh]->value() == -999 ) return;  
     enableSignalSlot = false;
     for( int i = 0; i < nCh; i++) spb[ID][i]->setValue(value);
     enableSignalSlot = true;
-  }else{
-    //check is all ComboBox has same index;
-    int count = 1;
-    const int value = spb[ID][0]->value();
-    for( int i = 1; i < nCh; i ++){
-      if( spb[ID][i]->value() == value ) count++;
+  }else{ 
+    if( ch == -1 ) {
+      //check is all ComboBox has same index;
+      int count = 1;
+      const int value = spb[ID][0]->value();
+      for( int i = 1; i < nCh; i ++){
+        if( spb[ID][i]->value() == value ) count++;
+      }
+
+      //printf("%d =? %d \n", count, nCh);
+      enableSignalSlot = false;
+      if( count != nCh ){
+        spb[ID][nCh]->setValue(-1);
+      }else{
+        spb[ID][nCh]->setValue(value);
+      }
+      enableSignalSlot = true;
+
+    }else{
+      enableSignalSlot = false;
+      spb[ID][nCh]->setValue(spb[ID][ch]->value());
+      enableSignalSlot = true;
     }
 
-    //printf("%d =? %d \n", count, nCh);
-    enableSignalSlot = false;
-    if( count != nCh ){
-       spb[ID][nCh]->setValue(-1);
-    }else{
-       spb[ID][nCh]->setValue(value);
-    }
-    enableSignalSlot = true;
+    spb[ID][nCh]->setStyleSheet("");
   }
 }
 
@@ -3170,6 +3190,7 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg p
   }else{
     //printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
   }
+  cbb->setStyleSheet("");
 }
 
 void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){
@@ -3181,6 +3202,7 @@ void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg par
   }else{
     spb->setValue(result.toDouble());
   }
+  spb->setStyleSheet("");
 }
 
 void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
