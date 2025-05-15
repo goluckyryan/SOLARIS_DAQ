@@ -11,8 +11,8 @@
 #include <QRandomGenerator>
 #include <QVariant>
 #include <QCoreApplication>
-#include <QChartView>
-#include <QValueAxis>
+//#include <QChartView>
+//#include <QValueAxis>
 #include <QStandardItemModel>
 #include <QApplication>
 #include <QDateTime>
@@ -1527,7 +1527,15 @@ void MainWindow::ProgramSettingsPanel(){
 
     expDataPath = masterExpDataPath + "/" + expName;
     rawDataPath = expDataPath + "/data_raw/";
-    rootDataPath = expDataPath + "/root_data/";
+    rootDataPath = expDataPath + "/root_data/";    
+    QString pcName = qEnvironmentVariable("PCName");
+    if( pcName == "solaris-daq" ){
+      LogMsg("This is SOLARIS DAQ....");
+      rawDataPath = expDataPath + "/";
+      LogMsg("Raw Data Path : " + rawDataPath);
+      rootDataPath = "/mnt/data1/" + expName + "/";
+      LogMsg("Root Data Path : " + rootDataPath);
+    }
     leExpName->setText(expName);
     leRawDataPath->setText(rawDataPath);
     
@@ -1628,6 +1636,15 @@ bool MainWindow::LoadProgramSettings(){
       expDataPath = masterExpDataPath + "/" + expName;
       rawDataPath = expDataPath + "/data_raw/";
       rootDataPath = expDataPath + "/root_data/";
+
+      QString pcName = qEnvironmentVariable("PCName");
+      if( pcName == "solaris-daq" ){
+        LogMsg("This is SOLARIS DAQ....");
+        rawDataPath = expDataPath + "/";
+        LogMsg("Raw Data Path : " + rawDataPath);
+        rootDataPath = "/mnt/data1/" + expName + "/";
+        LogMsg("Root Data Path : " + rootDataPath);
+      }
 
       leExpName->setText(expName);
       
@@ -2123,6 +2140,15 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   rawDataPath = expDataPath + "/data_raw/";
   rootDataPath = expDataPath + "/root_data/";
 
+  QString pcName = qEnvironmentVariable("PCName");
+  if( pcName == "solaris-daq" ){
+    LogMsg("This is SOLARIS DAQ....");
+    rawDataPath = expDataPath + "/";
+    LogMsg("Raw Data Path : " + rawDataPath);
+    rootDataPath = "/mnt/data1/" + expName + "/";
+    LogMsg("Root Data Path : " + rootDataPath);
+  }
+
   CreateRawDataFolder();
   WriteExpNameSh();
 
@@ -2190,11 +2216,11 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   logMsgHTMLMode = true;
   LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
 
-  expDataPath = masterExpDataPath + "/" + newExpName;
-  rawDataPath = expDataPath + "/data_raw/"; 
-  rootDataPath = expDataPath + "/root_data/"; 
+  // expDataPath = masterExpDataPath + "/" + newExpName;
+  // rawDataPath = expDataPath + "/data_raw/"; 
+  // rootDataPath = expDataPath + "/root_data/"; 
 
-  CreateRawDataFolder();
+  // CreateRawDataFolder();
   CreateDataSymbolicLink();
 
   leRawDataPath->setText(rawDataPath);
@@ -2291,9 +2317,9 @@ void MainWindow::CreateDataSymbolicLink(){
   }
 
   if (file.link(rawDataPath, linkName)) {
-      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " created.");
+    LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " created.");
   } else {
-      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " cannot be created. </font>");
+    LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rawDataPath + " cannot be created. </font>");
   }
 
   linkName = analysisPath + "/root_data";
@@ -2303,9 +2329,9 @@ void MainWindow::CreateDataSymbolicLink(){
   }
 
   if (file.link(rootDataPath, linkName)) {
-      LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " created.");
+    LogMsg("Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " created.");
   } else {
-      LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " cannot be created. </font>");
+    LogMsg("<font style=\"color:red;\">Symbolic link  <b>" + linkName +"</b> -> " + rootDataPath + " cannot be created. </font>");
   }
 
 
