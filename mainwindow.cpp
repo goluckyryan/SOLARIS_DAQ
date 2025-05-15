@@ -1374,6 +1374,7 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment and <b>Elog Folder</b>. \
                          This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
                         The experiment data will be saved under this folder. e.g. <font style=\"color : blue;\">Data Path/Exp Name</font>.");
+  helpInfo->appendHtml("For User links to Analysis folder and use the New/Change/Reload/Exp button, the Exp Name will be overwriten.");
 
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Save runs in sub-folders </font> means \
@@ -1766,7 +1767,7 @@ void MainWindow::SetupNewExpPanel(){
 
   QDialog dialog(this);
   dialog.setWindowTitle("Setup / change Experiment");
-  dialog.setGeometry(0, 0, 500, 400);
+  dialog.setGeometry(0, 0, 500, 500);
   dialog.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
 
   QGridLayout * layout = new QGridLayout(&dialog);
@@ -1781,8 +1782,9 @@ void MainWindow::SetupNewExpPanel(){
   instr->setStyleSheet("background-color: #F3F3F3;");
   instr->appendHtml("Setup new experiment will do following things:");
   instr->appendHtml("<b>0,</b> Check the git repository in <font style=\"color:blue;\">Analysis Path</font>");
-  instr->appendHtml("<b>1,</b> Create folder in <font style=\"color:blue;\">Data Path</font> and <font style=\"color:blue;\">Root Data Path</font>");
-  instr->appendHtml("<b>2,</b> Create Symbolic links in <font style=\"color:blue;\">Analysis Path</font>");
+  instr->appendHtml("<b>1,</b> Add a new local branch in <font style=\"color:blue;\">Analysis Path</font>. User need to manually push to remote.");
+  instr->appendHtml("<b>2,</b> Create folder in <font style=\"color:blue;\">Data Path</font> and <font style=\"color:blue;\">Root Data Path</font>");
+  instr->appendHtml("<b>3,</b> Create Symbolic links in <font style=\"color:blue;\">Analysis Path</font>");
   instr->appendHtml("<p></p>");
   instr->appendHtml("If <font style=\"color:blue;\">Use Git</font> is <b>checked</b>, \
                     the repository <b>MUST</b> be clean. \
