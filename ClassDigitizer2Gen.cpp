@@ -1202,7 +1202,7 @@ void Digitizer2Gen::ReadAllSettings(){
     // here TempSens is same for PHA and PSD
     if( ModelName == "VX2740" && boardSettings[i].GetPara() != PHA::DIG::TempSensADC0.GetPara()) continue;
 
-    if( ModelName == "VX2730" && 
+    if( ModelName != "VX2740" && 
       (boardSettings[i].GetPara() == PHA::DIG::FreqSensCore.GetPara() ||  
        boardSettings[i].GetPara() == PHA::DIG::DutyCycleSensDCDC.GetPara()
       )
@@ -1227,6 +1227,7 @@ void Digitizer2Gen::ReadAllSettings(){
   for(int ch = 0; ch < nChannels ; ch++ ){
     for( int i = 0; i < (int) chSettings[ch].size(); i++){
       if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+      if( ModelName != "VX2730" && chSettings[ch][i].GetPara() == PSD::CH::ChGain.GetPara()) continue;
       ReadValue(chSettings[ch][i], ch);
     }
   }

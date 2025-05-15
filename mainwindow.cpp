@@ -759,7 +759,11 @@ void MainWindow::OpenDigitizers(){
     bnComment->setEnabled(false);
     bnOpenScope->setEnabled(true);
     chkSaveRun->setEnabled(true);
-    bnSyncHelper->setEnabled(true);
+    if( nDigiConnected == 1 ) {
+      bnSyncHelper->setEnabled(false);
+    }else{
+      bnSyncHelper->setEnabled(true);
+    }
     bnOpenDigitizers->setEnabled(false);
     bnOpenDigitizers->setStyleSheet("");
     cbAutoRun->setEnabled(true);
@@ -1497,10 +1501,12 @@ void MainWindow::ProgramSettingsPanel(){
     DatabaseIP = lDatbaseIP->text();
     DatabaseName = lDatbaseName->text();
     DatabaseToken = lDatbaseToken->text();
-    ElogIP = lElogIP->text();
     analysisPath = lAnalysisPath->text();
     masterExpDataPath = lExpDataPath->text();
     expName = lExpName->text();
+    ElogIP = lElogIP->text();
+    ElogUser = lElogUser->text();
+    ElogPWD = lElogPWD->text();
 
     SaveProgramSettings();
 
@@ -2425,6 +2431,8 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
 
   arg << "-a" << "Subject=" + subject 
       << "-n " << "2" <<  htmlText  ;
+
+  // printf("Elog command: %s\n", arg.join(" ").toStdString().c_str());
 
   QProcess elogBash(this);
   elogBash.start("elog", arg); 
