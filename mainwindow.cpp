@@ -453,8 +453,10 @@ int MainWindow::StartACQ(){
       //Save setting to raw data with run ID
       QString fileSetting =  runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
       // name should be [ExpName]_[runID]_[digiID]_[digiSerialNumber]_[acculmulate_count].sol
-      QString outFileName =  runFolder + expName + "_" + runIDStr + "_" + QString::number(i).rightJustified(2, '0')  + "_" + QString::number(digi[i]->GetSerialNumber());
-
+      QString outFileName =  runFolder + expName + "_" 
+                                       + runIDStr + "_" 
+                                       + QString::number(i).rightJustified(2, '0')  + "_" 
+                                       + QString::number(digi[i]->GetSerialNumber());
 
       digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
       qDebug() << outFileName;
@@ -2537,8 +2539,12 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
 void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
   
-  QFile file(masterExpDataPath + "/" + expName + "/data_raw/RunTimeStamp.dat");
-  
+  QString pcName = qEnvironmentVariable("PCName");
+  QString data_raw_str = "/data_raw";
+  if( pcName == "solaris-daq" ) data_raw_str = "";
+
+  QFile file(masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp.dat");
+
   if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
     if( isStartRun ){
@@ -2551,7 +2557,7 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
   }
 
 
-  QFile fileCSV(masterExpDataPath + "/" + expName + "/data_raw/RunTimeStamp.csv");
+  QFile fileCSV(masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp.csv");
 
   if( fileCSV.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 

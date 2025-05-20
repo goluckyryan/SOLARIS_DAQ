@@ -1,6 +1,6 @@
 CC=g++
-CFLAG= -O2
-#CFLAG= -g -O0
+CFLAG= -std=c++17 -O2
+# CFLAG= -std=c++17 -g -O0
 ROOTFLAG=`root-config --cflags --glibs`
 
 OBJS = ClassDigitizer.o ClassInfluxDB.o

@@ -111,12 +111,13 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
   if( feof(inFile) ) return -1;
   if( filePos >= inFileSize) return -1;
   
-  dummy = fread(&blockStartIdentifier, 2, 1, inFile);
+  dummy = fread(&blockStartIdentifier, 2, 1, inFile); // read pne 2 Bytes = 16 bits
 
   if( (blockStartIdentifier & 0xAA00) != 0xAA00 ) {
-    printf("header fail.\n");
+    printf("header fail. | 0x%08X\n", blockStartIdentifier);
     return -2 ;
-  } 
+  }
+
 
   if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw ){
     hit->SetDataType(DataFormat::Raw, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  

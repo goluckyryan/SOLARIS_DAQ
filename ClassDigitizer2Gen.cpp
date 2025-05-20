@@ -839,6 +839,9 @@ int Digitizer2Gen::ReadData(){
     return CAEN_FELib_UNKNOWN;
   }
 
+  hit->timestamp *=  tick2ns;
+  hit->fine_timestamp *=  tick2ns;
+
   if( ret != CAEN_FELib_Success) {
     //ErrorMsg("ReadData()");
     return ret;

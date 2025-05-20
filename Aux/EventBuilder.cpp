@@ -24,8 +24,6 @@ inline unsigned int getTime_us(){
 #define MAX_MULTI 64
 #define MAX_TRACE_LEN 1250 ///  = 10 us
 
-#define tick2ns 8 // 1 tick = 8 ns
-
 SolReader ** reader;
 Hit ** hit;
 
@@ -114,7 +112,7 @@ int main(int argc, char ** argv){
   if( argc <= 3){
     printf("%s [outfile] [timeWindow] [saveTrace] [sol-1] [sol-2] ... \n", argv[0]);
     printf("      outfile : output root file name\n");
-    printf("   timeWindow : number of tick, 1 tick = %d ns.\n", tick2ns); 
+    printf("   timeWindow : nano-sec; if < 0, no event build\n"); 
     printf("    saveTrace : 1 = save trace, 0 = no trace\n");
     printf("        sol-X : the sol file(s)\n");
     return -1;
@@ -123,7 +121,7 @@ int main(int argc, char ** argv){
   unsigned int runStartTime = getTime_us();
 
   TString outFileName = argv[1];
-  int timeWindow = abs(atoi(argv[2]));
+  int timeWindow = atoi(argv[2]);
   const bool saveTrace = atoi(argv[3]);
 
   const int nFile = argc - 4;
@@ -205,7 +203,11 @@ int main(int argc, char ** argv){
   group.push_back(kaka);
 
   printf(" out file : \033[1;33m%s\033[m\n", outFileName.Data());
-  printf(" Event building time window : %d tics = %d nsec \n", timeWindow, timeWindow*tick2ns);
+  if ( timeWindow < 0 ){
+    printf(" Event building time window : no event build\n");
+  }else{
+    printf(" Event building time window : %d nsec \n", timeWindow);
+  }
   printf(" Save Trace ? %s \n", saveTrace ? "Yes" : "No");
   printf(" Number of input file : %d \n", nFile);
   for( int i = 0; i < nFile; i++){
@@ -281,15 +283,24 @@ int main(int argc, char ** argv){
       }
     }
 
-    if( hit[fileID]->timestamp - e_t[0] < timeWindow ){
-      fillData(fileID, saveTrace);
-    }else{
+    if (timeWindow < 0 ){
       outRootFile->cd();
       tree->Fill();
       evID ++;
 
       multi = 0;
       fillData(fileID, saveTrace);
+    }else{
+      if( hit[fileID]->timestamp - e_t[0] < timeWindow ){
+        fillData(fileID, saveTrace);
+      }else{
+        outRootFile->cd();
+        tree->Fill();
+        evID ++;
+
+        multi = 0;
+        fillData(fileID, saveTrace);
+      }
     }
     
     ///========= calculate progress
@@ -348,10 +359,10 @@ int main(int argc, char ** argv){
   printf("Number of Block Scanned : %u\n", numBlock);
   printf("  Number of Event Built : %lld\n", evID);
   printf("  Output Root File Size : %.2f MB\n", outRootFile->GetSize()/1024./1024.);
-  printf("        first timestamp : %lu \n", firstTimeStamp);
-  printf("         last timestamp : %lu \n", lastTimeStamp);
+  printf("        first timestamp : %lu ns \n", firstTimeStamp);
+  printf("         last timestamp : %lu ns \n", lastTimeStamp);
   unsigned long duration = lastTimeStamp - firstTimeStamp;
-  printf("         total duration : %lu = %.2f sec \n", duration, duration * tick2ns * 1.0 / 1e9 );
+  printf("        total duration* : %lu ns = %.2f sec \n", duration, duration * 1.0 / 1e9 );
   printf("===================================== end of summary. \n");
 
 
