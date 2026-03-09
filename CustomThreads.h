@@ -8,7 +8,7 @@
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
 
-static QMutex digiMTX[MaxNumberOfDigitizer];
+extern QMutex digiMTX[MaxNumberOfDigitizer];
 
 //^#===================================================== ReadData Thread
 class ReadDataThread : public QThread {
@@ -68,7 +68,6 @@ signals:
 private:
   Digitizer2Gen * digi; 
   int ID;
-  timespec ta, tb;
   // bool isSaveData, stop, canSendMsg;
   bool isSaveData, stop;
 };

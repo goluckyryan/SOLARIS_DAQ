@@ -98,20 +98,23 @@ class Hit {
       digital_probes_type[2] = 0xFF;
       digital_probes_type[3] = 0xFF;
       data = NULL;
+      traceLenght = 0;
+      dataSize = 0;
+      n_events = 0;
 
       isTraceAllZero = true; // indicate trace are all zero
     }
 
     void ClearMemory(){
-      if( data != NULL ) delete data;
+      if( data != NULL ) delete[] data;
 
-      if( analog_probes[0] != NULL) delete analog_probes[0];
-      if( analog_probes[1] != NULL) delete analog_probes[1];
+      if( analog_probes[0] != NULL) delete[] analog_probes[0];
+      if( analog_probes[1] != NULL) delete[] analog_probes[1];
       
-      if( digital_probes[0] != NULL) delete digital_probes[0];
-      if( digital_probes[1] != NULL) delete digital_probes[1];
-      if( digital_probes[2] != NULL) delete digital_probes[2];
-      if( digital_probes[3] != NULL) delete digital_probes[3];
+      if( digital_probes[0] != NULL) delete[] digital_probes[0];
+      if( digital_probes[1] != NULL) delete[] digital_probes[1];
+      if( digital_probes[2] != NULL) delete[] digital_probes[2];
+      if( digital_probes[3] != NULL) delete[] digital_probes[3];
 
       isTraceAllZero = true;
     }

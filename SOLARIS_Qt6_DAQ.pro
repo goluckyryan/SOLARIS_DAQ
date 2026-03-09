@@ -6,7 +6,7 @@ TEMPLATE = app
 TARGET = SOLARIS_DAQ
 INCLUDEPATH += .
 
-QT += widgets charts
+QT += core widgets charts printsupport
 
 LIBS += -lcurl -lCAEN_FELib -lX11
 
@@ -33,7 +33,11 @@ HEADERS += ClassDigitizer2Gen.h \
 					 CustomThreads.h \
 					 CustomWidgets.h \
 					 macro.h \
-					 SOLARISpanel.h
+					 SOLARISpanel.h \
+					 qcustomplot.h \
+					 Histogram1D.h \
+					 Histogram2D.h \
+					 SingleSpectra.h
 
 SOURCES += ClassDigitizer2Gen.cpp \
            ClassInfluxDB.cpp \
@@ -41,4 +45,6 @@ SOURCES += ClassDigitizer2Gen.cpp \
 					 mainwindow.cpp \
 					 digiSettingsPanel.cpp \
 					 scope.cpp \
-					 SOLARISpanel.cpp
+					 SOLARISpanel.cpp \
+					 qcustomplot.cpp \
+					 SingleSpectra.cpp 

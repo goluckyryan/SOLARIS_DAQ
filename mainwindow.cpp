@@ -7,7 +7,6 @@
 #include <QStorageInfo>
 #include <QDir>
 #include <QFile>
-#include <QProcess>
 #include <QRandomGenerator>
 #include <QVariant>
 #include <QCoreApplication>
@@ -26,6 +25,7 @@
 
 //------ static memeber
 Digitizer2Gen ** MainWindow::digi = nullptr;
+QMutex digiMTX[MaxNumberOfDigitizer];
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
@@ -78,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   solarisSetting = nullptr;
   scope = nullptr;
   digiSetting = nullptr;
+  singleSpectra = nullptr;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -126,6 +127,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSyncHelper->setEnabled(false);
     connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
+    bnSingleSpectra = new QPushButton("Single Spectra", this);
+    bnSingleSpectra->setEnabled(false);
+    connect(bnSingleSpectra, &QPushButton::clicked, this, &MainWindow::OpenSingleSpectra);
+
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -138,6 +143,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnOpenScope, 2, 0);
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
+
+    layout1->addWidget(bnSingleSpectra, 3, 0);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -274,7 +281,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     QVBoxLayout * layout3 = new QVBoxLayout(box3);
 
     logInfo = new QPlainTextEdit(this);
-    logInfo->isReadOnly();
+    logInfo->setReadOnly(true);
     QFont font; 
     font.setFamily("Courier New");
     logInfo->setFont(font);
@@ -310,6 +317,12 @@ MainWindow::~MainWindow(){
 
   printf("-------- remove %s\n", DAQLockFile);
   remove(DAQLockFile);
+
+  printf("-------- delete single spectra\n");
+  if( singleSpectra ){
+    delete singleSpectra;
+    singleSpectra = nullptr;
+  }
 
   printf("-------- delete Solaris panel\n");
   if( solarisSetting ) {
@@ -469,6 +482,9 @@ int MainWindow::StartACQ(){
     readDataThread[i]->start();
   }
 
+
+  if( singleSpectra ) singleSpectra->startTimer();
+
   if(chkSaveRun->isChecked() ){
     QString startTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
     LogMsg("<font style=\"color : blue;\"> All Digitizers started. </font>");
@@ -497,7 +513,7 @@ int MainWindow::StartACQ(){
     scalar->show();
     if( !scalarThread->isRunning() ) scalarThread->start();
   }
-  isACQRunning = True;
+  isACQRunning = true;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
   //scalarThread->start();
   scalarOutputInflux = true;
@@ -548,6 +564,8 @@ void MainWindow::StopACQ(){
       leRunComment->setText(stopComment);
     }
   }
+
+  if ( singleSpectra ) singleSpectra->stopTimer();
 
   //=============== Stop digitizer
   for( int i = nDigi - 1; i >= 0; i--){
@@ -771,6 +789,10 @@ void MainWindow::OpenDigitizers(){
     cbAutoRun->setEnabled(true);
     cbDataFormat->setEnabled(true);
     bnOpenScalar->setEnabled(true);
+
+    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
+    bnSingleSpectra->setEnabled(true);
+
   }
 
   bnDigiSettings->setEnabled(true);
@@ -802,6 +824,12 @@ void MainWindow::CloseDigitizers(){
     }
     CleanUpScalar(); // this use digi->GetNChannels(); 
   }
+
+  if( singleSpectra ){
+    singleSpectra->close();
+    delete singleSpectra;
+    singleSpectra = NULL;
+  }
   
   if( digiSetting ){
     digiSetting->close();
@@ -816,17 +844,19 @@ void MainWindow::CloseDigitizers(){
   }
 
   for( int i = 0; i < nDigi; i++){    
-    if( digi[i] == NULL) return;
+    if( digi[i] == NULL) continue;
 
     if( digi[i]->IsConnected() ){
       int digiSN = digi[i]->GetSerialNumber();
       LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + programPath + "/tempSettings/");
       digi[i]->SaveSettingsToFile((programPath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString().c_str());
     }
+    int closedSN = digi[i]->GetSerialNumber();
     digi[i]->CloseDigitizer();
     delete digi[i];
+    digi[i] = NULL;
 
-    LogMsg("Closed Digitizer : " + QString::number(digi[i]->GetSerialNumber()));
+    LogMsg("Closed Digitizer : " + QString::number(closedSN));
 
     if( readDataThread[i] != NULL ){
       LogMsg("Waiting for readData Thread .....");
@@ -855,6 +885,7 @@ void MainWindow::CloseDigitizers(){
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
   cbDataFormat->setEnabled(false);
+  bnSingleSpectra->setEnabled(false);
 
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
@@ -938,8 +969,10 @@ void MainWindow::OpenScope(){
         }
         if( onOff){
           lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
+          if ( singleSpectra ) singleSpectra->startTimer();
         }else{
           lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
+          if ( singleSpectra ) singleSpectra->stopTimer();
         }
       });
 
@@ -1112,8 +1145,6 @@ bool MainWindow::CheckSOLARISpanelOK(){
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
   connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(2);});
 
-  if( solarisSetting == nullptr) return false;
-
   return true;
 }
 
@@ -1273,7 +1304,7 @@ void MainWindow::UpdateScalar(){
   ///===== Get trigger for all channel
   unsigned long totalFileSize  = 0;
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
-    if( digi[iDigi]->IsDummy() ) return;
+    if( digi[iDigi]->IsDummy() ) continue;
 
     //=========== another method, directly readValue
     for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
@@ -1738,7 +1769,7 @@ void MainWindow::SaveProgramSettings(){
   file.write("//------------end of file.");
   
   file.close();
-  LogMsg("Saved program settings to <b>"+programPath + "/programSettings.txt<b>.");
+  LogMsg("Saved program settings to <b>"+programPath + "/programSettings.txt</b>.");
 
 }
 
@@ -2104,7 +2135,7 @@ void MainWindow::WriteExpNameSh(){
   file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
   file2.write("#------------end of file.");
   file2.close();
-  LogMsg("Saved expName.sh to <b>"+ rawDataPath + "/expName.sh<b>.");
+  LogMsg("Saved expName.sh to <b>"+ rawDataPath + "/expName.sh</b>.");
 
 }
 
@@ -2286,10 +2317,10 @@ void MainWindow::CreateFolder(QString path, QString AdditionalMsg){
     if( dir.mkpath(path)){
       LogMsg("Created folder <b>" + path + "</b> " + AdditionalMsg );
     }else{
-      LogMsg("Folder \"<font style=\"color:red;\"><b>" + rawDataPath + "</b>\" cannot be created. Access right problem? </font>" );
+      LogMsg("Folder \"<font style=\"color:red;\"><b>" + path + "</b>\" cannot be created. Access right problem? </font>" );
     }
   }else{
-      LogMsg("Folder \"<b>" + rawDataPath + "</b>\" already exist." );
+      LogMsg("Folder \"<b>" + path + "</b>\" already exist." );
   }
 
 }
@@ -2338,6 +2369,21 @@ void MainWindow::CreateDataSymbolicLink(){
 
 
 }
+
+//*###################################################################### 
+//*###################################################################### Single Spectrum
+void MainWindow::OpenSingleSpectra(){
+
+  if( singleSpectra == nullptr ) {
+    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath);
+    singleSpectra->show();
+  }else{
+    singleSpectra->show();
+    singleSpectra->activateWindow();
+    singleSpectra->LoadSetting();
+  }
+}
+
 
 //*###################################################################### 
 //*###################################################################### log msg and others

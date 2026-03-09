@@ -30,6 +30,7 @@
 #include "digiSettingsPanel.h"
 #include "scope.h"
 #include "SOLARISpanel.h"
+#include "SingleSpectra.h"
 
 const int chromeWindowID = -1; // disable capture screenshot
 
@@ -85,6 +86,8 @@ private slots:
     if( solarisSetting ) solarisSetting->close();
     event->accept();
   }
+
+  void OpenSingleSpectra();
 
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
@@ -232,6 +235,11 @@ private:
       return password.left(3) + QString("*").repeated(7);
     }
   }
+
+  //@------ single spectra
+
+  QPushButton * bnSingleSpectra;
+  SingleSpectra * singleSpectra;
 
 };
 

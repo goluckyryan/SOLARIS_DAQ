@@ -7,14 +7,15 @@
 #include <vector>
 #include <unistd.h>
 #include <time.h> // time in nano-sec
+#include <inttypes.h>
 
 #include "../Hit.h"
 
 class SolReader {
   private:
     FILE * inFile;
-    unsigned int inFileSize;
-    unsigned int filePos;
+    uint64_t inFileSize;
+    uint64_t filePos;
     unsigned int totNumBlock;
 
     unsigned short blockStartIdentifier;
@@ -23,7 +24,7 @@ class SolReader {
 
     void init();
 
-    std::vector<unsigned int> blockPos;
+    std::vector<uint64_t> blockPos;
 
     size_t dummy;
 
@@ -42,8 +43,8 @@ class SolReader {
     unsigned int GetBlockID()       const {return numBlock - 1;}
     unsigned int GetNumBlock()      const {return numBlock;}
     unsigned int GetTotalNumBlock() const {return totNumBlock;}
-    unsigned int GetFilePos()       const {return filePos;}
-    unsigned int GetFileSize()      const {return inFileSize;}
+    uint64_t GetFilePos()       const {return filePos;}
+    uint64_t GetFileSize()      const {return inFileSize;}
     
     void RewindFile(); 
 
@@ -80,7 +81,7 @@ SolReader::~SolReader(){
 }
 
 inline void SolReader::OpenFile(std::string fileName){
-  inFile = fopen(fileName.c_str(), "r");
+  inFile = fopen(fileName.c_str(), "rb");
   if( inFile == NULL ){
     printf("Cannot open file : %s \n", fileName.c_str());
   }else{
@@ -95,7 +96,7 @@ inline int SolReader::ReadBlock(unsigned int index, bool verbose){
   if( index >= totNumBlock )return -1;
   fseek(inFile, 0L, SEEK_SET);
 
-  if( verbose ) printf("Block index: %u, File Pos: %u byte\n", index, blockPos[index]);
+  if( verbose ) printf("Block index: %u, File Pos: %" PRIu64 " byte\n", index, blockPos[index]);
 
   fseek(inFile, blockPos[index], SEEK_CUR);
 
@@ -159,7 +160,7 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
       dummy = fread(hit->digital_probes[2], hit->traceLenght, 1, inFile);
       dummy = fread(hit->digital_probes[3], hit->traceLenght, 1, inFile);
     }else{
-      dummy = fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
+      fseek(inFile, 6 + hit->traceLenght*(12), SEEK_CUR);
     } 
 
   }else if( hit->dataType == DataFormat::OneTrace){
@@ -253,7 +254,7 @@ void SolReader::ScanNumBlock(){
 
   while( ReadNextBlock(1) == 0){
     blockPos.push_back(filePos);
-    printf("%u, %.2f%% %u/%u\n\033[A\r", numBlock, filePos*100./inFileSize, filePos, inFileSize);
+    printf("%u, %.2f%% %" PRIu64 "/" "%" PRIu64 "\n\033[A\r", numBlock, filePos*100./inFileSize, filePos, inFileSize);
   }
 
   totNumBlock = numBlock;

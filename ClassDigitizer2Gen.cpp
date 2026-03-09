@@ -249,7 +249,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   ModelName = ReadValue(PHA::DIG::ModelName);
   CupVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   int adcRate = atoi(ReadValue(PHA::DIG::ADC_SampleRate).c_str());
-  tick2ns = 1000/adcRate;
+  tick2ns = (adcRate > 0) ? 1000/adcRate : 1;
   
   printf("   IP address : %s\n", ReadValue(PHA::DIG::IPAddress).c_str());
   printf("     Net Mask : %s\n", ReadValue(PHA::DIG::NetMask).c_str());
@@ -839,13 +839,13 @@ int Digitizer2Gen::ReadData(){
     return CAEN_FELib_UNKNOWN;
   }
 
-  hit->timestamp *=  tick2ns;
-  hit->fine_timestamp *=  tick2ns;
-
   if( ret != CAEN_FELib_Success) {
     //ErrorMsg("ReadData()");
     return ret;
   }
+
+  hit->timestamp     *= tick2ns;
+  hit->fine_timestamp *= tick2ns;
 
   return ret;
 }
@@ -854,8 +854,13 @@ int Digitizer2Gen::ReadData(){
 
 void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   outFileNameBase = fileName;
-  sprintf(outFileName, "%s_%03d.sol", fileName.c_str(), outFileIndex);
+  snprintf(outFileName, sizeof(outFileName), "%s_%03d.sol", fileName.c_str(), outFileIndex);
   outFile = fopen(outFileName, mode);
+  if( outFile == NULL ){
+    printf("OpenOutFile: failed to open file '%s'\n", outFileName);
+    outFileSize = 0;
+    return;
+  }
   fseek(outFile, 0L, SEEK_END);
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB
 
@@ -871,12 +876,18 @@ void Digitizer2Gen::CloseOutFile(){
 
 void Digitizer2Gen::SaveDataToFile(){
 
+  if( outFile == NULL ) return;
+
   if( outFileSize > (unsigned int) MaxOutFileSize){
     FinishedOutFilesSize += ftell(outFile);
     CloseOutFile();
     outFileIndex ++;
-    sprintf(outFileName, "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
+    snprintf(outFileName, sizeof(outFileName), "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
     outFile = fopen(outFileName, "wb"); //overwrite binary
+    if( outFile == NULL ){
+      printf("SaveDataToFile: failed to open new file '%s'\n", outFileName);
+      return;
+    }
   }
 
   if( hit->dataType == DataFormat::ALL){
@@ -974,10 +985,9 @@ void Digitizer2Gen::ProgramBoard(){
   WriteValue("/par/RunDelay"  , "0"); // ns, that is for sync time with multi board
   WriteValue("/par/IOlevel"   , "NIM");
 
-  WriteValue("/par/EnAutoDisarmAcq" , "true");
+  WriteValue("/par/EnAutoDisarmAcq" , "False");
   if( FPGAType == DPPType::PHA ) WriteValue("/par/EnStatEvents"    , "true");
   if( FPGAType == DPPType::PSD ) WriteValue("/par/EnStatEvents"    , "false");
-  WriteValue("/par/EnAutoDisarmAcq"    , "False");
   
   WriteValue("/par/BoardVetoWidth"    , "0");
   WriteValue("/par/VolatileClockOutDelay"    , "0");
