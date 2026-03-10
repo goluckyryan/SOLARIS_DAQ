@@ -33,16 +33,16 @@ public:
     while(!stop){
       digiMTX[ID].lock();
       int ret = digi->ReadData();
-      if(ret != CAEN_FELib_Stop){
+      if( ret == CAEN_FELib_Stop ){
         digi->hit->ClearTrace();
       }
       digiMTX[ID].unlock();
 
-      if ( ret == CAEN_FELib_Success && isSaveData ){
+      if( isSaveData && ret == CAEN_FELib_Success ){
         digi->SaveDataToFile();
-      }
-
-      if(ret == CAEN_FELib_Stop){
+      } 
+      
+      if( ret == CAEN_FELib_Stop ){
         digi->ErrorMsg("ReadData Thread No more data");
         break;
       }

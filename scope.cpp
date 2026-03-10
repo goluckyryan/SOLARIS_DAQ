@@ -727,25 +727,17 @@ void Scope::UpdateScope(){
       return;
     }
 
-    // Copy raw trace data under the lock (fast memcpy), then build QVectors outside
-    int32_t anaTrace[2][MaxDisplayTraceDataLength];
-    uint8_t digTrace[4][MaxDisplayTraceDataLength];
-
-    digiMTX[iDigi].lock();
-    for( int j = 0; j < 2; j++) memcpy(anaTrace[j], digi[iDigi]->hit->analog_probes[j], traceLength * sizeof(int32_t));
-    for( int j = 0; j < 4; j++) memcpy(digTrace[j], digi[iDigi]->hit->digital_probes[j], traceLength * sizeof(uint8_t));
-    digiMTX[iDigi].unlock();
-
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , anaTrace[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->hit->analog_probes[j][i]));
       dataTrace[j]->replace(points);
     }
     for( int j = 0; j < 4; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digTrace[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digi[iDigi]->hit->digital_probes[j][i]));
       dataTrace[j+2]->replace(points);
     }
+
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 
   }
