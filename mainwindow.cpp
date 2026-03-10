@@ -22,6 +22,7 @@
 #include <X11/Xatom.h>
 
 #include <unistd.h>
+#include <algorithm>
 
 //------ static memeber
 Digitizer2Gen ** MainWindow::digi = nullptr;
@@ -437,7 +438,7 @@ int MainWindow::StartACQ(){
   for( int i = nDigi-1 ; i >= 0; i --){
     if( digi[i]->IsDummy () ) continue;
 
-    for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch ++) oldTimeStamp[i][ch] = 0;
+    for( int ch = 0; ch < std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel); ch ++) oldTimeStamp[i][ch] = 0;
 
     //digi[i]->SetPHADataFormat(1);// only save 1 trace
     int dataFormatID = cbDataFormat->currentData().toInt();
@@ -759,7 +760,8 @@ void MainWindow::OpenDigitizers(){
 
       if( maxNumChannelAcrossDigitizer < digi[i]->GetNChannels()) maxNumChannelAcrossDigitizer = digi[i]->GetNChannels();
 
-      for( int ch = 0; ch < (int) digi[i]->GetNChannels(); ch++) {
+      int nCh = std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel);
+      for( int ch = 0; ch < nCh; ch++) {
         oldTimeStamp[i][ch] = 0;
         oldSavedCount[i][ch] = 0;
       }
@@ -1307,7 +1309,7 @@ void MainWindow::UpdateScalar(){
     if( digi[iDigi]->IsDummy() ) continue;
 
     //=========== another method, directly readValue
-    for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch ++){
+    for( int ch = 0; ch < std::min((int) digi[iDigi]->GetNChannels(), (int) MaxNumberOfChannel); ch ++){
       // digiMTX[iDigi].lock();
       std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
       haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
@@ -1806,6 +1808,10 @@ void MainWindow::DecodeIPList(){
     }
   }
   nDigi = IPList.size();
+  if( nDigi > MaxNumberOfDigitizer ){
+    LogMsg("<font style=\"color:red;\">Number of digitizers (" + QString::number(nDigi) + ") exceeds MaxNumberOfDigitizer (" + QString::number(MaxNumberOfDigitizer) + "). Clamping.</font>");
+    nDigi = MaxNumberOfDigitizer;
+  }
 }
 
 //*######################################################################

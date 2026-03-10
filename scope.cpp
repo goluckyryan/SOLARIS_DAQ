@@ -709,17 +709,15 @@ void Scope::UpdateScope(){
 
   if( digi ){
 
-    digiMTX[iDigi].lock();    
-    std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
+    // ReadValue calls communicate with hardware (slow) — do them outside the mutex
+    // to avoid blocking ReadDataThread for too long
+    std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreshing SelfTrgRate and SavedCount
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
-    //unsigned int traceLength = qMin((int) digi[iDigi]->hit->traceLenght, MaxDisplayTraceDataLength);
     unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValueFromMemory(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
 
     if( atoi(haha.c_str()) == 0 ) {
-      digiMTX[iDigi].unlock();
-
       for( int j = 0; j < 6; j++){
         QVector<QPointF> points;
         for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
@@ -728,21 +726,26 @@ void Scope::UpdateScope(){
       plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
       return;
     }
-    
-    //printf("%s, traceLength : %d , %d\n", __func__, traceLength, digi[iDigi]->hit->analog_probes[0][10]);
+
+    // Copy raw trace data under the lock (fast memcpy), then build QVectors outside
+    int32_t anaTrace[2][MaxDisplayTraceDataLength];
+    uint8_t digTrace[4][MaxDisplayTraceDataLength];
+
+    digiMTX[iDigi].lock();
+    for( int j = 0; j < 2; j++) memcpy(anaTrace[j], digi[iDigi]->hit->analog_probes[j], traceLength * sizeof(int32_t));
+    for( int j = 0; j < 4; j++) memcpy(digTrace[j], digi[iDigi]->hit->digital_probes[j], traceLength * sizeof(uint8_t));
+    digiMTX[iDigi].unlock();
 
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->hit->analog_probes[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , anaTrace[j][i]));
       dataTrace[j]->replace(points);
     }
     for( int j = 0; j < 4; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digi[iDigi]->hit->digital_probes[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digTrace[j][i]));
       dataTrace[j+2]->replace(points);
     }
-    //digi[iDigi]->hit->ClearTrace();
-    digiMTX[iDigi].unlock();
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 
   }

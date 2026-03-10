@@ -1382,12 +1382,12 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
   if( loadFile ){
     printf("Opened %s\n", settingFileName.c_str());
-    char * para      = new char[100];
-    char * readWrite = new char[100];
-    char * idStr     = new char[100];
-    char * value     = new char[100];
+    std::string para;
+    std::string readWrite;
+    std::string idStr;
+    std::string value;
 
-    char line[100];
+    char line[512];
     while(fgets(line, sizeof(line), loadFile) != NULL){
 
       //printf("%s", line);
@@ -1403,50 +1403,46 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
         size_t len = std::strcspn(token, "\n");
         if( len > 0 ) token[len] = '\0';
 
-        if( count == 0 ) std::strcpy(para, token);
-        if( count == 1 ) std::strcpy(readWrite, token);
-        if( count == 2 ) std::strcpy(idStr, token);
-        if( count == 3 ) std::strcpy(value, token);
+        if( count == 0 ) para = token;
+        if( count == 1 ) readWrite = token;
+        if( count == 2 ) idStr = token;
+        if( count == 3 ) value = token;
         if( count > 3) break;
-        
+
         count ++;
         token = std::strtok(nullptr, "!");
       }
 
-      int id = atoi(idStr);
+      int id = atoi(idStr.c_str());
       if( id < 7000){ // channel
         int ch = id / 100;
         int index = id - ch * 100;
-        chSettings[ch][index].SetValue(value);
+        chSettings[ch][index].SetValue(value.c_str());
         //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
-        //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(), 
-        //                         chSettings[ch][index].ReadWrite(), id, 
+        //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(),
+        //                         chSettings[ch][index].ReadWrite(), id,
         //                         chSettings[ch][index].GetValue().c_str());
 
       }else if ( 7000 <= id && id < 8000){ // LVDS
         int index = (id-7000)/4;
         int ch = id - 7000 - index * 4;
-        LVDSSettings[index][ch].SetValue(value);
+        LVDSSettings[index][ch].SetValue(value.c_str());
 
       }else if ( 8000 <= id && id < 9000){ // board
-        boardSettings[id - 8000].SetValue(value);
+        boardSettings[id - 8000].SetValue(value.c_str());
         //printf("%s|%d|%d|%s\n", boardSettings[id-8000].GetFullPara().c_str(),
         //                        boardSettings[id-8000].ReadWrite(), id,
         //                        boardSettings[id-8000].GetValue().c_str());
       }else if ( 9000 <= id && id < 9050){ // vga
-        VGASetting[id - 9000].SetValue(value);
+        VGASetting[id - 9000].SetValue(value.c_str());
       }else{ // group
-        if( CupVer >= 2023091800 ) InputDelay[id - 9050].SetValue(value);
+        if( CupVer >= 2023091800 ) InputDelay[id - 9050].SetValue(value.c_str());
       }
-      //printf("%s|%s|%d|%s|\n", para, readWrite, id, value);
-      if( std::strcmp(readWrite, "2") == 0 && isConnected)  WriteValue(para, value, false);
+      //printf("%s|%s|%d|%s|\n", para.c_str(), readWrite.c_str(), id, value.c_str());
+      if( readWrite == "2" && isConnected)  WriteValue(para.c_str(), value.c_str(), false);
     }
 
-    delete [] para;
-    delete [] readWrite;
-    delete [] idStr;
-    delete [] value;
-
+    fclose(loadFile);
     return true;
   }else{
     printf("Fail to opened %s\n", settingFileName.c_str());
