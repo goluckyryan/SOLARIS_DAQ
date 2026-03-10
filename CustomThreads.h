@@ -31,6 +31,7 @@ public:
     emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " ReadDataThread started.");
 
     while(!stop){
+        
       digiMTX[ID].lock();
       int ret = digi->ReadData();
       if( ret == CAEN_FELib_Stop ){
@@ -40,12 +41,13 @@ public:
 
       if( isSaveData && ret == CAEN_FELib_Success ){
         digi->SaveDataToFile();
-      } 
-      
+      }
+
       if( ret == CAEN_FELib_Stop ){
         digi->ErrorMsg("ReadData Thread No more data");
         break;
       }
+      usleep(1000); // sleep for 1 ms to yield to other threads
 // 
       // if( isSaveData && canSendMsg ){
       //   clock_gettime(CLOCK_REALTIME, &tb);

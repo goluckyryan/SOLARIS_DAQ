@@ -480,7 +480,7 @@ int MainWindow::StartACQ(){
 
     //TODO ========================== Sync start.
     readDataThread[i]->SetSaveData(chkSaveRun->isChecked());
-    readDataThread[i]->start();
+    readDataThread[i]->start(QThread::HighestPriority);
   }
 
 

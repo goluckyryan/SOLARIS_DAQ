@@ -7,6 +7,7 @@
 #include <QLabel>
 
 #define MaxDisplayTraceDataLength 2000 //data point, 
+#define MiniTraceUpdateTimeSec 0.1
 
 Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow *parent) : QMainWindow(parent){
   this->digi = digi;
@@ -56,7 +57,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   xaxis->setTitleText("Time [ns]");
 
   updateTraceThread = new TimingThread();
-  updateTraceThread->SetWaitTimeSec(0.2);
+  updateTraceThread->SetWaitTimeSec(MiniTraceUpdateTimeSec);
   connect(updateTraceThread, &TimingThread::TimeUp, this, &Scope::UpdateScope);
   
   //*================ add Widgets
@@ -90,10 +91,13 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int ch = cbScopeCh->currentIndex();
     digiMTX[iDigi].lock();
     ReadScopeSettings();
+    int prevCh = oldCh;
     RestoreSettings(false);
     if( digi[iDigi]->IsAcqOn()){
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", prevCh);
       digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
+      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
     }
     digiMTX[iDigi].unlock();
 
@@ -595,12 +599,12 @@ void Scope::RestoreSettings(bool changeBoard){
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
 
-  waveSaving = digi[iDigi]->ReadValue(PHA::CH::WaveSaving, ch);
-  waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
+  waveSaving = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::WaveSaving, ch);
+  waveTriggerSource = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::WaveTriggerSource, ch);
   if( changeBoard ){
-    clockSource = digi[iDigi]->ReadValue(PHA::DIG::ClockSource);
-    startSource = digi[iDigi]->ReadValue(PHA::DIG::StartSource);
-    syncOutMode = digi[iDigi]->ReadValue(PHA::DIG::SyncOutMode);
+    clockSource = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::ClockSource);
+    startSource = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::StartSource);
+    syncOutMode = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::SyncOutMode);
   }
   oldDigi = iDigi;
   oldCh = ch;
@@ -650,7 +654,7 @@ void Scope::StartScope(){
     digi[iDigi]->StartACQ();
 
     readDataThread[iDigi]->SetSaveData(false);
-    readDataThread[iDigi]->start();
+    readDataThread[iDigi]->start(QThread::HighestPriority);
 
     updateTraceThread->start();
 
@@ -709,9 +713,8 @@ void Scope::UpdateScope(){
 
   if( digi ){
 
-    // ReadValue calls communicate with hardware (slow) — do them outside the mutex
-    // to avoid blocking ReadDataThread for too long
-    std::string time = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreshing SelfTrgRate and SavedCount
+    if( !digiMTX[iDigi].tryLock() ) return; // skip this update if mutex is busy
+
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
@@ -724,6 +727,7 @@ void Scope::UpdateScope(){
         dataTrace[j]->replace(points);
       }
       plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
+      digiMTX[iDigi].unlock();
       return;
     }
 
@@ -737,6 +741,7 @@ void Scope::UpdateScope(){
       for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digi[iDigi]->hit->digital_probes[j][i]));
       dataTrace[j+2]->replace(points);
     }
+    digiMTX[iDigi].unlock();
 
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 
