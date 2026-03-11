@@ -123,6 +123,9 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   }else{
     if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
   }
+  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr || strstr(parameter, "ChRecordLengthT") != nullptr) ){
+    return std::to_string(atoi(retValue) * 4);
+  }
   return retValue;
 }
 
@@ -147,6 +150,9 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
   if( !isConnected ) return false; 
   //ReadValue(parameter, 1);
   if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
+  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr || strstr(parameter, "ChRecordLengthT") != nullptr) ){
+    value = std::to_string(atoi(value.c_str()) / 4);
+  }
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
     printf("WriteError|%s||%s|\n", parameter, value.c_str());
@@ -1304,7 +1310,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       count ++;
     }
 
-    if( CupVer >= 2023091800 ){
+    if( CupVer >= 2023091800 && ModelName != "VX2730" ){
       for( int idx = 0; idx < 16; idx ++){
         totCount ++;
         if( InputDelay[idx].GetValue() == "" ) {
@@ -1344,7 +1350,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
         }
         fprintf(saveFile, "%-45s!%d!%4d!%s\n", LVDSSettings[index][i].GetFullPara(index).c_str(), 
                                                LVDSSettings[index][i].ReadWrite(),
-                                               7000 + 4 * index + i,
+                                               7000 + 4 * i + index,
                                                LVDSSettings[index][i].GetValue().c_str());
         count ++;
       }
@@ -1435,26 +1441,31 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       if( id < 7000){ // channel
         int ch = id / 100;
         int index = id - ch * 100;
-        chSettings[ch][index].SetValue(value.c_str());
+        if( ch < nChannels && index < (int) chSettings[ch].size() )
+          chSettings[ch][index].SetValue(value.c_str());
         //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
         //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(),
         //                         chSettings[ch][index].ReadWrite(), id,
         //                         chSettings[ch][index].GetValue().c_str());
 
       }else if ( 7000 <= id && id < 8000){ // LVDS
-        int index = (id-7000)/4;
-        int ch = id - 7000 - index * 4;
-        LVDSSettings[index][ch].SetValue(value.c_str());
+        int index = (id-7000) % 4;
+        int ch = (id-7000) / 4;
+        if( index < 4 && ch < (int) LVDSSettings[index].size() )
+          LVDSSettings[index][ch].SetValue(value.c_str());
 
       }else if ( 8000 <= id && id < 9000){ // board
-        boardSettings[id - 8000].SetValue(value.c_str());
+        if( id - 8000 < (int) boardSettings.size() )
+          boardSettings[id - 8000].SetValue(value.c_str());
         //printf("%s|%d|%d|%s\n", boardSettings[id-8000].GetFullPara().c_str(),
         //                        boardSettings[id-8000].ReadWrite(), id,
         //                        boardSettings[id-8000].GetValue().c_str());
       }else if ( 9000 <= id && id < 9050){ // vga
-        VGASetting[id - 9000].SetValue(value.c_str());
-      }else{ // group
-        if( CupVer >= 2023091800 ) InputDelay[id - 9050].SetValue(value.c_str());
+        if( id - 9000 < 4 && ModelName == "VX2745" && FPGAType == DPPType::PHA )
+          VGASetting[id - 9000].SetValue(value.c_str());
+      }else if ( id >= 9050 ){ // group
+        if( CupVer >= 2023091800 && ModelName != "VX2730" && id - 9050 < 16 )
+          InputDelay[id - 9050].SetValue(value.c_str());
       }
       //printf("%s|%s|%d|%s|\n", para.c_str(), readWrite.c_str(), id, value.c_str());
       if( readWrite == "2" && isConnected)  WriteValue(para.c_str(), value.c_str(), false);

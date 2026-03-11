@@ -2536,6 +2536,7 @@ void DigiSettingsPanel::SetDefaultPHASettigns(){
   digi[ID]->ProgramBoard();
   digi[ID]->ProgramChannels();
   RefreshSettings();
+  emit UpdateOtherPanels();
 }
 
 void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
@@ -3190,7 +3191,7 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg p
   }else{
     //printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
   }
-  cbb->setStyleSheet("");
+  if( cbb->styleSheet() == "color:red;" ) cbb->setStyleSheet("");
 }
 
 void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){

@@ -578,6 +578,9 @@ void Scope::UpdateSettingsFromMemeory(){
 
   }
 
+  // Update plot legend to match current probe selections
+  for( int j = 0; j < 2; j++ ) dataTrace[j]->setName(cbAnaProbe[j]->currentText());
+  for( int j = 0; j < 4; j++ ) dataTrace[j+2]->setName(cbDigProbe[j]->currentText());
 
   allowChange = true;
 }
@@ -716,9 +719,10 @@ void Scope::UpdateScope(){
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
-    unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValueFromMemory(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
-
     unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
+    unsigned int traceLength = qMin(digi[iDigi]->traceRingBuffer.ref(traceIdx).traceLenght,(unsigned int) MaxDisplayTraceDataLength);
+
+    printf("traceIdx = %lu, traceLength = %u\n", traceIdx, traceLength);
 
     if( atoi(haha.c_str()) == 0 || traceIdx == 0 ) {
       for( int j = 0; j < 6; j++){
