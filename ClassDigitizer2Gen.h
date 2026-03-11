@@ -8,11 +8,18 @@
 #include <unordered_map>
 
 #include "Hit.h"
+#include "RingBuffer.h"
 
 #define MaxOutFileSize 2*1024*1024*1024  //2GB
 //#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
 #define MaxNumberOfGroup 16
+#define RingBufferSize 10000
+
+struct HitSummary {
+  uint16_t energy;
+  uint16_t energy_short;
+};
 
 #include "DigiParameters.h"
 
@@ -129,6 +136,8 @@ class Digitizer2Gen {
     unsigned short GetTick2ns()     const {return tick2ns;}
     uint64_t       GetHandle()    const {return handle;}
     
+    RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];
+
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
     void CloseOutFile();

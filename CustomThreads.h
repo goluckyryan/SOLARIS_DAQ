@@ -48,7 +48,7 @@ public:
         break;
       }
       usleep(1000); // sleep for 1 ms to yield to other threads
-// 
+
       // if( isSaveData && canSendMsg ){
       //   clock_gettime(CLOCK_REALTIME, &tb);
       //   if( tb.tv_sec - ta.tv_sec > 2 ) {

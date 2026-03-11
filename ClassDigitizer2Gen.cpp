@@ -847,6 +847,11 @@ int Digitizer2Gen::ReadData(){
   hit->timestamp     *= tick2ns;
   hit->fine_timestamp *= tick2ns;
 
+  //======== fill per-channel ring buffer for histogram
+  if( hit->dataType != DataFormat::Raw ){
+    ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
+  }
+
   return ret;
 }
 

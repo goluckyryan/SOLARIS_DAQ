@@ -192,7 +192,7 @@ void SingleSpectra::ClearInternalDataCount(){
   DebugPrint("%s", "SingleSpectra");
   for( unsigned int i = 0; i < nDigi; i++){
     for( int ch = 0; ch < MaxNumberOfChannel ; ch++) {
-      lastFilledIndex[i][ch] = -1;
+      lastFilledIndex[i][ch] = 0;
     }
   }
 }
@@ -246,96 +246,57 @@ void SingleSpectra::FillHistograms(){
 
   isFillingHistograms = true;
   // timespec t0, t1;
-  timespec ta, tb;
+  // timespec ta, tb;
 
-  printf("####################### SingleSpectra::%s\n", __func__);
+  // printf("####################### SingleSpectra::%s\n", __func__);
   // qDebug() << __func__ << "| thread:" << QThread::currentThreadId();
 
-  clock_gettime(CLOCK_REALTIME, &ta);
+  // clock_gettime(CLOCK_REALTIME, &ta);
 
-  std::vector<int> digiChList; // (digi*1000 + ch) 
-  std::vector<long> digiChLastIndex; // loop * dataSize + index; 
-  std::vector<int> digiChAvalibleData; 
-  std::vector<bool> digiChFilled;
-  std::vector<int> digiChFilledCount; 
+  long totalFilled = 0;
+  bool timeout = false;
 
+  for( int ID = 0; ID < (int)nDigi && !timeout; ID++){
+    bool isPSD = digi[ID]->GetFPGAType() == DPPType::PSD;
+    for( int ch = 0; ch < digi[ID]->GetNChannels() && !timeout; ch++){
+      long absIndex = digi[ID]->ringBuffer[ch].index();
+      long gap = absIndex - lastFilledIndex[ID][ch];
 
-  for( int ID = 0; ID < (int)nDigi; ID++){
-    for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
-      // TODO: Digitizer2Gen has no ring buffer (GetData() API).
-      // Implement a per-channel ring buffer in Digitizer2Gen, then replace
-      // the two lines below with: GetAbsDataIndex(ch) and GetDataSize().
-      int temp1 = lastFilledIndex[ID][ch] + 1; // placeholder — always 0 new events
-      int temp2 = lastFilledIndex[ID][ch];
+      if( gap <= 0 ) continue;
 
-      if( temp1 <= temp2 ) continue;
-      digiChList.push_back( ID*1000 + ch ) ;
-      digiChLastIndex.push_back(temp1);
-      digiChAvalibleData.push_back(temp1-temp2);
-      digiChFilled.push_back(false);
-      digiChFilledCount.push_back(0);
+      // if gap is bigger than ring buffer, skip the old data
+      if( gap > (long)digi[ID]->ringBuffer[ch].size() ) {
+        lastFilledIndex[ID][ch] = absIndex - digi[ID]->ringBuffer[ch].size();
+        gap = digi[ID]->ringBuffer[ch].size();
+      }
 
-      if( temp1 - temp2 > 0 ) lastFilledIndex[ID][ch] = temp1; // placeholder guard
+      long filled = 0;
+      while( lastFilledIndex[ID][ch] < absIndex ){
+        HitSummary hs = digi[ID]->ringBuffer[ch].at(lastFilledIndex[ID][ch]);
+        lastFilledIndex[ID][ch] ++;
 
+        hist[ID][ch]->Fill( hs.energy );
+        if( isPSD ) hist[ID][ch]->Fill( hs.energy_short, 1);
+        hist2D[ID]->Fill(ch, hs.energy);
+        filled++;
+
+        // check time periodically
+        // if( filled % 200 == 0 ){
+        //   clock_gettime(CLOCK_REALTIME, &tb);
+        //   if( (tb.tv_sec - ta.tv_sec)*1e3 + (tb.tv_nsec - ta.tv_nsec)/1e6 >= maxFillTimeinMilliSec ){
+        //     timeout = true;
+        //     break;
+        //   }
+        // }
+      }
+
+      totalFilled += filled;
+      // printf("Digi-%2d ch-%2d | event filled %ld / %ld\n", ID, ch, filled, gap);
     }
   }
 
-  int nSize = digiChList.size();
-
-  if( nSize == 0 ) {
-    isFillingHistograms = false;
-    return;
-  }
-
-  // this method, small trigger rate channel will have more chance to fill all data
-  do{
-    size_t filledCount = 0;
-    for( size_t i = 0; i < digiChFilled.size() ; i++ ){
-      if( digiChFilled[i] ) filledCount ++;
-    }
-    if( filledCount == digiChFilled.size() ) break;
-
-    int randomValue  = QRandomGenerator::global()->bounded(nSize);
-    if( digiChFilled[randomValue] == true ) continue;
-    
-    int ID = digiChList[randomValue] / 1000;
-    int ch = digiChList[randomValue] % 1000;
-    // printf(" -------------------- %d  /  %d | %d\n", randomValue, nSize-1, digiCh);
-
-    if( digiChLastIndex[randomValue] <= lastFilledIndex[ID][ch]  ) {
-      digiChFilled[randomValue] = true;
-      // printf("Digi-%2d ch-%2d all filled | %zu\n", ID, ch, digiChList.size());
-      continue;
-    }
-
-    lastFilledIndex[ID][ch] ++;
-    digiChFilledCount[randomValue]++;
-
-    // TODO: replace with ring-buffer access once implemented in Digitizer2Gen.
-    // e.g. uint16_t data = digi[ID]->GetData()->GetEnergy(ch, lastFilledIndex[ID][ch]);
-    digiMTX[ID].lock();
-    uint16_t data = digi[ID]->hit ? digi[ID]->hit->energy : 0;
-    uint16_t e2   = digi[ID]->hit ? digi[ID]->hit->energy_short : 0;
-    digiMTX[ID].unlock();
-
-    hist[ID][ch]->Fill( data );
-    if( digi[ID]->GetFPGAType() == DPPType::PSD ){
-      hist[ID][ch]->Fill( e2, 1);
-    }
-    hist2D[ID]->Fill(ch, data);
-
-    // QCoreApplication::processEvents();
-
-    clock_gettime(CLOCK_REALTIME, &tb);
-  }while( isFillingHistograms && (tb.tv_sec - ta.tv_sec)*1e3 + (tb.tv_nsec - ta.tv_nsec)/1e6 < maxFillTimeinMilliSec ); 
-
-  //*--------------- generate fillign report
-  for( size_t i = 0; i < digiChFilled.size() ; i++){
-    printf("Digi-%2d ch-%2d | event filled %d / %d\n", digiChList[i] / 1000, digiChList[i] % 1000, digiChFilledCount[i], digiChAvalibleData[i] );
-  }  
-
-  clock_gettime(CLOCK_REALTIME, &tb);
-  printf("total time : %8.3f ms\n", (tb.tv_sec - ta.tv_sec)*1e3 + (tb.tv_nsec - ta.tv_nsec)/1e6 );
+  // clock_gettime(CLOCK_REALTIME, &tb);
+  // printf("total filled: %ld, time : %8.3f ms\n", totalFilled, (tb.tv_sec - ta.tv_sec)*1e3 + (tb.tv_nsec - ta.tv_nsec)/1e6 );
 
   isFillingHistograms = false;
 
