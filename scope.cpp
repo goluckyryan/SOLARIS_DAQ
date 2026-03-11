@@ -713,35 +713,35 @@ void Scope::UpdateScope(){
 
   if( digi ){
 
-    if( !digiMTX[iDigi].tryLock() ) return; // skip this update if mutex is busy
-
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
     unsigned int traceLength = qMin( atoi(digi[iDigi]->GetSettingValueFromMemory(PHA::CH::RecordLength, ch).c_str())/sample2ns,   MaxDisplayTraceDataLength  );
 
-    if( atoi(haha.c_str()) == 0 ) {
+    unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
+
+    if( atoi(haha.c_str()) == 0 || traceIdx == 0 ) {
       for( int j = 0; j < 6; j++){
         QVector<QPointF> points;
         for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
         dataTrace[j]->replace(points);
       }
       plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
-      digiMTX[iDigi].unlock();
       return;
     }
 
+    const TraceSnapshot& ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
+
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , digi[iDigi]->hit->analog_probes[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , ts.analog_probes[j][i]));
       dataTrace[j]->replace(points);
     }
     for( int j = 0; j < 4; j++) {
       QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*digi[iDigi]->hit->digital_probes[j][i]));
+      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*ts.digital_probes[j][i]));
       dataTrace[j+2]->replace(points);
     }
-    digiMTX[iDigi].unlock();
 
     plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
 

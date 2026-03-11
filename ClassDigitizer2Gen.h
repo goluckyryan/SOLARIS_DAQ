@@ -21,6 +21,14 @@ struct HitSummary {
   uint16_t energy_short;
 };
 
+#define TraceRingBufferSize 10
+
+struct TraceSnapshot {
+  int32_t analog_probes[2][MaxTraceLenght];
+  uint8_t digital_probes[4][MaxTraceLenght];
+  size_t traceLenght;
+};
+
 #include "DigiParameters.h"
 
 //^=================== Digitizer Class
@@ -137,6 +145,7 @@ class Digitizer2Gen {
     uint64_t       GetHandle()    const {return handle;}
     
     RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];
+    RingBuffer<TraceSnapshot, TraceRingBufferSize> traceRingBuffer;
 
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary

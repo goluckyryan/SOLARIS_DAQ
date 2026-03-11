@@ -32,12 +32,11 @@ public:
 
     while(!stop){
         
-      digiMTX[ID].lock();
       int ret = digi->ReadData();
+      
       if( ret == CAEN_FELib_Stop ){
         digi->hit->ClearTrace();
       }
-      digiMTX[ID].unlock();
 
       if( isSaveData && ret == CAEN_FELib_Success ){
         digi->SaveDataToFile();
@@ -47,7 +46,6 @@ public:
         digi->ErrorMsg("ReadData Thread No more data");
         break;
       }
-      usleep(1000); // sleep for 1 ms to yield to other threads
 
       // if( isSaveData && canSendMsg ){
       //   clock_gettime(CLOCK_REALTIME, &tb);

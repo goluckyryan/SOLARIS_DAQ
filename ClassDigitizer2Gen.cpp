@@ -852,6 +852,19 @@ int Digitizer2Gen::ReadData(){
     ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
   }
 
+  //======== fill trace ring buffer for scope
+  if( !hit->isTraceAllZero ){
+    TraceSnapshot& ts = traceRingBuffer.nextSlot();
+    ts.traceLenght = hit->traceLenght;
+    memcpy(ts.analog_probes[0], hit->analog_probes[0], hit->traceLenght * sizeof(int32_t));
+    memcpy(ts.analog_probes[1], hit->analog_probes[1], hit->traceLenght * sizeof(int32_t));
+    memcpy(ts.digital_probes[0], hit->digital_probes[0], hit->traceLenght);
+    memcpy(ts.digital_probes[1], hit->digital_probes[1], hit->traceLenght);
+    memcpy(ts.digital_probes[2], hit->digital_probes[2], hit->traceLenght);
+    memcpy(ts.digital_probes[3], hit->digital_probes[3], hit->traceLenght);
+    traceRingBuffer.advance();
+  }
+
   return ret;
 }
 
