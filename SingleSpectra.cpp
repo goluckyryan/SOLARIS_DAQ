@@ -191,8 +191,8 @@ SingleSpectra::~SingleSpectra(){
 void SingleSpectra::ClearInternalDataCount(){
   DebugPrint("%s", "SingleSpectra");
   for( unsigned int i = 0; i < nDigi; i++){
-    for( int ch = 0; ch < MaxNumberOfChannel ; ch++) {
-      lastFilledIndex[i][ch] = 0;
+    for( int ch = 0; ch < digi[i]->GetNChannels() ; ch++) {
+      lastFilledIndex[i][ch] = digi[i]->ringBuffer[ch].index();
     }
   }
 }

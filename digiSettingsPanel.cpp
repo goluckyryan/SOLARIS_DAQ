@@ -2389,11 +2389,28 @@ void DigiSettingsPanel::UpdateStatus(){
   digi[ID]->ReadValue(PHA::DIG::LED_status);
   digi[ID]->ReadValue(PHA::DIG::ACQ_status);
 
-  if( digi[ID]->GetModelName() == "VX2740" ) {
-    digi[ID]->ReadValue(PHA::DIG::TempSensADC[0]);
-  }else{
-      for( int i = 0; i < (int) PHA::DIG::TempSensADC.size(); i++){
-      digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+  {
+    int nADC = (digi[ID]->GetModelName() == "VX2740") ? 1 : (int) PHA::DIG::TempSensADC.size();
+    for( int i = 0; i < nADC; i++){
+      std::string ans;
+      bool ok = false;
+      for( int try_ = 0; try_ < 5; try_++){
+        ans = digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+        bool isNumber = !ans.empty();
+        for( char c : ans ){
+          if( !isdigit(c) && c != '-' && c != '+' ){
+            isNumber = false;
+            break;
+          }
+        }
+        if( isNumber ){
+          ok = true;
+          break;
+        }
+      }
+      if( !ok ){
+        printf("Failed to read TempSensADC[%d] after 5 attempts.\n", i);
+      }
     }
   }
 

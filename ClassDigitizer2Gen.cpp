@@ -1288,13 +1288,28 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       }
 
       //--- exclude some TempSens for Not VX2745
-      if( ModelName != "VX2745" && 
+      if( ModelName != "VX2745" &&
          ( boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
            boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
            boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
            boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
            boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
            boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara() ) ) {
+        totCount --;
+        continue;
+      }
+
+      //--- exclude FreqSensCore, DutyCycleSensDCDC for non-VX2740 (not readable)
+      if( ModelName != "VX2740" &&
+         ( boardSettings[i].GetPara() == PHA::DIG::FreqSensCore.GetPara() ||
+           boardSettings[i].GetPara() == PHA::DIG::DutyCycleSensDCDC.GetPara() ) ) {
+        totCount --;
+        continue;
+      }
+
+      //--- for VX2740, only TempSensADC0 is readable
+      if( ModelName == "VX2740" && boardSettings[i].ReadWrite() == RW::ReadOnly &&
+          boardSettings[i].GetPara() != PHA::DIG::TempSensADC0.GetPara() ) {
         totCount --;
         continue;
       }
@@ -1359,6 +1374,10 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
     for( int i = 0; i < (int) chSettings[0].size(); i++){
       for(int ch = 0; ch < nChannels ; ch++ ){
         if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+        //--- exclude ChGain for non-VX2730 (not readable)
+        if( ModelName != "VX2730" && chSettings[ch][i].GetPara() == PSD::CH::ChGain.GetPara()) {
+          continue;
+        }
         totCount ++;
         if( chSettings[ch][i].GetValue() == "") {
           printf("[%i] No value for %s , ch-%02d\n", i, chSettings[ch][i].GetPara().c_str(), ch);
