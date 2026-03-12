@@ -22,7 +22,7 @@ inline unsigned int getTime_us(){
 }
 
 #define MAX_MULTI 64
-#define MAX_TRACE_LEN 1250 ///  = 10 us
+#define MAX_TRACE_LEN 5000 ///  = 40 us, 8 ns per sample
 
 SolReader ** reader;
 Hit ** hit;
@@ -33,6 +33,7 @@ unsigned long totFileSize = 0;
 unsigned long processedFileSize = 0;
 
 std::vector<int> activeFileID;
+std::vector<int> activeGroupID; // maps activeFileID index to original group index
 std::vector<int> groupIndex;
 std::vector<std::vector<int>> group; // group[i][j], i = group ID, j = group member)
 
@@ -73,6 +74,11 @@ int             traceLen[MAX_MULTI] = {0};
 int trace[MAX_MULTI][MAX_TRACE_LEN] = {0};
 
 void fillData(int &fileID, const bool &saveTrace){
+  if( multi >= MAX_MULTI ) {
+    reader[fileID]->ReadNextBlock();
+    return;
+  }
+
   bd[multi]       = idList[fileID][1];
   sn[multi]       = idList[fileID][3];
   ch[multi]       = hit[fileID]->channel;
@@ -82,12 +88,12 @@ void fillData(int &fileID, const bool &saveTrace){
   e_f[multi]      = hit[fileID]->fine_timestamp;
   lowFlag[multi]  = hit[fileID]->flags_low_priority;
   highFlag[multi] = hit[fileID]->flags_high_priority;
-  
+
   if( saveTrace ){
     traceLen[multi] = hit[fileID]->traceLenght;
     for( int i = 0; i < TMath::Min(traceLen[multi], MAX_TRACE_LEN); i++){
       trace[multi][i] = hit[fileID]->analog_probes[0][i];
-    } 
+    }
   }
 
   multi++;
@@ -125,7 +131,7 @@ int main(int argc, char ** argv){
   const bool saveTrace = atoi(argv[3]);
 
   const int nFile = argc - 4;
-  TString inFileName[nFile];
+  std::vector<TString> inFileName(nFile);
   for( int i = 0 ; i < nFile ; i++){
     inFileName[i] = argv[i+4];
   }
@@ -254,11 +260,13 @@ int main(int argc, char ** argv){
 
   //--- find earlist time among the files
   activeFileID.clear();
+  activeGroupID.clear();
   groupIndex.clear();  //the index of each group
 
   for(int i = 0; i < (int) group.size(); i++) {
     groupIndex.push_back(0);
     activeFileID.push_back(group[i][0]);
+    activeGroupID.push_back(i);
   }
 
   int fileID = 0;
@@ -266,24 +274,28 @@ int main(int argc, char ** argv){
   findEarliestTime(fileID, groupID);
   fillData(fileID, saveTrace);
 
-  unsigned long firstTimeStamp = hit[fileID]->timestamp;
-  unsigned long lastTimeStamp = 0;
+  unsigned long long firstTimeStamp = e_t[0];
+  unsigned long long lastTimeStamp = 0;
 
-  int last_precentage = 0;
+  int last_percentage = 0;
   while((activeFileID.size() > 0)){
 
     findEarliestTime(fileID, groupID);
     if( reader[fileID]->IsEndOfFile() ){
+      int origGroup = activeGroupID[groupID];
       groupIndex[groupID] ++;
-      if( groupIndex[groupID] < (int) group[groupID].size() ){
-        activeFileID[groupID] = group[groupID][groupIndex[groupID]];
+      if( groupIndex[groupID] < (int) group[origGroup].size() ){
+        activeFileID[groupID] = group[origGroup][groupIndex[groupID]];
         fileID = activeFileID[groupID];
       }else{
         activeFileID.erase(activeFileID.begin() + groupID);
+        activeGroupID.erase(activeGroupID.begin() + groupID);
+        groupIndex.erase(groupIndex.begin() + groupID);
       }
     }
 
     if (timeWindow < 0 ){
+      lastTimeStamp = e_t[0];
       outRootFile->cd();
       tree->Fill();
       evID ++;
@@ -294,6 +306,7 @@ int main(int argc, char ** argv){
       if( hit[fileID]->timestamp - e_t[0] < timeWindow ){
         fillData(fileID, saveTrace);
       }else{
+        lastTimeStamp = e_t[0];
         outRootFile->cd();
         tree->Fill();
         evID ++;
@@ -305,20 +318,19 @@ int main(int argc, char ** argv){
     
     ///========= calculate progress
     processedFileSize = 0;
-    for( int p = 0; p < (int) group.size(); p ++){
+    for( int p = 0; p < (int) activeGroupID.size(); p ++){
+      int gID = activeGroupID[p];
       for( int q = 0; q <= groupIndex[p]; q++){
-        if( groupIndex[p] < (int) group[p].size() ){
-          int id = group[p][q];
-          processedFileSize += reader[id]->GetFilePos();
-        }
+        int id = group[gID][q];
+        processedFileSize += reader[id]->GetFilePos();
       }
     }
     double percentage = processedFileSize * 100/ totFileSize;
-    if( percentage >= last_precentage ) {
+    if( percentage >= last_percentage ) {
       printf("Processed : %llu, %.0f%% | %lu/%lu | ", evID, percentage, processedFileSize, totFileSize);
       for( int i = 0; i < (int) activeFileID.size(); i++) printf("%d, ", activeFileID[i]);
       printf(" \n\033[A\r");
-      last_precentage = percentage + 1.0;
+      last_percentage = percentage + 1.0;
     }
   }; ///====== end of event building loop
 
@@ -332,7 +344,7 @@ int main(int argc, char ** argv){
   double percentage = processedFileSize * 100/ totFileSize;
   printf("Processed : %llu, %.0f%% | %lu/%lu            \n", evID, percentage, processedFileSize, totFileSize);
 
-  lastTimeStamp = hit[fileID]->timestamp;
+  lastTimeStamp = e_t[0];
   //*=========================================== save file
   outRootFile->cd();
   tree->Fill();
@@ -342,8 +354,8 @@ int main(int argc, char ** argv){
   //*=========================================== Save timestamp as TMacro
   TMacro timeStamp;
   TString str;
-  str.Form("%lu", firstTimeStamp); timeStamp.AddLine( str.Data() );
-  str.Form("%lu", lastTimeStamp); timeStamp.AddLine( str.Data() );
+  str.Form("%llu", firstTimeStamp); timeStamp.AddLine( str.Data() );
+  str.Form("%llu", lastTimeStamp); timeStamp.AddLine( str.Data() );
   timeStamp.Write("timeStamp");
 
   unsigned int numBlock = 0;
@@ -359,16 +371,17 @@ int main(int argc, char ** argv){
   printf("Number of Block Scanned : %u\n", numBlock);
   printf("  Number of Event Built : %lld\n", evID);
   printf("  Output Root File Size : %.2f MB\n", outRootFile->GetSize()/1024./1024.);
-  printf("        first timestamp : %lu ns \n", firstTimeStamp);
-  printf("         last timestamp : %lu ns \n", lastTimeStamp);
-  unsigned long duration = lastTimeStamp - firstTimeStamp;
-  printf("        total duration* : %lu ns = %.2f sec \n", duration, duration * 1.0 / 1e9 );
+  printf("        first timestamp : %llu ns \n", firstTimeStamp);
+  printf("         last timestamp : %llu ns \n", lastTimeStamp);
+  unsigned long long duration = lastTimeStamp - firstTimeStamp;
+  printf("        total duration* : %llu ns = %.2f sec \n", duration, duration * 1.0 / 1e9 );
   printf("===================================== end of summary. \n");
 
 
   //^############## delete new
   for( int i = 0; i < nFile; i++) delete reader[i];
   delete [] reader;
+  delete [] hit;
   outRootFile->Close();
 
   return 0;
