@@ -21,7 +21,7 @@ inline unsigned int getTime_us(){
   return time_us;
 }
 
-#define MAX_MULTI 64
+#define MAX_MULTI 50000
 #define MAX_TRACE_LEN 5000 ///  = 40 us, 8 ns per sample
 
 SolReader ** reader;
