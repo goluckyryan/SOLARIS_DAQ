@@ -221,6 +221,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
       ACQStopButtonPressed = true;
       needManualComment = true;
       runTimer->stop();
+      disconnect(runTimer, &QTimer::timeout, nullptr, nullptr);
       StopACQ();
 
       if( !isACQRunning ){
@@ -651,10 +652,12 @@ void MainWindow::AutoRun(){
 
   needManualComment = true;
   int isRun = 0;
+  ///=========== always disconnect previous timer connection first
+  disconnect(runTimer,  &QTimer::timeout, nullptr, nullptr);
+
   ///=========== infinite single run
   if( cbAutoRun->currentData().toInt() == 0 ){
     isRun = StartACQ();
-    disconnect(runTimer,  &QTimer::timeout, nullptr, nullptr);
   }else{
     isRun = StartACQ();
     connect(runTimer, &QTimer::timeout, this, [=](){
@@ -670,17 +673,16 @@ void MainWindow::AutoRun(){
         if( digiSetting ) digiSetting->EnableControl();
       }else{
         LogMsg("Wait for 10 sec for next Run....");
-        elapsedTimer.invalidate();
-        elapsedTimer.start();
-        while(elapsedTimer.elapsed() < 10000) {
-          QCoreApplication::processEvents();
+        runTimer->stop();
+        QTimer::singleShot(10000, this, [=](){
           if( ACQStopButtonPressed ) {
             ACQStopButtonPressed = false;
             return;
           }
-        }
-        StartACQ();
-      } 
+          StartACQ();
+          runTimer->start(abs(cbAutoRun->currentData().toInt()) * 60 * 1000);
+        });
+      }
     });
   }
 
@@ -788,7 +790,7 @@ void MainWindow::OpenDigitizers(){
     }
     bnOpenDigitizers->setEnabled(false);
     bnOpenDigitizers->setStyleSheet("");
-    cbAutoRun->setEnabled(true);
+    cbAutoRun->setEnabled(chkSaveRun->isChecked());
     cbDataFormat->setEnabled(true);
     bnOpenScalar->setEnabled(true);
 
@@ -1182,7 +1184,21 @@ void MainWindow::OpenScaler(){
 
   scalarThread->start();
 
+  RepositionScalar();
+
   if( scalar->isVisible() ) scalar->activateWindow();
+}
+
+void MainWindow::RepositionScalar(){
+  if( !scalar->isVisible() ) return;
+  int x = this->x() - scalar->width() - 50;
+  int y = this->y();
+  scalar->move(x, y);
+}
+
+void MainWindow::resizeEvent(QResizeEvent * event){
+  QMainWindow::resizeEvent(event);
+  RepositionScalar();
 }
 
 void MainWindow::SetUpScalar(){

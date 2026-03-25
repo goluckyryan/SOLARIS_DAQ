@@ -87,6 +87,9 @@ private slots:
     event->accept();
   }
 
+  void resizeEvent(QResizeEvent * event);
+  void RepositionScalar();
+
   void OpenSingleSpectra();
 
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
