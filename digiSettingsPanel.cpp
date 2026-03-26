@@ -3050,7 +3050,7 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
 
     if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() ){
 
-      if( digi[ID]->WriteValue(para, std::to_string(spb->value()/8), index)){
+      if( digi[ID]->WriteValue(para, std::to_string((int)(spb->value()/8)), index)){
         SendLogMsg(msg + "|OK.");
         spb->setStyleSheet("");
         UpdatePanelFromMemory();
@@ -3064,7 +3064,7 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_inde
 
 
     }else{
-      if( digi[ID]->WriteValue(para, std::to_string(spb->value()), index)){
+      if( digi[ID]->WriteValue(para, std::to_string((int)spb->value()), index)){
         SendLogMsg(msg + "|OK.");
         spb->setStyleSheet("");
         UpdatePanelFromMemory();

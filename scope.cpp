@@ -454,8 +454,8 @@ void Scope::SetupPSD(){
 
   //------------------ next row
   ScopeMakeSpinBox(spbGateLong, "Long Gate [ns] ", bLayout, 4, 0, PSD::CH::GateLongLength);
-  ScopeMakeSpinBox(spbGateShort, "Shart Gate [ns] ", bLayout, 4, 2, PSD::CH::GateLongLength);
-  ScopeMakeSpinBox(spbGateOffset, "Gate offset [ns] ", bLayout, 4, 4, PSD::CH::GateLongLength);
+  ScopeMakeSpinBox(spbGateShort, "Short Gate [ns] ", bLayout, 4, 2, PSD::CH::GateShortLength);
+  ScopeMakeSpinBox(spbGateOffset, "Gate offset [ns] ", bLayout, 4, 4, PSD::CH::GateOffset);
   ScopeMakeComoBox(cbbEnergyGain, "Energy Gain ", bLayout, 4, 6, PSD::CH::EnergyGain);
 
 
@@ -890,7 +890,7 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
     QString msg;
     msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + QString::number(sb->value());
-    if( digi[iDigi]->WriteValue(digPara, std::to_string(sb->value()), ch)){
+    if( digi[iDigi]->WriteValue(digPara, std::to_string((int)sb->value()), ch)){
       SendLogMsg(msg + "|OK.");
       sb->setStyleSheet("");
       UpdateSettingsFromMemeory();
