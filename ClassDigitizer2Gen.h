@@ -139,10 +139,14 @@ class Digitizer2Gen {
 
     void PrintBoardSettings();
     void PrintChannelSettings(unsigned short ch);
+    void AdjustParameterRanges(); // adjust min/max/step based on ModelName and FPGAType
     
     unsigned short GetNChannels() const {return nChannels;}
     unsigned short GetTick2ns()     const {return tick2ns;}
     uint64_t       GetHandle()    const {return handle;}
+
+    const std::vector<Reg>& GetChSettings(int ch) const {return chSettings[ch];}
+    const std::vector<Reg>& GetBoardSettings() const {return boardSettings;}
     
     RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];
     RingBuffer<TraceSnapshot, TraceRingBufferSize> traceRingBuffer;

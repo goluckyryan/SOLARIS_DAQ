@@ -58,6 +58,7 @@ class Reg {
     ANSTYPE     GetAnswerType() const {return ansType;}
     std::string GetUnit() const {return answerUnit;}
     std::vector<std::pair<std::string,std::string>> GetAnswers() const {return answer;}
+    void SetAnswers(std::vector<std::pair<std::string,std::string>> ans) { answer = ans; }
 
     std::string GetPara()   const {return name;}
     std::string GetFullPara(int ch_index = -1, int nChannals = MaxNumberOfChannel) const {
@@ -204,29 +205,31 @@ namespace PHA{
                                                                                    {"LVDS", "LVDS"}});
     //const Reg EnableClockOutBackplane  ("EnClockOutP0", RW::ReadWrite, TYPE::DIG);
     const Reg EnableClockOutFrontPanel ("EnClockOutFP", RW::ReadWrite, TYPE::DIG, {{"True", "Enable"}, {"False", "Disabled"}});
-    const Reg TrgOutMode               ("TrgOutMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
-                                                                                 {"TRGIN",     "TRG-IN"}, 
-                                                                                 {"SwTrg",     "Software Trigger"}, 
-                                                                                 {"LVDS",      "LVDS"}, 
+    const Reg TrgOutMode               ("TrgOutMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"},
+                                                                                 {"TrgIn",     "TRG-IN"},
+                                                                                 {"P0",        "Back Plane"},
+                                                                                 {"SwTrg",     "Software Trigger"},
+                                                                                 {"LVDS",      "LVDS"},
                                                                                  {"ITLA",      "ITL-A"},
                                                                                  {"ITLB",      "ITL-B"},
                                                                                  {"ITLA_AND_ITLB",  "ITL-A & B"},
                                                                                  {"ITLA_OR_ITLB",  "ITL-A || B"},
                                                                                  {"EncodedClkIn",  "Encoded CLK-IN"},
-                                                                                 {"Run",       "Run Signal"}, 
-                                                                                 {"RefClk",    "Reference Clock"}, 
-                                                                                 {"TestPulse", "Test Pulse"}, 
-                                                                                 {"Busy",      "Busy Signal"}, 
-                                                                                 {"Fixed0",    "0-level"}, 
-                                                                                 {"Fixed1",    "1-level"}, 
-                                                                                 {"SyncIn",    "SyncIn Signal"}, 
-                                                                                 {"SIN",       "S-IN Signal"}, 
-                                                                                 {"GPIO",      "GPIO Signal"}, 
-                                                                                 {"LBinClk",      "GPIO Signal"}, 
-                                                                                 {"AcceptTrg", "Acceped Trigger Signal"}, 
+                                                                                 {"Run",       "Run Signal"},
+                                                                                 {"RefClk",    "Reference Clock"},
+                                                                                 {"TestPulse", "Test Pulse"},
+                                                                                 {"Busy",      "Busy Signal"},
+                                                                                 {"UserTrgout","User Trigger Out"},
+                                                                                 {"Fixed0",    "0-level"},
+                                                                                 {"Fixed1",    "1-level"},
+                                                                                 {"SyncIn",    "SyncIn Signal"},
+                                                                                 {"SIN",       "S-IN Signal"},
+                                                                                 {"GPIO",      "GPIO Signal"},
+                                                                                 {"LBinClk",   "LBin Clock"},
+                                                                                 {"AcceptTrg", "Accepted Trigger Signal"},
                                                                                  {"TrgClk",    "Trigger Clock"}});
     const Reg GPIOMode                 ("GPIOMode", RW::ReadWrite, TYPE::DIG, {{"Disabled",  "Disabled"}, 
-                                                                               {"TRGIN",     "TRG-IN"}, 
+                                                                               {"TrgIn",     "TRG-IN"}, 
                                                                                {"P0",        "Back Plane"}, 
                                                                                {"SIN",       "S-IN Signal"},
                                                                                {"LVDS",      "LVDS Trigger"}, 
@@ -255,7 +258,7 @@ namespace PHA{
                                                                                       {"EncodedClkIn",  "Encoded CLK-IN"}});
     const Reg BoardVetoWidth           ("BoardVetoWidth", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"34359738360", ""}, {"1", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg BoardVetoPolarity        ("BoardVetoPolarity", RW::ReadWrite, TYPE::DIG, {{"ActiveHigh", "High"}, {"ActiveLow", "Low"}});
-    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
+    const Reg RunDelay                 ("RunDelay", RW::ReadWrite, TYPE::DIG, {{"0", ""}, {"524280", ""}, {"8", ""}},  ANSTYPE::INTEGER, "ns");
     const Reg EnableAutoDisarmACQ      ("EnAutoDisarmAcq", RW::ReadWrite, TYPE::DIG, {{"True", "Enabled"}, {"False", "Disabled"}});
     const Reg EnableDataReduction      ("EnDataReduction", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
     const Reg EnableStatisticEvents    ("EnStatEvents", RW::ReadWrite, TYPE::DIG, {{"False", "Disabled"}, {"True", "Enabled"}});
@@ -463,14 +466,15 @@ namespace PHA{
     const Reg TriggerThreshold ("TriggerThr", RW::ReadWrite, TYPE::CH, {{"0", ""},{"8191", ""}, {"1",""}}, ANSTYPE::INTEGER);
     const Reg Polarity         ("PulsePolarity", RW::ReadWrite, TYPE::CH, {{"Positive", "Pos. +"},{"Negative", "Neg. -"}});
 
-    const Reg WaveDataSource              ("WaveDataSource", RW::ReadWrite, TYPE::CH, {{"ADC_DATA",         "Input ADC"}, 
-                                                                                       {"ADC_TEST_TOGGLE",  "ADC produces TOGGLE signal"}, 
-                                                                                       {"ADC_TEST_RAMP",    "ADC produces RAMP signal"}, 
-                                                                                       {"ADC_TEST_SIN",     "ADC produce SIN signal"}, 
-                                                                                       {"Ramp",             "Ramp generator"}, 
-                                                                                       {"IPE",              "Internal Pulse Emulator"}, 
-                                                                                       {"SquareWave",       "Test Pusle (Square Wave)"}  });
-    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
+    const Reg WaveDataSource              ("WaveDataSource", RW::ReadWrite, TYPE::CH, {{"ADC_DATA",         "Input ADC"},
+                                                                                       {"ADC_TEST_TOGGLE",  "ADC produces TOGGLE signal"},
+                                                                                       {"ADC_TEST_RAMP",    "ADC produces RAMP signal"},
+                                                                                       {"ADC_TEST_SIN",     "ADC produce SIN signal"},
+                                                                                       {"ADC_TEST_PRBS",    "ADC produces PRBS signal"},
+                                                                                       {"Ramp",             "Ramp generator"},
+                                                                                       {"IPE",              "Internal Pulse Emulator"},
+                                                                                       {"SquareWave",       "Test Pulse (Square Wave)"}  });
+    const Reg RecordLength                ("ChRecordLengthT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"64800", ""}, {"32",""}}, ANSTYPE::INTEGER, "ns");
     const Reg PreTrigger                  ("ChPreTriggerT", RW::ReadWrite, TYPE::CH, {{"32", ""}, {"32000", ""}, {"8",""}}, ANSTYPE::INTEGER, "ns");
     const Reg WaveSaving                  ("WaveSaving", RW::ReadWrite, TYPE::CH, {{"Always", "Always"}, {"OnRequest", "On Request"}});
     const Reg WaveResolution              ("WaveResolution", RW::ReadWrite, TYPE::CH, {{"RES8", " 8 ns"}, 
@@ -485,8 +489,7 @@ namespace PHA{
     const Reg EnergyFilterPeakingPosition ("EnergyFilterPeakingPosition", RW::ReadWrite, TYPE::CH, {{"10", ""},{"90", ""}, {"1",""}}, ANSTYPE::INTEGER, "%");
     const Reg EnergyFilterPeakingAvg      ("EnergyFilterPeakingAvg", RW::ReadWrite, TYPE::CH, {{"OneShot",   "1 sample"},
                                                                                                {"LowAVG",    "4 samples"},
-                                                                                               {"MediumAVG", "16 samples"},
-                                                                                               {"HighAVG",   "64 samples"}});
+                                                                                               {"MediumAVG", "16 samples"}});
     const Reg EnergyFilterBaselineAvg     ("EnergyFilterBaselineAvg", RW::ReadWrite, TYPE::CH, {{"Fixed",    "0 sample"},
                                                                                                {"VeryLow",   "16 samples"},
                                                                                                {"Low",       "64 samples"},
@@ -501,12 +504,12 @@ namespace PHA{
     const Reg WaveAnalogProbe0            ("WaveAnalogProbe0", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
                                                                                          {"TimeFilter",                 "Time Filter"}, 
                                                                                          {"EnergyFilter",               "Trapazoid"}, 
-                                                                                         {"EnergyFilterBase",           "Trap. Baseline"}, 
+                                                                                         {"EnergyFilterBaseline",           "Trap. Baseline"}, 
                                                                                          {"EnergyFilterMinusBaseline",  "Trap. - Baseline"}});
     const Reg WaveAnalogProbe1            ("WaveAnalogProbe1", RW::ReadWrite, TYPE::CH, {{"ADCInput",                   "ADC Input"}, 
                                                                                          {"TimeFilter",                 "Time Filter"}, 
                                                                                          {"EnergyFilter",               "Trapazoid"}, 
-                                                                                         {"EnergyFilterBase",           "Trap. Baseline"}, 
+                                                                                         {"EnergyFilterBaseline",           "Trap. Baseline"}, 
                                                                                          {"EnergyFilterMinusBaseline",  "Trap. - Baseline"}});
     const Reg WaveDigitalProbe0           ("WaveDigitalProbe0", RW::ReadWrite, TYPE::CH, {{"Trigger",                    "Trigger"},              
                                                                                           {"TimeFilterArmed",            "Time Filter Armed"},    
@@ -519,7 +522,7 @@ namespace PHA{
                                                                                           {"ADCSaturation",              "ADC Saturate"},         
                                                                                           {"ADCSaturationProtection",    "ADC Sat. Protection"},  
                                                                                           {"PostSaturationEvent",        "Post Sat. Event"},      
-                                                                                          {"EnergylterSaturation",       "Trap. Saturate"},       
+                                                                                          {"EnergyFilterSaturation",       "Trap. Saturate"},       
                                                                                           {"AcquisitionInhibit",         "ACQ Inhibit"}    });
     const Reg WaveDigitalProbe1           ("WaveDigitalProbe1", RW::ReadWrite, TYPE::CH, {{"Trigger",                    "Trigger"},              
                                                                                           {"TimeFilterArmed",            "Time Filter Armed"},    
@@ -532,7 +535,7 @@ namespace PHA{
                                                                                           {"ADCSaturation",              "ADC Saturate"},         
                                                                                           {"ADCSaturationProtection",    "ADC Sat. Protection"},  
                                                                                           {"PostSaturationEvent",        "Post Sat. Event"},      
-                                                                                          {"EnergylterSaturation",       "Trap. Saturate"},       
+                                                                                          {"EnergyFilterSaturation",       "Trap. Saturate"},       
                                                                                           {"AcquisitionInhibit",         "ACQ Inhibit"}    });
     const Reg WaveDigitalProbe2           ("WaveDigitalProbe2", RW::ReadWrite, TYPE::CH, {{"Trigger",                    "Trigger"},              
                                                                                           {"TimeFilterArmed",            "Time Filter Armed"},    
@@ -545,7 +548,7 @@ namespace PHA{
                                                                                           {"ADCSaturation",              "ADC Saturate"},         
                                                                                           {"ADCSaturationProtection",    "ADC Sat. Protection"},  
                                                                                           {"PostSaturationEvent",        "Post Sat. Event"},      
-                                                                                          {"EnergylterSaturation",       "Trap. Saturate"},       
+                                                                                          {"EnergyFilterSaturation",       "Trap. Saturate"},       
                                                                                           {"AcquisitionInhibit",         "ACQ Inhibit"}    });
     const Reg WaveDigitalProbe3           ("WaveDigitalProbe3", RW::ReadWrite, TYPE::CH, {{"Trigger",                    "Trigger"},              
                                                                                           {"TimeFilterArmed",            "Time Filter Armed"},    
@@ -558,7 +561,7 @@ namespace PHA{
                                                                                           {"ADCSaturation",              "ADC Saturate"},         
                                                                                           {"ADCSaturationProtection",    "ADC Sat. Protection"},  
                                                                                           {"PostSaturationEvent",        "Post Sat. Event"},      
-                                                                                          {"EnergylterSaturation",       "Trap. Saturate"},       
+                                                                                          {"EnergyFilterSaturation",       "Trap. Saturate"},       
                                                                                           {"AcquisitionInhibit",         "ACQ Inhibit"}    });
 
     const std::vector<Reg> AnalogProbe  = {WaveAnalogProbe0, WaveAnalogProbe1};
@@ -566,8 +569,8 @@ namespace PHA{
 
 
     const Reg EventTriggerSource      ("EventTriggerSource", RW::ReadWrite, TYPE::CH, {{"GlobalTriggerSource",   "Global Trigger Source"}, 
-                                                                                       {"TRGIN",                 "TRG-IN"}, 
-                                                                                       {"SWTrigger",             "Software Trigger"}, 
+                                                                                       {"TrgIn",                 "TRG-IN"}, 
+                                                                                       {"SwTrg",             "Software Trigger"}, 
                                                                                        {"ChSelfTrigger",         "Channel Self-Trigger"}, 
                                                                                        {"Ch64Trigger",           "Channel 64-Trigger"}, 
                                                                                        {"ITLA",                 "ITL-A"}, 
@@ -580,11 +583,11 @@ namespace PHA{
                                                                                       {"ADCUnderSaturation", "ADC Under Saturation"},
                                                                                       {"Disabled", "Disabled"}});
     const Reg WaveTriggerSource       ("WaveTriggerSource", RW::ReadWrite, TYPE::CH, {{"GlobalTriggerSource",  "Global Trigger Source"}, 
-                                                                                      {"TRGIN",                "TRG-IN"}, 
+                                                                                      {"TrgIn",                "TRG-IN"}, 
                                                                                       {"ExternalInhibit",      "External Inhibit"}, 
                                                                                       {"ADCUnderSaturation",   "ADC Under Saturation"}, 
                                                                                       {"ADCOverSaturation",    "ADC Over Saturation"}, 
-                                                                                      {"SWTrigger",            "Software Trigger"}, 
+                                                                                      {"SwTrg",            "Software Trigger"}, 
                                                                                       {"ChSelfTrigger",        "Channel Self-Trigger"}, 
                                                                                       {"Ch64Trigger",          "Channel 64-Trigger"}, 
                                                                                       {"ITLA",                 "ITL-A"}, 
@@ -593,27 +596,27 @@ namespace PHA{
                                                                                       {"Disabled",             "Disabled"}});
 
     const Reg EventSelector           ("EventSelector", RW::ReadWrite, TYPE::CH, {{"All", "All"},
-                                                                                  {"Pileup", "Pile up"},
+                                                                                  {"PileUp", "Pile up"},
                                                                                   {"EnergySkim", "Energy Skim"}});
     const Reg WaveSelector            ("WaveSelector", RW::ReadWrite, TYPE::CH, {{"All", "All wave"},
-                                                                                  {"Pileup", "Only Pile up"},
+                                                                                  {"PileUp", "Only Pile up"},
                                                                                   {"EnergySkim", "Only in Energy Skim Range"}});
     const Reg CoincidenceMask         ("CoincidenceMask", RW::ReadWrite, TYPE::CH, {{"Disabled", "Disabled"},
                                                                                     {"Ch64Trigger", "Channel 64-Trigger"},
-                                                                                    {"TRGIN", "TRG-IN"},
+                                                                                    {"TrgIn", "TRG-IN"},
                                                                                     {"GlobalTriggerSource", "Global Trigger"},
                                                                                     {"ITLA", "ITLA"},
                                                                                     {"ITLB", "ITLB"}});
     const Reg AntiCoincidenceMask     ("AntiCoincidenceMask", RW::ReadWrite, TYPE::CH,{{"Disabled", "Disabled"},
                                                                                        {"Ch64Trigger", "Channel 64-Trigger"},
-                                                                                       {"TRGIN", "TRG-IN"},
+                                                                                       {"TrgIn", "TRG-IN"},
                                                                                        {"GlobalTriggerSource", "Global Trigger"},
                                                                                        {"ITLA", "ITLA"},
                                                                                        {"ITLB", "ITLB"}});
     const Reg CoincidenceLength       ("CoincidenceLengthT", RW::ReadWrite, TYPE::CH, {{"0", ""},{"524280", ""}, {"8", ""}}, ANSTYPE::INTEGER, "ns");
     const Reg CoincidenceLengthSample ("CoincidenceLengthS", RW::ReadWrite, TYPE::CH, {{"0", ""},{"65535", ""}, {"1", ""}}, ANSTYPE::INTEGER, "sample");
 
-    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"1", ""}},  ANSTYPE::INTEGER, "ns");
+    const Reg ADCVetoWidth       ("ADCVetoWidth", RW::ReadWrite, TYPE::CH, {{"0", ""}, {"524280", ""}, {"8", ""}},  ANSTYPE::INTEGER, "ns");
 
     const Reg EnergySkimLowDiscriminator  ("EnergySkimLowDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::INTEGER);
     const Reg EnergySkimHighDiscriminator ("EnergySkimHighDiscriminator", RW::ReadWrite, TYPE::CH,  {{"0", ""}, {"65534", ""}, {"1", ""}}, ANSTYPE::INTEGER);
@@ -1103,7 +1106,7 @@ namespace PSD{
     const Reg TriggerFilterSelection ("TriggerFilterSelection", RW::ReadWrite, TYPE::CH, {{"LeadingEdge", "Leading Edge"}, {"CFD", "CFD"}});
 
     const Reg CFDDelay ("CFDDelayT", RW::ReadWrite, TYPE::CH, {{"32", ""},{"8184", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
-    const Reg CFDFraction ("CFDFraction", RW::ReadWrite, TYPE::CH, {{"25", ""},{"100", ""},{"0", ""}}, ANSTYPE::INTEGER, "%");
+    const Reg CFDFraction ("CFDFraction", RW::ReadWrite, TYPE::CH, {{"25", ""},{"100", ""},{"25", ""}}, ANSTYPE::INTEGER, "%");
 
     const Reg TimeFilterRetriggerGuard ("TimeFilterRetriggerGuardT", RW::ReadWrite, TYPE::CH, {{"8", ""},{"8000", ""},{"8", ""}}, ANSTYPE::INTEGER, "ns");
 

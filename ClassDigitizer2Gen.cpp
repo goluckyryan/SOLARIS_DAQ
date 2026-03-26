@@ -123,7 +123,12 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   }else{
     if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
   }
-  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr || strstr(parameter, "ChRecordLengthT") != nullptr) ){
+  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
+                             || strstr(parameter, "ChRecordLengthT") != nullptr
+                             || strstr(parameter, "CFDDelayT") != nullptr
+                             || strstr(parameter, "GateLongLengthT") != nullptr
+                             || strstr(parameter, "GateShortLengthT") != nullptr
+                             || strstr(parameter, "GateOffsetT") != nullptr )){
     return std::to_string(atoi(retValue) * 4);
   }
   return retValue;
@@ -150,7 +155,12 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
   if( !isConnected ) return false; 
   //ReadValue(parameter, 1);
   if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
-  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr || strstr(parameter, "ChRecordLengthT") != nullptr) ){
+  if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
+                             || strstr(parameter, "ChRecordLengthT") != nullptr
+                             || strstr(parameter, "CFDDelayT") != nullptr
+                             || strstr(parameter, "GateLongLengthT") != nullptr
+                             || strstr(parameter, "GateShortLengthT") != nullptr
+                             || strstr(parameter, "GateOffsetT") != nullptr )){
     value = std::to_string(atoi(value.c_str()) / 4);
   }
   ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
@@ -310,6 +320,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     return -303;
   }
 
+  AdjustParameterRanges();
   ReadAllSettings();
   //------ set default setting file name
   settingFileName = "settings_"+ std::to_string(serialNumber) + ".dat";
@@ -330,6 +341,58 @@ int Digitizer2Gen::CloseDigitizer(){
     isConnected = false;
   }
   return 0;
+}
+
+//########################################### Adjust parameter ranges for model/firmware
+void Digitizer2Gen::AdjustParameterRanges(){
+
+  printf("Digitizer2Gen::%s | Model=%s, FPGA=%s\n", __func__, ModelName.c_str(), FPGAType.c_str());
+
+  // Helper to update a channel parameter's answers (min/max/step for INTEGER, or value list for COMBOX)
+  auto updateChParam = [&](const std::string & paraName, std::vector<std::pair<std::string,std::string>> newAnswers){
+    if( chMap.find(paraName) == chMap.end() ) return;
+    int idx = chMap[paraName];
+    for( int ch = 0; ch < nChannels; ch++ ){
+      chSettings[ch][idx].SetAnswers(newAnswers);
+    }
+  };
+
+  //========== VX2730 adjustments
+  if( ModelName == "VX2730" ){
+    // Time params with 4x ratio (VX2730 has finer tick but /4 conversion in WriteValue/ReadValue)
+    updateChParam("ChRecordLengthT", {{"32",""},{"16200",""},{"8",""}});
+    updateChParam("ChPreTriggerT",   {{"32",""},{"8000",""},{"8",""}});
+
+    // PSD-specific time params (also 4x ratio, /4 extended in WriteValue/ReadValue)
+    if( FPGAType == DPPType::PSD ){
+      updateChParam("CFDDelayT",          {{"2",""},{"2040",""},{"2",""}});
+      updateChParam("GateLongLengthT",    {{"2",""},{"8000",""},{"2",""}});
+      updateChParam("GateShortLengthT",   {{"2",""},{"8000",""},{"2",""}});
+      updateChParam("GateOffsetT",        {{"16",""},{"2000",""},{"2",""}});
+      updateChParam("AbsoluteBaseline",   {{"0",""},{"16383",""},{"1",""}});
+      updateChParam("SignalOffset",       {{"-1000000",""},{"1000000",""},{"50",""}});
+    }
+
+    // WaveDataSource: VX2730 doesn't support ADC_TEST_* values
+    updateChParam("WaveDataSource", {{"ADC_DATA","Input ADC"},
+                                     {"Ramp","Ramp generator"},
+                                     {"IPE","Internal Pulse Emulator"},
+                                     {"SquareWave","Test Pulse (Square Wave)"}});
+
+    // AntiCoincidenceMask: VX2730 firmware has issues with ITLA/ITLB
+    updateChParam("AntiCoincidenceMask", {{"Disabled","Disabled"},
+                                          {"Ch64Trigger","Channel 64-Trigger"},
+                                          {"TrgIn","TRG-IN"},
+                                          {"GlobalTriggerSource","Global Trigger Source"}});
+  }
+
+  //========== PSD firmware adjustments (both VX2730 and VX2745)
+  if( FPGAType == DPPType::PSD ){
+    // ChPreTriggerT: PSD max is 8000 (PHA max is 32000)
+    if( ModelName != "VX2730" ){ // VX2730 already set above
+      updateChParam("ChPreTriggerT", {{"32",""},{"8000",""},{"8",""}});
+    }
+  }
 }
 
 //########################################### DAQ
