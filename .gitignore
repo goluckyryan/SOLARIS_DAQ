@@ -88,5 +88,7 @@ CMakeLists.txt.user*
 *.exe
 
 EventBuilder
+EventBuilderRaw
 Aux/debug_raw
-Aux/check_gate
+Aux/check*
+*.sol_raw

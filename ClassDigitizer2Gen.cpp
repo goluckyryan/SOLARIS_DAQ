@@ -37,7 +37,7 @@ void Digitizer2Gen::Initialization(){
   hit = NULL;
 
   acqON = false;
-  rawBlobPending = false;
+
 
   settingFileName = "";
 
@@ -491,7 +491,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
     }
   }
 
-  rawBlobPending = false;
+
 
   if( hit ) delete hit;
   hit = new Hit();
@@ -941,43 +941,46 @@ int Digitizer2Gen::ReadData(){
 
   }else if( hit->dataType == DataFormat::Raw){
 
-    // Yield buffered decoded hits one at a time
-    if( rawBlobPending && rawDecoder.HasNext() ){
+    ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events);
+
+    if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
+      rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
+
+      // Decode all hits: push to ring buffers and copy traces
       RawDecoder::DecodedHit decoded;
-      rawDecoder.Next(decoded);
-      rawDecoder.CopyToHit(decoded, hit);
-      ret = CAEN_FELib_Success;
-    } else {
-      // Fetch new blob from digitizer
-      rawBlobPending = false;
-      ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events);
-
-      if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
-        rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
-
-        // Apply stat updates from time/counter events
-        for( const auto& su : rawDecoder.GetStatUpdates() ){
-          if( su.channel < nChannels ){
-            realTime[su.channel]       = su.realTime;
-            deadTime[su.channel]       = su.deadTime;
-            liveTime[su.channel]       = (su.realTime > su.deadTime) ? (su.realTime - su.deadTime) : 0;
-            triggerCount[su.channel]   = su.triggerCount;
-            savedEventCount[su.channel] = su.savedEventCount;
-          }
+      while( rawDecoder.Next(decoded) ){
+        if( decoded.channel < nChannels ){
+          ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
         }
+        // If this hit has a waveform, copy it to the trace ring buffer
+        if( decoded.hasWaveform && decoded.traceLenght > 0 ){
+          size_t n = decoded.traceLenght;
+          if( n > MaxTraceLenght ) n = MaxTraceLenght;
+          TraceSnapshot& ts = traceRingBuffer.nextSlot();
+          ts.traceLenght = n;
+          memcpy(ts.analog_probes[0], decoded.analog_probes_0, n * sizeof(int32_t));
+          memcpy(ts.analog_probes[1], decoded.analog_probes_1, n * sizeof(int32_t));
+          memcpy(ts.digital_probes[0], decoded.digital_probes_0, n);
+          memcpy(ts.digital_probes[1], decoded.digital_probes_1, n);
+          memcpy(ts.digital_probes[2], decoded.digital_probes_2, n);
+          memcpy(ts.digital_probes[3], decoded.digital_probes_3, n);
+          traceRingBuffer.advance();
+        }
+      }
 
-        if( rawDecoder.HasNext() ){
-          rawBlobPending = true;
-          RawDecoder::DecodedHit decoded;
-          rawDecoder.Next(decoded);
-          rawDecoder.CopyToHit(decoded, hit);
-        } else {
-          // blob had no physics events (only stat events or empty)
-          hit->isTraceAllZero = true;
-          return ret;
+      // Apply stat updates from time/counter events
+      for( const auto& su : rawDecoder.GetStatUpdates() ){
+        if( su.channel < nChannels ){
+          realTime[su.channel]       = su.realTime;
+          deadTime[su.channel]       = su.deadTime;
+          liveTime[su.channel]       = (su.realTime > su.deadTime) ? (su.realTime - su.deadTime) : 0;
+          triggerCount[su.channel]   = su.triggerCount;
+          savedEventCount[su.channel] = su.savedEventCount;
         }
       }
     }
+
+    hit->isTraceAllZero = true; // hit struct itself has no trace, traces go directly to traceRingBuffer
 
   }else{
     return CAEN_FELib_UNKNOWN;
@@ -992,7 +995,9 @@ int Digitizer2Gen::ReadData(){
   hit->fine_timestamp *= tick2ns;
 
   //======== fill per-channel ring buffer for histogram
-  ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
+  if( hit->dataType != DataFormat::Raw ){
+    ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
+  }
 
   //======== fill trace ring buffer for scope
   if( !hit->isTraceAllZero ){
@@ -1014,7 +1019,8 @@ int Digitizer2Gen::ReadData(){
 
 void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   outFileNameBase = fileName;
-  snprintf(outFileName, sizeof(outFileName), "%s_%03d.sol", fileName.c_str(), outFileIndex);
+  const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "sol_raw" : "sol";
+  snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
   outFile = fopen(outFileName, mode);
   if( outFile == NULL ){
     printf("OpenOutFile: failed to open file '%s'\n", outFileName);
@@ -1042,7 +1048,8 @@ void Digitizer2Gen::SaveDataToFile(){
     FinishedOutFilesSize += ftell(outFile);
     CloseOutFile();
     outFileIndex ++;
-    snprintf(outFileName, sizeof(outFileName), "%s_%03d.sol", outFileNameBase.c_str(), outFileIndex);
+    const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "sol_raw" : "sol";
+    snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", outFileNameBase.c_str(), outFileIndex, ext);
     outFile = fopen(outFileName, "wb"); //overwrite binary
     if( outFile == NULL ){
       printf("SaveDataToFile: failed to open new file '%s'\n", outFileName);
@@ -1114,17 +1121,9 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->timestamp,      6, 1, outFile);
 
   }else if( hit->dataType == DataFormat::Raw){
-    // Write each decoded hit in NoTrace format for EventBuilder compatibility
-    unsigned short decId = 0xAA00 + DataFormat::NoTrace;
-    if( FPGAType == DPPType::PSD ) decId += 0x0010;
-    fwrite(&decId,                      2, 1, outFile);
-    fwrite(&hit->channel,              1, 1, outFile);
-    fwrite(&hit->energy,               2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
-    fwrite(&hit->timestamp,            6, 1, outFile);
-    fwrite(&hit->fine_timestamp,       2, 1, outFile);
-    fwrite(&hit->flags_high_priority,  1, 1, outFile);
-    fwrite(&hit->flags_low_priority,   2, 1, outFile);
+    fwrite(&dataStartIndetifier,  2, 1, outFile);
+    fwrite(&hit->dataSize,        8, 1, outFile);
+    fwrite(hit->data, hit->dataSize, 1, outFile);
   }
   
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB

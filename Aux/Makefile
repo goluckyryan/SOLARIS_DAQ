@@ -5,10 +5,13 @@ ROOTFLAG=`root-config --cflags --glibs`
 
 OBJS = ClassDigitizer.o ClassInfluxDB.o
 
-all: EventBuilder
+all: EventBuilder EventBuilderRaw
 
 EventBuilder: EventBuilder.cpp SolReader.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilder.cpp -o EventBuilder ${ROOTFLAG}
+
+EventBuilderRaw: EventBuilderRaw.cpp ../RawDecoder.h ../Hit.h
+	$(CC) $(CFLAG) EventBuilderRaw.cpp -o EventBuilderRaw ${ROOTFLAG}
 
 ClassDigitizer.o : ../ClassDigitizer.cpp ../ClassDigitizer.h ../RegisterAddress.h ../macro.h ../ClassData.h
 		$(CC) $(COPTS) -c ../ClassDigitizer.cpp
@@ -20,4 +23,4 @@ test: test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit
 	$(CC) $(CFLAG) test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o test -lcurl -lCAEN_FELib -lX11
 
 clean:
-	-rm EventBuilder test
+	-rm EventBuilder EventBuilderRaw test

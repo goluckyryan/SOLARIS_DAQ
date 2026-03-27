@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <cmath>
+#include <sys/stat.h>
 
 #include "../ClassDigitizer2Gen.h"
 #include "../RawDecoder.h"
@@ -646,45 +647,22 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
     printf("  Sample: ch=%d energy=%u\n", refHits[0].ch, refHits[0].energy);
   }
 
-  // 3. Switch to Raw mode and read
-  printf("  Step 3: Read events from raw endpoint\n");
+  // 3. Switch to Raw mode and read blobs
+  printf("  Step 3: Read blobs from raw endpoint\n");
   digi->SetDataFormat(DataFormat::Raw);
   digi->StartACQ();
 
-  int rawHitCount = 0;
   int rawBlobCount = 0;
+  int rawHitCount = 0;
   int rawTimeout = 0;
-  int maxRawEvents = 500;
-  bool channelValid = true;
-  bool energyValid = true;
-  uint16_t minEnergy = 0xFFFF, maxEnergy = 0;
-  uint64_t lastTimestamp[MaxNumberOfChannel] = {0};
-  int timestampErrors = 0;
+  int maxRawBlobs = 50;
 
-  while( rawHitCount < maxRawEvents && rawTimeout < 20 ){
+  while( rawBlobCount < maxRawBlobs && rawTimeout < 20 ){
     int ret = digi->ReadData();
     if( ret == CAEN_FELib_Success ){
       rawTimeout = 0;
-
-      // Validate decoded fields
-      if( digi->hit->channel >= nCh ){
-        if( channelValid ) printf("  FAIL: Invalid channel %d (max %d)\n", digi->hit->channel, nCh);
-        channelValid = false;
-      }
-
-      if( digi->hit->energy < minEnergy ) minEnergy = digi->hit->energy;
-      if( digi->hit->energy > maxEnergy ) maxEnergy = digi->hit->energy;
-
-      // Check timestamp monotonicity per channel
-      uint8_t ch = digi->hit->channel;
-      if( ch < MaxNumberOfChannel ){
-        if( lastTimestamp[ch] > 0 && digi->hit->timestamp < lastTimestamp[ch] ){
-          timestampErrors++;
-        }
-        lastTimestamp[ch] = digi->hit->timestamp;
-      }
-
-      rawHitCount++;
+      rawBlobCount++;
+      rawHitCount += digi->hit->n_events; // n_events from CAEN, approximate
     } else {
       usleep(100000);
       rawTimeout++;
@@ -692,38 +670,14 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
   }
   digi->StopACQ();
 
-  printf("  Got %d events from raw endpoint\n", rawHitCount);
-  printf("  Energy range: [%u, %u]\n", minEnergy, maxEnergy);
-  printf("  Timestamp ordering errors: %d\n", timestampErrors);
+  printf("  Got %d blobs from raw endpoint (dataSize of last: %zu bytes)\n", rawBlobCount, digi->hit->dataSize);
 
-  if( rawHitCount == 0 ){
-    printf("  FAIL: No events decoded from raw blob\n");
+  if( rawBlobCount == 0 ){
+    printf("  FAIL: No blobs from raw endpoint\n");
     ok = false;
   }
 
-  if( !channelValid ){
-    printf("  FAIL: Invalid channel numbers found\n");
-    ok = false;
-  }
-
-  if( timestampErrors > 0 ){
-    printf("  WARNING: %d timestamp ordering errors (may be expected with multiple channels)\n", timestampErrors);
-  }
-
-  // 4. Compare energy ranges between decoded and raw
-  if( !refHits.empty() && rawHitCount > 0 ){
-    // Test pulse should produce similar energy values
-    uint16_t refEnergy = refHits[0].energy;
-    bool energyMatch = (minEnergy <= refEnergy * 2) && (maxEnergy >= refEnergy / 2);
-    if( !energyMatch && refEnergy > 0 ){
-      printf("  WARNING: Raw energy range [%u,%u] doesn't match ref energy %u\n",
-             minEnergy, maxEnergy, refEnergy);
-    } else {
-      printf("  Energy range consistent with decoded endpoint\n");
-    }
-  }
-
-  // 5. Check statistics from stat events
+  // 4. Check statistics from stat events
   printf("  Step 4: Check statistics from raw stream\n");
   bool hasStats = false;
   for( int ch = 0; ch < nCh; ch++ ){
@@ -740,20 +694,26 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
     printf("  No stat events found in raw stream (EnStatEvents may need enabling)\n");
   }
 
-  // 6. Test file round-trip
-  printf("  Step 5: Test file round-trip\n");
+  // 5. Test file round-trip (.sol_raw)
+  printf("  Step 5: Test .sol_raw file round-trip\n");
   const char * testFile = "/tmp/test_raw_decode";
+  // Clean up stale files from previous runs (CloseOutFile sets read-only)
+  char cleanupFile[200];
+  snprintf(cleanupFile, sizeof(cleanupFile), "%s_%03d.sol_raw", testFile, 0);
+  chmod(cleanupFile, S_IWUSR | S_IRUSR);
+  remove(cleanupFile);
+
   digi->SetDataFormat(DataFormat::Raw);
   digi->StartACQ();
   digi->OpenOutFile(testFile);
 
-  int savedCount = 0;
+  int savedBlobs = 0;
   int saveTimeout = 0;
-  while( savedCount < 100 && saveTimeout < 20 ){
+  while( savedBlobs < 20 && saveTimeout < 20 ){
     int ret = digi->ReadData();
     if( ret == CAEN_FELib_Success ){
       digi->SaveDataToFile();
-      savedCount++;
+      savedBlobs++;
       saveTimeout = 0;
     } else {
       usleep(100000);
@@ -762,49 +722,65 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
   }
   digi->CloseOutFile();
   digi->StopACQ();
-  printf("  Saved %d decoded hits to .sol file\n", savedCount);
+  printf("  Saved %d blobs to .sol_raw file\n", savedBlobs);
 
-  // Try reading back with SolReader
-  if( savedCount > 0 ){
-    char solFile[200];
-    snprintf(solFile, sizeof(solFile), "%s_%03d.sol", testFile, 0);
-    SolReader reader;
-    reader.OpenFile(solFile);
-    reader.hit->SetDataType(DataFormat::NoTrace, fpga == DPPType::PSD ? DPPType::PSD : DPPType::PHA);
+  // Read back .sol_raw file and decode
+  if( savedBlobs > 0 ){
+    char solRawFile[200];
+    snprintf(solRawFile, sizeof(solRawFile), "%s_%03d.sol_raw", testFile, 0);
+    FILE * rf = fopen(solRawFile, "rb");
+    if( rf ){
+      int readBlobs = 0;
+      int readHits = 0;
+      unsigned short ident;
+      size_t blobSize;
+      uint8_t * buf = new uint8_t[20*1024*1024];
+      RawDecoder dec;
 
-    int readBack = 0;
-    while( reader.ReadNextBlock() == 0 ){
-      readBack++;
-    }
-    printf("  SolReader read back %d blocks from .sol file\n", readBack);
+      while( fread(&ident, 2, 1, rf) == 1 ){
+        if( (ident & 0xAA00) != 0xAA00 ) break;
+        if( fread(&blobSize, 8, 1, rf) != 1 ) break;
+        if( fread(buf, blobSize, 1, rf) != 1 ) break;
 
-    if( readBack != savedCount ){
-      printf("  WARNING: saved %d but read back %d blocks\n", savedCount, readBack);
+        std::string dppT = ((ident >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+        dec.LoadBlob(buf, blobSize, dppT);
+        RawDecoder::DecodedHit dh;
+        while( dec.Next(dh) ) readHits++;
+        readBlobs++;
+      }
+      fclose(rf);
+      delete[] buf;
+
+      printf("  Read back %d blobs, decoded %d hits\n", readBlobs, readHits);
+      if( readBlobs == savedBlobs ){
+        printf("  File round-trip OK!\n");
+      } else {
+        printf("  WARNING: saved %d blobs but read back %d\n", savedBlobs, readBlobs);
+      }
+      remove(solRawFile);
     } else {
-      printf("  File round-trip OK\n");
+      printf("  FAIL: Cannot open %s\n", solRawFile);
+      ok = false;
     }
-
-    // cleanup
-    remove(solFile);
   }
 
-  // 7. Throughput comparison
+  // 6. Throughput comparison (blobs/s for raw, hits/s for decoded)
   printf("  Step 6: Throughput comparison\n");
 
-  // Decoded endpoint throughput
+  // Decoded endpoint: 1 hit per ReadData call
   digi->SetDataFormat(DataFormat::Minimum);
   digi->StartACQ();
   struct timespec t0, t1;
   clock_gettime(CLOCK_MONOTONIC, &t0);
   int decodedCount = 0;
   int decodedTimeout = 0;
-  while( decodedCount < 1000 && decodedTimeout < 30 ){
+  while( decodedCount < 5000 && decodedTimeout < 50 ){
     int ret = digi->ReadData();
     if( ret == CAEN_FELib_Success ){
       decodedCount++;
       decodedTimeout = 0;
     } else {
-      usleep(10000);
+      usleep(1000);
       decodedTimeout++;
     }
   }
@@ -812,32 +788,86 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
   digi->StopACQ();
   double decodedTime = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
   double decodedRate = (decodedTime > 0) ? decodedCount / decodedTime : 0;
-  printf("  Decoded endpoint: %d events in %.3f s = %.0f events/s\n", decodedCount, decodedTime, decodedRate);
+  printf("  Decoded (Minimum): %d hits in %.3f s = %.0f hits/s\n", decodedCount, decodedTime, decodedRate);
 
-  // Raw endpoint throughput
+  // Raw endpoint: 1 blob (many hits) per ReadData call
   digi->SetDataFormat(DataFormat::Raw);
   digi->StartACQ();
   clock_gettime(CLOCK_MONOTONIC, &t0);
-  int rawCount = 0;
+  int rawBlobs2 = 0;
   int rawTout = 0;
-  while( rawCount < 1000 && rawTout < 30 ){
+  size_t rawBytes = 0;
+  while( rawBlobs2 < 500 && rawTout < 50 ){
     int ret = digi->ReadData();
     if( ret == CAEN_FELib_Success ){
-      rawCount++;
+      rawBlobs2++;
+      rawBytes += digi->hit->dataSize;
       rawTout = 0;
     } else {
-      usleep(10000);
+      usleep(1000);
       rawTout++;
     }
   }
   clock_gettime(CLOCK_MONOTONIC, &t1);
   digi->StopACQ();
   double rawTime = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
-  double rawRate = (rawTime > 0) ? rawCount / rawTime : 0;
-  printf("  Raw endpoint:     %d events in %.3f s = %.0f events/s\n", rawCount, rawTime, rawRate);
+  double rawBlobRate = (rawTime > 0) ? rawBlobs2 / rawTime : 0;
+  double rawMBps = (rawTime > 0) ? rawBytes / rawTime / 1024.0 / 1024.0 : 0;
+  printf("  Raw: %d blobs (%.1f MB) in %.3f s = %.0f blobs/s, %.1f MB/s\n",
+         rawBlobs2, rawBytes/1024.0/1024.0, rawTime, rawBlobRate, rawMBps);
 
-  if( decodedRate > 0 && rawRate > 0 ){
-    printf("  Speedup: %.1fx\n", rawRate / decodedRate);
+  // 7. Test waveform trace recording with Raw mode
+  printf("  Step 7: Test waveform trace in Raw mode\n");
+
+  // Enable ch0 with WaveSaving=Always and a short record length
+  digi->WriteValue("/ch/0..31/par/ChEnable", "false");
+  digi->WriteValue("/ch/0/par/ChEnable", "true");
+  digi->WriteValue("/ch/0/par/WaveSaving", "Always");
+  digi->WriteValue("/ch/0/par/ChRecordLengthT", "256");
+  printf("  ChRecordLengthT readback: %s ns\n", digi->ReadValue("/ch/0/par/ChRecordLengthT").c_str());
+
+  // Clear trace ring buffer
+  digi->traceRingBuffer.clear();
+
+  digi->SetDataFormat(DataFormat::Raw);
+  digi->StartACQ();
+
+  int traceBlobs = 0;
+  int traceTout = 0;
+  while( traceBlobs < 20 && traceTout < 30 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      traceBlobs++;
+      traceTout = 0;
+    } else {
+      usleep(100000);
+      traceTout++;
+    }
+  }
+  digi->StopACQ();
+
+  // Check if traces were captured in the ring buffer
+  unsigned long traceIdx = digi->traceRingBuffer.index();
+  printf("  Read %d blobs, traceRingBuffer index: %lu\n", traceBlobs, traceIdx);
+
+  if( traceIdx > 0 ){
+    // Read the latest trace snapshot
+    TraceSnapshot ts = digi->traceRingBuffer.at(traceIdx - 1);
+    printf("  Latest trace: length=%zu samples\n", ts.traceLenght);
+    if( ts.traceLenght > 0 ){
+      printf("  First 10 samples (AP0, AP1, DP0, DP1, DP2, DP3):\n");
+      for( int s = 0; s < 10 && s < (int) ts.traceLenght; s++ ){
+        printf("    [%3d] %6d %6d  %d %d %d %d\n", s,
+               ts.analog_probes[0][s], ts.analog_probes[1][s],
+               ts.digital_probes[0][s], ts.digital_probes[1][s],
+               ts.digital_probes[2][s], ts.digital_probes[3][s]);
+      }
+      printf("  Waveform trace recording in Raw mode: OK\n");
+    } else {
+      printf("  WARNING: trace length is 0\n");
+    }
+  } else {
+    printf("  No traces captured in Raw mode (waveform may not be enabled or no triggers)\n");
   }
 
   printf("  Test 8 %s\n\n", ok ? "PASSED" : "FAILED");

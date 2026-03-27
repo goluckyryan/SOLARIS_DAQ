@@ -75,7 +75,6 @@ class Digitizer2Gen {
     bool acqON;
 
     RawDecoder rawDecoder;
-    bool rawBlobPending;
 
     //all read and read/write settings
     std::string settingFileName;

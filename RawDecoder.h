@@ -285,20 +285,21 @@ private:
       hit.hasWaveform         = W;
       hit.traceLenght         = 0;
 
-      // If not last word, scan forward for extra words
+      // If not last word, scan forward for extra words.
+      // The last header word (bit 63=1) is the waveform extra word when W=1.
+      uint64_t lastHeaderWord = w1;
       if( !lastWord ){
         while( pos < nAggWords ){
-          uint64_t ew = words[pos];
+          lastHeaderWord = words[pos];
           pos++;
-          if( (ew >> 63) & 0x1 ) break; // last extra word
+          if( (lastHeaderWord >> 63) & 0x1 ) break; // last extra word
         }
       }
 
       // If waveform present (W=1), parse waveform extra word + samples
-      if( W && pos < nAggWords ){
-        // Waveform extra word (probe info)
-        uint64_t wfExtra = words[pos];
-        pos++;
+      // The waveform extra word is the last header word (already consumed above)
+      if( W ){
+        uint64_t wfExtra = lastHeaderWord;
 
         hit.downSampling        = (wfExtra >> 48) & 0x3;
         hit.trigger_threashold  = (wfExtra >> 32) & 0xFFFF;
