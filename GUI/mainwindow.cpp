@@ -32,7 +32,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   setWindowTitle("FSU SOLARIS DAQ");
   setGeometry(500, 100, 1000, 500);
-  QIcon icon("SOLARIS_favicon.png");
+  QIcon icon("GUI/SOLARIS_favicon.png");
   setWindowIcon(icon);
 
   programPath = QDir::currentPath();

@@ -1,6 +1,8 @@
 # This file is used to ignore files which are generated
 # ----------------------------------------------------------------------------
 SOLARIS_DAQ
+solaris-broker
+solaris-cli
 *.sol
 programSettings.txt
 test
@@ -38,7 +40,8 @@ tags
 .DS_Store
 .directory
 *.debug
-Makefile*
+GUI/Makefile*
+GUI/.qmake.stash
 *.prl
 *.app
 moc_*.cpp
@@ -95,3 +98,4 @@ Aux/check*
 *.sol
 
 broker/data
+*.log
