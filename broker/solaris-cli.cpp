@@ -13,6 +13,13 @@
 #include <sys/wait.h>
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <csignal>
+
+static volatile sig_atomic_t gInterrupted = 0;
+
+static void SigIntHandler(int /*sig*/) {
+  gInterrupted = 1;
+}
 
 static void PrintHelp() {
   printf("Commands:\n");
@@ -501,7 +508,11 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
 
   if (cmd == "sleep") {
     int ms = (tok.size() > 1) ? atoi(tok[1].c_str()) : 1000;
-    std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    gInterrupted = 0;
+    for (int t = 0; t < ms && !gInterrupted; t += 100) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(std::min(100, ms - t)));
+    }
+    if (gInterrupted) { printf("\nSleep interrupted.\n"); gInterrupted = 0; }
     return 0;
   }
 
@@ -694,12 +705,20 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
              (idx >= 0 && idx < 7) ? names[idx] : "unknown");
     };
 
-    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    gInterrupted = 0;
+    for (int t = 0; t < seconds * 10 && !gInterrupted; t++) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
 
     client.onScalarUpdate = nullptr;
     client.onLogMessage = nullptr;
     client.onStatusChange = nullptr;
-    printf("\nSubscription ended.\n");
+    if (gInterrupted) {
+      printf("\nSubscription interrupted.\n");
+      gInterrupted = 0;
+    } else {
+      printf("\nSubscription ended.\n");
+    }
   }
   else if (cmd == "shutdown") {
     printf("Sending shutdown to broker...\n");
@@ -841,12 +860,24 @@ int main(int argc, char** argv) {
     LoadScript(argv[2], client);
   }
 
+  // Ctrl+C handler: interrupts subscribe/sleep, clears line at prompt
+  signal(SIGINT, SigIntHandler);
+
   // Setup readline tab completion
   rl_attempted_completion_function = CliCompletion;
 
+  // Load command history from file
+  std::string historyFile = std::string(getenv("HOME") ? getenv("HOME") : ".") + "/.solaris_cli_history";
+  read_history(historyFile.c_str());
+
   // Interactive loop with readline
   char* input;
-  while ((input = readline("> ")) != nullptr) {
+  while (true) {
+    gInterrupted = 0;
+    input = readline("> ");
+    if (!input) break; // EOF (Ctrl+D)
+    if (gInterrupted) { printf("\n"); gInterrupted = 0; continue; } // Ctrl+C at prompt
+
     std::string line(input);
     free(input);
 
@@ -861,6 +892,10 @@ int main(int argc, char** argv) {
     int ret = ExecuteCommand(line, client, false);
     if (ret == 1) break;
   }
+
+  // Append new commands to history file, then trim to 1000 lines
+  append_history(history_length, historyFile.c_str());
+  history_truncate_file(historyFile.c_str(), 1000);
 
   client.Disconnect();
   printf("Goodbye.\n");

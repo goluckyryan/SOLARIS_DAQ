@@ -620,11 +620,13 @@ void BrokerServer::ScalarBroadcastLoop() {
 
     for (int i = 0; i < nDigi; i++) {
       if (!digi[i] || !digi[i]->IsConnected()) continue;
-      if (!digi[i]->IsAcqOn()) continue;
 
       PublishScalar(i);
-      PublishHitSummaries(i);
-      PublishTraceSnapshot(i);
+
+      if (digi[i]->IsAcqOn()) {
+        PublishHitSummaries(i);
+        PublishTraceSnapshot(i);
+      }
     }
   }
 
