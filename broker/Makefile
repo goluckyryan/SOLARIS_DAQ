@@ -29,7 +29,7 @@ solaris-broker: solaris-broker.cpp BrokerServer.o $(DIGI_OBJ) $(INFLUX_OBJ)
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 solaris-cli: solaris-cli.cpp BrokerClient.o $(DIGI_OBJ) $(INFLUX_OBJ)
-	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS) -lreadline
 
 clean:
 	rm -f *.o solaris-broker solaris-cli

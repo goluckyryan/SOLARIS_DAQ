@@ -587,16 +587,20 @@ void BrokerServer::ReadDataLoop(int digiIndex) {
     {
       std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
       ret = digi[digiIndex]->ReadData();
-    }
 
-    if (ret == CAEN_FELib_Success && isSaveData[digiIndex]) {
-      std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
-      digi[digiIndex]->SaveDataToFile();
+      if (ret == CAEN_FELib_Success && isSaveData[digiIndex]) {
+        digi[digiIndex]->SaveDataToFile();
+      }
     }
 
     if (ret == CAEN_FELib_Stop) {
       digi[digiIndex]->hit->ClearTrace();
       break;
+    }
+
+    // Yield briefly so ScalarBroadcastLoop and command handlers can acquire the mutex
+    if (ret != CAEN_FELib_Success) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 

@@ -389,19 +389,21 @@ void BrokerClient::SubscriptionLoop() {
         uint8_t digiIdx = UnpackU8(data, off);
         if (digiIdx >= MaxNumberOfDigitizer) break;
 
-        std::lock_guard<std::mutex> lock(scalarMutex);
-        scalarData[digiIdx].serialNumber = UnpackU16(data, off);
-        scalarData[digiIdx].nChannels = UnpackU8(data, off);
-        int nCh = scalarData[digiIdx].nChannels;
+        {
+          std::lock_guard<std::mutex> lock(scalarMutex);
+          scalarData[digiIdx].serialNumber = UnpackU16(data, off);
+          scalarData[digiIdx].nChannels = UnpackU8(data, off);
+          int nCh = scalarData[digiIdx].nChannels;
 
-        for (int ch = 0; ch < nCh && off < (size_t)size; ch++) {
-          scalarData[digiIdx].trgRate[ch]    = UnpackU32(data, off);
-          scalarData[digiIdx].savedCount[ch] = UnpackU64(data, off);
-          scalarData[digiIdx].acceptRate[ch]  = UnpackFloat(data, off);
-          scalarData[digiIdx].realTime[ch]    = UnpackU64(data, off);
-        }
-        scalarData[digiIdx].totalFileSize = UnpackU64(data, off);
-        scalarData[digiIdx].acqOn = (UnpackU8(data, off) != 0);
+          for (int ch = 0; ch < nCh && off < (size_t)size; ch++) {
+            scalarData[digiIdx].trgRate[ch]    = UnpackU32(data, off);
+            scalarData[digiIdx].savedCount[ch] = UnpackU64(data, off);
+            scalarData[digiIdx].acceptRate[ch]  = UnpackFloat(data, off);
+            scalarData[digiIdx].realTime[ch]    = UnpackU64(data, off);
+          }
+          scalarData[digiIdx].totalFileSize = UnpackU64(data, off);
+          scalarData[digiIdx].acqOn = (UnpackU8(data, off) != 0);
+        } // unlock before callback
 
         if (onScalarUpdate) onScalarUpdate(digiIdx);
         break;

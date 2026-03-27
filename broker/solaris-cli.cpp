@@ -11,6 +11,8 @@
 #include <fstream>
 #include <map>
 #include <sys/wait.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 static void PrintHelp() {
   printf("Commands:\n");
@@ -711,6 +713,107 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
   return 0;
 }
 
+//^============================================ Tab completion
+
+static const char* commands[] = {
+  "connect", "disconnect", "ping", "list", "info", "open", "close",
+  "read", "write", "cmd", "format", "start", "stop", "status",
+  "file-status", "save-settings", "load-settings", "subscribe",
+  "load", "sleep", "shutdown", "help", "quit", "exit", nullptr
+};
+
+// Common CAEN parameter paths for read/write completion
+static const char* paramPaths[] = {
+  "/par/SerialNum", "/par/ModelName", "/par/FwType", "/par/NumCh",
+  "/par/ADC_SamplRate", "/par/ClockSource", "/par/StartSource",
+  "/par/GlobalTriggerSource", "/par/TrgOutMode", "/par/GPIOMode",
+  "/par/BusyInSource", "/par/SyncOutMode", "/par/BoardVetoSource",
+  "/par/RunDelay", "/par/IOlevel", "/par/EnAutoDisarmAcq",
+  "/par/EnStatEvents", "/par/BoardVetoWidth",
+  "/par/DACoutMode", "/par/DACoutChSelect",
+  "/par/TestPulsePeriod", "/par/TestPulseWidth",
+  "/par/TestPulseLowLevel", "/par/TestPulseHighLevel",
+  "/par/EnClockOutFP", "/par/VolatileClockOutDelay",
+  "/par/PermanentClockOutDelay",
+  "/par/ITLAMainLogic", "/par/ITLAMajorityLev", "/par/ITLAPairLogic",
+  "/par/ITLAPolarity", "/par/ITLAGateWidth",
+  "/par/ITLBMainLogic", "/par/ITLBMajorityLev", "/par/ITLBPairLogic",
+  "/par/ITLBPolarity", "/par/ITLBGateWidth",
+  "/ch/0/par/ChEnable", "/ch/0/par/DCOffset", "/ch/0/par/TriggerThr",
+  "/ch/0/par/SelfTrgRate", "/ch/0/par/ChannelRealtime",
+  "/ch/0/par/ChannelSavedCount", "/ch/0/par/PulsePolarity",
+  "/ch/0/par/WaveDataSource", "/ch/0/par/ChRecordLengthT",
+  "/ch/0/par/ChPreTriggerT", "/ch/0/par/WaveSaving",
+  "/ch/0/par/WaveResolution", "/ch/0/par/EventTriggerSource",
+  "/ch/0/par/WaveTriggerSource",
+  "/ch/0/par/TimeFilterRiseTimeT", "/ch/0/par/TimeFilterRetriggerGuardT",
+  "/ch/0/par/EnergyFilterRiseTimeT", "/ch/0/par/EnergyFilterFlatTopT",
+  "/ch/0/par/EnergyFilterPoleZeroT", "/ch/0/par/EnergyFilterPeakingPosition",
+  "/ch/0/par/EnergyFilterBaselineAvg", "/ch/0/par/EnergyFilterFineGain",
+  "/ch/0/par/GateLongLengthT", "/ch/0/par/GateShortLengthT",
+  "/ch/0/par/GateOffsetT", "/ch/0/par/CFDDelayT", "/ch/0/par/CFDFraction",
+  "/ch/0/par/TriggerFilterSelection", "/ch/0/par/ADCInputBaselineAvg",
+  "/cmd/Reset", "/cmd/armacquisition", "/cmd/swstartacquisition",
+  "/cmd/SwStopAcquisition", "/cmd/disarmacquisition",
+  nullptr
+};
+
+static char* CommandGenerator(const char* text, int state) {
+  static int index;
+  if (state == 0) index = 0;
+  while (commands[index]) {
+    const char* cmd = commands[index++];
+    if (strncmp(cmd, text, strlen(text)) == 0) {
+      return strdup(cmd);
+    }
+  }
+  return nullptr;
+}
+
+static char* ParamGenerator(const char* text, int state) {
+  static int index;
+  if (state == 0) index = 0;
+  while (paramPaths[index]) {
+    const char* p = paramPaths[index++];
+    if (strncmp(p, text, strlen(text)) == 0) {
+      return strdup(p);
+    }
+  }
+  return nullptr;
+}
+
+static char** CliCompletion(const char* text, int start, int /*end*/) {
+  // Figure out which word we're completing
+  std::string lineSoFar(rl_line_buffer, start);
+  auto tok = Tokenize(lineSoFar);
+
+  if (tok.empty()) {
+    // First word: complete command names
+    return rl_completion_matches(text, CommandGenerator);
+  }
+
+  // Second or third word after read/write/cmd: complete parameter paths
+  if (tok[0] == "read" || tok[0] == "write" || tok[0] == "cmd") {
+    if (text[0] == '/' || tok.size() >= 2) {
+      return rl_completion_matches(text, ParamGenerator);
+    }
+  }
+
+  // After "load": fall through to default filename completion
+  if (tok[0] == "load") {
+    return nullptr; // use readline's default filename completion
+  }
+
+  // After "!": fall through to default filename completion for shell commands
+  if (tok[0] == "!") {
+    return nullptr;
+  }
+
+  // No matches -- suppress default filename completion for other commands
+  rl_attempted_completion_over = 1;
+  return nullptr;
+}
+
 //^============================================ Main
 
 int main(int argc, char** argv) {
@@ -738,12 +841,22 @@ int main(int argc, char** argv) {
     LoadScript(argv[2], client);
   }
 
-  std::string line;
-  while (true) {
-    printf("> ");
-    fflush(stdout);
-    if (!std::getline(std::cin, line)) break;
+  // Setup readline tab completion
+  rl_attempted_completion_function = CliCompletion;
+
+  // Interactive loop with readline
+  char* input;
+  while ((input = readline("> ")) != nullptr) {
+    std::string line(input);
+    free(input);
+
     if (line.empty()) continue;
+
+    // Add to history (skip duplicates of the last entry)
+    HIST_ENTRY* last = history_get(history_length);
+    if (!last || line != last->line) {
+      add_history(line.c_str());
+    }
 
     int ret = ExecuteCommand(line, client, false);
     if (ret == 1) break;
