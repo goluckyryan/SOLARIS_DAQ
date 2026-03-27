@@ -195,7 +195,7 @@ namespace PHA{
                                                                                          {"LVDS",       "LVDS"},
                                                                                          {"ITLA",       "ITL-A"},
                                                                                          {"ITLB",       "ITL-B"},
-                                                                                         {"ITLA_AND_ITLB",       "ITL-A \\& ITL-B"},
+                                                                                         {"ITLA_AND_ITLB",       "ITL-A && ITL-B"},
                                                                                          {"ITLA_OR_ITLB",       "ITL-A || ITL-B"},
                                                                                          {"UserTrg",       "User custom Trigger"}}, ANSTYPE::STR);
 
