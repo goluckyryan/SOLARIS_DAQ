@@ -698,7 +698,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           sbITLBMajority[iDigi]->setEnabled(cbITLBMainLogic[iDigi]->currentData().toString() == "Majority");
         });
 
-        QGroupBox * gbITL = new QGroupBox("ITL-Connect", bdITL[iDigi]);
+        QGroupBox * gbITL = new QGroupBox("ITL-Connect (ITL-A and ITL-B are exclusive)", bdITL[iDigi]);
         ITLLayout->addWidget(gbITL, 1, 0, 1, 2);
         QGridLayout * cLayout = new QGridLayout(gbITL);
 
