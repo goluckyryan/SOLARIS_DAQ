@@ -20,21 +20,22 @@ public:
     uint16_t flags_low_priority;
     uint16_t flags_high_priority;
     bool     board_fail;
-    uint16_t trigger_threashold;
-    uint8_t  downSampling;
     uint32_t aggCounter;
     bool     flush;
 
+    // Waveform fields (only populated when decodeWaveform = true)
     bool     hasWaveform;
     size_t   traceLenght;
+    uint8_t  downSampling;
+    uint16_t trigger_threashold;
     uint8_t  analog_probes_type[2];
     uint8_t  digital_probes_type[4];
-    int32_t  analog_probes_0[MaxTraceLenght];
-    int32_t  analog_probes_1[MaxTraceLenght];
-    uint8_t  digital_probes_0[MaxTraceLenght];
-    uint8_t  digital_probes_1[MaxTraceLenght];
-    uint8_t  digital_probes_2[MaxTraceLenght];
-    uint8_t  digital_probes_3[MaxTraceLenght];
+    std::vector<int32_t> analog_probes_0;
+    std::vector<int32_t> analog_probes_1;
+    std::vector<uint8_t> digital_probes_0;
+    std::vector<uint8_t> digital_probes_1;
+    std::vector<uint8_t> digital_probes_2;
+    std::vector<uint8_t> digital_probes_3;
 
     void Clear(){
       channel = 0;
@@ -45,12 +46,12 @@ public:
       flags_low_priority = 0;
       flags_high_priority = 0;
       board_fail = false;
-      trigger_threashold = 0;
-      downSampling = 0;
       aggCounter = 0;
       flush = false;
       hasWaveform = false;
       traceLenght = 0;
+      downSampling = 0;
+      trigger_threashold = 0;
       memset(analog_probes_type, 0, sizeof(analog_probes_type));
       memset(digital_probes_type, 0, sizeof(digital_probes_type));
     }
@@ -66,12 +67,14 @@ public:
 
   RawDecoder(){
     cursor_ = 0;
+    decodeWaveform_ = false;
   }
 
-  void LoadBlob(const uint8_t* data, size_t dataSize, const std::string& dppType){
+  void LoadBlob(const uint8_t* data, size_t dataSize, const std::string& dppType, bool decodeWaveform = false){
     hits_.clear();
     statUpdates_.clear();
     cursor_ = 0;
+    decodeWaveform_ = decodeWaveform;
     if( data == nullptr || dataSize < 8 ) return;
     ParseBlob(data, dataSize, dppType);
   }
@@ -89,47 +92,11 @@ public:
 
   uint32_t GetDecodedCount() const { return (uint32_t) hits_.size(); }
 
-  void CopyToHit(const DecodedHit& d, Hit* hit){
-    hit->channel          = d.channel;
-    hit->timestamp        = d.timestamp;
-    hit->fine_timestamp   = d.fine_timestamp;
-    hit->energy           = d.energy;
-    hit->energy_short     = d.energy_short;
-    hit->flags_low_priority  = d.flags_low_priority;
-    hit->flags_high_priority = d.flags_high_priority;
-    hit->board_fail       = d.board_fail;
-    hit->trigger_threashold = d.trigger_threashold;
-    hit->downSampling     = d.downSampling;
-    hit->aggCounter       = d.aggCounter;
-    hit->flush            = d.flush;
-
-    if( d.hasWaveform && d.traceLenght > 0 ){
-      size_t n = d.traceLenght;
-      if( n > MaxTraceLenght ) n = MaxTraceLenght;
-      hit->traceLenght = n;
-      hit->analog_probes_type[0] = d.analog_probes_type[0];
-      hit->analog_probes_type[1] = d.analog_probes_type[1];
-      hit->digital_probes_type[0] = d.digital_probes_type[0];
-      hit->digital_probes_type[1] = d.digital_probes_type[1];
-      hit->digital_probes_type[2] = d.digital_probes_type[2];
-      hit->digital_probes_type[3] = d.digital_probes_type[3];
-      if( hit->analog_probes[0] ) memcpy(hit->analog_probes[0], d.analog_probes_0, n * sizeof(int32_t));
-      if( hit->analog_probes[1] ) memcpy(hit->analog_probes[1], d.analog_probes_1, n * sizeof(int32_t));
-      if( hit->digital_probes[0] ) memcpy(hit->digital_probes[0], d.digital_probes_0, n);
-      if( hit->digital_probes[1] ) memcpy(hit->digital_probes[1], d.digital_probes_1, n);
-      if( hit->digital_probes[2] ) memcpy(hit->digital_probes[2], d.digital_probes_2, n);
-      if( hit->digital_probes[3] ) memcpy(hit->digital_probes[3], d.digital_probes_3, n);
-      hit->isTraceAllZero = false;
-    } else {
-      hit->traceLenght = 0;
-      hit->isTraceAllZero = true;
-    }
-  }
-
 private:
   std::vector<DecodedHit> hits_;
   std::vector<StatUpdate> statUpdates_;
   size_t cursor_;
+  bool decodeWaveform_;
 
   static uint64_t ReadBE64(const uint8_t* p){
     uint64_t val;
@@ -211,8 +178,7 @@ private:
         hit.board_fail       = boardFail;
         hit.aggCounter       = aggCounter;
         hit.flush            = flush;
-        hit.hasWaveform      = false;
-        hit.traceLenght      = 0;
+
         hits_.push_back(hit);
         pos++;
         continue;
@@ -282,8 +248,6 @@ private:
       hit.energy_short        = (dppType == DPPType::PSD) ? ((w1 >> 26) & 0xFFFF) : 0;
       hit.fine_timestamp      = (w1 >> 16) & 0x03FF;
       hit.energy              = w1 & 0xFFFF;
-      hit.hasWaveform         = W;
-      hit.traceLenght         = 0;
 
       // If not last word, scan forward for extra words.
       // The last header word (bit 63=1) is the waveform extra word when W=1.
@@ -296,64 +260,71 @@ private:
         }
       }
 
-      // If waveform present (W=1), parse waveform extra word + samples
+      // If waveform present (W=1), handle waveform data
       // The waveform extra word is the last header word (already consumed above)
       if( W ){
-        uint64_t wfExtra = lastHeaderWord;
+        if( decodeWaveform_ ){
+          // Parse waveform extra word (probe info)
+          uint64_t wfExtra = lastHeaderWord;
+          hit.downSampling        = (wfExtra >> 48) & 0x3;
+          hit.trigger_threashold  = (wfExtra >> 32) & 0xFFFF;
+          hit.digital_probes_type[3] = (wfExtra >> 28) & 0xF;
+          hit.digital_probes_type[2] = (wfExtra >> 24) & 0xF;
+          hit.digital_probes_type[1] = (wfExtra >> 20) & 0xF;
+          hit.digital_probes_type[0] = (wfExtra >> 16) & 0xF;
+          uint8_t ap1info = (wfExtra >> 10) & 0x3F;
+          uint8_t ap0info = (wfExtra >>  4) & 0x3F;
+          hit.analog_probes_type[0] = ap0info & 0x07;
+          hit.analog_probes_type[1] = ap1info & 0x07;
 
-        hit.downSampling        = (wfExtra >> 48) & 0x3;
-        hit.trigger_threashold  = (wfExtra >> 32) & 0xFFFF;
-        hit.digital_probes_type[3] = (wfExtra >> 28) & 0xF;
-        hit.digital_probes_type[2] = (wfExtra >> 24) & 0xF;
-        hit.digital_probes_type[1] = (wfExtra >> 20) & 0xF;
-        hit.digital_probes_type[0] = (wfExtra >> 16) & 0xF;
+          // Waveform header word
+          if( pos < nAggWords ){
+            uint64_t wfHeader = words[pos];
+            pos++;
+            uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
+            size_t nSamples = wfNWords * 2;
+            hit.hasWaveform = true;
+            hit.traceLenght = nSamples;
+            hit.analog_probes_0.resize(nSamples);
+            hit.analog_probes_1.resize(nSamples);
+            hit.digital_probes_0.resize(nSamples);
+            hit.digital_probes_1.resize(nSamples);
+            hit.digital_probes_2.resize(nSamples);
+            hit.digital_probes_3.resize(nSamples);
 
-        uint8_t ap1info = (wfExtra >> 10) & 0x3F;
-        uint8_t ap0info = (wfExtra >>  4) & 0x3F;
-        hit.analog_probes_type[0] = ap0info & 0x07; // type bits [2:0]
-        hit.analog_probes_type[1] = ap1info & 0x07;
-
-        // Waveform header word
-        if( pos < nAggWords ){
-          uint64_t wfHeader = words[pos];
-          pos++;
-          uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
-          size_t nSamples = wfNWords * 2; // 2 samples per 64-bit word
-          if( nSamples > MaxTraceLenght ) nSamples = MaxTraceLenght;
-          hit.traceLenght = nSamples;
-
-          // Parse waveform samples
-          size_t sampleIdx = 0;
-          for( uint32_t wi = 0; wi < wfNWords && pos < nAggWords; wi++, pos++ ){
-            uint64_t sw = words[pos];
-
-            // Lower 32 bits = sample #0 (even index)
-            if( sampleIdx < nSamples ){
-              uint32_t s0 = sw & 0xFFFFFFFF;
-              int32_t ap0 = (int32_t)((s0 & 0x3FFF) | ((s0 & 0x2000) ? 0xFFFFC000 : 0)); // sign-extend 14-bit
-              int32_t ap1 = (int32_t)(((s0 >> 16) & 0x3FFF) | (((s0 >> 16) & 0x2000) ? 0xFFFFC000 : 0));
-              hit.analog_probes_0[sampleIdx] = ap0;
-              hit.analog_probes_1[sampleIdx] = ap1;
-              hit.digital_probes_0[sampleIdx] = (s0 >> 14) & 0x1;
-              hit.digital_probes_1[sampleIdx] = (s0 >> 15) & 0x1;
-              hit.digital_probes_2[sampleIdx] = (s0 >> 30) & 0x1;
-              hit.digital_probes_3[sampleIdx] = (s0 >> 31) & 0x1;
-              sampleIdx++;
+            size_t sampleIdx = 0;
+            for( uint32_t wi = 0; wi < wfNWords && pos < nAggWords; wi++, pos++ ){
+              uint64_t sw = words[pos];
+              if( sampleIdx < nSamples ){
+                uint32_t s0 = sw & 0xFFFFFFFF;
+                hit.analog_probes_0[sampleIdx] = (int32_t)((s0 & 0x3FFF) | ((s0 & 0x2000) ? 0xFFFFC000 : 0));
+                hit.analog_probes_1[sampleIdx] = (int32_t)(((s0 >> 16) & 0x3FFF) | (((s0 >> 16) & 0x2000) ? 0xFFFFC000 : 0));
+                hit.digital_probes_0[sampleIdx] = (s0 >> 14) & 0x1;
+                hit.digital_probes_1[sampleIdx] = (s0 >> 15) & 0x1;
+                hit.digital_probes_2[sampleIdx] = (s0 >> 30) & 0x1;
+                hit.digital_probes_3[sampleIdx] = (s0 >> 31) & 0x1;
+                sampleIdx++;
+              }
+              if( sampleIdx < nSamples ){
+                uint32_t s1 = (sw >> 32) & 0xFFFFFFFF;
+                hit.analog_probes_0[sampleIdx] = (int32_t)((s1 & 0x3FFF) | ((s1 & 0x2000) ? 0xFFFFC000 : 0));
+                hit.analog_probes_1[sampleIdx] = (int32_t)(((s1 >> 16) & 0x3FFF) | (((s1 >> 16) & 0x2000) ? 0xFFFFC000 : 0));
+                hit.digital_probes_0[sampleIdx] = (s1 >> 14) & 0x1;
+                hit.digital_probes_1[sampleIdx] = (s1 >> 15) & 0x1;
+                hit.digital_probes_2[sampleIdx] = (s1 >> 30) & 0x1;
+                hit.digital_probes_3[sampleIdx] = (s1 >> 31) & 0x1;
+                sampleIdx++;
+              }
             }
-
-            // Upper 32 bits = sample #1 (odd index)
-            if( sampleIdx < nSamples ){
-              uint32_t s1 = (sw >> 32) & 0xFFFFFFFF;
-              int32_t ap0 = (int32_t)((s1 & 0x3FFF) | ((s1 & 0x2000) ? 0xFFFFC000 : 0));
-              int32_t ap1 = (int32_t)(((s1 >> 16) & 0x3FFF) | (((s1 >> 16) & 0x2000) ? 0xFFFFC000 : 0));
-              hit.analog_probes_0[sampleIdx] = ap0;
-              hit.analog_probes_1[sampleIdx] = ap1;
-              hit.digital_probes_0[sampleIdx] = (s1 >> 14) & 0x1;
-              hit.digital_probes_1[sampleIdx] = (s1 >> 15) & 0x1;
-              hit.digital_probes_2[sampleIdx] = (s1 >> 30) & 0x1;
-              hit.digital_probes_3[sampleIdx] = (s1 >> 31) & 0x1;
-              sampleIdx++;
-            }
+          }
+        } else {
+          // Skip waveform: just advance past the waveform words
+          if( pos < nAggWords ){
+            uint64_t wfHeader = words[pos];
+            pos++;
+            uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
+            pos += wfNWords;
+            if( pos > nAggWords ) pos = nAggWords;
           }
         }
       }

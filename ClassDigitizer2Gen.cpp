@@ -946,25 +946,11 @@ int Digitizer2Gen::ReadData(){
     if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
       rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
 
-      // Decode all hits: push to ring buffers and copy traces
+      // Decode all hits and push to ring buffers (waveform samples are skipped)
       RawDecoder::DecodedHit decoded;
       while( rawDecoder.Next(decoded) ){
         if( decoded.channel < nChannels ){
           ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
-        }
-        // If this hit has a waveform, copy it to the trace ring buffer
-        if( decoded.hasWaveform && decoded.traceLenght > 0 ){
-          size_t n = decoded.traceLenght;
-          if( n > MaxTraceLenght ) n = MaxTraceLenght;
-          TraceSnapshot& ts = traceRingBuffer.nextSlot();
-          ts.traceLenght = n;
-          memcpy(ts.analog_probes[0], decoded.analog_probes_0, n * sizeof(int32_t));
-          memcpy(ts.analog_probes[1], decoded.analog_probes_1, n * sizeof(int32_t));
-          memcpy(ts.digital_probes[0], decoded.digital_probes_0, n);
-          memcpy(ts.digital_probes[1], decoded.digital_probes_1, n);
-          memcpy(ts.digital_probes[2], decoded.digital_probes_2, n);
-          memcpy(ts.digital_probes[3], decoded.digital_probes_3, n);
-          traceRingBuffer.advance();
         }
       }
 
