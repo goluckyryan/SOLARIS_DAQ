@@ -25,6 +25,7 @@ QMAKE_CFLAGS_RELEASE = -O0
 # Input
 HEADERS += ClassDigitizer2Gen.h \
            Hit.h \
+					 RawDecoder.h \
 					 ClassInfluxDB.h \
 					 mainwindow.h \
 					 digiSettingsPanel.h \

@@ -17,7 +17,8 @@ std::vector<std::pair<std::string, Reg>> infoIndex = {{"Serial Num : ",         
                                                       {"Num. of Channel : ",       PHA::DIG::NumberOfChannel},
                                                       {"Input range [Vpp] : ",     PHA::DIG::InputDynamicRange},
                                                       {"Input Type : ",            PHA::DIG::InputType},
-                                                      {"Input Impedance [Ohm] : ", PHA::DIG::InputImpedance}
+                                                      {"Input Impedance [Ohm] : ", PHA::DIG::InputImpedance},
+                                                      {"MaxRawDataSize [Byte] : ", PHA::DIG::MaxRawDataSize}
                                                     };
 
 QStringList LEDToolTip = { "LED_JESD_Y_PASS" ,
@@ -101,7 +102,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       QGridLayout * infoLayout = new QGridLayout(infoBox);
       tabLayout_V1->addWidget(infoBox);
       
-      const unsigned short nRow = 4;
+      const unsigned short nRow = 5;
       for( unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
         QLabel * lab = new QLabel(QString::fromStdString(infoIndex[j].first), digiTab[iDigi]);
         lab->setAlignment(Qt::AlignRight | Qt::AlignCenter);

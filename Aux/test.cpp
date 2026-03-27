@@ -7,6 +7,8 @@
 #include <cmath>
 
 #include "../ClassDigitizer2Gen.h"
+#include "../RawDecoder.h"
+#include "SolReader.h"
 
 //^####################################################
 // Test: Read, Write, Save, Load ALL registers
@@ -599,6 +601,249 @@ static bool TestSaveLoadRoundTrip(Digitizer2Gen *digi) {
   return ok;
 }
 
+static bool TestRawDataDecode(Digitizer2Gen *digi) {
+  printf("============================================\n");
+  printf("  Test 8: Raw Data Decode\n");
+  printf("============================================\n");
+
+  bool ok = true;
+  int nCh = digi->GetNChannels();
+  std::string fpga = digi->GetFPGAType();
+
+  // 1. Program board with test pulse, enable ch0
+  printf("  Step 1: Program board with test pulse\n");
+  digi->ProgramBoard();
+  digi->ProgramChannels(true); // testPulse = true
+  digi->WriteValue("/ch/0/par/ChEnable", "true");
+  printf("  Enabled ch0 for test pulse\n");
+
+  // 2. Read events from decoded endpoint (Minimum) as reference
+  printf("  Step 2: Read events from decoded endpoint (Minimum)\n");
+  digi->SetDataFormat(DataFormat::Minimum);
+  digi->StartACQ();
+
+  struct RefHit { uint8_t ch; uint16_t energy; };
+  std::vector<RefHit> refHits;
+  int maxRefEvents = 100;
+  int refTimeout = 0;
+  while( (int) refHits.size() < maxRefEvents && refTimeout < 20 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      refHits.push_back({digi->hit->channel, digi->hit->energy});
+      refTimeout = 0;
+    } else {
+      usleep(100000);
+      refTimeout++;
+    }
+  }
+  digi->StopACQ();
+
+  printf("  Got %zu reference events from decoded endpoint\n", refHits.size());
+  if( refHits.empty() ){
+    printf("  WARNING: No events from decoded endpoint. Test pulse may not be working.\n");
+    printf("  Continuing with raw decode test anyway...\n");
+  } else {
+    printf("  Sample: ch=%d energy=%u\n", refHits[0].ch, refHits[0].energy);
+  }
+
+  // 3. Switch to Raw mode and read
+  printf("  Step 3: Read events from raw endpoint\n");
+  digi->SetDataFormat(DataFormat::Raw);
+  digi->StartACQ();
+
+  int rawHitCount = 0;
+  int rawBlobCount = 0;
+  int rawTimeout = 0;
+  int maxRawEvents = 500;
+  bool channelValid = true;
+  bool energyValid = true;
+  uint16_t minEnergy = 0xFFFF, maxEnergy = 0;
+  uint64_t lastTimestamp[MaxNumberOfChannel] = {0};
+  int timestampErrors = 0;
+
+  while( rawHitCount < maxRawEvents && rawTimeout < 20 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      rawTimeout = 0;
+
+      // Validate decoded fields
+      if( digi->hit->channel >= nCh ){
+        if( channelValid ) printf("  FAIL: Invalid channel %d (max %d)\n", digi->hit->channel, nCh);
+        channelValid = false;
+      }
+
+      if( digi->hit->energy < minEnergy ) minEnergy = digi->hit->energy;
+      if( digi->hit->energy > maxEnergy ) maxEnergy = digi->hit->energy;
+
+      // Check timestamp monotonicity per channel
+      uint8_t ch = digi->hit->channel;
+      if( ch < MaxNumberOfChannel ){
+        if( lastTimestamp[ch] > 0 && digi->hit->timestamp < lastTimestamp[ch] ){
+          timestampErrors++;
+        }
+        lastTimestamp[ch] = digi->hit->timestamp;
+      }
+
+      rawHitCount++;
+    } else {
+      usleep(100000);
+      rawTimeout++;
+    }
+  }
+  digi->StopACQ();
+
+  printf("  Got %d events from raw endpoint\n", rawHitCount);
+  printf("  Energy range: [%u, %u]\n", minEnergy, maxEnergy);
+  printf("  Timestamp ordering errors: %d\n", timestampErrors);
+
+  if( rawHitCount == 0 ){
+    printf("  FAIL: No events decoded from raw blob\n");
+    ok = false;
+  }
+
+  if( !channelValid ){
+    printf("  FAIL: Invalid channel numbers found\n");
+    ok = false;
+  }
+
+  if( timestampErrors > 0 ){
+    printf("  WARNING: %d timestamp ordering errors (may be expected with multiple channels)\n", timestampErrors);
+  }
+
+  // 4. Compare energy ranges between decoded and raw
+  if( !refHits.empty() && rawHitCount > 0 ){
+    // Test pulse should produce similar energy values
+    uint16_t refEnergy = refHits[0].energy;
+    bool energyMatch = (minEnergy <= refEnergy * 2) && (maxEnergy >= refEnergy / 2);
+    if( !energyMatch && refEnergy > 0 ){
+      printf("  WARNING: Raw energy range [%u,%u] doesn't match ref energy %u\n",
+             minEnergy, maxEnergy, refEnergy);
+    } else {
+      printf("  Energy range consistent with decoded endpoint\n");
+    }
+  }
+
+  // 5. Check statistics from stat events
+  printf("  Step 4: Check statistics from raw stream\n");
+  bool hasStats = false;
+  for( int ch = 0; ch < nCh; ch++ ){
+    if( digi->GetTriggerCount(ch) > 0 ){
+      if( !hasStats ){
+        printf("  Statistics extracted from raw stream:\n");
+        hasStats = true;
+      }
+      printf("    ch%02d: triggers=%u, realTime=%lu ns\n",
+             ch, digi->GetTriggerCount(ch), digi->GetRealTime(ch));
+    }
+  }
+  if( !hasStats ){
+    printf("  No stat events found in raw stream (EnStatEvents may need enabling)\n");
+  }
+
+  // 6. Test file round-trip
+  printf("  Step 5: Test file round-trip\n");
+  const char * testFile = "/tmp/test_raw_decode";
+  digi->SetDataFormat(DataFormat::Raw);
+  digi->StartACQ();
+  digi->OpenOutFile(testFile);
+
+  int savedCount = 0;
+  int saveTimeout = 0;
+  while( savedCount < 100 && saveTimeout < 20 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      digi->SaveDataToFile();
+      savedCount++;
+      saveTimeout = 0;
+    } else {
+      usleep(100000);
+      saveTimeout++;
+    }
+  }
+  digi->CloseOutFile();
+  digi->StopACQ();
+  printf("  Saved %d decoded hits to .sol file\n", savedCount);
+
+  // Try reading back with SolReader
+  if( savedCount > 0 ){
+    char solFile[200];
+    snprintf(solFile, sizeof(solFile), "%s_%03d.sol", testFile, 0);
+    SolReader reader;
+    reader.OpenFile(solFile);
+    reader.hit->SetDataType(DataFormat::NoTrace, fpga == DPPType::PSD ? DPPType::PSD : DPPType::PHA);
+
+    int readBack = 0;
+    while( reader.ReadNextBlock() == 0 ){
+      readBack++;
+    }
+    printf("  SolReader read back %d blocks from .sol file\n", readBack);
+
+    if( readBack != savedCount ){
+      printf("  WARNING: saved %d but read back %d blocks\n", savedCount, readBack);
+    } else {
+      printf("  File round-trip OK\n");
+    }
+
+    // cleanup
+    remove(solFile);
+  }
+
+  // 7. Throughput comparison
+  printf("  Step 6: Throughput comparison\n");
+
+  // Decoded endpoint throughput
+  digi->SetDataFormat(DataFormat::Minimum);
+  digi->StartACQ();
+  struct timespec t0, t1;
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  int decodedCount = 0;
+  int decodedTimeout = 0;
+  while( decodedCount < 1000 && decodedTimeout < 30 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      decodedCount++;
+      decodedTimeout = 0;
+    } else {
+      usleep(10000);
+      decodedTimeout++;
+    }
+  }
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  digi->StopACQ();
+  double decodedTime = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
+  double decodedRate = (decodedTime > 0) ? decodedCount / decodedTime : 0;
+  printf("  Decoded endpoint: %d events in %.3f s = %.0f events/s\n", decodedCount, decodedTime, decodedRate);
+
+  // Raw endpoint throughput
+  digi->SetDataFormat(DataFormat::Raw);
+  digi->StartACQ();
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+  int rawCount = 0;
+  int rawTout = 0;
+  while( rawCount < 1000 && rawTout < 30 ){
+    int ret = digi->ReadData();
+    if( ret == CAEN_FELib_Success ){
+      rawCount++;
+      rawTout = 0;
+    } else {
+      usleep(10000);
+      rawTout++;
+    }
+  }
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  digi->StopACQ();
+  double rawTime = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
+  double rawRate = (rawTime > 0) ? rawCount / rawTime : 0;
+  printf("  Raw endpoint:     %d events in %.3f s = %.0f events/s\n", rawCount, rawTime, rawRate);
+
+  if( decodedRate > 0 && rawRate > 0 ){
+    printf("  Speedup: %.1fx\n", rawRate / decodedRate);
+  }
+
+  printf("  Test 8 %s\n\n", ok ? "PASSED" : "FAILED");
+  return ok;
+}
+
 int main(int argc, char* argv[]) {
 
   const char * url = "dig2://192.168.0.254/";
@@ -629,6 +874,7 @@ int main(int argc, char* argv[]) {
   bool t5 = TestWriteAllChannels(digi);
   bool t6 = TestSaveAndLoad(digi);
   bool t7 = TestSaveLoadRoundTrip(digi);
+  bool t8 = TestRawDataDecode(digi);
 
   printf("######################################################\n");
   printf("  RESULTS\n");
@@ -639,10 +885,11 @@ int main(int argc, char* argv[]) {
   printf("  Test 5 (Write-all channels):   %s\n", t5 ? "PASS" : "FAIL");
   printf("  Test 6 (Save/Load verify):     %s\n", t6 ? "PASS" : "FAIL");
   printf("  Test 7 (Round-trip compare):   %s\n", t7 ? "PASS" : "FAIL");
+  printf("  Test 8 (Raw data decode):      %s\n", t8 ? "PASS" : "FAIL");
   printf("######################################################\n");
 
   digi->CloseDigitizer();
   delete digi;
 
-  return (t1 && t2 && t3 && t4 && t5 && t6 && t7) ? 0 : 1;
+  return (t1 && t2 && t3 && t4 && t5 && t6 && t7 && t8) ? 0 : 1;
 }

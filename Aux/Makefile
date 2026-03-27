@@ -16,7 +16,7 @@ ClassDigitizer.o : ../ClassDigitizer.cpp ../ClassDigitizer.h ../RegisterAddress.
 ClassInfluxDB.o : ../ClassInfluxDB.cpp ../ClassInfluxDB.h 
 		$(CC) $(COPTS) -c ../ClassInfluxDB.cpp -lcurl
 
-test: test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o
+test: test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit.h
 	$(CC) $(CFLAG) test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o test -lcurl -lCAEN_FELib -lX11
 
 clean:

@@ -37,6 +37,7 @@ void Digitizer2Gen::Initialization(){
   hit = NULL;
 
   acqON = false;
+  rawBlobPending = false;
 
   settingFileName = "";
 
@@ -152,9 +153,40 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
 }
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool verbose){
-  if( !isConnected ) return false; 
+  if( !isConnected ) return false;
   //ReadValue(parameter, 1);
   if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
+
+  // Clamp numeric values to the parameter's valid range before writing
+  // Look up the parameter in settings arrays by matching the base name
+  const char * parName = strrchr(parameter, '/');
+  if( parName ) parName++; else parName = parameter;
+
+  auto clampToRange = [&](const std::vector<Reg>& settings) {
+    for( const auto& reg : settings ){
+      if( reg.GetPara() == parName && reg.GetAnswerType() == ANSTYPE::INTEGER ){
+        auto answers = reg.GetAnswers();
+        if( answers.size() >= 3 ){
+          long long minVal = atoll(answers[0].first.c_str());
+          long long maxVal = atoll(answers[1].first.c_str());
+          long long step   = atoll(answers[2].first.c_str());
+          long long val    = atoll(value.c_str());
+          if( val < minVal ) val = minVal;
+          if( val > maxVal ) val = maxVal;
+          if( step > 0 ) val = ((val - minVal + step/2) / step) * step + minVal;
+          value = std::to_string(val);
+        }
+        break;
+      }
+    }
+  };
+
+  if( strstr(parameter, "/ch/") != nullptr ){
+    clampToRange(chSettings[0]);
+  } else {
+    clampToRange(boardSettings);
+  }
+
   if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
                              || strstr(parameter, "ChRecordLengthT") != nullptr
                              || strstr(parameter, "CFDDelayT") != nullptr
@@ -358,17 +390,23 @@ void Digitizer2Gen::AdjustParameterRanges(){
   };
 
   //========== VX2730 adjustments
+  // VX2730 has 500 Msps (2ns tick), but time parameters use an internal 4x scaling:
+  //   ReadValue multiplies firmware value by 4 to return ns
+  //   WriteValue divides user ns by 4 before sending to firmware
+  // So user-facing range = firmware internal range × 4
   if( ModelName == "VX2730" ){
-    // Time params with 4x ratio (VX2730 has finer tick but /4 conversion in WriteValue/ReadValue)
-    updateChParam("ChRecordLengthT", {{"32",""},{"16200",""},{"8",""}});
-    updateChParam("ChPreTriggerT",   {{"32",""},{"8000",""},{"8",""}});
+    // firmware internal: min=32, step=8 → user: min=128, step=32
+    updateChParam("ChRecordLengthT", {{"128",""},{"16200",""},{"32",""}});
+    updateChParam("ChPreTriggerT",   {{"128",""},{"8000",""},{"32",""}});
 
-    // PSD-specific time params (also 4x ratio, /4 extended in WriteValue/ReadValue)
+    // PSD-specific time params
     if( FPGAType == DPPType::PSD ){
-      updateChParam("CFDDelayT",          {{"2",""},{"2040",""},{"2",""}});
-      updateChParam("GateLongLengthT",    {{"2",""},{"8000",""},{"2",""}});
-      updateChParam("GateShortLengthT",   {{"2",""},{"8000",""},{"2",""}});
-      updateChParam("GateOffsetT",        {{"16",""},{"2000",""},{"2",""}});
+      // firmware internal: min=2, step=2 → user: min=8, step=8
+      updateChParam("CFDDelayT",          {{"8",""},{"2040",""},{"8",""}});
+      updateChParam("GateLongLengthT",    {{"8",""},{"8000",""},{"8",""}});
+      updateChParam("GateShortLengthT",   {{"8",""},{"8000",""},{"8",""}});
+      // firmware internal: min=16, step=2 → user: min=64, step=8
+      updateChParam("GateOffsetT",        {{"64",""},{"2000",""},{"8",""}});
       updateChParam("AbsoluteBaseline",   {{"0",""},{"16383",""},{"1",""}});
       updateChParam("SignalOffset",       {{"-1000000",""},{"1000000",""},{"50",""}});
     }
@@ -452,6 +490,8 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       return;
     }
   }
+
+  rawBlobPending = false;
 
   if( hit ) delete hit;
   hit = new Hit();
@@ -900,10 +940,45 @@ int Digitizer2Gen::ReadData(){
     hit->isTraceAllZero = true;
 
   }else if( hit->dataType == DataFormat::Raw){
-    ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events );
-    //printf("data size: %lu byte\n", evt.dataSize);
 
-    hit->isTraceAllZero = true; //assume no trace, as the trace need to be extracted.
+    // Yield buffered decoded hits one at a time
+    if( rawBlobPending && rawDecoder.HasNext() ){
+      RawDecoder::DecodedHit decoded;
+      rawDecoder.Next(decoded);
+      rawDecoder.CopyToHit(decoded, hit);
+      ret = CAEN_FELib_Success;
+    } else {
+      // Fetch new blob from digitizer
+      rawBlobPending = false;
+      ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events);
+
+      if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
+        rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
+
+        // Apply stat updates from time/counter events
+        for( const auto& su : rawDecoder.GetStatUpdates() ){
+          if( su.channel < nChannels ){
+            realTime[su.channel]       = su.realTime;
+            deadTime[su.channel]       = su.deadTime;
+            liveTime[su.channel]       = (su.realTime > su.deadTime) ? (su.realTime - su.deadTime) : 0;
+            triggerCount[su.channel]   = su.triggerCount;
+            savedEventCount[su.channel] = su.savedEventCount;
+          }
+        }
+
+        if( rawDecoder.HasNext() ){
+          rawBlobPending = true;
+          RawDecoder::DecodedHit decoded;
+          rawDecoder.Next(decoded);
+          rawDecoder.CopyToHit(decoded, hit);
+        } else {
+          // blob had no physics events (only stat events or empty)
+          hit->isTraceAllZero = true;
+          return ret;
+        }
+      }
+    }
+
   }else{
     return CAEN_FELib_UNKNOWN;
   }
@@ -917,9 +992,7 @@ int Digitizer2Gen::ReadData(){
   hit->fine_timestamp *= tick2ns;
 
   //======== fill per-channel ring buffer for histogram
-  if( hit->dataType != DataFormat::Raw ){
-    ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
-  }
+  ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
 
   //======== fill trace ring buffer for scope
   if( !hit->isTraceAllZero ){
@@ -1041,9 +1114,17 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->timestamp,      6, 1, outFile);
 
   }else if( hit->dataType == DataFormat::Raw){
-    fwrite(&dataStartIndetifier,  2, 1, outFile);
-    fwrite(&hit->dataSize,        8, 1, outFile);
-    fwrite(hit->data, hit->dataSize, 1, outFile);
+    // Write each decoded hit in NoTrace format for EventBuilder compatibility
+    unsigned short decId = 0xAA00 + DataFormat::NoTrace;
+    if( FPGAType == DPPType::PSD ) decId += 0x0010;
+    fwrite(&decId,                      2, 1, outFile);
+    fwrite(&hit->channel,              1, 1, outFile);
+    fwrite(&hit->energy,               2, 1, outFile);
+    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    fwrite(&hit->timestamp,            6, 1, outFile);
+    fwrite(&hit->fine_timestamp,       2, 1, outFile);
+    fwrite(&hit->flags_high_priority,  1, 1, outFile);
+    fwrite(&hit->flags_low_priority,   2, 1, outFile);
   }
   
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB
@@ -1073,8 +1154,7 @@ void Digitizer2Gen::ProgramBoard(){
   WriteValue("/par/IOlevel"   , "NIM");
 
   WriteValue("/par/EnAutoDisarmAcq" , "False");
-  if( FPGAType == DPPType::PHA ) WriteValue("/par/EnStatEvents"    , "true");
-  if( FPGAType == DPPType::PSD ) WriteValue("/par/EnStatEvents"    , "false");
+  WriteValue("/par/EnStatEvents", "true"); // enable for both PHA and PSD (needed for raw decoder scaler)
   
   WriteValue("/par/BoardVetoWidth"    , "0");
   WriteValue("/par/VolatileClockOutDelay"    , "0");

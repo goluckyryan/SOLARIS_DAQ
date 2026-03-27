@@ -126,18 +126,18 @@ class Hit {
 
       if( dataType == DataFormat::Raw){
         data = new uint8_t[20*1024*1024];
-      }else{
-        analog_probes[0] = new int32_t[MaxTraceLenght];
-        analog_probes[1] = new int32_t[MaxTraceLenght];
-
-        digital_probes[0] = new uint8_t[MaxTraceLenght];
-        digital_probes[1] = new uint8_t[MaxTraceLenght];
-        digital_probes[2] = new uint8_t[MaxTraceLenght];
-        digital_probes[3] = new uint8_t[MaxTraceLenght];
-
-        isTraceAllZero = true;
-
       }
+
+      // Always allocate probe arrays (needed for raw decode and trace display)
+      analog_probes[0] = new int32_t[MaxTraceLenght];
+      analog_probes[1] = new int32_t[MaxTraceLenght];
+
+      digital_probes[0] = new uint8_t[MaxTraceLenght];
+      digital_probes[1] = new uint8_t[MaxTraceLenght];
+      digital_probes[2] = new uint8_t[MaxTraceLenght];
+      digital_probes[3] = new uint8_t[MaxTraceLenght];
+
+      isTraceAllZero = true;
     }
 
     void ClearTrace(){
