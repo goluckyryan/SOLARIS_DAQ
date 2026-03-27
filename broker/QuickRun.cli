@@ -1,0 +1,28 @@
+# QuickRun.cli
+# Open digitizer, apply default settings, run 30-sec acquisition with OneTrace format.
+# Usage:  ./solaris-cli --script QuickRun.cli
+
+connect
+
+# Open digitizer if not already opened
+if num_digi == 0
+  open dig2://192.168.0.254
+endif
+
+# Apply default settings (auto-detects PHA/PSD)
+load DefaultSettings.cli
+
+# Create output directory
+! mkdir -p data
+
+# Start ACQ: digi 0, format 1 (OneTrace), save to file (path + prefix)
+start 0 1 save data/QuickRun001
+
+# Wait 30 seconds
+subscribe 30
+
+# Stop ACQ
+stop 0
+
+# Show final file size
+file-status 0

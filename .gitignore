@@ -92,3 +92,6 @@ EventBuilderRaw
 Aux/debug_raw
 Aux/check*
 *.sol_raw
+*.sol
+
+broker/data

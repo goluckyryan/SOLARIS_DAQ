@@ -70,7 +70,8 @@
     "qdatetime": "cpp",
     "fstream": "cpp",
     "allocator": "cpp",
-    "qsignalmapper": "cpp"
+    "qsignalmapper": "cpp",
+    "*.cli": "shellscript"
   },
 
   "better-comments.multilineComments": true,

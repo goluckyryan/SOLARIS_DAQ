@@ -104,11 +104,12 @@ All threads accessing the same digitizer are serialized by a per-digitizer `std:
 
 ## solaris-cli
 
-Interactive command-line client.
+Interactive command-line client with scripting support.
 
 ```bash
-./solaris-cli                              # start, then type "connect"
-./solaris-cli --connect localhost 5555 5556 # auto-connect on startup
+./solaris-cli                                  # start, then type "connect"
+./solaris-cli --connect localhost 5555 5556     # auto-connect on startup
+./solaris-cli --script DefaultSettings.cli   # run a script, then drop into interactive mode
 ```
 
 ### Commands
@@ -187,7 +188,97 @@ stop all
 
 | Command | Description |
 |---------|-------------|
-| `subscribe [seconds]` | Listen and print scalar updates (trigger rates, accept rates, file sizes) for N seconds. Default: 10. |
+| `subscribe [seconds]` | Monitor live rates and file sizes for N seconds (default 10). Prints trigger rates, accept rates, and file sizes every scalar interval. Also acts as a timed wait -- useful in scripts to let an acquisition run for a fixed duration while watching progress. |
+
+#### Scripting and Shell
+
+| Command | Description |
+|---------|-------------|
+| `load <script>` | Execute commands from a `.cli` script file. Lines starting with `#` are comments. Blank lines are skipped. Scripts can call `load` to nest other scripts. |
+| `sleep <ms>` | Pause for N milliseconds. Useful in scripts to wait between commands. |
+| `! <command>` | Run a shell command (e.g. `! mkdir -p data/run001`, `! ls -la data/`, `! date`). The full command after `!` is passed to the system shell. |
+
+Run interactively or from the command line:
+```bash
+# Interactive: type at the > prompt
+load DefaultSettings.cli
+
+# Command line: auto-run a script on startup, then drop into interactive mode
+./solaris-cli --script DefaultSettings.cli
+```
+
+#### Flow Control (script-only)
+
+Scripts support `if`/`elif`/`else`/`endif` blocks for conditional execution. Nesting is supported.
+
+| Statement | Description |
+|-----------|-------------|
+| `if read <digi> <param> == <value>` | Read a parameter from the digitizer and compare. Branch executes if equal. |
+| `if read <digi> <param> != <value>` | Branch executes if not equal. |
+| `if num_digi == <N>` | Branch based on the number of connected digitizers. Operators: `==`, `!=`, `>`, `<`, `>=`, `<=`. |
+| `elif read <digi> <param> == <value>` | Else-if branch. Same condition syntax as `if`. |
+| `else` | Execute if no previous `if`/`elif` branch was taken. |
+| `endif` | End the if block. Every `if` must have a matching `endif`. |
+
+Example -- apply different settings based on firmware type:
+
+```
+connect
+
+if read 0 /par/FwType == DPP_PSD
+  # PSD-specific settings
+  write 0 /ch/0..63/par/GateLongLengthT 400
+  write 0 /ch/0..63/par/GateShortLengthT 100
+  write 0 /ch/0..63/par/CFDDelayT 32
+elif read 0 /par/FwType == DPP_PHA
+  # PHA-specific settings
+  write 0 /ch/0..63/par/EnergyFilterRiseTimeT 496
+  write 0 /ch/0..63/par/EnergyFilterFlatTopT 1600
+  write 0 /ch/0..63/par/EnergyFilterPoleZeroT 50000
+else
+  # unknown firmware
+  ping
+endif
+```
+
+#### For Loops (script-only)
+
+Loop over values with `for`/`endfor`. Use `$var` or `${var}` for variable substitution anywhere in a command. Nesting is supported.
+
+| Statement | Description |
+|-----------|-------------|
+| `for <var> in <val1> <val2> ...` | Loop with explicit values. |
+| `for <var> in <start>..<end>` | Loop over integer range (inclusive). |
+| `for <var> in <start>..<step>..<end>` | Loop with step (e.g. `0..2..10` = 0,2,4,6,8,10). |
+| `endfor` | End the for block. Every `for` must have a matching `endfor`. |
+
+Example -- configure all digitizers and specific channels:
+
+```
+connect
+
+# Set threshold for channels 0-15 on digitizer 0
+for ch in 0..15
+  write 0 /ch/$ch/par/ChTriggerThreshold 100
+endfor
+
+# Configure multiple digitizers
+for d in 0 1
+  write $d /par/ClockSource Internal
+  write $d /par/StartSource SWcmd
+
+  # Per-channel settings with nested loop
+  for ch in 0..63
+    write $d /ch/$ch/par/ChEnable true
+    write $d /ch/$ch/par/DCOffset 50
+  endfor
+endfor
+
+# Even channels only (step of 2)
+for ch in 0..2..62
+  write 0 /ch/$ch/par/ChEnable true
+endfor
+```
 
 #### Lifecycle
 
@@ -678,11 +769,45 @@ if __name__ == "__main__":
 
 ```
 broker/
-  BrokerProtocol.h     Message type enums, binary pack/unpack inline helpers, endpoint constants
-  BrokerServer.h/.cpp  Broker daemon: ZMQ sockets, command dispatch, ReadDataLoop, ScalarBroadcastLoop
-  BrokerClient.h/.cpp  C++ client library: command sending, PUB subscription, local ring buffers
-  solaris-broker.cpp   Daemon entry point (CLI arg parsing, signal handling)
-  solaris-cli.cpp      Interactive CLI client
-  Makefile             Build system (depends on libzmq, libCAEN_FELib, libcurl)
-  README.md            This file
+  BrokerProtocol.h          Message type enums, binary pack/unpack inline helpers, endpoint constants
+  BrokerServer.h/.cpp       Broker daemon: ZMQ sockets, command dispatch, ReadDataLoop, ScalarBroadcastLoop
+  BrokerClient.h/.cpp       C++ client library: command sending, PUB subscription, local ring buffers
+  solaris-broker.cpp        Daemon entry point (CLI arg parsing, signal handling)
+  solaris-cli.cpp           Interactive CLI client with scripting engine (if/else, for loops, variables)
+  Makefile                  Build system (depends on libzmq, libCAEN_FELib, libcurl)
+  DefaultSettings.cli    Example script: default PHA/PSD settings (auto-detects firmware type)
+  QuickRun.cli           Example script: open digitizer, apply defaults, run 30-sec acquisition
+  README.md                 This file
 ```
+
+### Script Language Summary
+
+`.cli` script files support the following features. Lines starting with `#` are comments. Blank lines are ignored.
+
+| Feature | Syntax | Example |
+|---------|--------|---------|
+| Comment | `# text` | `# this is a comment` |
+| Command | any CLI command | `write 0 /par/ClockSource Internal` |
+| Sleep | `sleep <ms>` | `sleep 500` |
+| Load subscript | `load <file>` | `load DefaultSettings.cli` |
+| If | `if <condition>` | `if read 0 /par/FwType == DPP_PSD` |
+| Elif | `elif <condition>` | `elif read 0 /par/FwType == DPP_PHA` |
+| Else | `else` | `else` |
+| Endif | `endif` | `endif` |
+| For (values) | `for <var> in <v1> <v2> ...` | `for d in 0 1 2` |
+| For (range) | `for <var> in <a>..<b>` | `for ch in 0..63` |
+| For (step) | `for <var> in <a>..<s>..<b>` | `for ch in 0..2..62` |
+| Endfor | `endfor` | `endfor` |
+| Variable | `$var` or `${var}` | `write $d /ch/$ch/par/ChEnable true` |
+| Set (literal) | `set <var> <value>` | `set threshold 100` |
+| Set (num_digi) | `set <var> num_digi` | `set ndigi num_digi` |
+| Set (read) | `set <var> read <digi> <param>` | `set nch read 0 /par/NumCh` |
+| Set (math) | `set <var> <A> +\|-\|*\|/ <B>` | `set last $ndigi - 1` |
+| Shell command | `! <command>` | `! mkdir -p data/run001` |
+
+Conditions for `if`/`elif`:
+- `read <digi> <param> == <value>` -- read a hardware parameter and compare
+- `read <digi> <param> != <value>` -- not equal
+- `num_digi ==|!=|>|<|>=|<= <N>` -- compare number of connected digitizers
+
+All blocks (`if`/`endif`, `for`/`endfor`) can be nested to arbitrary depth. Variables from outer `for` loops are accessible in inner blocks.

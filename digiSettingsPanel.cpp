@@ -208,7 +208,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       
       bnDefaultSetting[iDigi] = new QPushButton("Set Default Settings", digiTab[iDigi]);
       bnLayout->addWidget(bnDefaultSetting[iDigi], rowId, 4, 1, 2);
-      connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::SetDefaultPHASettigns);
+      connect(bnDefaultSetting[iDigi], &QPushButton::clicked, this, &DigiSettingsPanel::SetDefaultSettings);
 
       bnSaveSettings[iDigi] = new QPushButton("Save Settings", digiTab[iDigi]);
       bnLayout->addWidget(bnSaveSettings[iDigi], rowId, 6, 1, 2);
@@ -2526,7 +2526,7 @@ void DigiSettingsPanel::LoadSettings(){
 
 }
 
-void DigiSettingsPanel::SetDefaultPHASettigns(){
+void DigiSettingsPanel::SetDefaultSettings(){
   SendLogMsg("Program Digitizer-" + QString::number(digi[ID]->GetSerialNumber()) + " to default " + QString::fromStdString(digi[ID]->GetFPGAType()));
   digi[ID]->ProgramBoard();
   digi[ID]->ProgramChannels();

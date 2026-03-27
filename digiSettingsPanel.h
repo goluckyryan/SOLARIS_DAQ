@@ -36,7 +36,7 @@ private slots:
 
   void SaveSettings();
   void LoadSettings();
-  void SetDefaultPHASettigns();
+  void SetDefaultSettings();
   void RefreshSettings(); // this read digitizer and ShowSettingToPanel
 
 public slots:

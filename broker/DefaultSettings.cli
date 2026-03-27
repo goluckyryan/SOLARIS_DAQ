@@ -1,0 +1,224 @@
+# DefaultSettings.cli
+# Default settings for all digitizers connected to the broker.
+# Automatically detects firmware type (DPP_PHA or DPP_PSD) and applies
+# the appropriate settings. Equivalent to SetDefaultSettings() in the GUI.
+#
+# Usage:  load DefaultSettings.cli
+#
+# Loops over all connected digitizers using num_digi.
+
+connect
+
+if num_digi == 0
+  # No digitizers connected, nothing to do
+else
+
+  set ndigi num_digi
+  set last $ndigi - 1
+  for digi in 0..$last
+
+      #========================================
+      # Board Settings (ProgramBoard)
+      # Same for PHA and PSD
+      #========================================
+
+      write $digi /par/ClockSource           Internal
+      write $digi /par/EnClockOutFP          True
+      write $digi /par/StartSource           SWcmd
+      write $digi /par/GlobalTriggerSource   TrgIn
+
+      write $digi /par/TrgOutMode            Disabled
+      write $digi /par/GPIOMode              Disabled
+      write $digi /par/BusyInSource          Disabled
+      write $digi /par/SyncOutMode           Disabled
+      write $digi /par/BoardVetoSource       Disabled
+
+      write $digi /par/RunDelay              0
+      write $digi /par/IOlevel               NIM
+
+      write $digi /par/EnAutoDisarmAcq       False
+      write $digi /par/EnStatEvents          true
+
+      write $digi /par/BoardVetoWidth             0
+      write $digi /par/VolatileClockOutDelay      0
+      write $digi /par/PermanentClockOutDelay     0
+
+      write $digi /par/DACoutMode            ChInput
+      write $digi /par/DACoutChSelect        0
+
+      # ITL-A
+      write $digi /par/ITLAMainLogic         OR
+      write $digi /par/ITLAMajorityLev       2
+      write $digi /par/ITLAPairLogic         NONE
+      write $digi /par/ITLAPolarity          Direct
+      write $digi /par/ITLAGateWidth         100
+
+      # ITL-B
+      write $digi /par/ITLBMainLogic         OR
+      write $digi /par/ITLBMajorityLev       2
+      write $digi /par/ITLBPairLogic         NONE
+      write $digi /par/ITLBPolarity          Direct
+      write $digi /par/ITLBGateWidth         100
+
+      #========================================
+      # Determine channel range based on model
+      # VX2730 = 32 ch, VX2740/VX2745 = 64 ch
+      #========================================
+
+      if read $digi /par/NumCh == 32
+        # VX2730: 32 channels
+        #--- Common channel settings ---
+        write $digi /ch/0..31/par/ChEnable             True
+        write $digi /ch/0..31/par/DCOffset             50
+        write $digi /ch/0..31/par/TriggerThr           1000
+        write $digi /ch/0..31/par/WaveDataSource       ADC_DATA
+        write $digi /ch/0..31/par/PulsePolarity        Positive
+        write $digi /ch/0..31/par/ChRecordLengthT      4096
+        write $digi /ch/0..31/par/ChPreTriggerT        1000
+        write $digi /ch/0..31/par/WaveSaving           OnRequest
+        write $digi /ch/0..31/par/WaveResolution       RES8
+        write $digi /ch/0..31/par/EventTriggerSource   ChSelfTrigger
+        write $digi /ch/0..31/par/WaveTriggerSource    Disabled
+        write $digi /ch/0..31/par/ChannelVetoSource    Disabled
+        write $digi /ch/0..31/par/ChannelsTriggerMask  0x0
+        write $digi /ch/0..31/par/CoincidenceMask      Disabled
+        write $digi /ch/0..31/par/AntiCoincidenceMask  Disabled
+        write $digi /ch/0..31/par/CoincidenceLengthT   0
+        write $digi /ch/0..31/par/ADCVetoWidth         0
+        write $digi /ch/0..31/par/EventSelector                 All
+        write $digi /ch/0..31/par/WaveSelector                  All
+        write $digi /ch/0..31/par/EnergySkimLowDiscriminator    0
+        write $digi /ch/0..31/par/EnergySkimHighDiscriminator   65534
+        write $digi /ch/0..31/par/ITLConnect                    Disabled
+
+        #--- Firmware-specific ---
+        if read $digi /par/FwType == DPP_PHA
+          write $digi /ch/0..31/par/TimeFilterRiseTimeT        80
+          write $digi /ch/0..31/par/TimeFilterRetriggerGuardT  80
+          write $digi /ch/0..31/par/EnergyFilterLFLimitation     Off
+          write $digi /ch/0..31/par/EnergyFilterRiseTimeT        496
+          write $digi /ch/0..31/par/EnergyFilterFlatTopT         1600
+          write $digi /ch/0..31/par/EnergyFilterPoleZeroT        50000
+          write $digi /ch/0..31/par/EnergyFilterPeakingPosition  20
+          write $digi /ch/0..31/par/EnergyFilterBaselineGuardT   800
+          write $digi /ch/0..31/par/EnergyFilterPileupGuardT     80
+          write $digi /ch/0..31/par/EnergyFilterBaselineAvg      Medium
+          write $digi /ch/0..31/par/EnergyFilterFineGain         1.0
+          write $digi /ch/0..31/par/EnergyFilterPeakingAvg       LowAVG
+          write $digi /ch/0..31/par/WaveAnalogProbe0   ADCInput
+          write $digi /ch/0..31/par/WaveAnalogProbe1   EnergyFilterMinusBaseline
+          write $digi /ch/0..31/par/WaveDigitalProbe0  Trigger
+          write $digi /ch/0..31/par/WaveDigitalProbe1  EnergyFilterPeaking
+          write $digi /ch/0..31/par/WaveDigitalProbe2  TimeFilterArmed
+          write $digi /ch/0..31/par/WaveDigitalProbe3  EnergyFilterPeakReady
+        elif read $digi /par/FwType == DPP_PSD
+          write $digi /ch/0..31/par/WaveAnalogProbe0   ADCInput
+          write $digi /ch/0..31/par/WaveAnalogProbe1   CFDFilter
+          write $digi /ch/0..31/par/WaveDigitalProbe0  Trigger
+          write $digi /ch/0..31/par/WaveDigitalProbe1  LongGate
+          write $digi /ch/0..31/par/WaveDigitalProbe2  ShortGate
+          write $digi /ch/0..31/par/WaveDigitalProbe3  ChargeReady
+          write $digi /ch/0..31/par/GateLongLengthT                400
+          write $digi /ch/0..31/par/GateShortLengthT               100
+          write $digi /ch/0..31/par/GateOffsetT                    50
+          write $digi /ch/0..31/par/LongChargeIntegratorPedestal   0
+          write $digi /ch/0..31/par/ShortChargeIntegratorPedestal  0
+          write $digi /ch/0..31/par/EnergyGain                     x1
+          write $digi /ch/0..31/par/TriggerFilterSelection    LeadingEdge
+          write $digi /ch/0..31/par/CFDDelayT                 32
+          write $digi /ch/0..31/par/CFDFraction               25
+          write $digi /ch/0..31/par/TimeFilterSmoothing       Disabled
+          write $digi /ch/0..31/par/ChargeSmoothing           Disabled
+          write $digi /ch/0..31/par/SmoothingFactor           1
+          write $digi /ch/0..31/par/PileupGap                 1000
+          write $digi /ch/0..31/par/ADCInputBaselineAvg        MediumHigh
+          write $digi /ch/0..31/par/AbsoluteBaseline           1000
+          write $digi /ch/0..31/par/ADCInputBaselineGuardT     0
+          write $digi /ch/0..31/par/TimeFilterRetriggerGuardT  8
+          write $digi /ch/0..31/par/TriggerHysteresis          Enabled
+          write $digi /ch/0..31/par/NeutronThreshold      0
+          write $digi /ch/0..31/par/EventNeutronReject    Disabled
+          write $digi /ch/0..31/par/WaveNeutronReject     Disabled
+        endif
+
+      else
+        # VX2740/VX2745: 64 channels
+        #--- Common channel settings ---
+        write $digi /ch/0..63/par/ChEnable             True
+        write $digi /ch/0..63/par/DCOffset             50
+        write $digi /ch/0..63/par/TriggerThr           1000
+        write $digi /ch/0..63/par/WaveDataSource       ADC_DATA
+        write $digi /ch/0..63/par/PulsePolarity        Positive
+        write $digi /ch/0..63/par/ChRecordLengthT      4096
+        write $digi /ch/0..63/par/ChPreTriggerT        1000
+        write $digi /ch/0..63/par/WaveSaving           OnRequest
+        write $digi /ch/0..63/par/WaveResolution       RES8
+        write $digi /ch/0..63/par/EventTriggerSource   ChSelfTrigger
+        write $digi /ch/0..63/par/WaveTriggerSource    Disabled
+        write $digi /ch/0..63/par/ChannelVetoSource    Disabled
+        write $digi /ch/0..63/par/ChannelsTriggerMask  0x0
+        write $digi /ch/0..63/par/CoincidenceMask      Disabled
+        write $digi /ch/0..63/par/AntiCoincidenceMask  Disabled
+        write $digi /ch/0..63/par/CoincidenceLengthT   0
+        write $digi /ch/0..63/par/ADCVetoWidth         0
+        write $digi /ch/0..63/par/EventSelector                 All
+        write $digi /ch/0..63/par/WaveSelector                  All
+        write $digi /ch/0..63/par/EnergySkimLowDiscriminator    0
+        write $digi /ch/0..63/par/EnergySkimHighDiscriminator   65534
+        write $digi /ch/0..63/par/ITLConnect                    Disabled
+
+        #--- Firmware-specific ---
+        if read $digi /par/FwType == DPP_PHA
+          write $digi /ch/0..63/par/TimeFilterRiseTimeT        80
+          write $digi /ch/0..63/par/TimeFilterRetriggerGuardT  80
+          write $digi /ch/0..63/par/EnergyFilterLFLimitation     Off
+          write $digi /ch/0..63/par/EnergyFilterRiseTimeT        496
+          write $digi /ch/0..63/par/EnergyFilterFlatTopT         1600
+          write $digi /ch/0..63/par/EnergyFilterPoleZeroT        50000
+          write $digi /ch/0..63/par/EnergyFilterPeakingPosition  20
+          write $digi /ch/0..63/par/EnergyFilterBaselineGuardT   800
+          write $digi /ch/0..63/par/EnergyFilterPileupGuardT     80
+          write $digi /ch/0..63/par/EnergyFilterBaselineAvg      Medium
+          write $digi /ch/0..63/par/EnergyFilterFineGain         1.0
+          write $digi /ch/0..63/par/EnergyFilterPeakingAvg       LowAVG
+          write $digi /ch/0..63/par/WaveAnalogProbe0   ADCInput
+          write $digi /ch/0..63/par/WaveAnalogProbe1   EnergyFilterMinusBaseline
+          write $digi /ch/0..63/par/WaveDigitalProbe0  Trigger
+          write $digi /ch/0..63/par/WaveDigitalProbe1  EnergyFilterPeaking
+          write $digi /ch/0..63/par/WaveDigitalProbe2  TimeFilterArmed
+          write $digi /ch/0..63/par/WaveDigitalProbe3  EnergyFilterPeakReady
+        elif read $digi /par/FwType == DPP_PSD
+          write $digi /ch/0..63/par/WaveAnalogProbe0   ADCInput
+          write $digi /ch/0..63/par/WaveAnalogProbe1   CFDFilter
+          write $digi /ch/0..63/par/WaveDigitalProbe0  Trigger
+          write $digi /ch/0..63/par/WaveDigitalProbe1  LongGate
+          write $digi /ch/0..63/par/WaveDigitalProbe2  ShortGate
+          write $digi /ch/0..63/par/WaveDigitalProbe3  ChargeReady
+          write $digi /ch/0..63/par/GateLongLengthT                400
+          write $digi /ch/0..63/par/GateShortLengthT               100
+          write $digi /ch/0..63/par/GateOffsetT                    50
+          write $digi /ch/0..63/par/LongChargeIntegratorPedestal   0
+          write $digi /ch/0..63/par/ShortChargeIntegratorPedestal  0
+          write $digi /ch/0..63/par/EnergyGain                     x1
+          write $digi /ch/0..63/par/TriggerFilterSelection    LeadingEdge
+          write $digi /ch/0..63/par/CFDDelayT                 32
+          write $digi /ch/0..63/par/CFDFraction               25
+          write $digi /ch/0..63/par/TimeFilterSmoothing       Disabled
+          write $digi /ch/0..63/par/ChargeSmoothing           Disabled
+          write $digi /ch/0..63/par/SmoothingFactor           1
+          write $digi /ch/0..63/par/PileupGap                 1000
+          write $digi /ch/0..63/par/ADCInputBaselineAvg        MediumHigh
+          write $digi /ch/0..63/par/AbsoluteBaseline           1000
+          write $digi /ch/0..63/par/ADCInputBaselineGuardT     0
+          write $digi /ch/0..63/par/TimeFilterRetriggerGuardT  8
+          write $digi /ch/0..63/par/TriggerHysteresis          Enabled
+          write $digi /ch/0..63/par/NeutronThreshold      0
+          write $digi /ch/0..63/par/EventNeutronReject    Disabled
+          write $digi /ch/0..63/par/WaveNeutronReject     Disabled
+        endif
+
+      endif
+
+  endfor
+
+endif
