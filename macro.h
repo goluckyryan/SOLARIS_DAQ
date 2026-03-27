@@ -8,21 +8,16 @@
 #define PIDFile  "pid.dat"
 #define SingleHistogramFillingTime 50  // ms between histogram fill refresh
 
-#include <QString>
+#include <string>
 
 //^=================================
 namespace Utility{
-  /// either haha is "0xFFF" or "12435", convert to 10-base 
+  /// either haha is "0xFFF" or "12435", convert to 10-base
   static unsigned long TenBase(std::string haha){
-    QString ans = QString::fromStdString(haha);
-    unsigned long  mask = 0 ;
-    if( ans.contains("0x")){
-      bool ok;
-      mask = ans.toULong(&ok, 16);
-    }else{
-      mask = ans.toULong();
+    if( haha.find("0x") != std::string::npos || haha.find("0X") != std::string::npos ){
+      return std::stoul(haha, nullptr, 16);
     }
-    return mask;
+    return std::stoul(haha);
   }
 }
 
