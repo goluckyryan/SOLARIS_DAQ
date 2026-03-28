@@ -28,8 +28,8 @@ int BrokerClient::Connect(const std::string& cmdEndpoint,
   zmqReq = zmq_socket(zmqCtx, ZMQ_REQ);
   if (!zmqReq) { lastError = "cannot create REQ socket"; return -1; }
 
-  // Set send/recv timeouts (5 seconds)
-  int timeout = 5000;
+  // Set send/recv timeouts (shorter for probe/ping, normal for full connection)
+  int timeout = pubEndpoint.empty() ? 1000 : 5000;
   zmq_setsockopt(zmqReq, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
   zmq_setsockopt(zmqReq, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
 
@@ -38,22 +38,26 @@ int BrokerClient::Connect(const std::string& cmdEndpoint,
     return -1;
   }
 
-  zmqSub = zmq_socket(zmqCtx, ZMQ_SUB);
-  if (!zmqSub) { lastError = "cannot create SUB socket"; return -1; }
-
-  // Subscribe to all messages
-  zmq_setsockopt(zmqSub, ZMQ_SUBSCRIBE, "", 0);
-
-  if (zmq_connect(zmqSub, pubEndpoint.c_str()) != 0) {
-    lastError = "cannot connect SUB to " + pubEndpoint + ": " + zmq_strerror(errno);
-    return -1;
-  }
-
   connected = true;
 
-  // Start subscription thread
-  subThreadStop = false;
-  subThread = std::thread(&BrokerClient::SubscriptionLoop, this);
+  // SUB socket is optional (empty pubEndpoint = command-only connection for ping/probe)
+  if (!pubEndpoint.empty()) {
+    zmqSub = zmq_socket(zmqCtx, ZMQ_SUB);
+    if (!zmqSub) { lastError = "cannot create SUB socket"; return -1; }
+
+    // Subscribe to all messages
+    zmq_setsockopt(zmqSub, ZMQ_SUBSCRIBE, "", 0);
+
+    if (zmq_connect(zmqSub, pubEndpoint.c_str()) != 0) {
+      lastError = "cannot connect SUB to " + pubEndpoint + ": " + zmq_strerror(errno);
+      connected = false;
+      return -1;
+    }
+
+    // Start subscription thread
+    subThreadStop = false;
+    subThread = std::thread(&BrokerClient::SubscriptionLoop, this);
+  }
 
   return 0;
 }

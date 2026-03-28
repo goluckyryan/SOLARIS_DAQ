@@ -98,7 +98,7 @@ class Digitizer2Gen {
     unsigned int   GetFPGAVersion()  const {return FPGAVer;}
     unsigned int   GetCupVer()       const {return CupVer;}
 
-    void  SetDummy(unsigned short sn);
+    void  SetDummy(unsigned short sn, unsigned short nCh = 64, std::string fpga = "DPP_PHA");
     bool  IsDummy()     const {return isDummy;}
     bool  IsConnected() const {return isConnected;}
 

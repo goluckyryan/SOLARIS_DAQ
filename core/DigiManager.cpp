@@ -49,8 +49,9 @@ int DigiManager::Connect(const std::string& cmdEndpoint, const std::string& pubE
     RefreshDigiInfo(i);  // get tick2ns, fpgaVersion, cupVersion
 
     // Create a local dummy Digitizer2Gen for UI construction
+    // Set correct channel count and FPGA type to match the real digitizer
     digi[i] = new Digitizer2Gen();
-    digi[i]->SetDummy(infoCache[i].serialNumber);
+    digi[i]->SetDummy(infoCache[i].serialNumber, infoCache[i].nChannels, infoCache[i].fpgaType);
   }
 
   return 0;
@@ -88,7 +89,7 @@ int DigiManager::OpenDigitizer(const std::string& url) {
       // Create local dummy for UI construction (settings panel, etc.)
       if (!digi[idx]) {
         digi[idx] = new Digitizer2Gen();
-        digi[idx]->SetDummy(infoCache[idx].serialNumber);
+        digi[idx]->SetDummy(infoCache[idx].serialNumber, infoCache[idx].nChannels, infoCache[idx].fpgaType);
       }
     }
     return idx;
@@ -110,7 +111,10 @@ void DigiManager::CloseDigitizer(int index) {
       digi[index] = nullptr;
     }
   } else {
-    // Broker mode: only clean up local dummy, don't close remote digitizer
+    // Broker mode: close remote digitizer on broker
+    if (client && client->IsConnected()) {
+      client->CloseDigitizer(index);
+    }
     if (digi[index]) { delete digi[index]; digi[index] = nullptr; }
     infoCache[index] = DigiInfoCache();
   }
@@ -184,7 +188,8 @@ std::string DigiManager::ReadValue(int d, const Reg& reg, int ch) {
     return digi[d]->ReadValue(reg, ch);
   } else {
     if (!client || !client->IsConnected()) return "";
-    return client->ReadValue(d, reg.GetFullPara(ch));
+    int nCh = GetNChannels(d);
+    return client->ReadValue(d, reg.GetFullPara(ch, nCh));
   }
 }
 
@@ -196,7 +201,8 @@ bool DigiManager::WriteValue(int d, const Reg& reg, const std::string& value, in
     return digi[d]->WriteValue(reg, value, ch);
   } else {
     if (!client || !client->IsConnected()) return false;
-    return client->WriteValue(d, reg.GetFullPara(ch), value);
+    int nCh = GetNChannels(d);
+    return client->WriteValue(d, reg.GetFullPara(ch, nCh), value);
   }
 }
 
@@ -208,7 +214,8 @@ void DigiManager::SendCommand(int d, const Reg& reg) {
     digi[d]->SendCommand(reg.GetFullPara());
   } else {
     if (!client || !client->IsConnected()) return;
-    client->SendCommand(d, reg.GetFullPara());
+    int nCh = GetNChannels(d);
+    client->SendCommand(d, reg.GetFullPara(-1, nCh));
   }
 }
 
@@ -275,10 +282,10 @@ void DigiManager::StopACQ(int d) {
 bool DigiManager::IsACQOn(int d) const {
   if (d < 0 || d >= nDigi) return false;
   if (mode == Mode::Standalone) return digi[d] ? digi[d]->IsAcqOn() : false;
-  // In broker mode, check cached scalar data
-  if (client) {
-    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(client->scalarMutex));
-    return client->scalarData[d].acqOn;
+  // In broker mode, query the broker directly (not cached scalar data)
+  if (client && client->IsConnected()) {
+    auto status = const_cast<BrokerClient*>(client)->GetACQStatus();
+    if (d < status.nDigi) return status.acqOn[d];
   }
   return false;
 }

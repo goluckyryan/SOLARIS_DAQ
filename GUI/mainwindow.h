@@ -46,7 +46,7 @@ public:
 private slots:
 
   void OpenDigitizers();
-  void CloseDigitizers();
+  void CloseDigitizers(bool closeRemote = true);
 
   void OpenScope();  
   void OpenDigitizersSettings();

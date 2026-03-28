@@ -59,12 +59,12 @@ void Digitizer2Gen::Initialization(){
 
 }
 
-void Digitizer2Gen::SetDummy(unsigned short sn){
+void Digitizer2Gen::SetDummy(unsigned short sn, unsigned short nCh, std::string fpga){
 
   isDummy = true;
   serialNumber = sn;
-  nChannels = 64;
-  FPGAType = "DPP_PHA";
+  nChannels = nCh;
+  FPGAType = fpga;
 }
 
 //########################################### Handles functions

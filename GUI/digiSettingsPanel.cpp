@@ -294,7 +294,7 @@ DigiSettingsPanel::DigiSettingsPanel(DigiManager * digiManager, unsigned short n
           
         int rowId = 0;
         //-------------------------------------
-        SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, false, "Clock Source :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, false, "Clock Source :", boardLayout, rowId, 0);
 
         QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", digiTab[iDigi]);
         lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -2402,7 +2402,7 @@ void DigiSettingsPanel::UpdateStatus(){
 
 void DigiSettingsPanel::EnableControl(){
 
-  UpdatePanelFromMemory();
+  UpdatePanelFromMemory(true); // only update status, not all values (avoids slow broker reads)
 
   for( int id = 0; id < nDigi; id ++){
     bool enable = !digiManager->IsACQOn(id);
@@ -2528,8 +2528,7 @@ void DigiSettingsPanel::LoadSettings(){
 
 void DigiSettingsPanel::SetDefaultSettings(){
   SendLogMsg("Program Digitizer-" + QString::number(digiManager->GetSerialNumber(ID)) + " to default " + QString::fromStdString(digiManager->GetFPGAType(ID)));
-  digiManager->GetDigitizer(ID)->ProgramBoard();
-  digiManager->GetDigitizer(ID)->ProgramChannels();
+  digiManager->SendCommand(ID, "/cmd/Reset");
   RefreshSettings();
   emit UpdateOtherPanels();
 }

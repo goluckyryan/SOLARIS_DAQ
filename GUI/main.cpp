@@ -1,5 +1,5 @@
 #include "mainwindow.h"
-#include "BrokerClient.h"
+#include <zmq.h>
 
 #include <QApplication>
 #include <QMessageBox>
@@ -29,12 +29,26 @@ int main(int argc, char *argv[]){
         settingsFile.close();
       }
 
-      // Try to ping the broker
+      // Try to ping the broker with raw ZMQ (1 second timeout, won't hang)
       std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(cmdPort);
-      BrokerClient probe;
-      if (probe.Connect(cmdEP, "") == 0) {
-        brokerMode = probe.Ping();
-        probe.Disconnect();
+      {
+        void* ctx = zmq_ctx_new();
+        void* sock = zmq_socket(ctx, ZMQ_REQ);
+        int timeout = 1000;
+        zmq_setsockopt(sock, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
+        zmq_setsockopt(sock, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+        int linger = 0;
+        zmq_setsockopt(sock, ZMQ_LINGER, &linger, sizeof(linger));
+        if (zmq_connect(sock, cmdEP.c_str()) == 0) {
+          uint8_t pingMsg[] = {0x00, 0xF0};
+          if (zmq_send(sock, pingMsg, 2, 0) == 2) {
+            uint8_t buf[16];
+            int n = zmq_recv(sock, buf, sizeof(buf), 0);
+            if (n >= 2 && buf[1] == 0xF0) brokerMode = true;
+          }
+        }
+        zmq_close(sock);
+        zmq_ctx_destroy(ctx);
       }
 
       if (brokerMode) {

@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include <zmq.h>
 #include <QLabel>
 #include <QGridLayout>
 #include <QDialog>
@@ -350,7 +351,7 @@ MainWindow::~MainWindow(){
   if( digiManager ){
     if( isACQRunning ) StopACQ();
   }
-  CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
+  CloseDigitizers(!useBrokerMode); // In broker mode, keep remote digitizers open when GUI exits
 
   printf("-------- delete scalar Thread\n");
   if( scalarThread->isRunning()){
@@ -837,7 +838,7 @@ void MainWindow::OpenDigitizers(){
 
 }
 
-void MainWindow::CloseDigitizers(){
+void MainWindow::CloseDigitizers(bool closeRemote){
 
   if( digiManager == nullptr ) return;
 
@@ -875,6 +876,8 @@ void MainWindow::CloseDigitizers(){
     solarisSetting = nullptr;
   }
 
+  LogMsg("CloseDigitizers: useBrokerMode=" + QString(useBrokerMode ? "true" : "false") + ", closeRemote=" + QString(closeRemote ? "true" : "false"));
+
   if( !useBrokerMode ){
     // Standalone: save settings and close each digitizer
     for( int i = 0; i < nDigi; i++){
@@ -887,8 +890,15 @@ void MainWindow::CloseDigitizers(){
       LogMsg("Closed Digitizer : " + QString::number(digiManager->GetSerialNumber(i)));
     }
   } else {
-    // Broker: just disconnect (don't close remote digitizers)
-    LogMsg("Disconnecting from broker.");
+    if( closeRemote ){
+      // Broker: close remote digitizers on the broker
+      for( int i = 0; i < nDigi; i++){
+        digiManager->CloseDigitizer(i);
+      }
+      LogMsg("Closed remote digitizers on broker.");
+    } else {
+      LogMsg("Disconnecting from broker (digitizers kept open).");
+    }
   }
 
   digiManager->CloseAll();
@@ -1720,16 +1730,38 @@ bool MainWindow::LoadProgramSettings(){
 
     if( count >= 3 ) {
 
-      // Auto-detect broker: try to ping it
+      // Auto-detect broker: try to ping it with a raw ZMQ socket (1 second timeout)
       {
         std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(brokerCmdPort);
-        BrokerClient probe;
-        if (probe.Connect(cmdEP, "") == 0) {
-          useBrokerMode = probe.Ping();
-          probe.Disconnect();
-        } else {
-          useBrokerMode = false;
+        LogMsg("Probing broker at " + QString::fromStdString(cmdEP) + " ...");
+
+        void* ctx = zmq_ctx_new();
+        void* sock = zmq_socket(ctx, ZMQ_REQ);
+        int timeout = 1000;
+        zmq_setsockopt(sock, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
+        zmq_setsockopt(sock, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
+        int linger = 0;
+        zmq_setsockopt(sock, ZMQ_LINGER, &linger, sizeof(linger));
+
+        useBrokerMode = false;
+        if (zmq_connect(sock, cmdEP.c_str()) == 0) {
+          // Send ping (REQ_PING = 0xF0)
+          uint8_t pingMsg[] = {0x00, 0xF0};
+          if (zmq_send(sock, pingMsg, 2, 0) == 2) {
+            uint8_t buf[16];
+            int n = zmq_recv(sock, buf, sizeof(buf), 0);
+            if (n >= 2 && buf[1] == 0xF0) { // RSP_PONG
+              useBrokerMode = true;
+            }
+          }
         }
+        zmq_close(sock);
+        zmq_ctx_destroy(ctx);
+
+        LogMsg("Broker " + QString(useBrokerMode ? "<b>detected</b>" : "not found") + ".");
+      }
+      if (useBrokerMode) {
+        LogMsg("<font style=\"color:blue;\"><b>Broker detected</b> at " + brokerIP + ":" + QString::number(brokerCmdPort) + "</font>");
       }
 
       logMsgHTMLMode = false;
