@@ -19,6 +19,7 @@
 #include <QSignalMapper>
 
 #include "ClassDigitizer2Gen.h"
+#include "DigiManager.h"
 #include "CustomWidgets.h"
 #include "macro.h"
 
@@ -27,7 +28,7 @@ class DigiSettingsPanel : public QWidget{
   Q_OBJECT
 
 public:
-  DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString analysisPath, QWidget * parent = nullptr);
+  DigiSettingsPanel(DigiManager * digiManager, unsigned short nDigi, QString analysisPath, QWidget * parent = nullptr);
   ~DigiSettingsPanel();
 
 private slots:  
@@ -51,7 +52,7 @@ signals:
 
 private:
   
-  Digitizer2Gen ** digi;
+  DigiManager * digiManager;
   unsigned short nDigi;
   unsigned short ID; // index for digitizer;
 

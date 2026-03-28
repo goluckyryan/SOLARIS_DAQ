@@ -22,6 +22,7 @@
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
+#include "DigiManager.h"
 // #include "influxdb.h"
 #include "ClassInfluxDB.h"
 
@@ -101,7 +102,7 @@ signals :
 
 private:
 
-  static Digitizer2Gen ** digi; 
+  DigiManager * digiManager;
   unsigned short nDigi;
   unsigned short nDigiConnected = 0;
   int maxNumChannelAcrossDigitizer = 0;
@@ -151,7 +152,7 @@ private:
   QLineEdit   * leRunID;
   QLineEdit   * leRawDataPath;
   QLineEdit   * leRunComment;
-  ReadDataThread ** readDataThread;   
+  // ReadDataThread managed by DigiManager
   QString startComment;
   QString stopComment;
   QString appendComment;
@@ -181,6 +182,10 @@ private:
   QLineEdit * lExpName;
 
   QLineEdit * lIPDomain;
+  QCheckBox * chkBrokerMode;
+  QLineEdit * lBrokerIP;
+  QLineEdit * lBrokerCmdPort;
+  QLineEdit * lBrokerPubPort;
   QLineEdit * lDatbaseIP;
   QLineEdit * lDatbaseName;
   QLineEdit * lDatbaseToken;
@@ -207,6 +212,12 @@ private:
   QString ElogIP;
   QString ElogUser;
   QString ElogPWD;
+
+  //@------ broker settings
+  bool useBrokerMode;
+  QString brokerIP;
+  int brokerCmdPort;
+  int brokerPubPort;
 
   //@------ experiment settings
   bool isGitExist;

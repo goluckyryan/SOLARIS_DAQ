@@ -5,11 +5,11 @@
 TEMPLATE = app
 TARGET = SOLARIS_DAQ
 DESTDIR = ..
-INCLUDEPATH += . ../core
+INCLUDEPATH += . ../core ../broker
 
 QT += core widgets charts printsupport
 
-LIBS += -lcurl -lCAEN_FELib -lX11
+LIBS += -lcurl -lCAEN_FELib -lX11 -lzmq
 
 #=========== for GDB debug
 QMAKE_CXXFLAGS += -g  # for gdb debug
@@ -23,7 +23,12 @@ HEADERS += ../core/ClassDigitizer2Gen.h \
            ../core/RingBuffer.h \
            ../core/ClassInfluxDB.h \
            ../core/DigiParameters.h \
+           ../core/DigiManager.h \
            ../core/macro.h
+
+# Broker headers
+HEADERS += ../broker/BrokerClient.h \
+           ../broker/BrokerProtocol.h
 
 # GUI headers
 HEADERS += mainwindow.h \
@@ -39,7 +44,11 @@ HEADERS += mainwindow.h \
 
 # Core sources (shared with broker)
 SOURCES += ../core/ClassDigitizer2Gen.cpp \
-           ../core/ClassInfluxDB.cpp
+           ../core/ClassInfluxDB.cpp \
+           ../core/DigiManager.cpp
+
+# Broker sources
+SOURCES += ../broker/BrokerClient.cpp
 
 # GUI sources
 SOURCES += main.cpp \

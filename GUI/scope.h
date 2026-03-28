@@ -20,6 +20,7 @@
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
+#include "DigiManager.h"
 #include "CustomThreads.h"
 #include "CustomWidgets.h"
 
@@ -124,7 +125,7 @@ class Scope : public QMainWindow{
   Q_OBJECT
 
 public:
-  Scope(Digitizer2Gen ** digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow * parent = nullptr);
+  Scope(DigiManager * digiManager, unsigned int nDigi, QMainWindow * parent = nullptr);
   ~Scope();
 
 public slots:
@@ -159,10 +160,8 @@ signals:
 
 private:
 
-  Digitizer2Gen ** digi;
+  DigiManager * digiManager;
   unsigned short nDigi;
-
-  ReadDataThread ** readDataThread;   
   TimingThread * updateTraceThread;
 
   QGroupBox * settingBox;

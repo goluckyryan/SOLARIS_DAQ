@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "BrokerClient.h"
 
 #include <QApplication>
 #include <QMessageBox>
@@ -12,22 +13,56 @@ int main(int argc, char *argv[]){
 
     QApplication a(argc, argv);
 
+    // Auto-detect broker: read broker IP/port from programSettings.txt and try to ping
+    bool brokerMode = false;
+    {
+      QString brokerIP = "localhost";
+      int cmdPort = 5555;
+      QFile settingsFile("programSettings.txt");
+      if (settingsFile.open(QIODevice::Text | QIODevice::ReadOnly)) {
+        QTextStream in(&settingsFile);
+        for (int i = 0; !in.atEnd(); i++) {
+          QString line = in.readLine();
+          if (i == 12) brokerIP = line;
+          if (i == 13) cmdPort = line.toInt();
+        }
+        settingsFile.close();
+      }
+
+      // Try to ping the broker
+      std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(cmdPort);
+      BrokerClient probe;
+      if (probe.Connect(cmdEP, "") == 0) {
+        brokerMode = probe.Ping();
+        probe.Disconnect();
+      }
+
+      if (brokerMode) {
+        printf("######### Broker detected at %s — using broker mode\n", cmdEP.c_str());
+      } else {
+        printf("######### No broker detected — using standalone mode\n");
+      }
+    }
+
+    // In broker mode, skip DAQ lock — multiple GUIs can connect
     bool isLock = false;
     int pid = 0;
 
-    QFile lockFile(DAQLockFile);
-    if( lockFile.open(QIODevice::Text | QIODevice::ReadOnly) ){
-        QTextStream in(&lockFile);
-        QString line = in.readLine();
-        isLock = line.toInt();
-        lockFile.close();
-    }
-    QFile pidFile(PIDFile);
-    if( pidFile.open(QIODevice::Text | QIODevice::ReadOnly)){
-        QTextStream in(&pidFile);
-        QString line = in.readLine();
-        pid = line.toInt();
-        pidFile.close();
+    if (!brokerMode) {
+      QFile lockFile(DAQLockFile);
+      if( lockFile.open(QIODevice::Text | QIODevice::ReadOnly) ){
+          QTextStream in(&lockFile);
+          QString line = in.readLine();
+          isLock = line.toInt();
+          lockFile.close();
+      }
+      QFile pidFile(PIDFile);
+      if( pidFile.open(QIODevice::Text | QIODevice::ReadOnly)){
+          QTextStream in(&pidFile);
+          QString line = in.readLine();
+          pid = line.toInt();
+          pidFile.close();
+      }
     }
 
     if( isLock ) {
@@ -54,13 +89,17 @@ int main(int argc, char *argv[]){
         }
     }
 
-    lockFile.open(QIODevice::Text | QIODevice::WriteOnly);
-    lockFile.write( "1" );
-    lockFile.close();
+    if (!brokerMode) {
+      QFile lockFile2(DAQLockFile);
+      lockFile2.open(QIODevice::Text | QIODevice::WriteOnly);
+      lockFile2.write( "1" );
+      lockFile2.close();
 
-    pidFile.open(QIODevice::Text | QIODevice::WriteOnly);
-    pidFile.write(  QString::number(QCoreApplication::applicationPid() ).toStdString().c_str() );
-    pidFile.close();
+      QFile pidFile2(PIDFile);
+      pidFile2.open(QIODevice::Text | QIODevice::WriteOnly);
+      pidFile2.write(  QString::number(QCoreApplication::applicationPid() ).toStdString().c_str() );
+      pidFile2.close();
+    }
 
     printf("######### Open Main Window...\n");
     MainWindow w;

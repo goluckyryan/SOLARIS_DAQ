@@ -13,7 +13,7 @@
 
 std::vector<Reg> SettingItems = {PHA::CH::TriggerThreshold, PHA::CH::DC_Offset};
 
-SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi, 
+SOLARISpanel::SOLARISpanel(DigiManager *digiManager, unsigned short nDigi,
                           QString analysisPath,
                           std::vector<std::vector<int>> mapping, 
                           QStringList detType, 
@@ -25,7 +25,7 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
   setWindowTitle("SOLARIS Settings");
   setGeometry(0, 0, 1350, 800);
 
-  this->digi = digi;
+  this->digiManager = digiManager;
   this->nDigi = nDigi;
   if( this->nDigi > MaxNumberOfDigitizer ) {
     this->nDigi = MaxNumberOfDigitizer;
@@ -166,11 +166,11 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
     }
 
     for(int i = 0; i < (int) mapping.size(); i ++){
-      if( i >= nDigi || digi[i]->IsDummy() || !digi[i]->IsConnected() ) return;
+      if( i >= nDigi || digiManager->IsDummy(i) || !digiManager->IsDigiConnected(i) ) return;
       QString msg;
-      msg = QString::fromStdString(PHA::CH::CoincidenceLength.GetPara()) + "|DIG:"+ QString::number(digi[i]->GetSerialNumber());
+      msg = QString::fromStdString(PHA::CH::CoincidenceLength.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(i));
       msg += ",CH:All = " + QString::number(sbCoinTime->value());
-      if( digi[i]->WriteValue(PHA::CH::CoincidenceLength, std::to_string(sbCoinTime->value()))){
+      if( digiManager->WriteValue(i, PHA::CH::CoincidenceLength, std::to_string(sbCoinTime->value()))){
         SendLogMsg(msg + "|OK.");
         sbCoinTime->setStyleSheet("");
       }else{
@@ -306,7 +306,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
     layout0->addWidget(leDisplay[SettingID][digiID][chID], 2*chIndex, 2);
 
     sbSetting[SettingID][digiID][chID] = new RSpinBox(this);
-    if( digiID < nDigi ) sbSetting[SettingID][digiID][chID]->setToolTip( "Digi-" + QString::number(digi[digiID]->GetSerialNumber()) + ", Ch-" + QString::number(chID));
+    if( digiID < nDigi ) sbSetting[SettingID][digiID][chID]->setToolTip( "Digi-" + QString::number(digiManager->GetSerialNumber(digiID)) + ", Ch-" + QString::number(chID));
     sbSetting[SettingID][digiID][chID]->setToolTipDuration(-1);
     sbSetting[SettingID][digiID][chID]->setFixedWidth(70);
 
@@ -316,7 +316,7 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
 
     layout0->addWidget(sbSetting[SettingID][digiID][chID], 2*chIndex+1, 2);
 
-    if( digiID >= nDigi || chID >= digi[digiID]->GetNChannels() ) {
+    if( digiID >= nDigi || chID >= digiManager->GetNChannels(digiID) ) {
       leDisplay[SettingID][digiID][chID]->setEnabled(false);
       sbSetting[SettingID][digiID][chID]->setEnabled(false);    
       chkOnOff[SettingID][digiID][chID]->setEnabled(false); 
@@ -351,11 +351,11 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
               int index = (detIDArrayList[k][h] & 0xFF);
 
               QString msg;
-              msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[digiK]->GetSerialNumber());
+              msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(digiK));
               msg += ",CH:" + QString::number(index) + "(" + detTypeNameList[typeID] + ")";
               msg += " = " + QString::number(spb->value());
               
-              if( digi[digiK]->WriteValue(para, std::to_string(spb->value()), index)){
+              if( digiManager->WriteValue(digiK, para, std::to_string(spb->value()), index)){
                 SendLogMsg(msg + "|OK.");
                 spb->setStyleSheet("");
               }else{
@@ -367,10 +367,10 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
         }
       }else{
         QString msg;
-        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digi[digiID]->GetSerialNumber());
+        msg = QString::fromStdString(para.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(digiID));
         msg += ",CH:" + QString::number(chID) + "(" + detTypeNameList[typeID] + ")";
         msg += " = " + QString::number(spb->value());
-        if( digi[digiID]->WriteValue(para, std::to_string(spb->value()), chID)){
+        if( digiManager->WriteValue(digiID, para, std::to_string(spb->value()), chID)){
           SendLogMsg(msg + "|OK.");
           spb->setStyleSheet("");
         }else{
@@ -397,11 +397,11 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
               if( digiK >= nDigi ) continue;
               int index = (detIDArrayList[k][h] & 0xFF);
               QString msg;
-              msg = QString::fromStdString(PHA::CH::ChannelEnable.GetPara()) + "|DIG:"+ QString::number(digi[digiK]->GetSerialNumber());
+              msg = QString::fromStdString(PHA::CH::ChannelEnable.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(digiK));
               msg += ",CH:" + QString::number(index) + "(" + detTypeNameList[typeID] + ")";
               msg += ( state ? " = True" : " = False");
               
-              if( digi[digiK]->WriteValue(PHA::CH::ChannelEnable, state ? "True" : "False", index)){
+              if( digiManager->WriteValue(digiK, PHA::CH::ChannelEnable, state ? "True" : "False", index)){
                 SendLogMsg(msg + "|OK.");
                 enableSignalSlot = false;
 
@@ -418,14 +418,14 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
 
       }else{
         QString msg;
-        msg = QString::fromStdString(PHA::CH::ChannelEnable.GetPara()) + "|DIG:"+ QString::number(digi[digiID]->GetSerialNumber());
+        msg = QString::fromStdString(PHA::CH::ChannelEnable.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(digiID));
 
         msg += ",CH:" + QString::number(chID) + "(" + detTypeNameList[typeID] + ")";
         msg += ( state ? " = True" : " = False");
 
         qDebug() << msg;
         
-        if( digi[digiID]->WriteValue(PHA::CH::ChannelEnable, state ? "True" : "False", chID)){
+        if( digiManager->WriteValue(digiID, PHA::CH::ChannelEnable, state ? "True" : "False", chID)){
           SendLogMsg(msg + "|OK.");
           enableSignalSlot = false;
           leDisplay[detGroup][digiID][chID]->setEnabled(state);
@@ -493,47 +493,47 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
         if( digiID >= nDigi) continue;
         int chID = (detIDArray[i] & 0xFF);
 
-        if( digi[digiID]->IsDummy() || !digi[digiID]->IsConnected() ) continue;
+        if( digiManager->IsDummy(digiID) || !digiManager->IsDigiConnected(digiID) ) continue;
 
-        digi[digiID]->WriteValue(PHA::CH::AntiCoincidenceMask, "Disabled", chID);
+        digiManager->WriteValue(digiID, PHA::CH::AntiCoincidenceMask, "Disabled", chID);
 
         switch(index){
           case 0 : { /// Self Trigger
-            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
-            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
-            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+            digiManager->WriteValue(digiID, PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
+            digiManager->WriteValue(digiID, PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
+            digiManager->WriteValue(digiID, PHA::CH::CoincidenceMask, "Disabled", chID);
           }; break;
           case 1 : { /// trigger by energy
-            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
-            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
+            digiManager->WriteValue(digiID, PHA::CH::EventTriggerSource, "ChSelfTrigger", chID);
+            digiManager->WriteValue(digiID, PHA::CH::WaveTriggerSource, "ChSelfTrigger", chID);
 
             if( i == ChStartIndex ){
-              digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+              digiManager->WriteValue(digiID, PHA::CH::CoincidenceMask, "Disabled", chID);
             }else {
-              digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Ch64Trigger", chID);
-              digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100");
+              digiManager->WriteValue(digiID, PHA::CH::CoincidenceMask, "Ch64Trigger", chID);
+              digiManager->WriteValue(digiID, PHA::CH::CoincidenceLength, "100");
 
               //Form the trigger bit
               unsigned long mask = 1ULL << (detIDArray[ChStartIndex] & 0xFF ); // trigger by energy
               QString maskStr = QString::number(mask);
-              digi[digiID]->WriteValue(PHA::CH::ChannelsTriggerMask, maskStr.toStdString() , chID);
+              digiManager->WriteValue(digiID, PHA::CH::ChannelsTriggerMask, maskStr.toStdString() , chID);
             }
           }; break;
           case 2 : { /// TRGIN, when the whole board is trigger by TRG-IN
-            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "TRGIN", chID);
-            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "TRGIN", chID);
-            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "TRGIN", chID);
+            digiManager->WriteValue(digiID, PHA::CH::EventTriggerSource, "TRGIN", chID);
+            digiManager->WriteValue(digiID, PHA::CH::WaveTriggerSource, "TRGIN", chID);
+            digiManager->WriteValue(digiID, PHA::CH::CoincidenceMask, "TRGIN", chID);
             
-            digi[digiID]->WriteValue(PHA::CH::CoincidenceLength, "100");
+            digiManager->WriteValue(digiID, PHA::CH::CoincidenceLength, "100");
           }; break;
           case 3 : { /// disbaled
-            digi[digiID]->WriteValue(PHA::CH::EventTriggerSource, "Disabled", chID);
-            digi[digiID]->WriteValue(PHA::CH::WaveTriggerSource, "Disabled", chID);
-            digi[digiID]->WriteValue(PHA::CH::CoincidenceMask, "Disabled", chID);
+            digiManager->WriteValue(digiID, PHA::CH::EventTriggerSource, "Disabled", chID);
+            digiManager->WriteValue(digiID, PHA::CH::WaveTriggerSource, "Disabled", chID);
+            digiManager->WriteValue(digiID, PHA::CH::CoincidenceMask, "Disabled", chID);
           }; break;
         }
 
-        SendLogMsg("SOLARIS panel : Set Trigger = " + cbTrigger[detGroup][detID]->itemText(index) + "|Digi:" + QString::number(digi[digiID]->GetSerialNumber()) + ",Det:" + QString::number(detID));
+        SendLogMsg("SOLARIS panel : Set Trigger = " + cbTrigger[detGroup][detID]->itemText(index) + "|Digi:" + QString::number(digiManager->GetSerialNumber(digiID)) + ",Det:" + QString::number(detID));
 
       }
       UpdatePanelFromMemory();
@@ -549,8 +549,8 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
 //^##############################################################
 void SOLARISpanel::RefreshSettings(){
   for( int i = 0 ; i < nDigi; i++){
-    if( digi[i]->IsDummy() || !digi[i]->IsConnected()){
-      digi[i]->ReadAllSettings();
+    if( digiManager->IsDummy(i) || !digiManager->IsDigiConnected(i)){
+      if(digiManager->GetDigitizer(i)) digiManager->GetDigitizer(i)->ReadAllSettings();
     }
   }
   UpdatePanelFromMemory();
@@ -571,17 +571,17 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       for( int chID = 0; chID < (int) mapping[DigiID].size(); chID++){
         if( mapping[DigiID][chID] < 0 ) continue;
 
-        std::string haha = digi[DigiID]->GetSettingValueFromMemory(SettingItems[SettingID], chID);
+        std::string haha = digiManager->ReadValue(DigiID, SettingItems[SettingID], chID);
         sbSetting[SettingID][DigiID][chID]->setValue( atof(haha.c_str()));
 
         if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara() ){
-          std::string haha =  digi[DigiID]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, chID);
+          std::string haha =  digiManager->ReadValue(DigiID, PHA::CH::SelfTrgRate, chID);
           leDisplay[SettingID][DigiID][chID]->setText(QString::number(atof(haha.c_str()), 'f', 2) );
         }else{
           leDisplay[SettingID][DigiID][chID]->setText(QString::number(atof(haha.c_str()), 'f', 2) );
         }
 
-        haha = digi[DigiID]->GetSettingValueFromMemory(PHA::CH::ChannelEnable, chID);
+        haha = digiManager->ReadValue(DigiID, PHA::CH::ChannelEnable, chID);
         chkOnOff[SettingID][DigiID][chID]->setChecked( haha == "True" ? true : false);
         leDisplay[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
         sbSetting[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
@@ -613,11 +613,11 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       }
 
       int chID = (detIDArrayList[k][h] & 0xFF);
-      triggerMap.push_back(Utility::TenBase(digi[digiID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, chID)));
-      coincidentMask.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::CoincidenceMask, chID));
-      antiCoincidentMask.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::AntiCoincidenceMask, chID));
-      eventTriggerSource.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::EventTriggerSource, chID));
-      waveTriggerSource.push_back(digi[digiID]->GetSettingValueFromMemory(PHA::CH::WaveTriggerSource, chID));
+      triggerMap.push_back(Utility::TenBase(digiManager->ReadValue(digiID, PHA::CH::ChannelsTriggerMask, chID)));
+      coincidentMask.push_back(digiManager->ReadValue(digiID, PHA::CH::CoincidenceMask, chID));
+      antiCoincidentMask.push_back(digiManager->ReadValue(digiID, PHA::CH::AntiCoincidenceMask, chID));
+      eventTriggerSource.push_back(digiManager->ReadValue(digiID, PHA::CH::EventTriggerSource, chID));
+      waveTriggerSource.push_back(digiManager->ReadValue(digiID, PHA::CH::WaveTriggerSource, chID));
     }
 
     if(skipFlag) continue;
@@ -707,8 +707,8 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       int digiID = detIDArrayList[i][j] >> 8;
       int chID = (detIDArrayList[i][j] & 0xFF);
       if( digiID >= nDigi ) continue;
-      if( digi[digiID]->IsDummy() || !digi[digiID]->IsConnected() ) continue;
-      coinTime.push_back( atoi(digi[digiID]->GetSettingValueFromMemory(PHA::CH::CoincidenceLength, chID).c_str()));
+      if( digiManager->IsDummy(digiID) || !digiManager->IsDigiConnected(digiID) ) continue;
+      coinTime.push_back( atoi(digiManager->ReadValue(digiID, PHA::CH::CoincidenceLength, chID).c_str()));
     }
   }
 
@@ -742,7 +742,7 @@ void SOLARISpanel::UpdateThreshold(){
 
         if( mapping[DigiID][chID] < 0 ) continue;
         
-        std::string haha =  digi[DigiID]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, chID);
+        std::string haha =  digiManager->ReadValue(DigiID, PHA::CH::SelfTrgRate, chID);
         leDisplay[SettingID][DigiID][chID]->setText(QString::fromStdString(haha));
         
         ///printf("====== %d %d %d |%s|\n", SettingID, DigiID, chID, haha.c_str());
@@ -762,10 +762,10 @@ void SOLARISpanel::SaveSettings(){
     QDir dir(digiSettingPath);
     if( !dir.exists() ) dir.mkpath(".");
 
-    QString settingFile = digiSettingPath + "/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat";
+    QString settingFile = digiSettingPath + "/setting_" + QString::number(digiManager->GetSerialNumber(i)) + "_" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".dat";
 
 
-    int flag = digi[i]->SaveSettingsToFile(settingFile.toStdString().c_str());
+    int flag = digiManager->GetDigitizer(i) ? digiManager->GetDigitizer(i)->SaveSettingsToFile(settingFile.toStdString().c_str()) : 0;
   
     switch (flag) {
       case 1 : {
@@ -786,14 +786,14 @@ void SOLARISpanel::LoadSettings(){
   for(int i = 0; i < nDigi; i++){
 
     //*------ search for settings_XXXX.dat
-    QString settingFile = digiSettingPath + "/settings_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
-    if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
+    QString settingFile = digiSettingPath + "/settings_" + QString::number(digiManager->GetSerialNumber(i)) + ".dat";
+    if( digiManager->GetDigitizer(i) && digiManager->GetDigitizer(i)->LoadSettingsFromFile(settingFile.toStdString().c_str()) ){
       SendLogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
-      digi[i]->SetSettingFileName(settingFile.toStdString());
+      digiManager->SetSettingFileName(i, settingFile.toStdString());
       SendLogMsg("done settings.");
     }else{
       SendLogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
-      digi[i]->SetSettingFileName("");
+      digiManager->SetSettingFileName(i, "");
     }
     
   }

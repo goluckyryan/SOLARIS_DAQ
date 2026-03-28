@@ -13,6 +13,7 @@
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
+#include "DigiManager.h"
 #include "CustomThreads.h"
 #include "CustomWidgets.h"
 #include "Histogram1D.h"
@@ -26,7 +27,7 @@ class SingleSpectra : public QMainWindow{
   Q_OBJECT
 
 public:
-  SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent = nullptr);
+  SingleSpectra(DigiManager * digiManager, unsigned int nDigi, QString rawDataPath, QMainWindow * parent = nullptr);
   ~SingleSpectra();
 
   void ClearInternalDataCount();
@@ -65,7 +66,7 @@ public slots:
 
 private:
 
-  Digitizer2Gen ** digi;
+  DigiManager * digiManager;
   unsigned int nDigi;
 
   long lastFilledIndex[MaxNumberOfDigitizer][MaxNumberOfChannel]; // ring-buffer fill index per channel

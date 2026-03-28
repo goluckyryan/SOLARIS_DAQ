@@ -19,6 +19,7 @@
 #include <QSignalMapper>
 
 #include "ClassDigitizer2Gen.h"
+#include "DigiManager.h"
 #include "CustomWidgets.h"
 #include "macro.h"
 
@@ -30,7 +31,7 @@ class SOLARISpanel : public QWidget{
   Q_OBJECT
 
 public: 
-  SOLARISpanel(Digitizer2Gen ** digi, 
+  SOLARISpanel(DigiManager * digiManager,
                unsigned short nDigi, 
                QString analysisPath,
                std::vector<std::vector<int>> mapping, 
@@ -59,7 +60,7 @@ signals:
 private:
   void CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLayout * &layout, int row, int col);
 
-  Digitizer2Gen ** digi;
+  DigiManager * digiManager;
   unsigned short nDigi;
   std::vector<std::vector<int>> mapping;
   QStringList detTypeNameList;

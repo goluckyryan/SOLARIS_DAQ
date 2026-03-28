@@ -24,9 +24,7 @@
 #include <unistd.h>
 #include <algorithm>
 
-//------ static memeber
-Digitizer2Gen ** MainWindow::digi = nullptr;
-QMutex digiMTX[MaxNumberOfDigitizer];
+QMutex digiMTX[MaxNumberOfDigitizer]; // kept for scope/digiSettings during migration
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
@@ -39,9 +37,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   nDigi = 0;
   nDigiConnected = 0;
+  digiManager = nullptr;
   digiSetting = nullptr;
   influx = nullptr;
-  readDataThread = nullptr;
 
   runTimer = new QTimer();
   needManualComment = true;
@@ -294,7 +292,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   
   LogMsg("<font style=\"color: blue;\"><b>Welcome to SOLARIS DAQ.</b></font>");
 
-  if( LoadProgramSettings() )  LoadExpNameSh();
+  if( LoadProgramSettings() ){
+    LoadExpNameSh();
+    // In broker mode, auto-connect if broker is available
+    if( useBrokerMode ){
+      OpenDigitizers();
+    }
+  }
 
 }
 
@@ -342,13 +346,9 @@ MainWindow::~MainWindow(){
     digiSetting = nullptr;
   }
 
-  printf("-------- delete readData Thread\n");
-  if( digi ){
-    for( int i = 0; i < nDigi ; i++){
-      if( digi[i]->IsDummy()) continue;
-      //printf("=== %d %p\n", i, readDataThread[i]);
-      if( readDataThread[i]->isRunning()) StopACQ();
-    }
+  printf("-------- close digitizers\n");
+  if( digiManager ){
+    if( isACQRunning ) StopACQ();
   }
   CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
 
@@ -436,27 +436,20 @@ int MainWindow::StartACQ(){
   }
 
   //============================= start digitizer
+  int dataFormatID = cbDataFormat->currentData().toInt();
+
   for( int i = nDigi-1 ; i >= 0; i --){
-    if( digi[i]->IsDummy () ) continue;
+    if( digiManager->IsDummy(i) ) continue;
 
-    for( int ch = 0; ch < std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel); ch ++) oldTimeStamp[i][ch] = 0;
+    for( int ch = 0; ch < std::min((int) digiManager->GetNChannels(i), (int) MaxNumberOfChannel); ch ++) oldTimeStamp[i][ch] = 0;
 
-    //digi[i]->SetPHADataFormat(1);// only save 1 trace
-    int dataFormatID = cbDataFormat->currentData().toInt();
-    digi[i]->SetDataFormat(dataFormatID);
-
-    if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
-      digi[i]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
-    }else{
-      digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
+    if( !useBrokerMode ){
+      // Standalone: set format and wave saving before starting
+      digiManager->WriteValue(i, PHA::CH::WaveSaving,
+        (dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace) ? "Always" : "OnRequest", -1);
     }
 
-    //Additional settings, it is better user to control
-    //if( cbDataFormat->currentIndex() <  2 )  {
-    //  digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
-    //  digi[i]->WriteValue(PHA::CH::WaveSaving, "True", -1);
-    //}
-
+    QString outFileName;
     if( chkSaveRun->isChecked() ){
 
       QString runFolder = rawDataPath + "/";
@@ -466,22 +459,17 @@ int MainWindow::StartACQ(){
       }
 
       //Save setting to raw data with run ID
-      QString fileSetting =  runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
-      // name should be [ExpName]_[runID]_[digiID]_[digiSerialNumber]_[acculmulate_count].sol
-      QString outFileName =  runFolder + expName + "_" 
-                                       + runIDStr + "_" 
-                                       + QString::number(i).rightJustified(2, '0')  + "_" 
-                                       + QString::number(digi[i]->GetSerialNumber());
+      QString fileSetting = runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digiManager->GetSerialNumber(i)) + ".dat";
+      outFileName = runFolder + expName + "_"
+                  + runIDStr + "_"
+                  + QString::number(i).rightJustified(2, '0') + "_"
+                  + QString::number(digiManager->GetSerialNumber(i));
 
-      digi[i]->SaveSettingsToFile(fileSetting.toStdString().c_str());
+      digiManager->SaveSettings(i, fileSetting.toStdString());
       qDebug() << outFileName;
-      digi[i]->OpenOutFile(outFileName.toStdString());// overwrite
     }
-    digi[i]->StartACQ();
 
-    //TODO ========================== Sync start.
-    readDataThread[i]->SetSaveData(chkSaveRun->isChecked());
-    readDataThread[i]->start(QThread::HighestPriority);
+    digiManager->StartACQ(i, dataFormatID, chkSaveRun->isChecked(), outFileName.toStdString());
   }
 
 
@@ -571,12 +559,11 @@ void MainWindow::StopACQ(){
 
   //=============== Stop digitizer
   for( int i = nDigi - 1; i >= 0; i--){
-    if( digi[i]->IsDummy () ) continue;
-    digiMTX[i].lock();
-    digi[i]->StopACQ();
-    // readDataThread[i]->SuppressFileSizeMsg();
-    digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
-    digiMTX[i].unlock();
+    if( digiManager->IsDummy(i) ) continue;
+    digiManager->StopACQ(i);
+    if( !useBrokerMode ){
+      digiManager->WriteValue(i, PHA::CH::WaveSaving, "OnRequest", -1);
+    }
   }
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
@@ -584,7 +571,7 @@ void MainWindow::StopACQ(){
   QString stopTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
   scalarOutputInflux = false;
 
-  if( chkSaveRun->isChecked() ){   
+  if( chkSaveRun->isChecked() ){
     LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
     LogMsg("<font style=\"color : blue;\">Please wait for collecting all remaining data.</font>");
     WriteRunTimeStampDat(false, stopTimeStr);
@@ -592,8 +579,8 @@ void MainWindow::StopACQ(){
     // ============= elog
     QString msg = stopTimeStr + "<br />";
     for( int i = 0; i < nDigi; i++){
-      if( digi[i]->IsDummy () ) continue;
-      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
+      if( digiManager->IsDummy(i) ) continue;
+      msg += "FileSize ("+ QString::number(digiManager->GetSerialNumber(i)) +"): " +  QString::number(digiManager->GetTotalFileSize(i)/1024./1024.) + " MB <br />";
     }
     msg += "comment : " + stopComment + "<br />"
         + "======================";
@@ -612,16 +599,11 @@ void MainWindow::StopACQ(){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-  if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
-  for( int i = nDigi -1; i >=0; i--){
-    if( readDataThread[i]->isRunning()){
-      if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-    }
-    if( chkSaveRun->isChecked() ) {
-       digi[i]->CloseOutFile();
-       LogMsg("Digi-" + QString::number(digi[i]->GetSerialNumber()) + " is done collecting all data.");
+  // DigiManager::StopACQ already handles read thread join and file close
+  if( chkSaveRun->isChecked() ){
+    for( int i = nDigi -1; i >=0; i--){
+      if( digiManager->IsDummy(i) ) continue;
+      LogMsg("Digi-" + QString::number(digiManager->GetSerialNumber(i)) + " is done collecting all data.");
     }
   }
 
@@ -719,61 +701,107 @@ void MainWindow::AutoRun(){
 //*###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
-  LogMsg("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
+  DigiManager::Mode mode = useBrokerMode ? DigiManager::Mode::Broker : DigiManager::Mode::Standalone;
+  digiManager = new DigiManager(mode);
 
-  digi = new Digitizer2Gen*[nDigi];
-  readDataThread = new ReadDataThread*[nDigi];
+  // Forward log messages from DigiManager to GUI
+  digiManager->onLogMessage = [this](const std::string& msg){
+    QMetaObject::invokeMethod(this, [this, msg](){
+      LogMsg(QString::fromStdString(msg));
+    }, Qt::QueuedConnection);
+  };
 
   nDigiConnected = 0;
 
-  //Check path exist
-  QDir dir(expDataPath + "/Settings/");
-  if( !dir.exists() ) dir.mkpath(".");
+  if( useBrokerMode ){
+    //===== Broker mode: connect and sync existing digitizers
+    std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(brokerCmdPort);
+    std::string pubEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(brokerPubPort);
+    LogMsg("<font style=\"color:blue;\">Connecting to broker at " + brokerIP + "...</font>");
 
-  for( int i = 0; i < nDigi; i++){
+    if( digiManager->Connect(cmdEP, pubEP) != 0 ){
+      LogMsg("<font style=\"color:red;\">Failed to connect to broker.</font>");
+      delete digiManager;
+      digiManager = nullptr;
+      return;
+    }
 
-    LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
+    nDigi = digiManager->GetNumDigitizers();
+    LogMsg("Broker has " + QString::number(nDigi) + " digitizer(s) already open.");
 
-    digi[i] = new Digitizer2Gen();
-    digi[i]->OpenDigitizer(("dig2://" + IPList[i]).toStdString().c_str());
-
-    if(digi[i]->IsConnected()){
-
-      LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
-
-      readDataThread[i] = new ReadDataThread(digi[i], i, this);
-      connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
-
-      //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
-      QString settingFile = expDataPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
-      if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
-        LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
-        digi[i]->SetSettingFileName(settingFile.toStdString());
-        LogMsg("done settings.");
-      }else{
-        LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
-        digi[i]->SetSettingFileName("");
-        //LogMsg("Reset digitizer And set default PHA settings.");        
-        //digi[i]->Reset();
-        //digi[i]->ProgramBoard(false);
+    // Open any additional digitizers from IP list that aren't already open
+    for( int i = 0; i < IPList.size(); i++ ){
+      bool alreadyOpen = false;
+      for( int d = 0; d < nDigi; d++ ){
+        // TODO: match by URL/serial number if broker exposes URL info
+        // For now, skip opening if broker already has enough digitizers
+        alreadyOpen = true;
       }
-      
-      nDigiConnected ++;
+      if( !alreadyOpen ){
+        int idx = digiManager->OpenDigitizer(("dig2://" + IPList[i]).toStdString());
+        if( idx >= 0 ) LogMsg("Opened additional digitizer via broker: " + IPList[i]);
+      }
+    }
 
-      if( maxNumChannelAcrossDigitizer < digi[i]->GetNChannels()) maxNumChannelAcrossDigitizer = digi[i]->GetNChannels();
-
-      int nCh = std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel);
+    nDigi = digiManager->GetNumDigitizers();
+    for( int i = 0; i < nDigi; i++ ){
+      if( digiManager->IsDigiConnected(i) ){
+        nDigiConnected++;
+        LogMsg("Digi-" + QString::number(digiManager->GetSerialNumber(i))
+               + " (" + QString::fromStdString(digiManager->GetModelName(i)) + ") connected via broker.");
+        if( maxNumChannelAcrossDigitizer < digiManager->GetNChannels(i) )
+          maxNumChannelAcrossDigitizer = digiManager->GetNChannels(i);
+      }
+      int nCh = std::min((int) digiManager->GetNChannels(i), (int) MaxNumberOfChannel);
       for( int ch = 0; ch < nCh; ch++) {
         oldTimeStamp[i][ch] = 0;
         oldSavedCount[i][ch] = 0;
       }
-    }else{
-      digi[i]->SetDummy(i);
-      LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digi[i]->GetNChannels()) + " ch.");
-
-      readDataThread[i] = NULL;
     }
-    QCoreApplication::processEvents(); // to prevent application busy.
+
+  } else {
+    //===== Standalone mode
+    LogMsg("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
+
+    //Check path exist
+    QDir dir(expDataPath + "/Settings/");
+    if( !dir.exists() ) dir.mkpath(".");
+
+    for( int i = 0; i < nDigi; i++){
+      LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
+
+      int idx = digiManager->OpenDigitizer(("dig2://" + IPList[i]).toStdString());
+
+      if( digiManager->IsDigiConnected(idx) ){
+        LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digiManager->GetSerialNumber(idx)) + "</font>");
+
+        //*------ search for settings_XXX_YYY.dat
+        QString settingFile = expDataPath + "/Settings/setting_"
+                            + QString::number(digiManager->GetSerialNumber(idx)) + "_"
+                            + QString::fromStdString(digiManager->GetFPGAType(idx).substr(4)) + ".dat";
+        digiManager->LoadSettings(idx, settingFile.toStdString());
+        if( QFile::exists(settingFile) ){
+          LogMsg("Found setting file <b>" + settingFile + "</b> and loading.");
+          digiManager->SetSettingFileName(idx, settingFile.toStdString());
+        }else{
+          LogMsg("<font style=\"color: red;\">Unable to find setting file <b>" + settingFile + "</b>. </font>");
+          digiManager->SetSettingFileName(idx, "");
+        }
+
+        nDigiConnected ++;
+        if( maxNumChannelAcrossDigitizer < digiManager->GetNChannels(idx)) maxNumChannelAcrossDigitizer = digiManager->GetNChannels(idx);
+
+        int nCh = std::min((int) digiManager->GetNChannels(idx), (int) MaxNumberOfChannel);
+        for( int ch = 0; ch < nCh; ch++) {
+          oldTimeStamp[idx][ch] = 0;
+          oldSavedCount[idx][ch] = 0;
+        }
+      }else{
+        LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digiManager->GetNChannels(i)) + " ch.");
+      }
+      QCoreApplication::processEvents();
+    }
+    nDigi = digiManager->GetNumDigitizers();
   }
 
   if( nDigiConnected > 0 ){
@@ -794,7 +822,7 @@ void MainWindow::OpenDigitizers(){
     cbDataFormat->setEnabled(true);
     bnOpenScalar->setEnabled(true);
 
-    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
+    singleSpectra = new SingleSpectra(digiManager, nDigi, rawDataPath, this);
     bnSingleSpectra->setEnabled(true);
 
   }
@@ -811,69 +839,61 @@ void MainWindow::OpenDigitizers(){
 
 void MainWindow::CloseDigitizers(){
 
-  if( digi == NULL) return;
+  if( digiManager == nullptr ) return;
 
   if( scope ){
     scope->close();
     delete scope;
-    scope = NULL;
+    scope = nullptr;
   }
 
-  if(scalar && nDigiConnected > 0 ){ // scalar is child of this, This MUST after scope, because scope tell scalar to update ACQ status
+  if(scalar && nDigiConnected > 0 ){
     scalar->close();
     if( scalarThread->isRunning()){
       scalarThread->Stop();
       scalarThread->quit();
       scalarThread->wait();
     }
-    CleanUpScalar(); // this use digi->GetNChannels(); 
+    CleanUpScalar();
   }
 
   if( singleSpectra ){
     singleSpectra->close();
     delete singleSpectra;
-    singleSpectra = NULL;
+    singleSpectra = nullptr;
   }
-  
+
   if( digiSetting ){
     digiSetting->close();
     delete digiSetting;
-    digiSetting = NULL;
+    digiSetting = nullptr;
   }
 
   if( solarisSetting ){
     solarisSetting->close();
     delete solarisSetting;
-    solarisSetting = NULL;
+    solarisSetting = nullptr;
   }
 
-  for( int i = 0; i < nDigi; i++){    
-    if( digi[i] == NULL) continue;
-
-    if( digi[i]->IsConnected() ){
-      int digiSN = digi[i]->GetSerialNumber();
-      LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + programPath + "/tempSettings/");
-      digi[i]->SaveSettingsToFile((programPath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString().c_str());
+  if( !useBrokerMode ){
+    // Standalone: save settings and close each digitizer
+    for( int i = 0; i < nDigi; i++){
+      if( digiManager->IsDummy(i) ) continue;
+      if( digiManager->IsDigiConnected(i) ){
+        int digiSN = digiManager->GetSerialNumber(i);
+        LogMsg("Save digi-"+ QString::number(digiSN) + " Settings to " + programPath + "/tempSettings/");
+        digiManager->SaveSettings(i, (programPath + "/tempSettings/Setting_" + QString::number(digiSN)).toStdString());
+      }
+      LogMsg("Closed Digitizer : " + QString::number(digiManager->GetSerialNumber(i)));
     }
-    int closedSN = digi[i]->GetSerialNumber();
-    digi[i]->CloseDigitizer();
-    delete digi[i];
-    digi[i] = NULL;
-
-    LogMsg("Closed Digitizer : " + QString::number(closedSN));
-
-    if( readDataThread[i] != NULL ){
-      LogMsg("Waiting for readData Thread .....");
-      readDataThread[i]->Stop();
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-      delete readDataThread[i];
-    }
+  } else {
+    // Broker: just disconnect (don't close remote digitizers)
+    LogMsg("Disconnecting from broker.");
   }
-  delete [] digi;
-  delete [] readDataThread;
-  digi = NULL;
-  readDataThread = NULL;
+
+  digiManager->CloseAll();
+  delete digiManager;
+  digiManager = nullptr;
 
   bnSyncHelper->setEnabled(false);
   bnOpenDigitizers->setEnabled(true);
@@ -894,7 +914,7 @@ void MainWindow::CloseDigitizers(){
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
 
-  LogMsg("Closed all digitizers and readData Threads.");
+  LogMsg("Closed all digitizers.");
 
 }
 
@@ -918,9 +938,9 @@ void MainWindow::OpenSyncHelper(){
 
   connect(bnNoSync, &QPushButton::clicked, [&](){
     for(unsigned int i = 0; i < nDigi; i++){
-      digi[i]->WriteValue(PHA::DIG::ClockSource, "Internal"); 
-      digi[i]->WriteValue(PHA::DIG::StartSource, "SWcmd");
-      digi[i]->WriteValue(PHA::DIG::SyncOutMode, "Disabled");
+      digiManager->WriteValue(i, PHA::DIG::ClockSource, "Internal");
+      digiManager->WriteValue(i, PHA::DIG::StartSource, "SWcmd");
+      digiManager->WriteValue(i, PHA::DIG::SyncOutMode, "Disabled");
     }
 
     if( digiSetting ) digiSetting->UpdatePanelFromMemory();
@@ -931,20 +951,20 @@ void MainWindow::OpenSyncHelper(){
   });
 
   connect(bnMethod1, &QPushButton::clicked, [&](){
-    digi[0]->WriteValue(PHA::DIG::ClockSource, "Internal"); 
-    digi[0]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, "True"); 
-    digi[0]->WriteValue(PHA::DIG::StartSource, "SWcmd");
-    digi[0]->WriteValue(PHA::DIG::SyncOutMode, "Run");
+    digiManager->WriteValue(0, PHA::DIG::ClockSource, "Internal");
+    digiManager->WriteValue(0, PHA::DIG::EnableClockOutFrontPanel, "True");
+    digiManager->WriteValue(0, PHA::DIG::StartSource, "SWcmd");
+    digiManager->WriteValue(0, PHA::DIG::SyncOutMode, "Run");
 
     for(unsigned int i = 1; i < nDigi; i++){
-      digi[i]->WriteValue(PHA::DIG::ClockSource, "FPClkIn"); 
-      digi[i]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, "True"); 
-      digi[i]->WriteValue(PHA::DIG::StartSource, "EncodedClkIn");
-      digi[i]->WriteValue(PHA::DIG::SyncOutMode, "SyncIn");
+      digiManager->WriteValue(i, PHA::DIG::ClockSource, "FPClkIn");
+      digiManager->WriteValue(i, PHA::DIG::EnableClockOutFrontPanel, "True");
+      digiManager->WriteValue(i, PHA::DIG::StartSource, "EncodedClkIn");
+      digiManager->WriteValue(i, PHA::DIG::SyncOutMode, "SyncIn");
     }
 
     if( digiSetting ) digiSetting->UpdatePanelFromMemory();
-    
+
     bnSyncHelper->setText("Sync Helper (Software)");
 
     dialog.accept();
@@ -958,9 +978,9 @@ void MainWindow::OpenSyncHelper(){
 //*######################################################################
 //*###################################################################### Open Scope
 void MainWindow::OpenScope(){
-  if( digi ){
+  if( digiManager ){
     if( !scope ){
-      scope = new Scope(digi, nDigi, readDataThread);
+      scope = new Scope(digiManager, nDigi);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
       //connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
@@ -1008,7 +1028,7 @@ void MainWindow::OpenDigitizersSettings(){
   LogMsg("Open digitizers Settings Panel");
 
   if( digiSetting == NULL){
-    digiSetting = new DigiSettingsPanel(digi, nDigi, expDataPath + "/Settings/");
+    digiSetting = new DigiSettingsPanel(digiManager, nDigi, expDataPath + "/Settings/");
     connect(digiSetting, &DigiSettingsPanel::SendLogMsg, this, &MainWindow::LogMsg);
     connect(digiSetting, &DigiSettingsPanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(1);});
 
@@ -1129,9 +1149,9 @@ bool MainWindow::CheckSOLARISpanelOK(){
   LogMsg("Mapping.h | Num. Digi : " + QString::number(mapping.size()));
   for( int i = 0 ; i < (int) mapping.size(); i ++){
     if( i < nDigi ){
-      LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | Digi-" 
-               +  QString::number(digi[i]->GetSerialNumber()) + " : " 
-                + QString::number(digi[i]->GetNChannels()) + " Ch.");
+      LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | Digi-"
+               +  QString::number(digiManager->GetSerialNumber(i)) + " : "
+                + QString::number(digiManager->GetNChannels(i)) + " Ch.");
     }else{
       LogMsg("      Digi-" + QString::number(i) + " : " + QString::number(mapping[i].size()) + " Ch. | No Conneted Digitizer" );
     }
@@ -1145,7 +1165,7 @@ bool MainWindow::CheckSOLARISpanelOK(){
   if( nDigiConnected == 0 ) return false;
 
   //@============= Create SOLAIRS panel
-  solarisSetting = new SOLARISpanel(digi, nDigi, analysisPath, mapping, detType, detGroupName, detGroupID, detMaxID);
+  solarisSetting = new SOLARISpanel(digiManager, nDigi, analysisPath, mapping, detType, detGroupName, detGroupID, detMaxID);
   connect(solarisSetting, &SOLARISpanel::SendLogMsg, this, &MainWindow::LogMsg);
   connect(solarisSetting, &SOLARISpanel::UpdateOtherPanels, this, [=](){ UpdateAllPanel(2);});
 
@@ -1243,12 +1263,12 @@ void MainWindow::SetUpScalar(){
     rowID = 3;
     lbFileSize[iDigi] = new QLabel("file Size", scalar);
     lbFileSize[iDigi]->setAlignment(Qt::AlignCenter);
-    leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
-    leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
-    for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
+    leTrigger[iDigi] = new QLineEdit *[digiManager->GetNChannels(iDigi)];
+    leAccept[iDigi] = new QLineEdit *[digiManager->GetNChannels(iDigi)];
+    for( int ch = 0; ch < digiManager->GetNChannels(iDigi); ch++){
 
       if( ch == 0 ){
-          QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
+          QLabel * lbDigi = new QLabel("Digi-" + QString::number(digiManager->GetSerialNumber(iDigi)), scalar); 
           lbDigi->setAlignment(Qt::AlignCenter);
           scalarLayout->addWidget(lbDigi, rowID, 2*iDigi+1, 1, 2);
           rowID ++;
@@ -1287,7 +1307,7 @@ void MainWindow::CleanUpScalar(){
   if( leTrigger == nullptr ) return;
 
   for( int i = 0; i < nDigi; i++){
-    for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){
+    for( int ch = 0; ch < digiManager->GetNChannels(i); ch ++){
       delete leTrigger[i][ch];
       delete leAccept[i][ch];
     }
@@ -1309,79 +1329,65 @@ void MainWindow::CleanUpScalar(){
 }
 
 void MainWindow::UpdateScalar(){
-  if( !digi ) return;
-  if( scalar == NULL ) return;
+  if( !digiManager ) return;
+  if( scalar == nullptr ) return;
   if( scalar->isVisible() == false ) return;
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
   if( influx && scalarOutputInflux) influx->ClearDataPointsBuffer();
-  std::string haha[MaxNumberOfChannel] = {""};
-  double acceptRate[MaxNumberOfChannel] = {0};
+  double localAcceptRate[MaxNumberOfChannel] = {0};
 
-  ///===== Get trigger for all channel
-  unsigned long totalFileSize  = 0;
-  for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
-    if( digi[iDigi]->IsDummy() ) continue;
+  unsigned long totalFileSize = 0;
+  for( int iDigi = 0; iDigi < nDigi; iDigi++ ){
+    if( digiManager->IsDummy(iDigi) ) continue;
 
-    //=========== another method, directly readValue
-    for( int ch = 0; ch < std::min((int) digi[iDigi]->GetNChannels(), (int) MaxNumberOfChannel); ch ++){
-      // digiMTX[iDigi].lock();
-      std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
-      haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
-      std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      // digiMTX[iDigi].unlock();
-      
-      unsigned long kaka = std::stoul(kakaStr.c_str()) ;
-      unsigned long time = std::stoul(timeStr.c_str()) ;
-      ///* it seems that the ChannelRealtime is not in ns for VX2730
-      if( digi[iDigi]->GetModelName() == "VX2730" ){ time = time / 4;}
+    auto snap = digiManager->GetScalarSnapshot(iDigi);
+    int nCh = std::min((int) digiManager->GetNChannels(iDigi), (int) MaxNumberOfChannel);
 
-      leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
-      
-      if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
-        acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
-      }else{
-        acceptRate[ch] = 0;
+    for( int ch = 0; ch < nCh; ch++ ){
+      unsigned long time = snap.realTime[ch];
+      unsigned long kaka = snap.savedCount[ch];
+
+      if( digiManager->GetModelName(iDigi) == "VX2730" ){ time = time / 4; }
+
+      leTrigger[iDigi][ch]->setText(QString::number(snap.trgRate[ch]));
+
+      if( useBrokerMode ){
+        // Broker provides pre-computed accept rate
+        localAcceptRate[ch] = snap.acceptRate[ch];
+      } else {
+        // Standalone: compute from deltas
+        if( oldTimeStamp[iDigi][ch] > 0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
+          localAcceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 * 1.0 / (time - oldTimeStamp[iDigi][ch]);
+        }else{
+          localAcceptRate[ch] = 0;
+        }
+        oldSavedCount[iDigi][ch] = kaka;
+        oldTimeStamp[iDigi][ch] = time;
       }
 
-      //if( acceptRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
-      // if( ch == 3){
-      //   printf("time: %lu (%lu) = %12.10f, Channel Saved Count %lu (%lu) = %lu | accepted Rate %f\n", 
-      //     time, oldTimeStamp[iDigi][ch], (time - oldTimeStamp[iDigi][ch])/1e9, 
-      //     kaka, oldSavedCount[iDigi][ch], (kaka - oldSavedCount[iDigi][ch]),
-      //     acceptRate[ch]);
-      // }
-
-      oldSavedCount[iDigi][ch] = kaka;
-      oldTimeStamp[iDigi][ch] = time; 
-      //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
-      leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
-
-      lbFileSize[iDigi]->setText(QString::number(digi[iDigi]->GetTotalFilesSize()/1024./1024.) + " MB");
-
+      leAccept[iDigi][ch]->setText(QString::number(localAcceptRate[ch],'f', 1));
     }
 
-    ///============== push the trigger, acceptRate rate database
+    lbFileSize[iDigi]->setText(QString::number(snap.totalFileSize/1024./1024.) + " MB");
+
     if( influx && scalarOutputInflux ){
-      for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
-        influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + haha[ch]);
-        if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(acceptRate[ch]));
+      for( int ch = 0; ch < nCh; ch++ ){
+        influx->AddDataPoint("Rate,Bd=" + std::to_string(digiManager->GetSerialNumber(iDigi)) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(snap.trgRate[ch]));
+        if( !std::isnan(localAcceptRate[ch]) ) influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digiManager->GetSerialNumber(iDigi)) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(localAcceptRate[ch]));
       }
     }
-    totalFileSize +=  digi[iDigi]->GetTotalFilesSize();
+    totalFileSize += snap.totalFileSize;
   }
 
   if( influx && influx->GetDataLength() > 0 && scalarOutputInflux ){
     if( chkSaveRun->isChecked() ) influx->AddDataPoint("FileSize value=" + std::to_string(totalFileSize));
-    //influx->PrintDataPoints();
     influx->WriteData(DatabaseName.toStdString());
     influx->ClearDataPointsBuffer();
   }
 
-  //TODO record ADC temperature, and status. In this case, the digiSetting is only UpdateFromMemory, manually looping digitizers and get the status.
   if( digiSetting && digiSetting->isVisible() ) digiSetting->UpdateStatus();
-
   if( solarisSetting && solarisSetting->isVisible() ) solarisSetting->UpdateThreshold();
 
 }
@@ -1486,6 +1492,38 @@ void MainWindow::ProgramSettingsPanel(){
   layout->addWidget(lbIPDomain, rowID, 0);
   lIPDomain = new QLineEdit(IPListStr, &dialog); layout->addWidget(lIPDomain, rowID, 1, 1, 2);
 
+  //-------- Broker mode
+  rowID ++;
+  chkBrokerMode = new QCheckBox("Use Broker Mode", &dialog);
+  chkBrokerMode->setChecked(useBrokerMode);
+  layout->addWidget(chkBrokerMode, rowID, 1, 1, 2);
+
+  rowID ++;
+  QLabel *lbBrokerIP = new QLabel("Broker IP", &dialog);
+  lbBrokerIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbBrokerIP, rowID, 0);
+  lBrokerIP = new QLineEdit(brokerIP, &dialog); layout->addWidget(lBrokerIP, rowID, 1);
+  QLabel *lbBrokerCmdPort = new QLabel("Cmd Port", &dialog);
+  lbBrokerCmdPort->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbBrokerCmdPort, rowID, 2);
+  lBrokerCmdPort = new QLineEdit(QString::number(brokerCmdPort), &dialog); layout->addWidget(lBrokerCmdPort, rowID, 3);
+
+  rowID ++;
+  QLabel *lbBrokerPubPort = new QLabel("Pub Port", &dialog);
+  lbBrokerPubPort->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbBrokerPubPort, rowID, 2);
+  lBrokerPubPort = new QLineEdit(QString::number(brokerPubPort), &dialog); layout->addWidget(lBrokerPubPort, rowID, 3);
+
+  // Enable/disable broker fields based on checkbox
+  auto updateBrokerFields = [=](){
+    bool on = chkBrokerMode->isChecked();
+    lBrokerIP->setEnabled(on);
+    lBrokerCmdPort->setEnabled(on);
+    lBrokerPubPort->setEnabled(on);
+  };
+  updateBrokerFields();
+  connect(chkBrokerMode, &QCheckBox::toggled, this, [=](){ updateBrokerFields(); });
+
   //------- add a separator
   rowID ++;
   QFrame * line = new QFrame;
@@ -1559,6 +1597,10 @@ void MainWindow::ProgramSettingsPanel(){
     ElogIP = lElogIP->text();
     ElogUser = lElogUser->text();
     ElogPWD = lElogPWD->text();
+    useBrokerMode = chkBrokerMode->isChecked();
+    brokerIP = lBrokerIP->text();
+    brokerCmdPort = lBrokerCmdPort->text().toInt();
+    brokerPubPort = lBrokerPubPort->text().toInt();
 
     SaveProgramSettings();
 
@@ -1636,6 +1678,10 @@ bool MainWindow::LoadProgramSettings(){
   ElogIP = "";
   ElogUser = "";
   ElogPWD = "";
+  useBrokerMode = false;
+  brokerIP = "localhost";
+  brokerCmdPort = 5555;
+  brokerPubPort = 5556;
 
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found.");
@@ -1661,6 +1707,10 @@ bool MainWindow::LoadProgramSettings(){
         case  8 : ElogIP          = line; break;
         case  9 : ElogUser        = line; break;
         case 10 : ElogPWD         = line; break;
+        case 11 : useBrokerMode  = (line == "1"); break;
+        case 12 : brokerIP       = line; break;
+        case 13 : brokerCmdPort  = line.toInt(); break;
+        case 14 : brokerPubPort  = line.toInt(); break;
       }
 
       count ++;
@@ -1669,8 +1719,20 @@ bool MainWindow::LoadProgramSettings(){
     }
 
     if( count >= 3 ) {
+
+      // Auto-detect broker: try to ping it
+      {
+        std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(brokerCmdPort);
+        BrokerClient probe;
+        if (probe.Connect(cmdEP, "") == 0) {
+          useBrokerMode = probe.Ping();
+          probe.Disconnect();
+        } else {
+          useBrokerMode = false;
+        }
+      }
+
       logMsgHTMLMode = false;
-      // LogMsg("Setting File Path : " + programSettingsPath);
       LogMsg("          Analysis Path : " + analysisPath);
       LogMsg("            Database IP : " + DatabaseIP);
       LogMsg("          Database Name : " + DatabaseName);
@@ -1682,6 +1744,7 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("Save Runs in SubFolders : " +  QString(isSaveSubFolder ? "Yes" : "No") );
       LogMsg("  Exp. Name (Elog Name) : " + expName);
       LogMsg("          Digi. IP List : " + IPListStr);
+      LogMsg("          Broker Mode   : " + QString(useBrokerMode ? "Yes (broker detected)" : "No (standalone)"));
       logMsgHTMLMode = true;
 
       expDataPath = masterExpDataPath + "/" + expName;
@@ -1737,6 +1800,11 @@ bool MainWindow::LoadProgramSettings(){
       DecodeIPList();
       SetupInflux();
       CheckElog();
+    }else if( useBrokerMode ){
+      // Broker mode: IP list not required, broker manages digitizers
+      bnOpenDigitizers->setEnabled(true);
+      SetupInflux();
+      CheckElog();
     }else{
       LogMsg("<font style=\"color : red;\">Digitizer IP list is empty.</font>");
       bnProgramSettings->setStyleSheet("color: red;");
@@ -1784,6 +1852,10 @@ void MainWindow::SaveProgramSettings(){
   file.write((ElogIP+"\n").toStdString().c_str());
   file.write((ElogUser+"\n").toStdString().c_str());
   file.write((ElogPWD+"\n").toStdString().c_str());
+  file.write((QString(useBrokerMode ? "1" : "0")+"\n").toStdString().c_str());
+  file.write((brokerIP+"\n").toStdString().c_str());
+  file.write((QString::number(brokerCmdPort)+"\n").toStdString().c_str());
+  file.write((QString::number(brokerPubPort)+"\n").toStdString().c_str());
   file.write("//------------end of file.");
   
   file.close();
@@ -2397,7 +2469,7 @@ void MainWindow::CreateDataSymbolicLink(){
 void MainWindow::OpenSingleSpectra(){
 
   if( singleSpectra == nullptr ) {
-    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath);
+    singleSpectra = new SingleSpectra(digiManager, nDigi, rawDataPath);
     singleSpectra->show();
   }else{
     singleSpectra->show();

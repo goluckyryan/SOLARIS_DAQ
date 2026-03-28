@@ -120,12 +120,18 @@ void BrokerServer::Stop() {
 //^============================================ Digitizer management
 
 int BrokerServer::OpenDigitizer(const std::string& url) {
-  if (nDigi >= MaxNumberOfDigitizer) {
-    printf("ERROR: max digitizers (%d) reached\n", MaxNumberOfDigitizer);
-    return -1;
+  // Find a free slot (reuse closed slots first)
+  int idx = -1;
+  for (int i = 0; i < nDigi; i++) {
+    if (digi[i] == nullptr) { idx = i; break; }
   }
-
-  int idx = nDigi;
+  if (idx < 0) {
+    if (nDigi >= MaxNumberOfDigitizer) {
+      printf("ERROR: max digitizers (%d) reached\n", MaxNumberOfDigitizer);
+      return -1;
+    }
+    idx = nDigi;
+  }
   digi[idx] = new Digitizer2Gen();
   int ret = digi[idx]->OpenDigitizer(url.c_str());
 
@@ -154,12 +160,17 @@ void BrokerServer::CloseDigitizer(int index) {
   readThreadStop[index] = true;
   if (readThread[index].joinable()) readThread[index].join();
 
-  std::lock_guard<std::mutex> lock(digiMutex[index]);
-  digi[index]->CloseDigitizer();
-  delete digi[index];
-  digi[index] = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(digiMutex[index]);
+    digi[index]->CloseDigitizer();
+    delete digi[index];
+    digi[index] = nullptr;
+  }
 
   PublishStatusChange(EVT_DIGI_CLOSED, index);
+
+  // Compact: shrink nDigi if trailing slots are empty
+  while (nDigi > 0 && digi[nDigi - 1] == nullptr) nDigi--;
 }
 
 void BrokerServer::CloseAllDigitizers() {

@@ -7,9 +7,9 @@
 #include <QRandomGenerator>
 #include <QScreen>
 
-SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent) : QMainWindow(parent){
+SingleSpectra::SingleSpectra(DigiManager * digiManager, unsigned int nDigi, QString rawDataPath, QMainWindow * parent) : QMainWindow(parent){
   DebugPrint("%s", "SingleSpectra");
-  this->digi = digi;
+  this->digiManager = digiManager;
   this->nDigi = nDigi;
   this->settingPath = rawDataPath + "/HistogramSettings.txt";
 
@@ -40,18 +40,18 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     controlBox->setLayout(ctrlLayout);
 
     cbDigi = new RComboBox(this);
-    for( unsigned int i = 0; i < nDigi; i++) cbDigi->addItem("Digi-" + QString::number( digi[i]->GetSerialNumber() ), i);
+    for( unsigned int i = 0; i < nDigi; i++) cbDigi->addItem("Digi-" + QString::number( digiManager->GetSerialNumber(i) ), i);
     ctrlLayout->addWidget(cbDigi, 0, 0, 1, 2);
     connect( cbDigi, &RComboBox::currentIndexChanged, this, [=](int index){
       isSignalSlotActive = false;
       cbCh->clear();
-      cbCh->addItem("All Ch", digi[index]->GetNChannels() );
-      for( int i = 0; i < digi[index]->GetNChannels(); i++) cbCh->addItem("ch-" + QString::number( i ), i);
+      cbCh->addItem("All Ch", digiManager->GetNChannels(index) );
+      for( int i = 0; i < digiManager->GetNChannels(index); i++) cbCh->addItem("ch-" + QString::number( i ), i);
 
       isSignalSlotActive = true;
 
       //printf("oldCh = %d \n", oldCh);
-      // if( oldCh >=  digi[index]->GetNChannels()) {
+      // if( oldCh >=  digiManager->GetNChannels(index)) {
       //   cbCh->setCurrentIndex(0);
       // }else{
       //   if( oldCh >= 0 ){
@@ -67,8 +67,8 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     });
 
     cbCh   = new RComboBox(this);
-    cbCh->addItem("All Ch", digi[0]->GetNChannels());
-    for( int i = 0; i < digi[0]->GetNChannels(); i++) cbCh->addItem("ch-" + QString::number( i ), i);
+    cbCh->addItem("All Ch", digiManager->GetNChannels(0));
+    for( int i = 0; i < digiManager->GetNChannels(0); i++) cbCh->addItem("ch-" + QString::number( i ), i);
     ctrlLayout->addWidget(cbCh, 0, 2, 1, 2);
     connect( cbCh, &RComboBox::currentIndexChanged, this, &SingleSpectra::ChangeHistView);
 
@@ -76,7 +76,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     ctrlLayout->addWidget(bnClearHist, 0, 4, 1, 2);
     connect(bnClearHist, &QPushButton::clicked, this, [=](){
       for( unsigned int i = 0; i < nDigi; i++){
-        for( int j = 0; j < digi[i]->GetNChannels(); j++){
+        for( int j = 0; j < digiManager->GetNChannels(i); j++){
           if( hist[i][j] ) hist[i][j]->Clear();
         }
         if( hist2D[i] ) hist2D[i]->Clear();
@@ -101,7 +101,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
   {//^========================
     for( unsigned int i = 0; i < nDigi; i++ ) {
       hist2DVisibility[i] = false;
-      for( int j = 0; j < digi[i]->GetNChannels() ; j++ ) {
+      for( int j = 0; j < digiManager->GetNChannels(i) ; j++ ) {
         histVisibility[i][j] = false;
       }
     }
@@ -117,19 +117,19 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
 
     for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++){
       if( i >= nDigi ) continue;
-      for( int j = 0; j < digi[i]->GetNChannels(); j++){
+      for( int j = 0; j < digiManager->GetNChannels(i); j++){
         if( i < nDigi ) {
-          hist[i][j] = new Histogram1D("Digi-" + QString::number(digi[i]->GetSerialNumber()) +", Ch-" +  QString::number(j), "Raw Energy [ch]", nBin, eMin, eMax);
-          if( digi[i]->GetFPGAType() == DPPType::PSD ){
+          hist[i][j] = new Histogram1D("Digi-" + QString::number(digiManager->GetSerialNumber(i)) +", Ch-" +  QString::number(j), "Raw Energy [ch]", nBin, eMin, eMax);
+          if( digiManager->GetFPGAType(i) == DPPType::PSD ){
             hist[i][j]->AddDataList("Short Energy", Qt::green);
           }
         }else{
           hist[i][j] = nullptr;
         }
       }
-      hist2D[i] = new Histogram2D("Digi-" + QString::number(digi[i]->GetSerialNumber()), "Channel", "Raw Energy [ch]", digi[i]->GetNChannels(), 0, digi[i]->GetNChannels(), nBin, eMin, eMax);
-      hist2D[i]->SetChannelMap(true, digi[i]->GetNChannels() < 20  ? 1 : 4);
-      hist2D[i]->Rebin(digi[i]->GetNChannels(), -0.5, digi[i]->GetNChannels()+0.5, nBin, eMin, eMax);
+      hist2D[i] = new Histogram2D("Digi-" + QString::number(digiManager->GetSerialNumber(i)), "Channel", "Raw Energy [ch]", digiManager->GetNChannels(i), 0, digiManager->GetNChannels(i), nBin, eMin, eMax);
+      hist2D[i]->SetChannelMap(true, digiManager->GetNChannels(i) < 20  ? 1 : 4);
+      hist2D[i]->Rebin(digiManager->GetNChannels(i), -0.5, digiManager->GetNChannels(i)+0.5, nBin, eMin, eMax);
     }
 
     LoadSetting();
@@ -181,7 +181,7 @@ SingleSpectra::~SingleSpectra(){
   SaveSetting();
 
   for( unsigned int i = 0; i < nDigi; i++ ){
-    for( int ch = 0; ch < digi[i]->GetNChannels(); ch++){
+    for( int ch = 0; ch < digiManager->GetNChannels(i); ch++){
       delete hist[i][ch];
     }
     delete hist2D[i];
@@ -191,8 +191,8 @@ SingleSpectra::~SingleSpectra(){
 void SingleSpectra::ClearInternalDataCount(){
   DebugPrint("%s", "SingleSpectra");
   for( unsigned int i = 0; i < nDigi; i++){
-    for( int ch = 0; ch < digi[i]->GetNChannels() ; ch++) {
-      lastFilledIndex[i][ch] = digi[i]->ringBuffer[ch].index();
+    for( int ch = 0; ch < digiManager->GetNChannels(i) ; ch++) {
+      lastFilledIndex[i][ch] = digiManager->GetRingBuffer(i, ch).index();
     }
   }
 }
@@ -207,7 +207,7 @@ void SingleSpectra::ChangeHistView(){
   //printf("bd : %d, ch : %d \n", bd, ch);
 
   // Remove oldCh
-  int oldCh = oldChComboBoxindex[oldBd] == 0 ? digi[oldBd]->GetNChannels() : oldChComboBoxindex[oldBd] - 1;
+  int oldCh = oldChComboBoxindex[oldBd] == 0 ? digiManager->GetNChannels(oldBd) : oldChComboBoxindex[oldBd] - 1;
 
   if( oldChComboBoxindex[oldBd] > 0 ){
     histLayout->removeWidget(hist[oldBd][oldCh]);
@@ -220,13 +220,13 @@ void SingleSpectra::ChangeHistView(){
   }
 
   // Add ch
-  if( ch >=0 && ch < digi[bd]->GetNChannels()) {
+  if( ch >=0 && ch < digiManager->GetNChannels(bd)) {
     histLayout->addWidget(hist[bd][ch], 0, 0);
     histVisibility[bd][ch] = true;
     hist[bd][ch]->UpdatePlot();
   }
 
-  if( ch == digi[bd]->GetNChannels() ){
+  if( ch == digiManager->GetNChannels(bd) ){
     histLayout->addWidget(hist2D[bd], 0, 0);
     hist2DVisibility[bd] = true;
     hist2D[bd]->UpdatePlot();
@@ -257,22 +257,22 @@ void SingleSpectra::FillHistograms(){
   bool timeout = false;
 
   for( int ID = 0; ID < (int)nDigi && !timeout; ID++){
-    bool isPSD = digi[ID]->GetFPGAType() == DPPType::PSD;
-    for( int ch = 0; ch < digi[ID]->GetNChannels() && !timeout; ch++){
-      long absIndex = digi[ID]->ringBuffer[ch].index();
+    bool isPSD = digiManager->GetFPGAType(ID) == DPPType::PSD;
+    for( int ch = 0; ch < digiManager->GetNChannels(ID) && !timeout; ch++){
+      long absIndex = digiManager->GetRingBuffer(ID, ch).index();
       long gap = absIndex - lastFilledIndex[ID][ch];
 
       if( gap <= 0 ) continue;
 
       // if gap is bigger than ring buffer, skip the old data
-      if( gap > (long)digi[ID]->ringBuffer[ch].size() ) {
-        lastFilledIndex[ID][ch] = absIndex - digi[ID]->ringBuffer[ch].size();
-        gap = digi[ID]->ringBuffer[ch].size();
+      if( gap > (long)digiManager->GetRingBuffer(ID, ch).size() ) {
+        lastFilledIndex[ID][ch] = absIndex - digiManager->GetRingBuffer(ID, ch).size();
+        gap = digiManager->GetRingBuffer(ID, ch).size();
       }
 
       long filled = 0;
       while( lastFilledIndex[ID][ch] < absIndex ){
-        HitSummary hs = digi[ID]->ringBuffer[ch].at(lastFilledIndex[ID][ch]);
+        HitSummary hs = digiManager->GetRingBuffer(ID, ch).at(lastFilledIndex[ID][ch]);
         lastFilledIndex[ID][ch] ++;
 
         hist[ID][ch]->Fill( hs.energy );
@@ -309,7 +309,7 @@ void SingleSpectra::ReplotHistograms(){
   int ID = cbDigi->currentData().toInt();
   int ch = cbCh->currentData().toInt();
 
-  if( ch == digi[ID]->GetNChannels()) {
+  if( ch == digiManager->GetNChannels(ID)) {
     if( hist2DVisibility[ID] ) hist2D[ID]->UpdatePlot();
     return;
   }
@@ -336,8 +336,8 @@ void SingleSpectra::SaveSetting(){
   if( file.open(QIODevice::Text | QIODevice::WriteOnly) ){
 
     for( unsigned int i = 0; i < nDigi; i++){
-      file.write(("======= " + QString::number(digi[i]->GetSerialNumber()) + "\n").toStdString().c_str());
-      for( int ch = 0; ch < digi[i]->GetNChannels() ; ch++){
+      file.write(("======= " + QString::number(digiManager->GetSerialNumber(i)) + "\n").toStdString().c_str());
+      for( int ch = 0; ch < digiManager->GetNChannels(i) ; ch++){
         QString a = QString::number(ch).rightJustified(2, ' ');
         QString b = QString::number(hist[i][ch]->GetNBin()).rightJustified(6, ' ');
         QString c = QString::number(hist[i][ch]->GetXMin()).rightJustified(6, ' ');
@@ -345,7 +345,7 @@ void SingleSpectra::SaveSetting(){
         file.write( QString("%1 %2 %3 %4\n").arg(a).arg(b).arg(c).arg(d).toStdString().c_str() );
       }
 
-      QString a = QString::number(digi[i]->GetNChannels()).rightJustified(2, ' ');
+      QString a = QString::number(digiManager->GetNChannels(i)).rightJustified(2, ' ');
       QString b = QString::number(hist2D[i]->GetXNBin()-2).rightJustified(6, ' ');
       QString c = QString::number(hist2D[i]->GetXMin()).rightJustified(6, ' ');
       QString d = QString::number(hist2D[i]->GetXMax()).rightJustified(6, ' ');
@@ -386,7 +386,7 @@ void SingleSpectra::LoadSetting(){
 
         digiID = -1;
         for( unsigned int i = 0; i < nDigi; i++){
-          if( digiSN == digi[i]->GetSerialNumber() ) {
+          if( digiSN == digiManager->GetSerialNumber(i) ) {
             digiID = i;
             break;
           }
@@ -408,11 +408,11 @@ void SingleSpectra::LoadSetting(){
           data.push_back(list[i].toFloat());
         }
         
-        if( 0 <= data[0] && data[0] < digi[digiID]->GetNChannels() ){
+        if( 0 <= data[0] && data[0] < digiManager->GetNChannels(digiID) ){
           hist[digiID][int(data[0])]->Rebin(data[1], data[2], data[3]);
         }
 
-        if( int(data[0]) == digi[digiID]->GetNChannels() && data.size() == 7 ){
+        if( int(data[0]) == digiManager->GetNChannels(digiID) && data.size() == 7 ){
           hist2D[digiID]->Rebin(int(data[1]), data[2], data[3], int(data[4]), data[5], data[6]);
         }
 

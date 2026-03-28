@@ -9,14 +9,13 @@
 #define MaxDisplayTraceDataLength 2000 //data point, 
 #define MiniTraceUpdateTimeSec 0.1
 
-Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDataThread, QMainWindow *parent) : QMainWindow(parent){
-  this->digi = digi;
+Scope::Scope(DigiManager *digiManager, unsigned int nDigi, QMainWindow *parent) : QMainWindow(parent){
+  this->digiManager = digiManager;
   this->nDigi = nDigi;
   if( nDigi > MaxNumberOfDigitizer ) {
     this->nDigi = MaxNumberOfDigitizer;
     qDebug() << "Please increase the MaxNumberOfChannel";
   }
-  this->readDataThread = readDataThread;
 
   setWindowTitle("Scope");
   setGeometry(0, 0, 1000, 800);  
@@ -78,7 +77,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   cbScopeDigi->clear(); ///this will also trigger RComboBox::currentIndexChanged
   cbScopeCh->clear();
   for( unsigned int i = 0 ; i < nDigi; i++) {
-    cbScopeDigi->addItem("Digi-" + QString::number(digi[i]->GetSerialNumber()), i);
+    cbScopeDigi->addItem("Digi-" + QString::number(digiManager->GetSerialNumber(i)), i);
   }
   cbScopeDigi->setCurrentIndex(1);
   allowChange = true;
@@ -89,17 +88,15 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
-    digiMTX[iDigi].lock();
     ReadScopeSettings();
     int prevCh = oldCh;
     RestoreSettings(false);
-    if( digi[iDigi]->IsAcqOn()){
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", prevCh);
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
+    if( digiManager->IsACQOn(iDigi)){
+      digiManager->WriteValue(iDigi, PHA::CH::ChannelEnable, "False", prevCh);
+      digiManager->WriteValue(iDigi, PHA::CH::ChannelEnable, "True", ch);
+      digiManager->WriteValue(iDigi, PHA::CH::WaveSaving, "Always", ch);
+      digiManager->WriteValue(iDigi, PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
     }
-    digiMTX[iDigi].unlock();
 
   });
 
@@ -108,9 +105,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   connect(bnScopeReset, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-    //digi[iDigi]->Reset();
-    digi[iDigi]->ProgramChannels();
-    //SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
+    if( digiManager->GetDigitizer(iDigi) ) digiManager->GetDigitizer(iDigi)->ProgramChannels();
+    //SendLogMsg("Reset Digi-" + QString::number(digiManager->GetSerialNumber(iDigi)) + " and Set Default PHA.");
     ReadScopeSettings();
     UpdateOtherPanels();
     SendLogMsg("Re-program all Channels to default PHA settings");
@@ -147,9 +143,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(anaProbeList[0], (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, anaProbeList[0], (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
   });
   
   connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -157,9 +151,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(anaProbeList[1], (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, anaProbeList[1], (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
   });
 
   connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
@@ -172,36 +164,28 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(digiProbeList[0], (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, digiProbeList[0], (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
   });
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(digiProbeList[1], (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, digiProbeList[1], (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
   });
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(digiProbeList[2], (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, digiProbeList[2], (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
   });
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
-    digi[iDigi]->WriteValue(digiProbeList[3], (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
+    digiManager->WriteValue(iDigi, digiProbeList[3], (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
   });
 
   layout->addWidget(cbAnaProbe[0], rowID, 0);
@@ -223,9 +207,9 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     bLayout = new QGridLayout(settingBox);
     bLayout->setSpacing(0);
 
-    if( digi[0]->GetFPGAType() == DPPType::PHA ) SetupPHA();
+    if( digiManager->GetFPGAType(0) == DPPType::PHA ) SetupPHA();
     
-    if( digi[0]->GetFPGAType() == DPPType::PSD ) SetupPSD();
+    if( digiManager->GetFPGAType(0) == DPPType::PSD ) SetupPSD();
 
   }
 
@@ -286,14 +270,14 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   oldDigi = cbScopeDigi->currentIndex();
   oldCh = cbScopeCh->currentIndex();;
-  waveSaving = digi[oldDigi]->ReadValue(PHA::CH::WaveSaving, oldCh);
-  waveTriggerSource = digi[oldDigi]->ReadValue(PHA::CH::WaveTriggerSource, oldCh);
-  clockSource = digi[oldDigi]->ReadValue(PHA::DIG::ClockSource);
-  startSource = digi[oldDigi]->ReadValue(PHA::DIG::StartSource);
-  syncOutMode = digi[oldDigi]->ReadValue(PHA::DIG::SyncOutMode);
+  waveSaving = digiManager->ReadValue(oldDigi, PHA::CH::WaveSaving, oldCh);
+  waveTriggerSource = digiManager->ReadValue(oldDigi, PHA::CH::WaveTriggerSource, oldCh);
+  clockSource = digiManager->ReadValue(oldDigi, PHA::DIG::ClockSource);
+  startSource = digiManager->ReadValue(oldDigi, PHA::DIG::StartSource);
+  syncOutMode = digiManager->ReadValue(oldDigi, PHA::DIG::SyncOutMode);
 
-  for( int ch2 = 0 ; ch2 < digi[oldDigi]->GetNChannels(); ch2 ++){
-    channelEnable[oldDigi][ch2] = digi[oldDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
+  for( int ch2 = 0 ; ch2 < digiManager->GetNChannels(oldDigi); ch2 ++){
+    channelEnable[oldDigi][ch2] = digiManager->ReadValue(oldDigi, PHA::CH::ChannelEnable, ch2);
   }
   originalValueSet = true;
 }
@@ -317,14 +301,14 @@ void Scope::ChangeDigitizer(){
   allowChange = false;
 
   cbScopeCh->clear();
-  for( int i = 0; i < digi[index]->GetNChannels(); i++){
+  for( int i = 0; i < digiManager->GetNChannels(index); i++){
     cbScopeCh->addItem("ch-" + QString::number(i), i);
   }
   cbScopeCh->setCurrentIndex(0);
 
   anaProbeList.clear();
   digiProbeList.clear();
-  if( digi[index]->GetFPGAType() == DPPType::PHA ) {
+  if( digiManager->GetFPGAType(index) == DPPType::PHA ) {
     anaProbeList.push_back(PHA::CH::WaveAnalogProbe0);
     anaProbeList.push_back(PHA::CH::WaveAnalogProbe1);
     digiProbeList.push_back(PHA::CH::WaveDigitalProbe0);
@@ -332,7 +316,7 @@ void Scope::ChangeDigitizer(){
     digiProbeList.push_back(PHA::CH::WaveDigitalProbe2);
     digiProbeList.push_back(PHA::CH::WaveDigitalProbe3);
   } 
-  if( digi[index]->GetFPGAType() == DPPType::PSD){
+  if( digiManager->GetFPGAType(index) == DPPType::PSD){
     anaProbeList.push_back(PSD::CH::WaveAnalogProbe0);
     anaProbeList.push_back(PSD::CH::WaveAnalogProbe1);
     digiProbeList.push_back(PSD::CH::WaveDigitalProbe0);
@@ -364,19 +348,17 @@ void Scope::ChangeDigitizer(){
     cbDigProbe[3]->addItem(cbDigProbe[0]->itemText(i), cbDigProbe[0]->itemData(i));
   }
 
-  if( digi[index]->GetFPGAType() == DPPType::PHA ) SetupPHA();
+  if( digiManager->GetFPGAType(index) == DPPType::PHA ) SetupPHA();
 
-  if( digi[index]->GetFPGAType() == DPPType::PSD ) SetupPSD();
+  if( digiManager->GetFPGAType(index) == DPPType::PSD ) SetupPSD();
 
 
-  digiMTX[index].lock();
   ReadScopeSettings();
 
-  if( digi[index]->IsAcqOn() ){
-    digi[index]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
-    digi[index]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
+  if( digiManager->IsACQOn(index) ){
+    digiManager->WriteValue(index, PHA::CH::ChannelEnable, "False", -1);
+    digiManager->WriteValue(index, PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
   }
-  digiMTX[index].unlock();
   allowChange = true;
 
 }
@@ -466,7 +448,7 @@ void Scope::ReadScopeSettings(){
   if( !isVisible() ) return;
 
   int iDigi = cbScopeDigi->currentIndex();
-  if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
+  if( digiManager->IsDummy(iDigi) || !digiManager->IsDigiConnected(iDigi)) return;
 
   UpdateSettingsFromMemeory();
 
@@ -478,23 +460,23 @@ void Scope::UpdateSettingsFromMemeory(){
   printf("Scope::%s\n", __func__);
 
   int iDigi = cbScopeDigi->currentIndex();
-  if( !digi[iDigi] || digi[iDigi]->IsDummy() || !digi[iDigi]->IsConnected()) return;
+  if( digiManager->IsDummy(iDigi) || !digiManager->IsDigiConnected(iDigi)) return;
 
   allowChange = false;
 
   int ch = cbScopeCh->currentIndex();
 
   for( int i = 0 ; i < 2; i++){
-    if( digi[iDigi]->GetFPGAType() == DPPType::PHA ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
-    if( digi[iDigi]->GetFPGAType() == DPPType::PSD ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PSD::CH::AnalogProbe[i]);
+    if( digiManager->GetFPGAType(iDigi) == DPPType::PHA ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PHA::CH::AnalogProbe[i]);
+    if( digiManager->GetFPGAType(iDigi) == DPPType::PSD ) ScopeReadComboBoxValue(iDigi, ch, cbAnaProbe[i], PSD::CH::AnalogProbe[i]);
   }
 
   for( int i = 0 ; i < 4; i++){
-    if( digi[iDigi]->GetFPGAType() == DPPType::PHA )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PHA::CH::DigitalProbe[i]);
-    if( digi[iDigi]->GetFPGAType() == DPPType::PSD )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PSD::CH::DigitalProbe[i]);
+    if( digiManager->GetFPGAType(iDigi) == DPPType::PHA )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PHA::CH::DigitalProbe[i]);
+    if( digiManager->GetFPGAType(iDigi) == DPPType::PSD )  ScopeReadComboBoxValue(iDigi, ch, cbDigProbe[i], PSD::CH::DigitalProbe[i]);
   }
 
-  if(  digi[iDigi]->GetFPGAType() == DPPType::PHA ){
+  if(  digiManager->GetFPGAType(iDigi) == DPPType::PHA ){
     ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PHA::CH::Polarity);
     ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PHA::CH::WaveResolution);
     ScopeReadComboBoxValue(iDigi, ch, cbTrapPeakAvg, PHA::CH::EnergyFilterPeakingAvg);
@@ -529,7 +511,7 @@ void Scope::UpdateSettingsFromMemeory(){
     sbPileUpGuard->setStyleSheet("");
   }
 
-  if(  digi[iDigi]->GetFPGAType() == DPPType::PSD ){
+  if(  digiManager->GetFPGAType(iDigi) == DPPType::PSD ){
 
     ScopeReadComboBoxValue(iDigi, ch, cbPolarity, PSD::CH::Polarity);
     ScopeReadComboBoxValue(iDigi, ch, cbWaveRes, PSD::CH::WaveResolution);
@@ -591,23 +573,23 @@ void Scope::RestoreSettings(bool changeBoard){
  
   //restore for old digi and old ch
   if( changeBoard ){
-    digi[oldDigi]->WriteValue(PHA::DIG::ClockSource, clockSource);
-    digi[oldDigi]->WriteValue(PHA::DIG::StartSource, startSource);
-    digi[oldDigi]->WriteValue(PHA::DIG::SyncOutMode, syncOutMode);
+    digiManager->WriteValue(oldDigi, PHA::DIG::ClockSource, clockSource);
+    digiManager->WriteValue(oldDigi, PHA::DIG::StartSource, startSource);
+    digiManager->WriteValue(oldDigi, PHA::DIG::SyncOutMode, syncOutMode);
   }
-  digi[oldDigi]->WriteValue(PHA::CH::WaveSaving, waveSaving, oldCh);
-  digi[oldDigi]->WriteValue(PHA::CH::WaveTriggerSource, waveTriggerSource, oldCh);
+  digiManager->WriteValue(oldDigi, PHA::CH::WaveSaving, waveSaving, oldCh);
+  digiManager->WriteValue(oldDigi, PHA::CH::WaveTriggerSource, waveTriggerSource, oldCh);
 
   // back up data for new digi and ch
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
 
-  waveSaving = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::WaveSaving, ch);
-  waveTriggerSource = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::WaveTriggerSource, ch);
+  waveSaving = digiManager->ReadValue(iDigi, PHA::CH::WaveSaving, ch);
+  waveTriggerSource = digiManager->ReadValue(iDigi, PHA::CH::WaveTriggerSource, ch);
   if( changeBoard ){
-    clockSource = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::ClockSource);
-    startSource = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::StartSource);
-    syncOutMode = digi[iDigi]->GetSettingValueFromMemory(PHA::DIG::SyncOutMode);
+    clockSource = digiManager->ReadValue(iDigi, PHA::DIG::ClockSource);
+    startSource = digiManager->ReadValue(iDigi, PHA::DIG::StartSource);
+    syncOutMode = digiManager->ReadValue(iDigi, PHA::DIG::SyncOutMode);
   }
   oldDigi = iDigi;
   oldCh = ch;
@@ -615,11 +597,11 @@ void Scope::RestoreSettings(bool changeBoard){
 
 void Scope::StartScope(){
 
-  if( !digi ) return; 
+  if( !digiManager ) return;
 
   for( int iDigi = 0 ; iDigi < nDigi; iDigi ++ ){
 
-    if( digi[iDigi]->IsDummy() ) return;
+    if( digiManager->IsDummy(iDigi) ) return;
 
     int ch = cbScopeCh->currentIndex();
 
@@ -629,35 +611,31 @@ void Scope::StartScope(){
     ReadScopeSettings();
 
     /// the settings are the same for PHA and PSD
-    for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
-      channelEnable[iDigi][ch2] = digi[iDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
+    for( int ch2 = 0 ; ch2 < digiManager->GetNChannels(iDigi); ch2 ++){
+      channelEnable[iDigi][ch2] = digiManager->ReadValue(iDigi, PHA::CH::ChannelEnable, ch2);
     }
-    digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
+    digiManager->WriteValue(iDigi, PHA::CH::ChannelEnable, "False", -1);
 
     if( iDigi == cbScopeDigi->currentIndex() ){
-      clockSource = digi[iDigi]->ReadValue(PHA::DIG::ClockSource);
-      startSource = digi[iDigi]->ReadValue(PHA::DIG::StartSource);
-      syncOutMode = digi[iDigi]->ReadValue(PHA::DIG::SyncOutMode);
-      waveSaving =  digi[iDigi]->ReadValue(PHA::CH::WaveSaving, ch);
-      waveTriggerSource = digi[iDigi]->ReadValue(PHA::CH::WaveTriggerSource, ch);
+      clockSource = digiManager->ReadValue(iDigi, PHA::DIG::ClockSource);
+      startSource = digiManager->ReadValue(iDigi, PHA::DIG::StartSource);
+      syncOutMode = digiManager->ReadValue(iDigi, PHA::DIG::SyncOutMode);
+      waveSaving =  digiManager->ReadValue(iDigi, PHA::CH::WaveSaving, ch);
+      waveTriggerSource = digiManager->ReadValue(iDigi, PHA::CH::WaveTriggerSource, ch);
       oldDigi = iDigi;
       oldCh = ch;
 
-      digi[iDigi]->WriteValue(PHA::CH::ChannelEnable, "True", ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
-      digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
+      digiManager->WriteValue(iDigi, PHA::CH::ChannelEnable, "True", ch);
+      digiManager->WriteValue(iDigi, PHA::CH::WaveSaving, "Always", ch);
+      digiManager->WriteValue(iDigi, PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
 
-      digi[iDigi]->WriteValue(PHA::DIG::ClockSource, "Internal");
-      digi[iDigi]->WriteValue(PHA::DIG::StartSource, "SWcmd");
-      digi[iDigi]->WriteValue(PHA::DIG::SyncOutMode, "Disabled");
+      digiManager->WriteValue(iDigi, PHA::DIG::ClockSource, "Internal");
+      digiManager->WriteValue(iDigi, PHA::DIG::StartSource, "SWcmd");
+      digiManager->WriteValue(iDigi, PHA::DIG::SyncOutMode, "Disabled");
 
     }
 
-    digi[iDigi]->SetDataFormat(DataFormat::ALL); 
-    digi[iDigi]->StartACQ();
-
-    readDataThread[iDigi]->SetSaveData(false);
-    readDataThread[iDigi]->start(QThread::HighestPriority);
+    digiManager->StartACQ(iDigi, DataFormat::ALL, false);
 
     updateTraceThread->start();
 
@@ -678,21 +656,15 @@ void Scope::StopScope(){
 
   /// the settings are the same for PHA and PSD
 
-  if(digi){
+  if(digiManager){
     for(int i = 0; i < nDigi; i++){
-      if( digi[i]->IsDummy() ) continue;
+      if( digiManager->IsDummy(i) ) continue;
 
-      readDataThread[i]->Stop();
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-
-      digiMTX[i].lock();
-      digi[i]->StopACQ();
-      for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
-        digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
+      digiManager->StopACQ(i);
+      for( int ch2 = 0 ; ch2 < digiManager->GetNChannels(i); ch2 ++){
+        digiManager->WriteValue(i, PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
       }
       RestoreSettings(true);
-      digiMTX[i].unlock();
     }
     
     emit TellACQOnOff(false);
@@ -714,13 +686,13 @@ void Scope::UpdateScope(){
 
   /// the settings are the same for PHA and PSD
 
-  if( digi ){
+  if( digiManager ){
 
-    std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
+    std::string haha = digiManager->ReadValue(iDigi, PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
-    unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
-    unsigned int traceLength = qMin(digi[iDigi]->traceRingBuffer.ref(traceIdx).traceLenght,(unsigned int) MaxDisplayTraceDataLength);
+    unsigned long traceIdx = digiManager->GetTraceRingBuffer(iDigi).index();
+    unsigned int traceLength = qMin(digiManager->GetTraceRingBuffer(iDigi).ref(traceIdx).traceLenght,(unsigned int) MaxDisplayTraceDataLength);
 
     printf("traceIdx = %lu, traceLength = %u\n", traceIdx, traceLength);
 
@@ -734,7 +706,7 @@ void Scope::UpdateScope(){
       return;
     }
 
-    const TraceSnapshot& ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
+    const TraceSnapshot& ts = digiManager->GetTraceRingBuffer(iDigi).ref(traceIdx - 1);
 
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
@@ -777,14 +749,12 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
   }
 
   //int ID = cbScopeDigi->currentIndex();
-  //digiMTX[ID].lock();
   if( size == 2) {// analog probes
     for( int j = 0; j < 2; j++ )dataTrace[j]->setName(cb[j]->currentText());
   }
   if( size == 4){ // digitial probes
     for( int j = 2; j < 6; j++ )dataTrace[j]->setName(cb[j-2]->currentText());
   }
-  //digiMTX[ID].unlock();
 
 }
 
@@ -795,7 +765,7 @@ void Scope::ScopeControlOnOff(bool on){
   bnScopeReset->setEnabled(on);
   bnScopeReadSettings->setEnabled(on);
 
-  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PHA ){ 
+  if( digiManager->GetFPGAType(cbScopeDigi->currentIndex()) == DPPType::PHA ){ 
     sbRL->setEnabled(on);
     sbPT->setEnabled(on);
     sbTimeRiseTime->setEnabled(on);
@@ -817,7 +787,7 @@ void Scope::ScopeControlOnOff(bool on){
     //cbLowFreqFilter->setEnabled(on);
   }
 
-  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PSD ){
+  if( digiManager->GetFPGAType(cbScopeDigi->currentIndex()) == DPPType::PSD ){
 
     cbPolarity->setEnabled(on);
     cbWaveRes->setEnabled(on);
@@ -848,12 +818,12 @@ void Scope::ScopeControlOnOff(bool on){
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
-  std::string ans = digi[iDigi]->GetSettingValueFromMemory(digPara, ch);
+  std::string ans = digiManager->ReadValue(iDigi, digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
 void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
-  std::string ans = digi[iDigi]->GetSettingValueFromMemory(digPara, ch);
+  std::string ans = digiManager->ReadValue(iDigi, digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
     cb->setCurrentIndex(index);
@@ -888,9 +858,9 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     QString msg;
-    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(iDigi)) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + QString::number(sb->value());
-    if( digi[iDigi]->WriteValue(digPara, std::to_string((int)sb->value()), ch)){
+    if( digiManager->WriteValue(iDigi, digPara, std::to_string((int)sb->value()), ch)){
       SendLogMsg(msg + "|OK.");
       sb->setStyleSheet("");
       UpdateSettingsFromMemeory();
@@ -921,9 +891,9 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
     QString msg;
-    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
+    msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digiManager->GetSerialNumber(iDigi)) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + cb->currentData().toString();
-    if( digi[iDigi]->WriteValue(digPara, cb->currentData().toString().toStdString(), ch)){
+    if( digiManager->WriteValue(iDigi, digPara, cb->currentData().toString().toStdString(), ch)){
       SendLogMsg(msg + "|OK.");
       cb->setStyleSheet("");
       UpdateSettingsFromMemeory();
