@@ -40,11 +40,11 @@ int main(int argc, char *argv[]){
         int linger = 0;
         zmq_setsockopt(sock, ZMQ_LINGER, &linger, sizeof(linger));
         if (zmq_connect(sock, cmdEP.c_str()) == 0) {
-          uint8_t pingMsg[] = {0x00, 0xF0};
+          uint8_t pingMsg[] = {0xF0, 0x00};
           if (zmq_send(sock, pingMsg, 2, 0) == 2) {
             uint8_t buf[16];
             int n = zmq_recv(sock, buf, sizeof(buf), 0);
-            if (n >= 2 && buf[1] == 0xF0) brokerMode = true;
+            if (n >= 2 && buf[0] == 0xF0) brokerMode = true;
           }
         }
         zmq_close(sock);

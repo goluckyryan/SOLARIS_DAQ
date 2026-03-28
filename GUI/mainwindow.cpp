@@ -113,7 +113,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     bnCloseDigitizers = new QPushButton("Close Digitizers", this);
     bnCloseDigitizers->setEnabled(false);
-    connect(bnCloseDigitizers, &QPushButton::clicked, this, &MainWindow::CloseDigitizers);
+    connect(bnCloseDigitizers, &QPushButton::clicked, this, [=](){ CloseDigitizers(true); });
   
     bnDigiSettings = new QPushButton("Digitizers Settings", this);
     bnDigiSettings->setEnabled(false);
@@ -1746,11 +1746,11 @@ bool MainWindow::LoadProgramSettings(){
         useBrokerMode = false;
         if (zmq_connect(sock, cmdEP.c_str()) == 0) {
           // Send ping (REQ_PING = 0xF0)
-          uint8_t pingMsg[] = {0x00, 0xF0};
+          uint8_t pingMsg[] = {0xF0, 0x00};
           if (zmq_send(sock, pingMsg, 2, 0) == 2) {
             uint8_t buf[16];
             int n = zmq_recv(sock, buf, sizeof(buf), 0);
-            if (n >= 2 && buf[1] == 0xF0) { // RSP_PONG
+            if (n >= 2 && buf[0] == 0xF0) { // RSP_PONG
               useBrokerMode = true;
             }
           }
