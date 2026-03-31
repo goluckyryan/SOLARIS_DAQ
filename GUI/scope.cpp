@@ -584,12 +584,12 @@ void Scope::RestoreSettings(bool changeBoard){
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
 
-  waveSaving = digiManager->ReadValue(iDigi, PHA::CH::WaveSaving, ch);
-  waveTriggerSource = digiManager->ReadValue(iDigi, PHA::CH::WaveTriggerSource, ch);
+  waveSaving = digiManager->ReadValueFromCache(iDigi, PHA::CH::WaveSaving, ch);
+  waveTriggerSource = digiManager->ReadValueFromCache(iDigi, PHA::CH::WaveTriggerSource, ch);
   if( changeBoard ){
-    clockSource = digiManager->ReadValue(iDigi, PHA::DIG::ClockSource);
-    startSource = digiManager->ReadValue(iDigi, PHA::DIG::StartSource);
-    syncOutMode = digiManager->ReadValue(iDigi, PHA::DIG::SyncOutMode);
+    clockSource = digiManager->ReadValueFromCache(iDigi, PHA::DIG::ClockSource);
+    startSource = digiManager->ReadValueFromCache(iDigi, PHA::DIG::StartSource);
+    syncOutMode = digiManager->ReadValueFromCache(iDigi, PHA::DIG::SyncOutMode);
   }
   oldDigi = iDigi;
   oldCh = ch;
@@ -692,7 +692,7 @@ void Scope::UpdateScope(){
     leTriggerRate->setText(QString::fromStdString(haha));
 
     unsigned long traceIdx = digiManager->GetTraceRingBuffer(iDigi).index();
-    unsigned int traceLength = qMin(digiManager->GetTraceRingBuffer(iDigi).ref(traceIdx).traceLenght,(unsigned int) MaxDisplayTraceDataLength);
+    unsigned int traceLength = (traceIdx > 0) ? qMin(digiManager->GetTraceRingBuffer(iDigi).ref(traceIdx - 1).traceLenght, (unsigned int) MaxDisplayTraceDataLength) : 0;
 
     printf("traceIdx = %lu, traceLength = %u\n", traceIdx, traceLength);
 
@@ -818,12 +818,12 @@ void Scope::ScopeControlOnOff(bool on){
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
-  std::string ans = digiManager->ReadValue(iDigi, digPara, ch);
+  std::string ans = digiManager->ReadValueFromCache(iDigi, digPara, ch);
   sb->setValue(atoi(ans.c_str()));
 }
 
 void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
-  std::string ans = digiManager->ReadValue(iDigi, digPara, ch);
+  std::string ans = digiManager->ReadValueFromCache(iDigi, digPara, ch);
   int index = cb->findData(QString::fromStdString(ans));
   if( index >= 0 && index < cb->count()) {
     cb->setCurrentIndex(index);

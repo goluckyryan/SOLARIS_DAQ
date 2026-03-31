@@ -41,8 +41,9 @@ public:
   bool         IsDigiConnected(int digi) const;
 
   //=== Parameter access ===
-  std::string ReadValue(int digi, const Reg& reg, int ch = -1);
-  bool        WriteValue(int digi, const Reg& reg, const std::string& value, int ch = -1);
+  std::string ReadValue(int digi, const Reg& reg, int ch = -1);       // reads from hardware, updates cache
+  std::string ReadValueFromCache(int digi, const Reg& reg, int ch = 0); // reads from memory cache only
+  bool        WriteValue(int digi, const Reg& reg, const std::string& value, int ch = -1); // writes to hardware, updates cache
   void        SendCommand(int digi, const Reg& reg);
   void        SendCommand(int digi, const std::string& cmd);
 
@@ -77,6 +78,9 @@ public:
     uint64_t realTime[MaxNumberOfChannel];
     uint64_t totalFileSize;
     bool     acqOn;
+    uint32_t ledStatus;
+    uint32_t acqStatus;
+    uint32_t tempADC[8];
   };
   ScalarSnapshot GetScalarSnapshot(int digi);
 

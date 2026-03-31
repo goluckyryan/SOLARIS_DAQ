@@ -23,6 +23,7 @@ BrokerServer::BrokerServer() {
     digi[i] = nullptr;
     readThreadStop[i] = false;
     isSaveData[i] = false;
+    dataFormat[i] = DataFormat::Minimum;
     lastPublishedTraceIndex[i] = 0;
     for (int ch = 0; ch < MaxNumberOfChannel; ch++) {
       oldTimeStamp[i][ch] = 0;
@@ -388,6 +389,7 @@ void BrokerServer::HandleStartACQ(const uint8_t* data, size_t len) {
     std::lock_guard<std::mutex> lock(digiMutex[i]);
 
     digi[i]->SetDataFormat(dataFormat);
+    this->dataFormat[i] = dataFormat;
 
     if (saveData && !fileNameBase.empty()) {
       std::string fn = fileNameBase + "_" + std::to_string(i) +
@@ -411,6 +413,7 @@ void BrokerServer::HandleStartACQ(const uint8_t* data, size_t len) {
     readThread[i] = std::thread(&BrokerServer::ReadDataLoop, this, i);
   }
 
+  scalarCountdown = 0; // trigger immediate scalar broadcast
   PublishStatusChange(EVT_ACQ_STARTED, idx);
   PublishLog("ACQ started");
   SendOK();
@@ -432,13 +435,13 @@ void BrokerServer::HandleStopACQ(const uint8_t* data, size_t len) {
   for (int i = startIdx; i < endIdx; i++) {
     if (!digi[i] || !digi[i]->IsConnected()) continue;
 
-    {
-      std::lock_guard<std::mutex> lock(digiMutex[i]);
-      digi[i]->StopACQ();
-    }
-
-    // Wait for read thread to finish
+    // Signal read thread to stop, then stop ACQ
+    // StopACQ sends CAEN commands that interrupt the blocking ReadData call
+    // Call WITHOUT mutex so it can interrupt immediately (CAEN commands are thread-safe)
     readThreadStop[i] = true;
+    digi[i]->StopACQ();
+
+    // Read thread should exit quickly now (ReadData returns CAEN_FELib_Stop)
     if (readThread[i].joinable()) readThread[i].join();
 
     // Close file if saving
@@ -609,35 +612,54 @@ void BrokerServer::ReadDataLoop(int digiIndex) {
       break;
     }
 
-    // Yield briefly so ScalarBroadcastLoop and command handlers can acquire the mutex
-    if (ret != CAEN_FELib_Success) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
+    // Always yield so ScalarBroadcastLoop and command handlers can acquire the mutex
+    // With DataFormat::ALL (waveforms), need more time for trace publishing
+    std::this_thread::sleep_for(std::chrono::milliseconds(
+      dataFormat[digiIndex] == DataFormat::ALL || dataFormat[digiIndex] == DataFormat::OneTrace ? 2 : 1));
+    std::this_thread::yield();
   }
 
   printf("ReadDataLoop stopped for digi %d\n", digiIndex);
 }
 
 void BrokerServer::ScalarBroadcastLoop() {
-  printf("ScalarBroadcastLoop started (interval=%.1f s)\n", scalarIntervalSec);
+  printf("ScalarBroadcastLoop started (scalar=%.1fs, hits=100ms, traces=500ms)\n", scalarIntervalSec);
+
+  scalarCountdown = 0;
+  int traceCountdown = 0;
 
   while (!scalarThreadStop) {
-    // Sleep in small increments so we can stop quickly
-    int sleepMs = static_cast<int>(scalarIntervalSec * 1000);
-    for (int t = 0; t < sleepMs && !scalarThreadStop; t += 100) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (scalarThreadStop) break;
+
+    scalarCountdown--;
+    traceCountdown--;
 
     for (int i = 0; i < nDigi; i++) {
       if (!digi[i] || !digi[i]->IsConnected()) continue;
 
-      PublishScalar(i);
+      // Scalar + board status: every scalarIntervalSec (e.g., 2 seconds)
+      if (scalarCountdown <= 0) {
+        PublishScalar(i);
+      }
 
       if (digi[i]->IsAcqOn()) {
+        // Hit summaries: every 100ms (fast for histograms)
         PublishHitSummaries(i);
-        PublishTraceSnapshot(i);
+
+        // Traces: every 500ms, only when data format includes waveforms
+        if (traceCountdown <= 0 &&
+            (dataFormat[i] == DataFormat::ALL || dataFormat[i] == DataFormat::OneTrace)) {
+          PublishTraceSnapshot(i);
+        }
       }
+    }
+
+    if (scalarCountdown <= 0) {
+      scalarCountdown = static_cast<int>(scalarIntervalSec * 10);
+    }
+    if (traceCountdown <= 0) {
+      traceCountdown = 5; // 5 ticks × 100ms = 500ms
     }
   }
 
@@ -655,13 +677,15 @@ void BrokerServer::PublishScalar(int digiIndex) {
   PackU16(buf, digi[digiIndex]->GetSerialNumber());
   PackU8(buf, static_cast<uint8_t>(nCh));
 
-  std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
-
+  // Read per-channel scalars — lock/unlock per channel to minimize mutex hold time
   for (int ch = 0; ch < nCh; ch++) {
-    // Read scalar values from digitizer (same as MainWindow::UpdateScalar)
-    std::string timeStr = digi[digiIndex]->ReadValue(PHA::CH::ChannelRealtime, ch);
-    std::string rateStr = digi[digiIndex]->ReadValue(PHA::CH::SelfTrgRate, ch);
-    std::string countStr = digi[digiIndex]->ReadValue(PHA::CH::ChannelSavedCount, ch);
+    std::string timeStr, rateStr, countStr;
+    {
+      std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
+      timeStr  = digi[digiIndex]->ReadValue(PHA::CH::ChannelRealtime, ch);
+      rateStr  = digi[digiIndex]->ReadValue(PHA::CH::SelfTrgRate, ch);
+      countStr = digi[digiIndex]->ReadValue(PHA::CH::ChannelSavedCount, ch);
+    }
 
     uint32_t trgRate = 0;
     uint64_t realTime = 0;
@@ -674,7 +698,6 @@ void BrokerServer::PublishScalar(int digiIndex) {
 
     if (digi[digiIndex]->GetModelName() == "VX2730") { realTime /= 4; }
 
-    // Calculate accept rate
     if (oldTimeStamp[digiIndex][ch] > 0 &&
         realTime > oldTimeStamp[digiIndex][ch] &&
         realTime - oldTimeStamp[digiIndex][ch] > 1000000000ULL &&
@@ -693,9 +716,22 @@ void BrokerServer::PublishScalar(int digiIndex) {
     PackU64(buf, realTime);
   }
 
-  // Footer
-  PackU64(buf, digi[digiIndex]->GetTotalFilesSize());
-  PackU8(buf, digi[digiIndex]->IsAcqOn() ? 1 : 0);
+  // Footer + board status — brief lock
+  {
+    std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
+    PackU64(buf, digi[digiIndex]->GetTotalFilesSize());
+    PackU8(buf, digi[digiIndex]->IsAcqOn() ? 1 : 0);
+
+    std::string ledStr = digi[digiIndex]->ReadValue(PHA::DIG::LED_status);
+    std::string acqStr = digi[digiIndex]->ReadValue(PHA::DIG::ACQ_status);
+    PackU32(buf, ledStr.empty() ? 0 : std::stoul(ledStr));
+    PackU32(buf, acqStr.empty() ? 0 : std::stoul(acqStr));
+    for (int i = 0; i < 8; i++) {
+      std::string tempStr = (i < (int)PHA::DIG::TempSensADC.size())
+                          ? digi[digiIndex]->ReadValue(PHA::DIG::TempSensADC[i]) : "";
+      PackU32(buf, tempStr.empty() ? 0 : (uint32_t)std::stoi(tempStr));
+    }
+  }
 
   zmq_send(zmqPub, buf.data(), buf.size(), 0);
 }

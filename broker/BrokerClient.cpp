@@ -407,6 +407,15 @@ void BrokerClient::SubscriptionLoop() {
           }
           scalarData[digiIdx].totalFileSize = UnpackU64(data, off);
           scalarData[digiIdx].acqOn = (UnpackU8(data, off) != 0);
+
+          // Board status (if present in message)
+          if (off + 4 + 4 + 8*4 <= (size_t)size) {
+            scalarData[digiIdx].ledStatus = UnpackU32(data, off);
+            scalarData[digiIdx].acqStatus = UnpackU32(data, off);
+            for (int i = 0; i < 8; i++) {
+              scalarData[digiIdx].tempADC[i] = UnpackU32(data, off);
+            }
+          }
         } // unlock before callback
 
         if (onScalarUpdate) onScalarUpdate(digiIdx);

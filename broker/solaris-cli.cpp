@@ -40,6 +40,7 @@ static void PrintHelp() {
   printf("  file-status <digi>                     Show file sizes\n");
   printf("  save-settings <digi> [file]            Save settings to file\n");
   printf("  load-settings <digi> [file]            Load settings from file\n");
+  printf("  trace <digi> <ch> [samples]             Capture and display a waveform trace (default 100 samples)\n");
   printf("  subscribe [seconds]                    Monitor live rates and file sizes for N seconds (default 10)\n");
   printf("  load <script>                          Execute commands from a script file\n");
   printf("  sleep <ms>                             Sleep for N milliseconds\n");
@@ -720,6 +721,74 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
       printf("\nSubscription ended.\n");
     }
   }
+  else if (cmd == "trace") {
+    if (tok.size() < 3) { printf("Usage: trace <digi> <ch> [samples]\n"); return 0; }
+    int digiIdx = atoi(tok[1].c_str());
+    int ch = atoi(tok[2].c_str());
+    int maxSamples = (tok.size() > 3) ? atoi(tok[3].c_str()) : 100;
+
+    // Save current settings
+    std::string oldWaveSaving = client.ReadValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveSaving");
+    std::string oldWaveTrigSrc = client.ReadValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveTriggerSource");
+
+    // Configure for trace capture
+    int nCh = client.GetDigiInfo(digiIdx).nChannels;
+    std::string chRange = "/ch/0.." + std::to_string(nCh - 1);
+    client.WriteValue(digiIdx, chRange + "/par/ChEnable", "False");
+    client.WriteValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/ChEnable", "True");
+    client.WriteValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveSaving", "Always");
+    client.WriteValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveTriggerSource", "ChSelfTrigger");
+
+    printf("Capturing trace from digi %d, ch %d (Ctrl+C to abort)...\n", digiIdx, ch);
+
+    // Set up trace callback
+    std::atomic<bool> gotTrace(false);
+    TraceSnapshot capturedTrace = {};
+
+    client.onTraceSnapshot = [&](int dIdx) {
+      if (dIdx != digiIdx || gotTrace) return;
+      auto& rb = client.GetTraceRingBuffer(dIdx);
+      unsigned long idx = rb.index();
+      if (idx == 0) return;
+      capturedTrace = rb.at(idx - 1);
+      if (capturedTrace.traceLenght > 0) gotTrace = true;
+    };
+
+    // Start ACQ with ALL format
+    client.StartACQ(digiIdx, DataFormat::ALL, false);
+
+    // Wait for trace (up to 10 seconds)
+    gInterrupted = 0;
+    for (int t = 0; t < 100 && !gotTrace && !gInterrupted; t++) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Stop ACQ
+    client.StopACQ(digiIdx);
+    client.onTraceSnapshot = nullptr;
+
+    // Restore settings
+    client.WriteValue(digiIdx, chRange + "/par/ChEnable", "True");
+    client.WriteValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveSaving", oldWaveSaving);
+    client.WriteValue(digiIdx, "/ch/" + std::to_string(ch) + "/par/WaveTriggerSource", oldWaveTrigSrc);
+
+    if (!gotTrace) {
+      printf("No trace captured (timeout or no triggers).\n");
+    } else {
+      int len = std::min((int)capturedTrace.traceLenght, maxSamples);
+      printf("Trace: %zu samples (showing %d)\n", capturedTrace.traceLenght, len);
+      printf("%6s  %10s  %10s  %4s %4s %4s %4s\n", "Sample", "Analog0", "Analog1", "D0", "D1", "D2", "D3");
+      for (int i = 0; i < len; i++) {
+        printf("%6d  %10d  %10d  %4d %4d %4d %4d\n", i,
+               capturedTrace.analog_probes[0][i],
+               capturedTrace.analog_probes[1][i],
+               capturedTrace.digital_probes[0][i],
+               capturedTrace.digital_probes[1][i],
+               capturedTrace.digital_probes[2][i],
+               capturedTrace.digital_probes[3][i]);
+      }
+    }
+  }
   else if (cmd == "shutdown") {
     printf("Sending shutdown to broker...\n");
     client.Shutdown();
@@ -737,7 +806,7 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
 static const char* commands[] = {
   "connect", "disconnect", "ping", "list", "info", "open", "close",
   "read", "write", "cmd", "format", "start", "stop", "status",
-  "file-status", "save-settings", "load-settings", "subscribe",
+  "file-status", "save-settings", "load-settings", "trace", "subscribe",
   "load", "sleep", "shutdown", "help", "quit", "exit", nullptr
 };
 

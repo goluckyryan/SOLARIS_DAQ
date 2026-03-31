@@ -571,7 +571,7 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       for( int chID = 0; chID < (int) mapping[DigiID].size(); chID++){
         if( mapping[DigiID][chID] < 0 ) continue;
 
-        std::string haha = digiManager->ReadValue(DigiID, SettingItems[SettingID], chID);
+        std::string haha = digiManager->ReadValueFromCache(DigiID, SettingItems[SettingID], chID);
         sbSetting[SettingID][DigiID][chID]->setValue( atof(haha.c_str()));
 
         if( SettingItems[SettingID].GetPara() == PHA::CH::TriggerThreshold.GetPara() ){
@@ -581,7 +581,7 @@ void SOLARISpanel::UpdatePanelFromMemory(){
           leDisplay[SettingID][DigiID][chID]->setText(QString::number(atof(haha.c_str()), 'f', 2) );
         }
 
-        haha = digiManager->ReadValue(DigiID, PHA::CH::ChannelEnable, chID);
+        haha = digiManager->ReadValueFromCache(DigiID, PHA::CH::ChannelEnable, chID);
         chkOnOff[SettingID][DigiID][chID]->setChecked( haha == "True" ? true : false);
         leDisplay[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
         sbSetting[SettingID][DigiID][chID]->setEnabled(haha == "True" ? true : false);
@@ -613,11 +613,11 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       }
 
       int chID = (detIDArrayList[k][h] & 0xFF);
-      triggerMap.push_back(Utility::TenBase(digiManager->ReadValue(digiID, PHA::CH::ChannelsTriggerMask, chID)));
-      coincidentMask.push_back(digiManager->ReadValue(digiID, PHA::CH::CoincidenceMask, chID));
-      antiCoincidentMask.push_back(digiManager->ReadValue(digiID, PHA::CH::AntiCoincidenceMask, chID));
-      eventTriggerSource.push_back(digiManager->ReadValue(digiID, PHA::CH::EventTriggerSource, chID));
-      waveTriggerSource.push_back(digiManager->ReadValue(digiID, PHA::CH::WaveTriggerSource, chID));
+      triggerMap.push_back(Utility::TenBase(digiManager->ReadValueFromCache(digiID, PHA::CH::ChannelsTriggerMask, chID)));
+      coincidentMask.push_back(digiManager->ReadValueFromCache(digiID, PHA::CH::CoincidenceMask, chID));
+      antiCoincidentMask.push_back(digiManager->ReadValueFromCache(digiID, PHA::CH::AntiCoincidenceMask, chID));
+      eventTriggerSource.push_back(digiManager->ReadValueFromCache(digiID, PHA::CH::EventTriggerSource, chID));
+      waveTriggerSource.push_back(digiManager->ReadValueFromCache(digiID, PHA::CH::WaveTriggerSource, chID));
     }
 
     if(skipFlag) continue;
@@ -708,7 +708,7 @@ void SOLARISpanel::UpdatePanelFromMemory(){
       int chID = (detIDArrayList[i][j] & 0xFF);
       if( digiID >= nDigi ) continue;
       if( digiManager->IsDummy(digiID) || !digiManager->IsDigiConnected(digiID) ) continue;
-      coinTime.push_back( atoi(digiManager->ReadValue(digiID, PHA::CH::CoincidenceLength, chID).c_str()));
+      coinTime.push_back( atoi(digiManager->ReadValueFromCache(digiID, PHA::CH::CoincidenceLength, chID).c_str()));
     }
   }
 

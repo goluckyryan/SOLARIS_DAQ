@@ -35,26 +35,26 @@ SOLARIS_DAQ/
 
 ## Operating Modes
 
-The DAQ supports two modes, selected automatically at startup:
+The DAQ supports two modes, selected automatically at startup.
 
 ### Standalone Mode
 
 The GUI directly controls the digitizers. Only one GUI instance can run (enforced by DAQ lock file).
 
 ```
-GUI (SOLARIS_DAQ) ──── Digitizer Hardware
+SOLARIS_DAQ ──── Digitizer Hardware
 ```
 
 ### Broker Mode
 
-A broker daemon (`solaris-broker`) manages the digitizers. The GUI connects to the broker over ZMQ (TCP). Multiple GUI instances can connect simultaneously.
+A broker daemon (`solaris-broker`) manages the digitizers. The GUI connects over ZMQ (TCP). Multiple GUIs can connect simultaneously from any machine on the network.
 
 ```
 solaris-broker ──── Digitizer Hardware
-     │
-     ├── GUI instance 1 (local or remote)
-     ├── GUI instance 2
-     └── solaris-cli (command line)
+     │  (tcp://  REQ/REP commands + PUB/SUB data)
+     ├── SOLARIS_DAQ (GUI instance 1, local or remote)
+     ├── SOLARIS_DAQ (GUI instance 2)
+     └── solaris-cli  (command-line client)
 ```
 
 ### Auto-Detection
@@ -62,45 +62,124 @@ solaris-broker ──── Digitizer Hardware
 On startup, the GUI:
 
 1. Reads `brokerIP` and `brokerCmdPort` from `programSettings.txt`
-2. Tries to ping the broker at `tcp://{brokerIP}:{brokerCmdPort}`
-3. If the broker responds: **broker mode** (auto-connects, DAQ lock skipped)
-4. If no broker found: **standalone mode** (DAQ lock active)
+2. Sends a ZMQ ping to `tcp://{brokerIP}:{brokerCmdPort}` (1-second timeout)
+3. If the broker responds: **broker mode** — auto-connects, syncs settings, DAQ lock skipped
+4. If no broker found: **standalone mode** — DAQ lock active, manual digitizer open
 
 No manual mode toggle is needed. If the broker is running, the GUI uses it.
 
-### Setting Up Broker Mode
+## Broker Architecture
+
+### Broker Lifecycle
+
+```
+solaris-broker [--ip DIG_IP] [--cmd-port 5555] [--pub-port 5556]
+  │
+  ├─ Start(): bind ZMQ REP (commands) + PUB (broadcast) sockets
+  ├─ Open digitizers from --ip argument (if provided)
+  └─ Run(): enter main loop
+      │
+      ├─ ScalarBroadcastLoop thread (started with Run)
+      │   ├─ Every 100ms: publish hit summaries (during ACQ)
+      │   ├─ Every 500ms: publish trace snapshots (only when data format includes waveforms)
+      │   └─ Every 2s: publish scalars + board status (LED, ACQ, temperatures)
+      │
+      └─ Command loop: poll ZMQ REP, dispatch commands
+          ├─ open/close/list digitizers
+          ├─ read/write parameters
+          ├─ start/stop ACQ → spawns/joins ReadDataLoop thread per digitizer
+          ├─ file control (open/close/save)
+          ├─ settings management (read all/save/load)
+          ├─ ping (for GUI auto-detection)
+          └─ shutdown
+```
+
+### Threads
+
+| Thread | Lifetime | Purpose |
+|--------|----------|---------|
+| **Main** | Process start → exit | Command polling loop (REQ/REP) |
+| **ScalarBroadcastLoop** | Run() → Stop() | Publishes hit summaries (100ms), traces (500ms), and scalars (2s) via PUB socket |
+| **ReadDataLoop[i]** | StartACQ → StopACQ | Reads hits from digitizer *i* into ring buffers, saves to file |
+
+Thread safety: per-digitizer `digiMutex[i]` protects all hardware access. `ReadDataLoop` yields between reads to allow scalar broadcasts and command handlers to acquire the mutex.
+
+### Data Flow
+
+```
+Digitizer Hardware
+  │ (CAEN FELib)
+  ▼
+ReadDataLoop: digi->ReadData() → fills ringBuffer[ch] + traceRingBuffer
+  │
+  ▼
+ScalarBroadcastLoop (independent timers, non-blocking):
+  ├─ PUB_HIT_SUMMARY (every 100ms): new hits from ring buffers → ZMQ PUB
+  ├─ PUB_TRACE (every 500ms): latest waveform snapshot → ZMQ PUB
+  │     (only when data format includes waveforms: ALL or OneTrace)
+  └─ PUB_SCALAR (every 2s): trigger rates, accept rates, file size,
+     board status (LED, ACQ, temperatures) → ZMQ PUB
+  │
+  ▼ (network)
+BrokerClient::SubscriptionLoop:
+  ├─ Pushes hits to client-side ringBuffer[digi][ch]
+  ├─ Updates scalarData[digi] (cached, mutex-protected)
+  └─ Fires callbacks: onScalarUpdate, onHitSummary, onTraceSnapshot
+  │
+  ▼
+GUI reads from cached data (zero network calls for display)
+```
+
+### Parameter Caching (DigiManager)
+
+All GUI components read parameters from a local memory cache, not from the hardware:
+
+| Method | What it does | When to use |
+|--------|-------------|-------------|
+| `ReadValue(digi, reg, ch)` | Reads from hardware/broker, **updates cache** | Explicit "Read Settings" button, write-readback |
+| `ReadValueFromCache(digi, reg, ch)` | Reads from local cache only, **zero network calls** | All UI display updates |
+| `WriteValue(digi, reg, val, ch)` | Writes to hardware/broker, **reads back and caches** | User changes a setting |
+| `ReadAllSettings(digi)` | Reads all parameters from hardware, **populates entire cache** | On connect, "Refresh Settings" button |
+
+In broker mode, a local dummy `Digitizer2Gen` object stores the cache. On connect, `ReadAllSettings` syncs all values from the broker to the local cache.
+
+## Setting Up Broker Mode
 
 1. Start the broker on the machine connected to the digitizers:
    ```bash
-   ./solaris-broker
+   ./solaris-broker --ip 192.168.0.100
    ```
-2. Open digitizers from the broker CLI:
+   The `--ip` flag opens the digitizer immediately. Without it, use the CLI to open later.
+
+2. Optionally use the CLI:
    ```bash
    ./solaris-cli
    > open dig2://192.168.0.100
+   > lsdig
+   > read 0 /par/ModelName
    ```
+
 3. Configure the GUI's `programSettings.txt` with the broker machine's IP:
-   - `brokerIP`: IP address of the broker machine (default: `localhost`)
-   - `brokerCmdPort`: command port (default: `5555`)
-   - `brokerPubPort`: publish port (default: `5556`)
-4. Start the GUI — it auto-detects the broker and connects.
+   - Line 12: `brokerIP` (default: `localhost`)
+   - Line 13: `brokerCmdPort` (default: `5555`)
+   - Line 14: `brokerPubPort` (default: `5556`)
 
-Multiple GUIs (on different machines) can connect to the same broker by setting the broker IP in their `programSettings.txt`.
+4. Start the GUI:
+   ```bash
+   ./SOLARIS_DAQ
+   ```
+   It auto-detects the broker, syncs digitizer settings, and is ready to use.
 
-### What Works in Each Mode
+Multiple GUIs on different machines can connect by setting the broker IP in their `programSettings.txt`.
 
-| Feature | Standalone | Broker |
-|---------|-----------|--------|
-| Open/Close digitizers | Yes | Yes |
-| Start/Stop ACQ | Yes | Yes |
-| Scalar display | Yes | Yes |
-| Energy spectra | Yes | Yes |
-| Scope (waveforms) | Yes | Yes |
-| Digitizer settings panel | Yes | Yes (reads/writes via broker) |
-| SOLARIS panel | Yes | Yes (reads/writes via broker) |
-| Data file saving | Local | On broker machine |
-| Multiple GUI instances | No (locked) | Yes |
-| Remote access | No | Yes (over network) |
+### Broker Behavior
+
+- **Window title**: shows `[Broker : IP]` or `[Standalone]` to indicate current mode
+- **GUI "Close Digitizers" button**: closes remote digitizers on the broker
+- **GUI window close (X button)**: just disconnects, broker keeps digitizers open
+- **Broker Ctrl+C**: gracefully stops all ACQ, closes all digitizers, exits
+- **Multiple GUIs**: all see the same scalar/histogram data via PUB/SUB; commands are serialized via REQ/REP
+- **DAQ lock**: only active in standalone mode; skipped in broker mode (multiple GUIs allowed)
 
 ## Build
 
@@ -115,24 +194,19 @@ Multiple GUIs (on different machines) can connect to the same broker by setting 
 - libreadline: `sudo apt install libreadline-dev` (for solaris-cli)
 - ROOT (for EventBuilder only)
 
-### Compile Everything
+### Compile
 
 ```bash
 make          # builds GUI + broker + CLI
+make gui      # GUI only
+make broker   # broker + CLI only
+make clean    # clean all
 ```
 
 All executables are placed in the project root:
 - `SOLARIS_DAQ` — GUI application
 - `solaris-broker` — broker daemon
 - `solaris-cli` — command-line client
-
-### Compile Individual Targets
-
-```bash
-make gui      # GUI only
-make broker   # broker + CLI only
-make clean    # clean all
-```
 
 ### Compile Auxiliary Tools
 
@@ -143,8 +217,6 @@ make test           # register and raw decode tests
 ```
 
 ### Using CAENDig2.h
-
-The CAENDig2.h header is not installed to the system include path by default:
 
 ```bash
 cp caen_dig2-vXXXX/include/CAENDig2.h /usr/local/include/
@@ -177,13 +249,13 @@ Line  7: DatabaseToken
 Line  8: ElogIP
 Line  9: ElogUser
 Line 10: ElogPWD
-Line 11: useBrokerMode (0/1, overridden by auto-detect)
+Line 11: useBrokerMode (0/1, used as hint for DAQ lock; overridden by auto-detect)
 Line 12: brokerIP (default: localhost)
 Line 13: brokerCmdPort (default: 5555)
 Line 14: brokerPubPort (default: 5556)
 ```
 
-Lines 11-14 are optional for backward compatibility. Old settings files without these lines will use defaults (standalone mode, localhost broker).
+Lines 11-14 are optional. Old settings files without them use defaults (standalone mode, localhost broker).
 
 ## Supported Firmware
 

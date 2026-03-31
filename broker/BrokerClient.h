@@ -87,6 +87,10 @@ public:
     uint64_t realTime[MaxNumberOfChannel];
     uint64_t totalFileSize;
     bool     acqOn;
+    // Board status (updated by scalar broadcast)
+    uint32_t ledStatus;
+    uint32_t acqStatus;
+    uint32_t tempADC[8];
   };
 
   // Heap-allocated buffers (ring buffers + traces are ~67 MB total)

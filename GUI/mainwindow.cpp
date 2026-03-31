@@ -502,10 +502,12 @@ int MainWindow::StartACQ(){
 
   if( !scalar->isVisible() ) {
     scalar->show();
+    RepositionScalar();
     if( !scalarThread->isRunning() ) scalarThread->start();
   }
   isACQRunning = true;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
+  UpdateScalar(); // immediate first update
   //scalarThread->start();
   scalarOutputInflux = true;
 
@@ -752,6 +754,11 @@ void MainWindow::OpenDigitizers(){
                + " (" + QString::fromStdString(digiManager->GetModelName(i)) + ") connected via broker.");
         if( maxNumChannelAcrossDigitizer < digiManager->GetNChannels(i) )
           maxNumChannelAcrossDigitizer = digiManager->GetNChannels(i);
+
+        // Sync all settings from broker to local cache
+        LogMsg("Syncing settings for Digi-" + QString::number(digiManager->GetSerialNumber(i)) + "...");
+        digiManager->ReadAllSettings(i);
+        LogMsg("Done.");
       }
       int nCh = std::min((int) digiManager->GetNChannels(i), (int) MaxNumberOfChannel);
       for( int ch = 0; ch < nCh; ch++) {
@@ -1762,6 +1769,9 @@ bool MainWindow::LoadProgramSettings(){
       }
       if (useBrokerMode) {
         LogMsg("<font style=\"color:blue;\"><b>Broker detected</b> at " + brokerIP + ":" + QString::number(brokerCmdPort) + "</font>");
+        setWindowTitle("FSU SOLARIS DAQ [Broker : " + brokerIP + "]");
+      } else {
+        setWindowTitle("FSU SOLARIS DAQ [Standalone]");
       }
 
       logMsgHTMLMode = false;

@@ -65,6 +65,23 @@ void Digitizer2Gen::SetDummy(unsigned short sn, unsigned short nCh, std::string 
   serialNumber = sn;
   nChannels = nCh;
   FPGAType = fpga;
+
+  // Rebuild settings arrays and maps for the correct FPGA type
+  if( fpga == DPPType::PSD ){
+    boardSettings = PSD::DIG::AllSettings;
+    for( int ch = 0; ch < nChannels; ch++ ) chSettings[ch] = PSD::CH::AllSettings;
+    for( int i = 0; i < 4; i++ ) {
+      VGASetting[i] = PSD::VGA::VGAGain;
+      LVDSSettings[i] = PSD::LVDS::AllSettings;
+    }
+    for( int i = 0; i < 16; i++ ) InputDelay[i] = PSD::GROUP::InputDelay;
+
+    boardMap.clear(); LVDSMap.clear(); chMap.clear();
+    for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++) boardMap[PSD::DIG::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PSD::LVDS::AllSettings.size(); i++) LVDSMap[PSD::LVDS::AllSettings[i].GetPara()] = i;
+    for( int i = 0; i < (int) PSD::CH::AllSettings.size(); i++) chMap[PSD::CH::AllSettings[i].GetPara()] = i;
+  }
+  // PHA is already set by Initialization(), no need to redo
 }
 
 //########################################### Handles functions

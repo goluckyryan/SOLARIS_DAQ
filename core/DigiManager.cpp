@@ -180,29 +180,53 @@ bool DigiManager::IsDigiConnected(int d) const {
 }
 
 //============================================ Parameter access
+
+// ReadValue: reads from hardware and updates the local cache
 std::string DigiManager::ReadValue(int d, const Reg& reg, int ch) {
   if (d < 0 || d >= nDigi) return "";
   if (mode == Mode::Standalone) {
     if (!digi[d] || digi[d]->IsDummy()) return "";
     std::lock_guard<std::mutex> lock(digiMutex[d]);
-    return digi[d]->ReadValue(reg, ch);
+    return digi[d]->ReadValue(reg, ch); // reads from hardware + stores in cache
   } else {
     if (!client || !client->IsConnected()) return "";
     int nCh = GetNChannels(d);
-    return client->ReadValue(d, reg.GetFullPara(ch, nCh));
+    std::string val = client->ReadValue(d, reg.GetFullPara(ch, nCh));
+    // Store in dummy's cache so GetSettingValueFromMemory works
+    if (digi[d] && !val.empty()) {
+      digi[d]->WriteValue(reg, val, ch); // WriteValue on dummy stores in memory (no hardware)
+    }
+    return val;
   }
 }
 
+// ReadValueFromCache: reads from local memory cache only (no hardware/network call)
+std::string DigiManager::ReadValueFromCache(int d, const Reg& reg, int ch) {
+  if (d < 0 || d >= nDigi || !digi[d]) return "";
+  return digi[d]->GetSettingValueFromMemory(reg, ch);
+}
+
+// WriteValue: writes to hardware and updates the local cache with readback
 bool DigiManager::WriteValue(int d, const Reg& reg, const std::string& value, int ch) {
   if (d < 0 || d >= nDigi) return false;
   if (mode == Mode::Standalone) {
     if (!digi[d] || digi[d]->IsDummy()) return false;
     std::lock_guard<std::mutex> lock(digiMutex[d]);
-    return digi[d]->WriteValue(reg, value, ch);
+    return digi[d]->WriteValue(reg, value, ch); // writes hardware + stores in cache
   } else {
     if (!client || !client->IsConnected()) return false;
     int nCh = GetNChannels(d);
-    return client->WriteValue(d, reg.GetFullPara(ch, nCh), value);
+    bool ok = client->WriteValue(d, reg.GetFullPara(ch, nCh), value);
+    // Read back and cache — the hardware may adjust the value
+    // For all-channel writes (ch=-1), read back from ch 0 (CAEN doesn't support wildcard reads)
+    if (digi[d]) {
+      int readCh = (ch == -1 && reg.GetType() == TYPE::CH) ? 0 : ch;
+      std::string readback = client->ReadValue(d, reg.GetFullPara(readCh, nCh));
+      if (!readback.empty()) {
+        digi[d]->WriteValue(reg, readback, ch); // store for all channels if ch=-1
+      }
+    }
+    return ok;
   }
 }
 
@@ -251,6 +275,9 @@ void DigiManager::StartACQ(int d, int dataFormat, bool saveData, const std::stri
   } else {
     if (!client || !client->IsConnected()) return;
     client->StartACQ(d, dataFormat, saveData, fileNameBase);
+    // Immediately update cached ACQ state (don't wait for next scalar broadcast)
+    std::lock_guard<std::mutex> lock(client->scalarMutex);
+    client->scalarData[d].acqOn = true;
   }
 }
 
@@ -276,16 +303,19 @@ void DigiManager::StopACQ(int d) {
   } else {
     if (!client || !client->IsConnected()) return;
     client->StopACQ(d);
+    // Immediately update cached ACQ state (don't wait for next scalar broadcast)
+    std::lock_guard<std::mutex> lock(client->scalarMutex);
+    client->scalarData[d].acqOn = false;
   }
 }
 
 bool DigiManager::IsACQOn(int d) const {
   if (d < 0 || d >= nDigi) return false;
   if (mode == Mode::Standalone) return digi[d] ? digi[d]->IsAcqOn() : false;
-  // In broker mode, query the broker directly (not cached scalar data)
-  if (client && client->IsConnected()) {
-    auto status = const_cast<BrokerClient*>(client)->GetACQStatus();
-    if (d < status.nDigi) return status.acqOn[d];
+  // In broker mode, use cached scalar data (updated by subscription)
+  if (client) {
+    std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(client->scalarMutex));
+    return client->scalarData[d].acqOn;
   }
   return false;
 }
@@ -343,7 +373,38 @@ void DigiManager::ReadAllSettings(int d) {
   if (mode == Mode::Standalone) {
     if (digi[d]) digi[d]->ReadAllSettings();
   } else {
-    if (client && client->IsConnected()) client->ReadAllSettings(d);
+    if (!client || !client->IsConnected()) return;
+    // Tell broker to read all settings from hardware
+    client->ReadAllSettings(d);
+    // Sync each value to the local dummy cache using correct FPGA type
+    if (digi[d]) {
+      int nCh = GetNChannels(d);
+      std::string fpga = GetFPGAType(d);
+
+      // Use correct settings list for the firmware type
+      const auto& bdSettings = (fpga == DPPType::PSD) ? PSD::DIG::AllSettings : PHA::DIG::AllSettings;
+      const auto& chSettings = (fpga == DPPType::PSD) ? PSD::CH::AllSettings  : PHA::CH::AllSettings;
+
+      std::string model = GetModelName(d);
+
+      for (const auto& reg : bdSettings) {
+        if (reg.ReadWrite() == RW::WriteOnly) continue;
+        // Skip model-specific unsupported parameters
+        std::string para = reg.GetPara();
+        if (model == "VX2740" && para != PHA::DIG::TempSensADC0.GetPara()) continue;
+        if (model != "VX2740" && (para == PHA::DIG::FreqSensCore.GetPara() ||
+                                   para == PHA::DIG::DutyCycleSensDCDC.GetPara())) continue;
+        std::string val = client->ReadValue(d, reg.GetFullPara());
+        if (!val.empty()) digi[d]->WriteValue(reg, val, -1);
+      }
+      for (int ch = 0; ch < nCh; ch++) {
+        for (const auto& reg : chSettings) {
+          if (reg.ReadWrite() == RW::WriteOnly) continue;
+          std::string val = client->ReadValue(d, reg.GetFullPara(ch, nCh));
+          if (!val.empty()) digi[d]->WriteValue(reg, val, ch);
+        }
+      }
+    }
   }
 }
 
@@ -373,7 +434,9 @@ std::string DigiManager::GetSettingFileName(int d) const {
 
 //============================================ Data access
 RingBuffer<HitSummary, RingBufferSize>& DigiManager::GetRingBuffer(int d, int ch) {
+  static RingBuffer<HitSummary, RingBufferSize> emptyHitBuf;
   if (mode == Mode::Standalone) {
+    if (!digi[d]) return emptyHitBuf;
     return digi[d]->ringBuffer[ch];
   } else {
     return client->GetRingBuffer(d, ch);
@@ -381,7 +444,9 @@ RingBuffer<HitSummary, RingBufferSize>& DigiManager::GetRingBuffer(int d, int ch
 }
 
 RingBuffer<TraceSnapshot, TraceRingBufferSize>& DigiManager::GetTraceRingBuffer(int d) {
+  static RingBuffer<TraceSnapshot, TraceRingBufferSize> emptyTraceBuf;
   if (mode == Mode::Standalone) {
+    if (!digi[d]) return emptyTraceBuf;
     return digi[d]->traceRingBuffer;
   } else {
     return client->GetTraceRingBuffer(d);
@@ -395,7 +460,8 @@ DigiManager::ScalarSnapshot DigiManager::GetScalarSnapshot(int d) {
 
   if (mode == Mode::Standalone) {
     if (!digi[d] || digi[d]->IsDummy()) return snap;
-    // Poll values from digitizer (same as old MainWindow::UpdateScalar)
+    // Poll values from digitizer under mutex
+    std::lock_guard<std::mutex> lock(digiMutex[d]);
     int nCh = digi[d]->GetNChannels();
     for (int ch = 0; ch < nCh; ch++) {
       std::string timeStr  = digi[d]->ReadValue(PHA::CH::ChannelRealtime, ch);
@@ -418,6 +484,9 @@ DigiManager::ScalarSnapshot DigiManager::GetScalarSnapshot(int d) {
     memcpy(snap.realTime,   sd.realTime,   sizeof(snap.realTime));
     snap.totalFileSize = sd.totalFileSize;
     snap.acqOn = sd.acqOn;
+    snap.ledStatus = sd.ledStatus;
+    snap.acqStatus = sd.acqStatus;
+    memcpy(snap.tempADC, sd.tempADC, sizeof(snap.tempADC));
   }
   return snap;
 }
@@ -430,30 +499,33 @@ Digitizer2Gen* DigiManager::GetDigitizer(int d) {
 
 //============================================ Internal
 void DigiManager::ReadDataLoop(int digiIndex) {
+  if (digiIndex < 0 || digiIndex >= MaxNumberOfDigitizer || !digi[digiIndex]) return;
+
   if (onLogMessage) {
     onLogMessage("Digi-" + std::to_string(digi[digiIndex]->GetSerialNumber())
                  + " ReadDataLoop started.");
   }
 
   while (!readThreadStop[digiIndex]) {
+    if (!digi[digiIndex]) break;
     int ret;
     {
       std::lock_guard<std::mutex> lock(digiMutex[digiIndex]);
       ret = digi[digiIndex]->ReadData();
+
+      if (ret > 0 && isSaveData[digiIndex]) {
+        digi[digiIndex]->SaveDataToFile();
+      }
     }
 
     if (ret < 0) break;  // CAEN_FELib_Stop or error
-
-    if (isSaveData[digiIndex] && ret > 0) {
-      digi[digiIndex]->SaveDataToFile();
-    }
 
     if (ret == 0) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
   }
 
-  if (onLogMessage) {
+  if (onLogMessage && digi[digiIndex]) {
     onLogMessage("Digi-" + std::to_string(digi[digiIndex]->GetSerialNumber())
                  + " ReadDataLoop stopped.");
   }

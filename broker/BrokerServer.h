@@ -50,10 +50,12 @@ private:
   std::thread readThread[MaxNumberOfDigitizer];
   std::atomic<bool> readThreadStop[MaxNumberOfDigitizer];
   bool isSaveData[MaxNumberOfDigitizer];
+  int  dataFormat[MaxNumberOfDigitizer]; // current data format per digitizer
 
   // Scalar broadcast thread
   std::thread scalarThread;
   std::atomic<bool> scalarThreadStop;
+  std::atomic<int>  scalarCountdown;
   float scalarIntervalSec;
 
   // For accept rate calculation

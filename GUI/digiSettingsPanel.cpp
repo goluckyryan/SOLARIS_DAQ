@@ -110,7 +110,7 @@ DigiSettingsPanel::DigiSettingsPanel(DigiManager * digiManager, unsigned short n
         leInfo[iDigi][j]->setReadOnly(true);
 
         Reg reg = infoIndex[j].second;
-        QString text = QString::fromStdString(digiManager->ReadValue(iDigi, reg));
+        QString text = QString::fromStdString(digiManager->ReadValueFromCache(iDigi, reg));
         if( reg.GetPara() == PHA::DIG::ADC_SampleRate.GetPara() ) {
           text += " = " + QString::number(digiManager->GetTick2ns(iDigi), 'f', 1) + " ns" ;
         }
@@ -202,7 +202,7 @@ DigiSettingsPanel::DigiSettingsPanel(DigiManager * digiManager, unsigned short n
       bnLayout->addWidget(bnResetBd[iDigi], rowId, 2, 1, 2);
       connect(bnResetBd[iDigi], &QPushButton::clicked, this, [=](){
          SendLogMsg("Reset Digitizer-" + QString::number(digiManager->GetSerialNumber(ID)));
-         digiManager->GetDigitizer(ID)->Reset();    
+         if( digiManager->GetDigitizer(ID) ) digiManager->GetDigitizer(ID)->Reset();
          RefreshSettings();
       });
       
@@ -635,7 +635,7 @@ DigiSettingsPanel::DigiSettingsPanel(DigiManager * digiManager, unsigned short n
 
         });
 
-        if( digiManager->GetDigitizer(iDigi)->GetCupVer() >= 2024041200 && digiManager->GetFPGAType(iDigi) == DPPType::PSD ){ // there are expoential test pulse
+        if( digiManager->GetDigitizer(iDigi) && digiManager->GetDigitizer(iDigi)->GetCupVer() >= 2024041200 && digiManager->GetFPGAType(iDigi) == DPPType::PSD ){ // there are expoential test pulse
           SetupSpinBox(sbIPEAmplitude[iDigi], PSD::DIG::IPEAmplitude, -1, false, "Ampuitude [LSB] :", testPulseLayout, 6, 0);
           SetupSpinBox(sbIPEBaseline[iDigi], PSD::DIG::IPEBaseline, -1, false, "Base line [LSB] :", testPulseLayout, 7, 0);
           SetupSpinBox(sbIPEDecayTime[iDigi], PSD::DIG::IPEDecayTime, -1, false, "Decay Time [ns] :", testPulseLayout, 8, 0);
@@ -846,7 +846,7 @@ DigiSettingsPanel::DigiSettingsPanel(DigiManager * digiManager, unsigned short n
             SetupSpinBox(spbInputDelay[iDigi][k], PHA::GROUP::InputDelay, k, false, "ch : " + QString::number(4*k) + " - " + QString::number(4*k+3) + " [ns] ", groupLayout, k/4, 2*(k%4));
           }
 
-          bdGroup[iDigi]->setEnabled(digiManager->GetDigitizer(iDigi)->GetCupVer() >= MIN_VERSION_GROUP);
+          bdGroup[iDigi]->setEnabled(digiManager->GetDigitizer(iDigi) && digiManager->GetDigitizer(iDigi)->GetCupVer() >= MIN_VERSION_GROUP);
         }
       }
 
@@ -1541,7 +1541,7 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
         FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
         FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
 
-        unsigned long  mask = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
+        unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
 
         //-------- PHA
@@ -1929,7 +1929,7 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
         FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
         FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
 
-        unsigned long  mask = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
+        unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
 
         //-------- PSD
@@ -2337,7 +2337,7 @@ void DigiSettingsPanel::onTriggerClick(int haha){
     SendLogMsg(msg + "|OK.");
   }else{
     SendLogMsg(msg + "|Fail.");
-    digiManager->ReadValue(iDig, PHA::CH::ChannelsTriggerMask, ch);
+    digiManager->ReadValueFromCache(iDig, PHA::CH::ChannelsTriggerMask, ch);
   }
 
   UpdatePanelFromMemory();
@@ -2359,7 +2359,7 @@ void DigiSettingsPanel::ReadTriggerMap(){
 
   for( int ch = 0; ch < (int) digiManager->GetNChannels(ID); ch ++){
 
-    unsigned long  mask = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, ch));
+    unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, ch));
     //printf("Trigger Mask of ch-%2d : 0x%s |%s| \n", ch, QString::number(mask, 16).toStdString().c_str(), digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, ch).c_str());
 
     for( int k = 0; k < (int) digiManager->GetNChannels(ID); k ++ ){
@@ -2387,15 +2387,7 @@ void DigiSettingsPanel::UpdateStatus(){
 
   if( tabWidget->currentIndex() >= nDigi) return;
 
-  digiManager->ReadValue(ID, PHA::DIG::LED_status);
-  digiManager->ReadValue(ID, PHA::DIG::ACQ_status);
-  int nADC = (digiManager->GetModelName(ID) == "VX2740") ? 1 : (int) PHA::DIG::TempSensADC.size();
-  for( int i = 0; i < nADC; i++) digiManager->ReadValue(ID, PHA::DIG::TempSensADC[i]);
-
-  for( int i = 0; i < (int) PHA::DIG::TempSensOthers.size(); i++){
-    digiManager->ReadValue(ID, PHA::DIG::TempSensOthers[i]);
-  }
-
+  // UpdatePanelFromMemory(true) reads status values directly via ReadValue
   UpdatePanelFromMemory(true);
 
 }
@@ -2478,7 +2470,7 @@ void DigiSettingsPanel::SaveSettings(){
     QString ext = fileInfo.suffix();
     if( ext == "") filePath += ".dat";
 
-    int flag = digiManager->GetDigitizer(ID)->SaveSettingsToFile(filePath.toStdString().c_str());
+    int flag = digiManager->GetDigitizer(ID) ? digiManager->GetDigitizer(ID)->SaveSettingsToFile(filePath.toStdString().c_str()) : -1;
 
     switch (flag) {
       case 1 : {
@@ -2516,7 +2508,7 @@ void DigiSettingsPanel::LoadSettings(){
   leSettingFile[ID]->setText(fileName);
   //TODO ==== check is the file valid;
 
-  if( digiManager->GetDigitizer(ID)->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
+  if( digiManager->GetDigitizer(ID) && digiManager->GetDigitizer(ID)->LoadSettingsFromFile(fileName.toStdString().c_str()) ){
     SendLogMsg("Loaded settings file " + fileName + " for Digi-" + QString::number(digiManager->GetSerialNumber(ID)));
     UpdatePanelFromMemory();
     UpdateOtherPanels();
@@ -2545,29 +2537,27 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     printf("DigiSettingsPanel::%s Digi-%d\n", __func__, digiManager->GetSerialNumber(ID));
   }  
 
-  //--------- LED Status
-  unsigned int ledStatus = atoi(digiManager->ReadValue(ID, PHA::DIG::LED_status).c_str());
+  //--------- LED Status, ACQ Status, Temperature — use cached snapshot (no network calls)
+  auto snap = digiManager->GetScalarSnapshot(ID);
+
   for( int i = 0; i < 19; i++){
-    if( (ledStatus >> i) & 0x1 ) {
+    if( (snap.ledStatus >> i) & 0x1 ) {
       LEDStatus[ID][i]->setStyleSheet("background-color:green;");
     }else{
       LEDStatus[ID][i]->setStyleSheet("");
     }
   }
 
-  //--------- ACQ Status
-  unsigned int acqStatus = atoi(digiManager->ReadValue(ID, PHA::DIG::ACQ_status).c_str());
   for( int i = 0; i < 7; i++){
-    if( (acqStatus >> i) & 0x1 ) {
+    if( (snap.acqStatus >> i) & 0x1 ) {
       ACQStatus[ID][i]->setStyleSheet("background-color:green;");
     }else{
       ACQStatus[ID][i]->setStyleSheet("");
     }
   }
 
-  //-------- temperature
   for( int i = 0; i < 8; i++){
-    leTemp[ID][i]->setText(QString::fromStdString(digiManager->ReadValue(ID, PHA::DIG::TempSensADC[i]))); // same for PSD
+    leTemp[ID][i]->setText(QString::number(snap.tempADC[i]));
   }
   
   if( onlyStatus ) {
@@ -2577,17 +2567,17 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     Reg reg = infoIndex[j].second;
-    QString text = QString::fromStdString(digiManager->ReadValue(ID, reg));
+    QString text = QString::fromStdString(digiManager->ReadValueFromCache(ID, reg));
     if( reg.GetPara() == PHA::DIG::ADC_SampleRate.GetPara() ) {
       text += " = " + QString::number(digiManager->GetTick2ns(ID), 'f', 1) + " ns" ;
     }
     leInfo[ID][j]->setText(text);
-  } 
+  }
 
   //-------- board settings
   FillComboBoxValueFromMemory(cbbClockSource[ID], PHA::DIG::ClockSource);
 
-  QString result = QString::fromStdString(digiManager->ReadValue(ID, PHA::DIG::StartSource));
+  QString result = QString::fromStdString(digiManager->ReadValueFromCache(ID, PHA::DIG::StartSource));
   QStringList resultList = result.remove(QChar(' ')).split("|");
   //qDebug() << resultList << "," << resultList.count();
   for( int j = 0; j < (int) PHA::DIG::StartSource.GetAnswers().size(); j++){
@@ -2598,7 +2588,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     }
   }
 
-  result = QString::fromStdString(digiManager->ReadValue(ID, PHA::DIG::GlobalTriggerSource));
+  result = QString::fromStdString(digiManager->ReadValueFromCache(ID, PHA::DIG::GlobalTriggerSource));
   resultList = result.remove(QChar(' ')).split("|");
   // bdTestPulse[ID]->setEnabled(false);
   for( int j = 0; j < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); j++){
@@ -2650,7 +2640,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     FillComboBoxValueFromMemory(cbLVDSMode[ID][k], PHA::LVDS::LVDSMode, k);
     FillComboBoxValueFromMemory(cbLVDSDirection[ID][k], PHA::LVDS::LVDSDirection, k);
   }
-  leLVDSIOReg[ID]->setText(QString::fromStdString(digiManager->ReadValue(ID, PHA::DIG::LVDSIOReg)));
+  leLVDSIOReg[ID]->setText(QString::fromStdString(digiManager->ReadValueFromCache(ID, PHA::DIG::LVDSIOReg)));
 
   //------------- DAC 
   FillComboBoxValueFromMemory(cbDACoutMode[ID], PHA::DIG::DACoutMode);
@@ -2670,7 +2660,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   }
 
   //------------ Group
-  if( digiManager->GetModelName(ID) != "VX2730" && digiManager->GetDigitizer(ID)->GetCupVer() >= MIN_VERSION_GROUP ){
+  if( digiManager->GetModelName(ID) != "VX2730" && digiManager->GetDigitizer(ID) && digiManager->GetDigitizer(ID)->GetCupVer() >= MIN_VERSION_GROUP ){
     for( int k = 0 ; k < MaxNumberOfGroup; k++){
       FillSpinBoxValueFromMemory(spbInputDelay[ID][k], PHA::GROUP::InputDelay, k); // PHA = PSD
     }
@@ -2681,7 +2671,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   for( int ch = 0; ch < digiManager->GetNChannels(ID); ch++){
 
-    unsigned int status = atoi(digiManager->ReadValue(ID, PHA::CH::ChannelStatus, ch).c_str());
+    unsigned int status = atoi(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelStatus, ch).c_str());
     for( int i = 0; i < 9; i++){
       if( (status >> i) & 0x1 ) {
         chStatus[ID][ch][i]->setStyleSheet("background-color:green;");
@@ -2689,8 +2679,8 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
         chStatus[ID][ch][i]->setStyleSheet("");
       }
     }
-    chGainFactor[ID][ch]->setText(QString::fromStdString(digiManager->ReadValue(ID, PHA::CH::GainFactor, ch)));
-    chADCToVolts[ID][ch]->setText(QString::fromStdString(digiManager->ReadValue(ID, PHA::CH::ADCToVolts, ch)));
+    chGainFactor[ID][ch]->setText(QString::fromStdString(digiManager->ReadValueFromCache(ID, PHA::CH::GainFactor, ch)));
+    chADCToVolts[ID][ch]->setText(QString::fromStdString(digiManager->ReadValueFromCache(ID, PHA::CH::ADCToVolts, ch)));
 
     FillComboBoxValueFromMemory(cbbOnOff[ID][ch], PHA::CH::ChannelEnable, ch);
     FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], PHA::CH::RecordLength, ch);
@@ -2724,7 +2714,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], PHA::CH::WaveDigitalProbe2, ch);
     FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], PHA::CH::WaveDigitalProbe3, ch);
 
-    std::string itlConnect = digiManager->ReadValue(ID, PHA::CH::ITLConnect, ch);
+    std::string itlConnect = digiManager->ReadValueFromCache(ID, PHA::CH::ITLConnect, ch);
     if( itlConnect == "Disabled" ) {
       ITLConnectStatus[ID][ch] = 0;
       chITLConnect[ID][ch][0]->setStyleSheet("");
@@ -2792,11 +2782,11 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   //------ Trigger Mask
   if( cbChPick[ID]->currentData().toInt() < 0 ) {
-    unsigned long mask = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, 0));
+    unsigned long mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, 0));
     
     bool isSame = true;
     for(int ch = 1; ch < digiManager->GetNChannels(ID) ; ch ++){
-      unsigned long haha = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, ch));
+      unsigned long haha = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, ch));
       if( mask != haha) {
         isSame = false;
         leTriggerMask[ID][digiManager->GetNChannels(ID)]->setText("Diff. value");
@@ -2806,7 +2796,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
     if( isSame ) leTriggerMask[ID][digiManager->GetNChannels(ID)]->setText("0x" + QString::number(mask, 16).toUpper());
   }else{
-    unsigned long  mask = Utility::TenBase(digiManager->ReadValue(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
+    unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
     leTriggerMask[ID][digiManager->GetNChannels(ID)]->setText("0x" + QString::number(mask, 16).toUpper());
     leTriggerMask[ID][digiManager->GetNChannels(ID)]->setStyleSheet("");
   }
@@ -3177,22 +3167,19 @@ void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel 
 }
 
 void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg para, int ch_index){
-  QString result = QString::fromStdString(digiManager->ReadValue(ID, para, ch_index));
-  //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, cbb);
+  QString result = QString::fromStdString(digiManager->ReadValueFromCache(ID, para, ch_index < 0 ? 0 : ch_index));
   int index = cbb->findData(result);
   if( index >= 0 && index < cbb->count()) {
     cbb->setCurrentIndex(index);
-  }else{
-    //printf("%s  %s\n", para.GetPara().c_str(), result.toStdString().c_str());
   }
   if( cbb->styleSheet() == "color:red;" ) cbb->setStyleSheet("");
 }
 
 void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){
-  QString result = QString::fromStdString(digiManager->ReadValue(ID, para, ch_index));
+  QString result = QString::fromStdString(digiManager->ReadValueFromCache(ID, para, ch_index < 0 ? 0 : ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
 
-  if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() && digiManager->GetDigitizer(ID)->GetCupVer() >= MIN_VERSION_GROUP) {
+  if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() && digiManager->GetDigitizer(ID) && digiManager->GetDigitizer(ID)->GetCupVer() >= MIN_VERSION_GROUP) {
     spb->setValue(result.toDouble()*8);
   }else{
     spb->setValue(result.toDouble());
@@ -3411,6 +3398,7 @@ bool DigiSettingsPanel::CheckDigitizersCanCopy(){
   int digiToIndex = cbCopyDigiTo->currentIndex();
   if( digiManager->GetModelName(digiFromIndex) != digiManager->GetModelName(digiToIndex) ) return false;
   if( digiManager->GetFPGAType(digiFromIndex) != digiManager->GetFPGAType(digiToIndex) ) return false;
+  if( !digiManager->GetDigitizer(digiFromIndex) || !digiManager->GetDigitizer(digiToIndex) ) return false;
   if( digiManager->GetDigitizer(digiFromIndex)->GetFPGAVersion() != digiManager->GetDigitizer(digiToIndex)->GetFPGAVersion() ) return false;
   return true;
 }

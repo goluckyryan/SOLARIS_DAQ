@@ -1,5 +1,4 @@
 #include "mainwindow.h"
-#include <zmq.h>
 
 #include <QApplication>
 #include <QMessageBox>
@@ -13,48 +12,18 @@ int main(int argc, char *argv[]){
 
     QApplication a(argc, argv);
 
-    // Auto-detect broker: read broker IP/port from programSettings.txt and try to ping
-    bool brokerMode = false;
+    // Read broker mode hint from programSettings.txt (line 11) for DAQ lock decision.
+    // The actual broker auto-detection happens later in LoadProgramSettings via ping.
+    bool brokerHint = false;
     {
-      QString brokerIP = "localhost";
-      int cmdPort = 5555;
       QFile settingsFile("programSettings.txt");
       if (settingsFile.open(QIODevice::Text | QIODevice::ReadOnly)) {
         QTextStream in(&settingsFile);
         for (int i = 0; !in.atEnd(); i++) {
           QString line = in.readLine();
-          if (i == 12) brokerIP = line;
-          if (i == 13) cmdPort = line.toInt();
+          if (i == 11) { brokerHint = (line == "1"); break; }
         }
         settingsFile.close();
-      }
-
-      // Try to ping the broker with raw ZMQ (1 second timeout, won't hang)
-      std::string cmdEP = "tcp://" + brokerIP.toStdString() + ":" + std::to_string(cmdPort);
-      {
-        void* ctx = zmq_ctx_new();
-        void* sock = zmq_socket(ctx, ZMQ_REQ);
-        int timeout = 1000;
-        zmq_setsockopt(sock, ZMQ_SNDTIMEO, &timeout, sizeof(timeout));
-        zmq_setsockopt(sock, ZMQ_RCVTIMEO, &timeout, sizeof(timeout));
-        int linger = 0;
-        zmq_setsockopt(sock, ZMQ_LINGER, &linger, sizeof(linger));
-        if (zmq_connect(sock, cmdEP.c_str()) == 0) {
-          uint8_t pingMsg[] = {0xF0, 0x00};
-          if (zmq_send(sock, pingMsg, 2, 0) == 2) {
-            uint8_t buf[16];
-            int n = zmq_recv(sock, buf, sizeof(buf), 0);
-            if (n >= 2 && buf[0] == 0xF0) brokerMode = true;
-          }
-        }
-        zmq_close(sock);
-        zmq_ctx_destroy(ctx);
-      }
-
-      if (brokerMode) {
-        printf("######### Broker detected at %s — using broker mode\n", cmdEP.c_str());
-      } else {
-        printf("######### No broker detected — using standalone mode\n");
       }
     }
 
@@ -62,7 +31,7 @@ int main(int argc, char *argv[]){
     bool isLock = false;
     int pid = 0;
 
-    if (!brokerMode) {
+    if (!brokerHint) {
       QFile lockFile(DAQLockFile);
       if( lockFile.open(QIODevice::Text | QIODevice::ReadOnly) ){
           QTextStream in(&lockFile);
@@ -87,7 +56,7 @@ int main(int argc, char *argv[]){
         msgBox.setWindowTitle("Oopss....");
         msgBox.setText("The DAQ program is already opened, or crashed perviously. \nPID is " + QString::number(pid) + "\n You can kill the procee by \"kill -9 <pid>\" and delete the " + DAQLockFile + "\n or click the \"Kill\" button");
         msgBox.setIcon(QMessageBox::Information);
-    
+
         QPushButton * kill = msgBox.addButton("Kill and Open New", QMessageBox::AcceptRole);
 
         msgBox.setStandardButtons(QMessageBox::Ok);
@@ -103,7 +72,7 @@ int main(int argc, char *argv[]){
         }
     }
 
-    if (!brokerMode) {
+    if (!brokerHint) {
       QFile lockFile2(DAQLockFile);
       lockFile2.open(QIODevice::Text | QIODevice::WriteOnly);
       lockFile2.write( "1" );
