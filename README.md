@@ -68,6 +68,196 @@ On startup, the GUI:
 
 No manual mode toggle is needed. If the broker is running, the GUI uses it.
 
+### GUI Startup Flow
+
+```mermaid
+flowchart TD
+    A[SOLARIS_DAQ starts] --> B[Read programSettings.txt]
+    B --> C{Ping broker at<br/>brokerIP:brokerCmdPort}
+    C -->|Response within 1s| D[Broker Mode]
+    C -->|No response / timeout| E[Standalone Mode]
+
+    D --> F[Skip DAQ lock]
+    F --> G[Connect BrokerClient<br/>REQ + SUB sockets]
+    G --> H[ListDigitizers from broker]
+    H --> I{Broker has<br/>digitizers?}
+    I -->|Yes| K[ReadAllSettings:<br/>sync cache from broker]
+    K --> L[GUI Ready<br/>title: FSU SOLARIS DAQ Broker : IP]
+    I -->|No| J[Open digitizers<br/>from IP list]
+    J --> K
+
+    E --> M{DAQ lock<br/>file exists?}
+    M -->|Yes| N[Show Kill/Cancel dialog]
+    M -->|No| O[Create lock file]
+    N -->|Kill| O
+    N -->|Cancel| P[Exit]
+    O --> Q[GUI Ready<br/>title: FSU SOLARIS DAQ Standalone]
+    Q --> R[User clicks<br/>Open Digitizers]
+    R --> S[Open each digitizer<br/>from IP list]
+    S --> T[LoadSettings from file]
+    T --> L
+```
+
+> **Note:** Currently, the GUI trusts whatever digitizers the broker has open. If the broker's digitizer list differs from the GUI's IP list (e.g., different digitizers, different order), the GUI does not verify or reconcile them. This may cause issues with settings files or detector mapping. This will be addressed in a future update.
+
+### Open Digitizers Flow
+
+```mermaid
+flowchart TD
+    A[Open Digitizers] --> B{Broker Mode?}
+
+    B -->|Yes| C[Connect to broker]
+    C --> D[List existing digitizers]
+    D --> E[Create local dummies<br/>PHA or PSD settings]
+    E --> F[ReadAllSettings:<br/>sync all params to cache]
+    F --> G[Setup scalar display]
+
+    B -->|No| H[Create DigiManager<br/>Standalone mode]
+    H --> I[For each IP in list]
+    I --> J[OpenDigitizer via CAEN FELib]
+    J --> K{Connected?}
+    K -->|Yes| L[Load settings file]
+    K -->|No| M[Create dummy digitizer]
+    L --> G
+    M --> G
+
+    G --> N[Enable ACQ controls]
+```
+
+### ACQ Start/Stop Flow
+
+```mermaid
+flowchart TD
+    A[Start ACQ] --> B{Save Run?}
+    B -->|Yes| C[Increment Run ID<br/>Get run comment]
+    B -->|No| D[No-save run]
+    C --> E[For each digitizer]
+    D --> E
+
+    E --> F{Broker Mode?}
+    F -->|Yes| G[client->StartACQ<br/>broker starts ReadDataLoop]
+    F -->|No| H[digi->StartACQ<br/>start local ReadDataThread]
+
+    G --> I[Set cached acqOn = true]
+    H --> I
+    I --> J[Show scalar window]
+    J --> K[Start scalar timer]
+    K --> L[ACQ Running]
+
+    L --> M[Stop ACQ]
+    M --> N{Broker Mode?}
+    N -->|Yes| O[client->StopACQ<br/>broker joins ReadDataLoop]
+    N -->|No| P[digi->StopACQ<br/>join local ReadDataThread]
+    O --> Q[Set cached acqOn = false]
+    P --> Q
+    Q --> R[Close data files]
+    R --> S[Enable controls]
+```
+
+### Scope Flow
+
+```mermaid
+flowchart TD
+    A[Open Scope] --> B[Read settings from cache]
+    B --> C[Display probe combo boxes]
+
+    C --> D[User clicks Start]
+    D --> E[Save current settings<br/>from cache]
+    E --> F[Disable all channels]
+    F --> G[Enable selected channel<br/>WaveSaving = Always]
+    G --> H[StartACQ with DataFormat::ALL]
+
+    H --> I{Broker Mode?}
+    I -->|Yes| J[Broker ReadDataLoop<br/>fills traceRingBuffer]
+    J --> K[PublishTraceSnapshot<br/>every 500ms via PUB]
+    K --> L[Client SubscriptionLoop<br/>receives PUB_TRACE]
+    L --> M[Pushes to client<br/>traceRingBuffer]
+
+    I -->|No| N[Local ReadDataThread<br/>fills traceRingBuffer]
+    N --> M
+
+    M --> O[Scope timer reads<br/>traceRingBuffer index-1]
+    O --> P[Plot analog + digital probes]
+    P --> O
+
+    Q[User clicks Stop] --> R[StopACQ]
+    R --> S[Restore saved settings]
+```
+
+### Parameter Read/Write Flow
+
+```mermaid
+flowchart TD
+    A[GUI needs parameter value] --> B{For display?}
+
+    B -->|Yes| C[ReadValueFromCache<br/>zero network calls]
+    C --> D[Return from local<br/>dummy memory]
+
+    B -->|No: explicit read| E[ReadValue<br/>hardware/network call]
+    E --> F{Broker Mode?}
+    F -->|Yes| G[client->ReadValue<br/>via broker REQ/REP]
+    F -->|No| H[digi->ReadValue<br/>direct hardware]
+    G --> I[Store in dummy cache]
+    H --> I
+    I --> J[Return value]
+
+    K[User changes setting] --> L[WriteValue]
+    L --> M{Broker Mode?}
+    M -->|Yes| N[client->WriteValue<br/>via broker]
+    N --> O[Readback from ch 0<br/>for all-channel writes]
+    M -->|No| P[digi->WriteValue<br/>direct hardware]
+    O --> Q[Store readback in cache]
+    P --> Q
+```
+
+### Data Flow During ACQ
+
+```mermaid
+flowchart LR
+    subgraph Broker
+        A[Digitizer<br/>Hardware] -->|CAEN FELib| B[ReadDataLoop]
+        B -->|hits| C[ringBuffer per ch]
+        B -->|waveforms| D[traceRingBuffer]
+        C -->|every 100ms| E[PUB_HIT_SUMMARY]
+        D -->|every 500ms| F[PUB_TRACE]
+        G[ReadValue per ch] -->|every 2s| H[PUB_SCALAR]
+    end
+
+    subgraph GUI
+        E -->|ZMQ SUB| I[Client ringBuffer]
+        F -->|ZMQ SUB| J[Client traceRingBuffer]
+        H -->|ZMQ SUB| K[Client scalarData]
+        I --> L[SingleSpectra<br/>histogram fill]
+        J --> M[Scope<br/>waveform display]
+        K --> N[Scalar window<br/>trigger rates]
+        K --> O[Settings panel<br/>LED/ACQ/temp status]
+    end
+```
+
+### Close Digitizers Flow
+
+```mermaid
+flowchart TD
+    A{How closed?} --> B[Close Digitizers button]
+    A --> C[GUI window X button]
+
+    B --> D{Broker Mode?}
+    D -->|Yes| E[client->CloseDigitizer<br/>for each digi]
+    E --> F[Broker closes<br/>remote digitizers]
+    F --> G[Disconnect from broker]
+    D -->|No| H[Save settings to<br/>tempSettings/]
+    H --> I[Close each digitizer<br/>locally]
+
+    C --> J{Broker Mode?}
+    J -->|Yes| K[Just disconnect<br/>keep remote digis open]
+    J -->|No| I
+
+    G --> L[Delete DigiManager]
+    I --> L
+    K --> L
+    L --> M[Reset UI controls]
+```
+
 ## Broker Architecture
 
 ### Broker Lifecycle

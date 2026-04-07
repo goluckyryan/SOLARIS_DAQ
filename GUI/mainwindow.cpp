@@ -732,17 +732,16 @@ void MainWindow::OpenDigitizers(){
     nDigi = digiManager->GetNumDigitizers();
     LogMsg("Broker has " + QString::number(nDigi) + " digitizer(s) already open.");
 
-    // Open any additional digitizers from IP list that aren't already open
-    for( int i = 0; i < IPList.size(); i++ ){
-      bool alreadyOpen = false;
-      for( int d = 0; d < nDigi; d++ ){
-        // TODO: match by URL/serial number if broker exposes URL info
-        // For now, skip opening if broker already has enough digitizers
-        alreadyOpen = true;
-      }
-      if( !alreadyOpen ){
+    // If broker has no digitizers, open from IP list
+    if( nDigi == 0 && !IPList.isEmpty() ){
+      LogMsg("Opening digitizers from IP list...");
+      for( int i = 0; i < IPList.size(); i++ ){
         int idx = digiManager->OpenDigitizer(("dig2://" + IPList[i]).toStdString());
-        if( idx >= 0 ) LogMsg("Opened additional digitizer via broker: " + IPList[i]);
+        if( idx >= 0 ){
+          LogMsg("Opened digitizer via broker: " + IPList[i]);
+        } else {
+          LogMsg("<font style=\"color:red;\">Failed to open " + IPList[i] + " via broker.</font>");
+        }
       }
     }
 
