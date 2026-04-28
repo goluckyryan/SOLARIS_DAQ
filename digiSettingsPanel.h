@@ -149,6 +149,7 @@ private:
   RComboBox * cbbAutoDisarmAcq[MaxNumberOfDigitizer];
   RComboBox * cbbBusyIn[MaxNumberOfDigitizer];
   RComboBox * cbbStatEvents[MaxNumberOfDigitizer];
+  RComboBox * cbbDataReduction[MaxNumberOfDigitizer];
   RComboBox * cbbSyncOut[MaxNumberOfDigitizer];
   RComboBox * cbbBoardVetoSource[MaxNumberOfDigitizer];
   RSpinBox  * dsbBdVetoWidth[MaxNumberOfDigitizer];

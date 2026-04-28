@@ -404,6 +404,33 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         rowId ++;
         SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, false, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
 
+        QLabel * lbDataReduction = new QLabel("Data Reduction :", digiTab[iDigi]);
+        lbDataReduction->setAlignment(Qt::AlignRight);
+        boardLayout->addWidget(lbDataReduction, rowId, 4, 1, 2);
+
+        cbbDataReduction[iDigi] = new RComboBox(digiTab[iDigi]);
+        boardLayout->addWidget(cbbDataReduction[iDigi], rowId, 6);
+        SetupShortComboBox(cbbDataReduction[iDigi], PHA::DIG::EnableDataReduction);
+        connect(cbbDataReduction[iDigi], &RComboBox::currentIndexChanged, this, [=](){
+          if( !enableSignalSlot ) return;
+          QString msg;
+          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableDataReduction.GetPara());
+          msg += " = " + cbbDataReduction[ID]->currentData().toString();
+          if( digi[ID]->WriteValue(PHA::DIG::EnableDataReduction, cbbDataReduction[ID]->currentData().toString().toStdString()) ){
+            SendLogMsg(msg + "|OK.");
+            cbbDataReduction[ID]->setStyleSheet("");
+          }else{
+            SendLogMsg(msg + "|Fail.");
+            cbbDataReduction[ID]->setStyleSheet("color:red");
+          }
+        });
+
+
+        //-------------------------------------
+        rowId ++;
+        SetupSpinBox(spbRunDelay[iDigi], PHA::DIG::RunDelay, -1, false, "Run Delay [ns] :", boardLayout, rowId, 0, 1, 2);
+
+
         //-------------------------------------
         rowId ++;
         SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, false, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
@@ -457,7 +484,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         
         //-------------------------------------
         rowId ++;
-        SetupSpinBox(spbRunDelay[iDigi], PHA::DIG::RunDelay, -1, false, "Run Delay [ns] :", boardLayout, rowId, 0);
+        SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, false, "IO Level :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
         QLabel * lbClockOutDelay = new QLabel("Temp. Clock Out Delay [ps] :", digiTab[iDigi]);
@@ -495,7 +522,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
         //-------------------------------------
         rowId ++;
-        SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, false, "IO Level :", boardLayout, rowId, 0, 1, 2);
+        SetupComboBox(cbDACoutMode[iDigi], PHA::DIG::DACoutMode, -1, false, "DAC out Mode :", boardLayout, rowId, 0, 1, 2);
 
         QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", digiTab[iDigi]);
         lbClockOutDelay2->setAlignment(Qt::AlignRight);
@@ -529,10 +556,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             SendLogMsg(msg + "|Fail.");
           }
         });
-
-        //-------------------------------------
-        rowId ++;
-        SetupComboBox(cbDACoutMode[iDigi], PHA::DIG::DACoutMode, -1, false, "DAC out Mode :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
         rowId ++;
@@ -2618,6 +2641,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   FillComboBoxValueFromMemory(cbbSyncOut[ID], PHA::DIG::SyncOutMode);
   FillComboBoxValueFromMemory(cbbAutoDisarmAcq[ID], PHA::DIG::EnableAutoDisarmACQ);
   FillComboBoxValueFromMemory(cbbStatEvents[ID], PHA::DIG::EnableStatisticEvents);
+  FillComboBoxValueFromMemory(cbbDataReduction[ID], PHA::DIG::EnableDataReduction);
   FillComboBoxValueFromMemory(cbbBdVetoPolarity[ID], PHA::DIG::BoardVetoPolarity);
   FillComboBoxValueFromMemory(cbbBoardVetoSource[ID], PHA::DIG::BoardVetoSource);
   FillComboBoxValueFromMemory(cbbIOLevel[ID], PHA::DIG::IO_Level);

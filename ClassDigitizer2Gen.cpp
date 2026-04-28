@@ -59,7 +59,7 @@ void Digitizer2Gen::Initialization(){
 
 }
 
-void Digitizer2Gen::SetDummy(unsigned short sn){
+void Digitizer2Gen::SetDummy(unsigned int sn){
 
   isDummy = true;
   serialNumber = sn;
