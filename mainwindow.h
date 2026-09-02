@@ -34,6 +34,8 @@
 
 const int chromeWindowID = -1; // disable capture screenshot
 
+const QString defaultElogPort = "8080";
+
 //^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
   Q_OBJECT
@@ -185,6 +187,7 @@ private:
   QLineEdit * lDatbaseName;
   QLineEdit * lDatbaseToken;
   QLineEdit * lElogIP;
+  QLineEdit * lElogPort;
   QLineEdit * lElogUser;
   QLineEdit * lElogPWD;
 
@@ -205,6 +208,7 @@ private:
   QString DatabaseName;
   QString DatabaseToken;
   QString ElogIP;
+  QString ElogPort;
   QString ElogUser;
   QString ElogPWD;
 

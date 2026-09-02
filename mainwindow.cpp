@@ -17,6 +17,7 @@
 #include <QDateTime>
 #include <QProcess>
 #include <QScreen>
+#include <QIntValidator>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -1440,6 +1441,7 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
                            the folder of the analysis code. Can be omitted.");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Elog Port </font> can be empty, it defaults to <b>" + defaultElogPort + "</b>.");
 
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml(" * items can be ommitted");
@@ -1530,6 +1532,15 @@ void MainWindow::ProgramSettingsPanel(){
   layout->addWidget(lbElogIP, rowID, 0);
   lElogIP = new QLineEdit(ElogIP, &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
 
+  //-------- Elog Port
+  rowID ++;
+  QLabel *lbElogPort = new QLabel("Elog Port *", &dialog);
+  lbElogPort->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogPort, rowID, 0);
+  lElogPort = new QLineEdit(ElogPort, &dialog); layout->addWidget(lElogPort, rowID, 1, 1, 2);
+  lElogPort->setValidator(new QIntValidator(1, 65535, lElogPort));
+  lElogPort->setPlaceholderText(defaultElogPort);
+
   //-------- Elog User
   rowID ++;
   QLabel *lbElogUser = new QLabel("Elog User *", &dialog);
@@ -1557,6 +1568,7 @@ void MainWindow::ProgramSettingsPanel(){
     masterExpDataPath = lExpDataPath->text();
     expName = lExpName->text();
     ElogIP = lElogIP->text();
+    ElogPort = lElogPort->text().isEmpty() ? defaultElogPort : lElogPort->text();
     ElogUser = lElogUser->text();
     ElogPWD = lElogPWD->text();
 
@@ -1634,6 +1646,7 @@ bool MainWindow::LoadProgramSettings(){
   DatabaseName = "";
   DatabaseToken = "";
   ElogIP = "";
+  ElogPort = defaultElogPort;
   ElogUser = "";
   ElogPWD = "";
 
@@ -1661,12 +1674,15 @@ bool MainWindow::LoadProgramSettings(){
         case  8 : ElogIP          = line; break;
         case  9 : ElogUser        = line; break;
         case 10 : ElogPWD         = line; break;
+        case 11 : ElogPort        = line; break; // appended after ElogPWD to stay compatible with older setting files
       }
 
       count ++;
       line = in.readLine();
       // printf("%d | %s \n", count, line.toStdString().c_str());
     }
+
+    if( ElogPort.isEmpty() ) ElogPort = defaultElogPort;
 
     if( count >= 3 ) {
       logMsgHTMLMode = false;
@@ -1676,6 +1692,7 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("          Database Name : " + DatabaseName);
       LogMsg("         Database Token : " + maskText(DatabaseToken));
       LogMsg("                 ElogIP : " + ElogIP);
+      LogMsg("              Elog Port : " + ElogPort);
       LogMsg("              Elog User : " + ElogUser);
       LogMsg("          Elog Password : " + maskText(ElogPWD));
       LogMsg("          Exp Data Path : " + masterExpDataPath);
@@ -1784,6 +1801,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((ElogIP+"\n").toStdString().c_str());
   file.write((ElogUser+"\n").toStdString().c_str());
   file.write((ElogPWD+"\n").toStdString().c_str());
+  file.write((ElogPort+"\n").toStdString().c_str());
   file.write("//------------end of file.");
   
   file.close();
@@ -2522,7 +2540,7 @@ void MainWindow::WriteElog(QString htmlText, QString subject, QString category, 
   //TODO ===== user name and pwd load from a file.
 
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD
+  arg << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD
       << "-a" << "Author=SOLARIS_DAQ" ;
   if( runNumber > 0 ) arg << "-a" << "RunNo=" + QString::number(runNumber);
   if( category != "" ) arg << "-a" << "Category=" + category;
@@ -2554,7 +2572,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
   QProcess elogBash(this);
 
   QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-w" << QString::number(elogID);
+  arg << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD << "-w" << QString::number(elogID);
 
   //retrevie the elog
   elogBash.start("elog", arg); 
@@ -2571,7 +2589,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
     QString originalHtml = output.mid(index + separator.length());
 
     arg.clear();
-    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-e" << QString::number(elogID)
+    arg << "-s" << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD << "-e" << QString::number(elogID)
         << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
 
     if( screenID >= 0) {
