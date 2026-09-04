@@ -27,6 +27,7 @@ HEADERS += ClassDigitizer2Gen.h \
            Hit.h \
 					 RawDecoder.h \
 					 ClassInfluxDB.h \
+					 ClassElog.h \
 					 mainwindow.h \
 					 digiSettingsPanel.h \
 					 Digiparameters.h \
@@ -42,6 +43,7 @@ HEADERS += ClassDigitizer2Gen.h \
 
 SOURCES += ClassDigitizer2Gen.cpp \
            ClassInfluxDB.cpp \
+					 ClassElog.cpp \
 					 main.cpp \
 					 mainwindow.cpp \
 					 digiSettingsPanel.cpp \

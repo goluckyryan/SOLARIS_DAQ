@@ -44,6 +44,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   influx = nullptr;
   readDataThread = nullptr;
 
+  elog = new Elog(this);
+  connect(elog, &Elog::logMsg, this, &MainWindow::LogMsg);
+
   runTimer = new QTimer();
   needManualComment = true;
   ACQStopButtonPressed = false;
@@ -1541,6 +1544,12 @@ void MainWindow::ProgramSettingsPanel(){
   lElogPort->setValidator(new QIntValidator(1, 65535, lElogPort));
   lElogPort->setPlaceholderText(defaultElogPort);
 
+  //-------- Elog SSL
+  rowID ++;
+  chkElogSSL = new QCheckBox("Use SSL (https) for elog", &dialog);
+  chkElogSSL->setChecked(ElogUseSSL);
+  layout->addWidget(chkElogSSL, rowID, 1);
+
   //-------- Elog User
   rowID ++;
   QLabel *lbElogUser = new QLabel("Elog User *", &dialog);
@@ -1569,6 +1578,7 @@ void MainWindow::ProgramSettingsPanel(){
     expName = lExpName->text();
     ElogIP = lElogIP->text();
     ElogPort = lElogPort->text().isEmpty() ? defaultElogPort : lElogPort->text();
+    ElogUseSSL = chkElogSSL->isChecked();
     ElogUser = lElogUser->text();
     ElogPWD = lElogPWD->text();
 
@@ -1586,7 +1596,7 @@ void MainWindow::ProgramSettingsPanel(){
     }
 
     SetupInflux();
-    CheckElog();
+    SetupElog();
 
     expDataPath = masterExpDataPath + "/" + expName;
     rawDataPath = expDataPath + "/data_raw/";
@@ -1647,6 +1657,7 @@ bool MainWindow::LoadProgramSettings(){
   DatabaseToken = "";
   ElogIP = "";
   ElogPort = defaultElogPort;
+  ElogUseSSL = true; // matches the default port 443
   ElogUser = "";
   ElogPWD = "";
 
@@ -1675,6 +1686,7 @@ bool MainWindow::LoadProgramSettings(){
         case  9 : ElogUser        = line; break;
         case 10 : ElogPWD         = line; break;
         case 11 : ElogPort        = line; break; // appended after ElogPWD to stay compatible with older setting files
+        case 12 : ElogUseSSL      = (line == "SSL" ? true : false); break;
       }
 
       count ++;
@@ -1683,6 +1695,7 @@ bool MainWindow::LoadProgramSettings(){
     }
 
     if( ElogPort.isEmpty() ) ElogPort = defaultElogPort;
+    if( count <= 12 ) ElogUseSSL = (ElogPort == "443"); // setting file older than the SSL option, derive it from the port
 
     if( count >= 3 ) {
       logMsgHTMLMode = false;
@@ -1693,6 +1706,7 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("         Database Token : " + maskText(DatabaseToken));
       LogMsg("                 ElogIP : " + ElogIP);
       LogMsg("              Elog Port : " + ElogPort);
+      LogMsg("               Elog SSL : " + QString(ElogUseSSL ? "Yes" : "No"));
       LogMsg("              Elog User : " + ElogUser);
       LogMsg("          Elog Password : " + maskText(ElogPWD));
       LogMsg("          Exp Data Path : " + masterExpDataPath);
@@ -1753,7 +1767,7 @@ bool MainWindow::LoadProgramSettings(){
       bnOpenDigitizers->setStyleSheet("color:red;");
       DecodeIPList();
       SetupInflux();
-      CheckElog();
+      SetupElog();
     }else{
       LogMsg("<font style=\"color : red;\">Digitizer IP list is empty.</font>");
       bnProgramSettings->setStyleSheet("color: red;");
@@ -1802,6 +1816,7 @@ void MainWindow::SaveProgramSettings(){
   file.write((ElogUser+"\n").toStdString().c_str());
   file.write((ElogPWD+"\n").toStdString().c_str());
   file.write((ElogPort+"\n").toStdString().c_str());
+  file.write( ElogUseSSL ? "SSL\n" : "NoSSL\n" );
   file.write("//------------end of file.");
   
   file.close();
@@ -2118,7 +2133,7 @@ bool MainWindow::LoadExpNameSh(){
     LogMsg("<b>" + settingFile + "</b> not found. Create one.");
     // LogMsg("Please Open the <font style=\"color : red;\">New/Change/Reload Exp</font>");
     runID = -1;
-    elogID = 0;
+    elog->SetID(0);
     //bnOpenDigitizers->setEnabled(false);
     //leExpName->setText("no expName found.");
 
@@ -2142,7 +2157,7 @@ bool MainWindow::LoadExpNameSh(){
       case 0 : expName = haha; break;
       // case 1 : masterExpDataPath = haha; break;
       case 1 : runID = haha.toInt(); break;
-      case 2 : elogID = haha.toInt(); break;
+      case 2 : elog->SetID(haha.toInt()); break;
     }
 
     count ++;
@@ -2172,7 +2187,7 @@ void MainWindow::WriteExpNameSh(){
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
   // file2.write(("ExpDataPath="+ masterExpDataPath + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
-  file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
+  file2.write(("elogID="+std::to_string(elog->GetID())+"\n").c_str());
   file2.write("#------------end of file.");
   file2.close();
   LogMsg("Saved expName.sh to <b>"+ rawDataPath + "/expName.sh</b>.");
@@ -2207,7 +2222,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
   expName = newExpName;
   runID = -1;
-  elogID = 0;
+  elog->SetID(0);
 
   expDataPath = masterExpDataPath + "/" + expName;
   rawDataPath = expDataPath + "/data_raw/";
@@ -2285,7 +2300,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   }
 
   //TODO is there anyway to create a new elog ?? direct edit the config.cfg??
-  //CheckElog();
+  //SetupElog();
   logMsgHTMLMode = true;
   LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
 
@@ -2507,119 +2522,43 @@ void MainWindow::SetupInflux(){
   }
 }
 
-void MainWindow::CheckElog(){
+void MainWindow::SetupElog(){
 
-  if( ElogIP.isEmpty() ) {
-    LogMsg("No Elog IP. No elog will be used.");
-    elogID = -1;
-    return;
-  }
+  elog->SetServer(ElogIP, ElogPort, ElogUseSSL);
+  elog->SetAuth(ElogUser, ElogPWD);
+  elog->SetLogbook(expName);
 
-  WriteElog("Checking elog writing", "Testing communication", "checking");
-
-  if( elogID > 0 ){
-    LogMsg("Checked Elog writing. OK.");
-
-    AppendElog("Check Elog append.", -1);
-    if( elogID > 0 ){
-      LogMsg("Checked Elog Append. OK.");
-    }else{
-      LogMsg("<font style=\"color : red;\">Checked Elog Append. FAIL. (no elog will be used.) </font>");
-    }
-
-  }else{
-    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) (probably logbook <b>" + expName + "</b> does not exist) </font>");
-  }
+  elog->Check();
 
 }
+
 void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
-  
-  //if( elogID < 0 ) return;
-  if( expName == "" ) return;
 
-  //TODO ===== user name and pwd load from a file.
-
-  QStringList arg;
-  arg << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD
-      << "-a" << "Author=SOLARIS_DAQ" ;
-  if( runNumber > 0 ) arg << "-a" << "RunNo=" + QString::number(runNumber);
-  if( category != "" ) arg << "-a" << "Category=" + category;
-
-  arg << "-a" << "Subject=" + subject 
-      << "-n " << "2" <<  htmlText  ;
-
-  // printf("Elog command: %s\n", arg.join(" ").toStdString().c_str());
-
-  QProcess elogBash(this);
-  elogBash.start("elog", arg); 
-  elogBash.waitForFinished();
-
-  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
-
-  int index = output.indexOf("ID=");
-  if( index != -1 ){
-    elogID = output.mid(index+3).toInt();
-  }else{
-    elogID = -1;
-  }
+  elog->SetLogbook(expName); // expName can change without passing by the Program Settings
+  elog->Write(htmlText, subject, category, runNumber);
 
 }
 
 void MainWindow::AppendElog(QString appendHtmlText, int screenID){
-  if( elogID < 1 ) return;
-  if( expName == "" ) return;
-  
-  QProcess elogBash(this);
 
-  QStringList arg;
-  arg << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD << "-w" << QString::number(elogID);
+  QString attachmentPath = "";
 
-  //retrevie the elog
-  elogBash.start("elog", arg); 
-  elogBash.waitForFinished();
+  if( screenID >= 0 ){
 
-  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
-  //qDebug() << output;
+    //TODO =========== chrome windowID
 
-  QString separator = "========================================";
-
-  int index = output.indexOf(separator);
-  if( index != -1){
-
-    QString originalHtml = output.mid(index + separator.length());
-
-    arg.clear();
-    arg << "-s" << "-h" << ElogIP << "-p" << ElogPort << "-l" << expName << "-u" << ElogUser << ElogPWD << "-e" << QString::number(elogID)
-        << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
-
-    if( screenID >= 0) {
-      
-      //TODO =========== chrome windowID
-      
-      QScreen * screen = QGuiApplication::primaryScreen();
-      if( screen){
-        QPixmap screenshot = screen->grabWindow(screenID);
-        screenshot.save("screenshot.png");
-        arg << "-f" << "screenshot.png";
-      }
+    QScreen * screen = QGuiApplication::primaryScreen();
+    if( screen ){
+      QPixmap screenshot = screen->grabWindow(screenID);
+      attachmentPath = "screenshot.png";
+      screenshot.save(attachmentPath);
     }
-
-    //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
-
-    elogBash.start("elog", arg); 
-    elogBash.waitForFinished();
-
-    output = QString::fromUtf8(elogBash.readAllStandardOutput());
-    index = output.indexOf("ID=");
-    if( index != -1 ){
-      elogID = output.mid(index+3).toInt();
-    }else{
-      elogID = -1;
-    }
-
-  }else{
-    elogID = -1;
   }
+
+  //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
+
+  elog->SetLogbook(expName);
+  elog->Append(appendHtmlText, attachmentPath);
 
 }
 

@@ -24,6 +24,7 @@
 #include "ClassDigitizer2Gen.h"
 // #include "influxdb.h"
 #include "ClassInfluxDB.h"
+#include "ClassElog.h"
 
 #include "CustomThreads.h"
 
@@ -33,8 +34,6 @@
 #include "SingleSpectra.h"
 
 const int chromeWindowID = -1; // disable capture screenshot
-
-const QString defaultElogPort = "8080";
 
 //^#===================================================== MainWindow
 class MainWindow : public QMainWindow{
@@ -70,7 +69,7 @@ private slots:
   void SaveProgramSettings();
   void DecodeIPList();
   void SetupInflux();
-  void CheckElog();
+  void SetupElog();
   void OpenDirectory(int id);
 
   void SetupNewExpPanel();
@@ -143,6 +142,7 @@ private:
   bool           scalarOutputInflux;
 
   InfluxDB     * influx;
+  Elog         * elog;
 
   //@------ ACQ things
   QPushButton * bnStartACQ;
@@ -188,6 +188,7 @@ private:
   QLineEdit * lDatbaseToken;
   QLineEdit * lElogIP;
   QLineEdit * lElogPort;
+  QCheckBox * chkElogSSL;
   QLineEdit * lElogUser;
   QLineEdit * lElogPWD;
 
@@ -209,6 +210,7 @@ private:
   QString DatabaseToken;
   QString ElogIP;
   QString ElogPort;
+  bool ElogUseSSL;
   QString ElogUser;
   QString ElogPWD;
 
@@ -218,7 +220,6 @@ private:
   QString expName;
   int runID;
   QString runIDStr;
-  int elogID;  // 0 = ready, -1 = disable, >1 = elogID
 
   //@------ calculate instant accept Rate
   unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
