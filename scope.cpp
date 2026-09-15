@@ -720,7 +720,8 @@ void Scope::UpdateScope(){
     leTriggerRate->setText(QString::fromStdString(haha));
 
     unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
-    unsigned int traceLength = qMin(digi[iDigi]->traceRingBuffer.ref(traceIdx).traceLenght,(unsigned int) MaxDisplayTraceDataLength);
+    const TraceSnapshot& ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1); // latest snapshot; traceIdx==0 -> zeroed slot
+    unsigned int traceLength = qMin(ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
 
     printf("traceIdx = %lu, traceLength = %u\n", traceIdx, traceLength);
 
@@ -733,8 +734,6 @@ void Scope::UpdateScope(){
       plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
       return;
     }
-
-    const TraceSnapshot& ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
 
     for( int j = 0; j < 2; j++) {
       QVector<QPointF> points;
