@@ -1426,7 +1426,7 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of data will store. ");  
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment and <b>Elog Folder</b>. \
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment. \
                          This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
                         The experiment data will be saved under this folder. e.g. <font style=\"color : blue;\">Data Path/Exp Name</font>.");
   helpInfo->appendHtml("For User links to Analysis folder and use the New/Change/Reload/Exp button, the Exp Name will be overwriten.");
@@ -1445,6 +1445,8 @@ void MainWindow::ProgramSettingsPanel(){
                            the folder of the analysis code. Can be omitted.");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Elog Port </font> can be empty, it defaults to <b>" + defaultElogPort + "</b>.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Elog Name </font> is the elog logbook. \
+Leave <b>same as Exp Name</b> ticked unless the logbook is named differently from the experiment.");
 
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml(" * items can be ommitted");
@@ -1528,6 +1530,28 @@ void MainWindow::ProgramSettingsPanel(){
   layout->addWidget(lbDatbaseToken, rowID, 0);
   lDatbaseToken = new QLineEdit(DatabaseToken, &dialog); layout->addWidget(lDatbaseToken, rowID, 1, 1, 2);
 
+  //-------- Elog Name
+  rowID ++;
+  QLabel *lbElogName = new QLabel("Elog Name *", &dialog);
+  lbElogName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogName, rowID, 0);
+  /// seed from GetElogName(), not ElogName, so a ticked box shows the Exp Name instead of an empty box
+  lElogName = new QLineEdit(GetElogName(), &dialog); layout->addWidget(lElogName, rowID, 1);
+  lElogName->setEnabled(!ElogNameSameAsExp);
+
+  chkElogSameAsExp = new QCheckBox("same as Exp Name", &dialog);
+  chkElogSameAsExp->setChecked(ElogNameSameAsExp);
+  layout->addWidget(chkElogSameAsExp, rowID, 2);
+
+  connect(chkElogSameAsExp, &QCheckBox::toggled, this, [=](bool same){
+    lElogName->setEnabled(!same);
+    if( same ) lElogName->setText(lExpName->text());
+  });
+  /// keep the mirror live while the box is ticked and the user retypes the Exp Name in the same dialog
+  connect(lExpName, &QLineEdit::textChanged, this, [=](const QString & text){
+    if( chkElogSameAsExp->isChecked() ) lElogName->setText(text);
+  });
+
   //-------- Elog IP
   rowID ++;
   QLabel *lbElogIP = new QLabel("Elog IP *", &dialog);
@@ -1581,6 +1605,14 @@ void MainWindow::ProgramSettingsPanel(){
     ElogUseSSL = chkElogSSL->isChecked();
     ElogUser = lElogUser->text();
     ElogPWD = lElogPWD->text();
+    ElogNameSameAsExp = chkElogSameAsExp->isChecked();
+    ElogName = lElogName->text();
+    /// an unticked-but-empty Elog Name is a broken state; fall back to the default rather than
+    /// silently writing to no logbook at all
+    if( !ElogNameSameAsExp && ElogName.isEmpty() ){
+      ElogNameSameAsExp = true;
+      LogMsg("Elog Name is empty, reverted to <b>same as Exp Name</b>.");
+    }
 
     SaveProgramSettings();
 
@@ -1660,6 +1692,8 @@ bool MainWindow::LoadProgramSettings(){
   ElogUseSSL = true; // matches the default port 443
   ElogUser = "";
   ElogPWD = "";
+  ElogName = "";
+  ElogNameSameAsExp = true; // matches the old behaviour: the logbook is the expName
 
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found.");
@@ -1687,6 +1721,8 @@ bool MainWindow::LoadProgramSettings(){
         case 10 : ElogPWD         = line; break;
         case 11 : ElogPort        = line; break; // appended after ElogPWD to stay compatible with older setting files
         case 12 : ElogUseSSL      = (line == "SSL" ? true : false); break;
+        case 13 : ElogName        = line; break; // appended after ElogUseSSL, older setting files simply stop at 12
+        case 14 : ElogNameSameAsExp = (line == "SameAsExp" ? true : false); break;
       }
 
       count ++;
@@ -1711,7 +1747,8 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("          Elog Password : " + maskText(ElogPWD));
       LogMsg("          Exp Data Path : " + masterExpDataPath);
       LogMsg("Save Runs in SubFolders : " +  QString(isSaveSubFolder ? "Yes" : "No") );
-      LogMsg("  Exp. Name (Elog Name) : " + expName);
+      LogMsg("              Exp. Name : " + expName);
+      LogMsg("              Elog Name : " + GetElogName() + (ElogNameSameAsExp ? "  (same as Exp Name)" : ""));
       LogMsg("          Digi. IP List : " + IPListStr);
       logMsgHTMLMode = true;
 
@@ -1817,6 +1854,8 @@ void MainWindow::SaveProgramSettings(){
   file.write((ElogPWD+"\n").toStdString().c_str());
   file.write((ElogPort+"\n").toStdString().c_str());
   file.write( ElogUseSSL ? "SSL\n" : "NoSSL\n" );
+  file.write((ElogName+"\n").toStdString().c_str());
+  file.write( ElogNameSameAsExp ? "SameAsExp\n" : "OwnElogName\n" );
   file.write("//------------end of file.");
   
   file.close();
@@ -2302,7 +2341,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   //TODO is there anyway to create a new elog ?? direct edit the config.cfg??
   //SetupElog();
   logMsgHTMLMode = true;
-  LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
+  LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + GetElogName() + "</b>. </font>");
 
   // expDataPath = masterExpDataPath + "/" + newExpName;
   // rawDataPath = expDataPath + "/data_raw/"; 
@@ -2526,7 +2565,7 @@ void MainWindow::SetupElog(){
 
   elog->SetServer(ElogIP, ElogPort, ElogUseSSL);
   elog->SetAuth(ElogUser, ElogPWD);
-  elog->SetLogbook(expName);
+  elog->SetLogbook(GetElogName());
 
   elog->Check();
 
@@ -2534,7 +2573,7 @@ void MainWindow::SetupElog(){
 
 void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
 
-  elog->SetLogbook(expName); // expName can change without passing by the Program Settings
+  elog->SetLogbook(GetElogName()); // expName can change without passing by the Program Settings
   elog->Write(htmlText, subject, category, runNumber);
 
 }
@@ -2557,7 +2596,7 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
 
   //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
 
-  elog->SetLogbook(expName);
+  elog->SetLogbook(GetElogName());
   elog->Append(appendHtmlText, attachmentPath);
 
 }

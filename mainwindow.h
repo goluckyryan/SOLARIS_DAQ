@@ -70,6 +70,9 @@ private slots:
   void DecodeIPList();
   void SetupInflux();
   void SetupElog();
+  /// the elog logbook name. Derived, never cached: expName changes in LoadExpNameSh(),
+  /// CreateNewExperiment() and ChangeExperiment() without passing by the Program Settings.
+  QString GetElogName() const { return (ElogNameSameAsExp || ElogName.isEmpty()) ? expName : ElogName; }
   void OpenDirectory(int id);
 
   void SetupNewExpPanel();
@@ -186,6 +189,8 @@ private:
   QLineEdit * lDatbaseIP;
   QLineEdit * lDatbaseName;
   QLineEdit * lDatbaseToken;
+  QLineEdit * lElogName;
+  QCheckBox * chkElogSameAsExp;
   QLineEdit * lElogIP;
   QLineEdit * lElogPort;
   QCheckBox * chkElogSSL;
@@ -213,6 +218,8 @@ private:
   bool ElogUseSSL;
   QString ElogUser;
   QString ElogPWD;
+  QString ElogName;          /// only meaningful when ElogNameSameAsExp == false, use GetElogName()
+  bool    ElogNameSameAsExp; /// default true: the logbook is the experiment name
 
   //@------ experiment settings
   bool isGitExist;

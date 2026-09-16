@@ -75,7 +75,7 @@ bool Elog::Check(){
   }
 
   if( logbook.isEmpty() ){
-    emit logMsg("No Elog logbook (Exp Name). No elog will be used.");
+    emit logMsg("No Elog logbook (Elog Name). No elog will be used.");
     elogID = -1;
     return false;
   }

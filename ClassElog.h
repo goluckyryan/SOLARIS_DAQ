@@ -21,7 +21,7 @@ public:
 
   void SetServer(QString ip, QString port, bool useSSL);
   void SetAuth(QString user, QString pwd);
-  void SetLogbook(QString logbook); /// the logbook is the experiment name
+  void SetLogbook(QString logbook); /// the logbook is the Elog Name, which defaults to the experiment name
 
   bool IsConfigured() const {return !elogIP.isEmpty() && !logbook.isEmpty();}
 
