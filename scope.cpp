@@ -5,6 +5,7 @@
 #include <QGroupBox>
 #include <QStandardItemModel>
 #include <QLabel>
+#include <QHBoxLayout>
 
 #define MaxDisplayTraceDataLength 2000 //data point, 
 #define MiniTraceUpdateTimeSec 0.1
@@ -24,6 +25,11 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
 
   allowChange = false;
   originalValueSet = false;
+
+  /// cbScopeDigi->setCurrentIndex() below fires ChangeDigitizer() before the bottom row is built,
+  /// so everything that touches sbTraceIdx must tolerate it being null.
+  sbTraceIdx = nullptr;
+  lbTraceIdx = nullptr;
 
   plot = new Trace();
   for( int i = 0; i < 6; i++) {
@@ -274,6 +280,23 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   leTriggerRate->setReadOnly(true);
   layout->addWidget(leTriggerRate, rowID, 3);
 
+  //------------ buffered trace browser
+  QWidget * traceBrowser = new QWidget(this);
+  QHBoxLayout * tbLayout = new QHBoxLayout(traceBrowser);
+  tbLayout->setContentsMargins(0, 0, 0, 0);
+
+  lbTraceIdx = new QLabel("Buffered Trace : ", traceBrowser);
+  lbTraceIdx->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  tbLayout->addWidget(lbTraceIdx);
+
+  sbTraceIdx = new QSpinBox(traceBrowser);
+  sbTraceIdx->setToolTip("0 = latest trace in the ring buffer, larger = older.\nUsable only when the scope is stopped.");
+  sbTraceIdx->setEnabled(false);
+  tbLayout->addWidget(sbTraceIdx);
+  layout->addWidget(traceBrowser, rowID, 4);
+
+  connect(sbTraceIdx, &QSpinBox::valueChanged, this, &Scope::DrawTraceFromBuffer);
+
   QPushButton * bnClose = new QPushButton("Close", this);
   layout->addWidget(bnClose, rowID, 5);
   connect(bnClose, &QPushButton::clicked, this, &Scope::close);
@@ -296,6 +319,8 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     channelEnable[oldDigi][ch2] = digi[oldDigi]->ReadValue(PHA::CH::ChannelEnable, ch2);
   }
   originalValueSet = true;
+
+  RefreshTraceBrowser();
 }
 
 Scope::~Scope(){
@@ -379,6 +404,7 @@ void Scope::ChangeDigitizer(){
   digiMTX[index].unlock();
   allowChange = true;
 
+  RefreshTraceBrowser(); // this board has its own ring buffer
 }
 
 void Scope::CleanUpSettingsGroupBox(){
@@ -653,7 +679,12 @@ void Scope::StartScope(){
 
     }
 
-    digi[iDigi]->SetDataFormat(DataFormat::ALL); 
+    digi[iDigi]->SetDataFormat(DataFormat::ALL);
+
+    /// drop the previous run's traces so the browser only ever shows this run. Safe here: this
+    /// board's ReadDataThread is started below, so nothing is writing to its ring yet.
+    digi[iDigi]->traceRingBuffer.clear();
+
     digi[iDigi]->StartACQ();
 
     readDataThread[iDigi]->SetSaveData(false);
@@ -745,21 +776,81 @@ void Scope::UpdateScope(){
       return;
     }
 
-    for( int j = 0; j < 2; j++) {
-      QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , ts.analog_probes[j][i]));
-      dataTrace[j]->replace(points);
-    }
-    for( int j = 0; j < 4; j++) {
-      QVector<QPointF> points;
-      for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*ts.digital_probes[j][i]));
-      dataTrace[j+2]->replace(points);
-    }
-
-    plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
+    PlotSnapshot(ts, traceLength, sample2ns);
 
   }
 
+}
+
+void Scope::PlotSnapshot(const TraceSnapshot & ts, unsigned int traceLength, int sample2ns){
+
+  for( int j = 0; j < 2; j++) {
+    QVector<QPointF> points;
+    for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , ts.analog_probes[j][i]));
+    dataTrace[j]->replace(points);
+  }
+  for( int j = 0; j < 4; j++) {
+    QVector<QPointF> points;
+    for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*ts.digital_probes[j][i]));
+    dataTrace[j+2]->replace(points);
+  }
+
+  plot->axes(Qt::Horizontal).first()->setRange(0, sample2ns * traceLength);
+}
+
+/// Re-range the browser spin box from the current board's ring buffer and draw the latest trace.
+/// Only ever reached with the scope stopped, see ScopeControlOnOff().
+void Scope::RefreshTraceBrowser(){
+
+  if( !sbTraceIdx ) return; // called from ChangeDigitizer() before the widget exists
+
+  int iDigi = cbScopeDigi->currentIndex();
+  if( iDigi < 0 || !digi || !digi[iDigi] ){
+    sbTraceIdx->setEnabled(false);
+    return;
+  }
+
+  unsigned long nWritten = digi[iDigi]->traceRingBuffer.index();
+  unsigned long nAvail   = qMin(nWritten, (unsigned long) digi[iDigi]->traceRingBuffer.size());
+
+  /// block signals so re-ranging does not fire DrawTraceFromBuffer() mid-setup
+  sbTraceIdx->blockSignals(true);
+  if( nAvail == 0 ){
+    sbTraceIdx->setRange(0, 0);
+    sbTraceIdx->setSuffix("  (empty)");
+    sbTraceIdx->setEnabled(false);
+  }else{
+    sbTraceIdx->setRange(0, nAvail - 1);
+    sbTraceIdx->setValue(0);
+    sbTraceIdx->setSuffix(" / " + QString::number(nAvail - 1));
+    sbTraceIdx->setEnabled(true);
+  }
+  sbTraceIdx->blockSignals(false);
+
+  if( nAvail > 0 ) DrawTraceFromBuffer(0);
+}
+
+/// Draw the backIdx-th newest trace held in the ring buffer; 0 is the latest.
+/// No lap check and no copy is needed here, unlike UpdateScope(): this is only reachable when the
+/// scope is stopped, so ReadDataThread has been joined and the ring is static.
+void Scope::DrawTraceFromBuffer(int backIdx){
+
+  if( !sbTraceIdx ) return;
+
+  int iDigi = cbScopeDigi->currentIndex();
+  if( iDigi < 0 || !digi || !digi[iDigi] ) return;
+
+  unsigned long nWritten = digi[iDigi]->traceRingBuffer.index();
+  if( nWritten == 0 ) return;
+
+  unsigned long nAvail = qMin(nWritten, (unsigned long) digi[iDigi]->traceRingBuffer.size());
+  if( backIdx < 0 || (unsigned long) backIdx >= nAvail ) return;
+
+  const TraceSnapshot & ts = digi[iDigi]->traceRingBuffer.ref(nWritten - 1 - backIdx);
+  unsigned int traceLength = qMin((unsigned int) ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
+  int sample2ns = PHA::TraceStep * (1 << cbWaveRes->currentIndex());
+
+  PlotSnapshot(ts, traceLength, sample2ns);
 }
 
 void Scope::ProbeChange(RComboBox * cb[], const int size ){
@@ -803,6 +894,17 @@ void Scope::ScopeControlOnOff(bool on){
   bnScopeStart->setEnabled(on);
   bnScopeReset->setEnabled(on);
   bnScopeReadSettings->setEnabled(on);
+
+  /// the trace browser reads the ring without any lap check, so it may only be used while the
+  /// producer is stopped. StopScope() calls us after readDataThread[i]->wait(), so by now the
+  /// DAQ threads are joined and the ring is static.
+  if( sbTraceIdx ){
+    if( on ){
+      RefreshTraceBrowser();
+    }else{
+      sbTraceIdx->setEnabled(false);
+    }
+  }
 
   if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PHA ){ 
     sbRL->setEnabled(on);
