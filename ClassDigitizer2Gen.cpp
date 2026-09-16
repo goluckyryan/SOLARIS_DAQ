@@ -18,7 +18,6 @@ void Digitizer2Gen::Initialization(){
   //printf("======== %s \n",__func__);
 
   handle = 0;
-  ret = 0;
   isConnected = false;
   isDummy = false;
 
@@ -71,20 +70,20 @@ void Digitizer2Gen::SetDummy(unsigned int sn){
 uint64_t Digitizer2Gen::GetHandle(const char * parameter){
   
   uint64_t par_handle;
-  ret = CAEN_FELib_GetHandle(handle, parameter, &par_handle);
+  int ret = CAEN_FELib_GetHandle(handle, parameter, &par_handle);
   if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return 0;
   }
   return par_handle;
-  
+
 }
 
 uint64_t Digitizer2Gen::GetParentHandle(uint64_t handle){
   uint64_t par_handle;
-  ret = CAEN_FELib_GetParentHandle(handle, NULL, &par_handle);
+  int ret = CAEN_FELib_GetParentHandle(handle, NULL, &par_handle);
   if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return 0;
   }
   return par_handle;
@@ -92,9 +91,9 @@ uint64_t Digitizer2Gen::GetParentHandle(uint64_t handle){
 
 std::string Digitizer2Gen::GetPath(uint64_t handle){
   char path[256];
-  ret = CAEN_FELib_GetPath(handle, path);
+  int ret = CAEN_FELib_GetPath(handle, path);
   if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return "Error";
   }
   return path;
@@ -103,12 +102,19 @@ std::string Digitizer2Gen::GetPath(uint64_t handle){
 
 //########################################### Read Write
 
-int Digitizer2Gen::FindIndex(const Reg para){  
+/// Look-up only: operator[] would INSERT on a miss, which mutates (and can rehash) the map from
+/// whichever thread happens to ask. Callers must handle the -1.
+static int LookUp(const std::unordered_map<std::string, int> & map, const std::string & key){
+  auto it = map.find(key);
+  return ( it == map.end() ) ? -1 : it->second;
+}
+
+int Digitizer2Gen::FindIndex(const Reg para){
   switch (para.GetType() ){
-    case TYPE::CH: return chMap[para.GetPara()];
-    case TYPE::DIG: return boardMap[para.GetPara()];
+    case TYPE::CH: return LookUp(chMap, para.GetPara());
+    case TYPE::DIG: return LookUp(boardMap, para.GetPara());
     case TYPE::VGA: return 0;
-    case TYPE::LVDS: return LVDSMap[para.GetPara()];
+    case TYPE::LVDS: return LookUp(LVDSMap, para.GetPara());
     case TYPE::GROUP : return 0;
   }
   return -1;
@@ -117,10 +123,11 @@ int Digitizer2Gen::FindIndex(const Reg para){
 std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   if( !isConnected ) return "not connected";
   //printf(" %s|%s \n", __func__, parameter);
-  ret = CAEN_FELib_GetValue(handle, parameter, retValue);
+  char retValue[256] = {0};
+  int ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
     printf("  %s|%d|%-45s| read fail\n", __func__, serialNumber, parameter);
-    return ErrorMsg(__func__);
+    return ErrorMsg(__func__, ret);
   }else{
     if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
   }
@@ -139,12 +146,13 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
   std:: string ans = ReadValue(para.GetFullPara(ch_index, nChannels).c_str(), verbose); 
 
   int index = FindIndex(para);
+  if( index < 0 ) return ans; // unknown parameter, nothing to cache
   switch( para.GetType()){
-    case TYPE::CH  : chSettings[ch_index][index].SetValue(ans); break;
+    case TYPE::CH  : if( ch_index >= 0 && ch_index < MaxNumberOfChannel ) chSettings[ch_index][index].SetValue(ans); break;
     case TYPE::DIG : boardSettings[index].SetValue(ans); break;
     case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
     case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
-    case TYPE::GROUP: InputDelay[ch_index].SetValue(ans); break; 
+    case TYPE::GROUP: InputDelay[ch_index].SetValue(ans); break;
   }
   
   //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
@@ -195,10 +203,10 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
                              || strstr(parameter, "GateOffsetT") != nullptr )){
     value = std::to_string(atoi(value.c_str()) / 4);
   }
-  ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
+  int ret = CAEN_FELib_SetValue(handle, parameter, value.c_str());
   if (ret != CAEN_FELib_Success) {
     printf("WriteError|%s||%s|\n", parameter, value.c_str());
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return false;
   }
   return true;
@@ -259,9 +267,9 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
 void Digitizer2Gen::SendCommand(const char * parameter){
   if( !isConnected ) return;
   printf(" %s|%d|Send Command : %s \n", __func__, serialNumber, parameter);
-  ret = CAEN_FELib_SendCommand(handle, parameter);
+  int ret = CAEN_FELib_SendCommand(handle, parameter);
   if (ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return;
   }
 }
@@ -276,12 +284,12 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   
   //printf("======== %s \n",__func__);
 
-  ret = CAEN_FELib_Open(url, &handle);
+  int ret = CAEN_FELib_Open(url, &handle);
 
   //printf("===  ret : %d | %d \n", ret, CAEN_FELib_Success);
-  
+
   if (ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__);
+    ErrorMsg(__func__, ret);
     return -1;
   }
   
@@ -365,9 +373,9 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
 int Digitizer2Gen::CloseDigitizer(){
   printf("========Digitizer2Gen::%s \n",__func__);
   if( isConnected == true ){
-    ret = CAEN_FELib_Close(handle);
+    int ret = CAEN_FELib_Close(handle);
     if (ret != CAEN_FELib_Success) {
-      ErrorMsg(__func__);
+      ErrorMsg(__func__, ret);
       return 0;
     }
     isConnected = false;
@@ -458,15 +466,18 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   
   printf("%s : %d for digi-%d %s\n", __func__, dataFormat, serialNumber, FPGAType.c_str() );
 
+  /// initialised, because the dataFormat if-ladder below is not exhaustive
+  int ret = CAEN_FELib_Success;
+
   ///========== get endpoint and endpoint folder handle
   if( dataFormat == DataFormat::Raw ){
 
     ret  = CAEN_FELib_GetHandle(handle, "/endpoint/raw", &ep_handle);
     ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
     ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "raw");
-    
+
     if (ret != CAEN_FELib_Success) {
-      ErrorMsg("Set active endpoint");
+      ErrorMsg("Set active endpoint", ret);
       return;
     }
 
@@ -481,12 +492,12 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
       ret |= CAEN_FELib_GetParentHandle(ep_handle, NULL, &ep_folder_handle);
       ret |= CAEN_FELib_SetValue(ep_folder_handle, "/par/activeendpoint", "dpppsd");
     }else{
-      ErrorMsg("DPP-Type not supported.");
+      ErrorMsg("DPP-Type not supported.", CAEN_FELib_GenericError);
       return;
     }
 
     if (ret != CAEN_FELib_Success) {
-      ErrorMsg("Set active endpoint");
+      ErrorMsg("Set active endpoint", ret);
       return;
     }
   }
@@ -700,7 +711,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   }
 
   if (ret != CAEN_FELib_Success) {
-    ErrorMsg("Set Read Data Format");
+    ErrorMsg("Set Read Data Format", ret);
     return;
   }
 
@@ -718,7 +729,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   );
 
   if (ret != CAEN_FELib_Success) {
-    ErrorMsg("Set Statistics");
+    ErrorMsg("Set Statistics", ret);
     return;
   }
 
@@ -726,19 +737,19 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
 
 int Digitizer2Gen::ReadStat(){
 
-  ret = CAEN_FELib_ReadData(stat_handle, 100,
-        realTime, 
-        deadTime, 
+  int ret = CAEN_FELib_ReadData(stat_handle, 100,
+        realTime,
+        deadTime,
         liveTime,
         triggerCount,
         savedEventCount
       );
 
-  if (ret != CAEN_FELib_Success) ErrorMsg("Read Statistics");
+  if (ret != CAEN_FELib_Success) ErrorMsg("Read Statistics", ret);
 
   for( int ch = 0; ch < nChannels; ch++) ReadValue( PHA::CH::SelfTrgRate, ch);
 
-  return ret;
+  return ret; // the status of the stat read; the ReadValue calls above no longer clobber it
 }
 
 void Digitizer2Gen::PrintStat(){
@@ -755,6 +766,10 @@ int Digitizer2Gen::ReadData(){
   //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
 
   if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
+
+  /// local, not a member: the GUI thread calls ReadValue() on this same object while we are here,
+  /// and a shared member would let it overwrite our status between the read and the check below.
+  int ret = CAEN_FELib_GenericError;
 
   if( hit->dataType == DataFormat::ALL ){
     if( FPGAType == DPPType::PHA ){
@@ -1341,7 +1356,7 @@ void Digitizer2Gen::PrintChannelSettings(unsigned short ch){
   }
 }
 
-std::string Digitizer2Gen::ErrorMsg(const char * funcName){
+std::string Digitizer2Gen::ErrorMsg(const char * funcName, int ret){
   printf("======== %s | %5d | %s\n",__func__, serialNumber, funcName);
   char msg[1024];
   int ec = CAEN_FELib_GetErrorDescription((CAEN_FELib_ErrorCode) ret, msg);
@@ -1630,6 +1645,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
 std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned int ch_index) {
   int index = FindIndex(para);
+  if( index < 0 ) return "invalid";
   switch (para.GetType()){
     case TYPE::DIG:   return boardSettings[index].GetValue();
     case TYPE::CH:    return chSettings[ch_index][index].GetValue();

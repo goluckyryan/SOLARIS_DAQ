@@ -43,7 +43,7 @@ public:
       }
 
       if( ret == CAEN_FELib_Stop ){
-        digi->ErrorMsg("ReadData Thread No more data");
+        digi->ErrorMsg("ReadData Thread No more data", ret);
         break;
       }
 

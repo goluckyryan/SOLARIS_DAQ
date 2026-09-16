@@ -719,13 +719,23 @@ void Scope::UpdateScope(){
     std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
     leTriggerRate->setText(QString::fromStdString(haha));
 
+    /// Take a private copy of the newest completed snapshot, slot (traceIdx - 1). The DAQ thread can
+    /// lap us mid-copy, so re-read the write cursor afterwards and drop the frame if it reached our
+    /// slot again. The check is entirely on this side - the producer pays nothing for it.
+    TraceSnapshot ts;
+    unsigned int traceLength = 0;
+    bool traceValid = false;
+
     unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
-    const TraceSnapshot& ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1); // latest snapshot; traceIdx==0 -> zeroed slot
-    unsigned int traceLength = qMin(ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
+    if( traceIdx > 0 ){
+      ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
+      if( digi[iDigi]->traceRingBuffer.index() - (traceIdx - 1) < digi[iDigi]->traceRingBuffer.size() ){
+        traceValid = true;
+        traceLength = qMin((unsigned int) ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
+      }
+    }
 
-    printf("traceIdx = %lu, traceLength = %u\n", traceIdx, traceLength);
-
-    if( atoi(haha.c_str()) == 0 || traceIdx == 0 ) {
+    if( atoi(haha.c_str()) == 0 || !traceValid ) {
       for( int j = 0; j < 6; j++){
         QVector<QPointF> points;
         for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));

@@ -44,9 +44,6 @@ class Digitizer2Gen {
 
     bool isDummy;
     bool isConnected;
-    int ret;
-
-    char retValue[256];
 
     unsigned int serialNumber;
     unsigned int CupVer;
@@ -105,8 +102,6 @@ class Digitizer2Gen {
     int  OpenDigitizer(const char * url);
     int  CloseDigitizer();
 
-    int GetRet() const {return ret;};
-
     uint64_t    GetHandle(const char * parameter);
     uint64_t    GetParentHandle(uint64_t handle);
     std::string GetPath(uint64_t handle);
@@ -122,7 +117,9 @@ class Digitizer2Gen {
     std::string GetSettingValueFromMemory(const Reg para, unsigned int ch_index = 0); // read from memory
 
     
-    std::string ErrorMsg(const char * funcName);
+    /// ret is passed in explicitly: a per-call status must not live in per-object storage,
+    /// the DAQ and GUI threads call into this object concurrently.
+    std::string ErrorMsg(const char * funcName, int ret);
 
     void StartACQ();
     void StopACQ();
