@@ -25,6 +25,7 @@
 // #include "influxdb.h"
 #include "ClassInfluxDB.h"
 #include "ClassElog.h"
+#include "ClassElogTemplate.h"
 
 #include "CustomThreads.h"
 
@@ -98,6 +99,10 @@ private slots:
 
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
+
+  /// build the elog entry from elog.template. subject/category are only filled for the start Run
+  /// section. Falls back to the built-in text when the template is missing or has no such section.
+  QString BuildElogMsg(ElogSection sec, QString * subject = nullptr, QString * category = nullptr);
 
   void WriteRunTimeStampDat(bool isStartRun, QString timeStr);
 
@@ -231,6 +236,16 @@ private:
   //@------ calculate instant accept Rate
   unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
+
+  //@------ last rates seen by UpdateScalar(), for the elog template
+  double lastTrgRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  double lastAcceptRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
+
+  //@------ elog template
+  ElogTemplate * elogTemplate;
+  QString runFolderPath;        /// where the raw files of the present run go
+  QDateTime runStartDateTime;   /// for <StartTime> and <Duration>
+  QDateTime runStopDateTime;    /// for <StopTime>, the moment the ACQ stopped, not the moment the elog is posted
 
   //@------ connection between pannels
   void UpdateAllPanel(int panelID);

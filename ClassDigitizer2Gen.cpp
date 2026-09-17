@@ -1656,3 +1656,23 @@ std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned in
   }
   return "no such parameter";
 }
+
+std::string Digitizer2Gen::GetBoardSettingByName(const std::string & name, bool * found) const {
+  const int index = LookUp(boardMap, name);
+  if( index < 0 || index >= (int) boardSettings.size() ){
+    if( found ) *found = false;
+    return "";
+  }
+  if( found ) *found = true;
+  return boardSettings[index].GetValue();
+}
+
+std::string Digitizer2Gen::GetChSettingByName(const std::string & name, int ch, bool * found) const {
+  const int index = LookUp(chMap, name);
+  if( index < 0 || ch < 0 || ch >= MaxNumberOfChannel || index >= (int) chSettings[ch].size() ){
+    if( found ) *found = false;
+    return "";
+  }
+  if( found ) *found = true;
+  return chSettings[ch][index].GetValue();
+}

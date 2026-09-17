@@ -157,6 +157,14 @@ class Digitizer2Gen {
     void SaveDataToFile();
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
+    unsigned short GetOutFileIndex() const {return outFileIndex;} // number of files = index + 1
+    std::string GetOutFileName() const {return outFileName;}
+
+    /// Look up a setting by its CAEN name in the in-memory cache, for the elog template.
+    /// It never touches the hardware, so the GUI thread can call it while the DAQ runs.
+    /// found is set to false when the name is not a parameter of this firmware.
+    std::string GetBoardSettingByName(const std::string & name, bool * found = nullptr) const;
+    std::string GetChSettingByName(const std::string & name, int ch, bool * found = nullptr) const;
 
     std::string GetSettingFileName() const {return settingFileName;}
     void SetSettingFileName(std::string fileName) {settingFileName = fileName;}

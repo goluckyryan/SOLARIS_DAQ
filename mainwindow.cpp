@@ -47,6 +47,23 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   elog = new Elog(this);
   connect(elog, &Elog::logMsg, this, &MainWindow::LogMsg);
 
+  elogTemplate = new ElogTemplate();
+  runFolderPath = "";
+  { /// give the user something to edit the first time the program runs here
+    QFile templateFile(programPath + "/" + defaultElogTemplateFileName);
+    if( !templateFile.exists() && templateFile.open(QIODevice::Text | QIODevice::WriteOnly) ){
+      printf("-------- create %s\n", templateFile.fileName().toStdString().c_str());
+      templateFile.write(ElogTemplate::DefaultTemplate().toUtf8());
+      templateFile.close();
+    }
+  }
+  for( int i = 0; i < MaxNumberOfDigitizer; i++){
+    for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+      lastTrgRate[i][ch] = 0;
+      lastAcceptRate[i][ch] = 0;
+    }
+  }
+
   runTimer = new QTimer();
   needManualComment = true;
   ACQStopButtonPressed = false;
@@ -373,6 +390,12 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
+  printf("-------- delete elog template\n");
+  if( elogTemplate ){
+    delete elogTemplate;
+    elogTemplate = nullptr;
+  }
+
   printf("--- end of %s\n", __func__);
 
 }
@@ -443,7 +466,11 @@ int MainWindow::StartACQ(){
   for( int i = nDigi-1 ; i >= 0; i --){
     if( digi[i]->IsDummy () ) continue;
 
-    for( int ch = 0; ch < std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel); ch ++) oldTimeStamp[i][ch] = 0;
+    for( int ch = 0; ch < std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel); ch ++) {
+      oldTimeStamp[i][ch] = 0;
+      lastTrgRate[i][ch] = 0;
+      lastAcceptRate[i][ch] = 0;
+    }
 
     //digi[i]->SetPHADataFormat(1);// only save 1 trace
     int dataFormatID = cbDataFormat->currentData().toInt();
@@ -468,6 +495,7 @@ int MainWindow::StartACQ(){
         runFolder += "run" + runIDStr + "/";
         CreateFolder(runFolder, "for " + runIDStr);
       }
+      runFolderPath = runFolder; /// kept for <FilePath> of the elog template
 
       //Save setting to raw data with run ID
       QString fileSetting =  runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digi[i]->GetSerialNumber()) + ".dat";
@@ -492,14 +520,14 @@ int MainWindow::StartACQ(){
   if( singleSpectra ) singleSpectra->startTimer();
 
   if(chkSaveRun->isChecked() ){
-    QString startTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+    runStartDateTime = QDateTime::currentDateTime();
+    runStopDateTime  = QDateTime(); /// invalidate, so <StopTime> is empty and not the previous run's
+    QString startTimeStr = runStartDateTime.toString("yyyy.MM.dd hh:mm:ss");
     LogMsg("<font style=\"color : blue;\"> All Digitizers started. </font>");
     // ============ elog
-    QString elogMsg = "=============== Run-" + runIDStr + "<br />"
-                    +  startTimeStr + "<br />"
-                    + "comment : " + startComment + "<br />" + 
-                    + "----------------------------------------------";
-    WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
+    QString subject, category;
+    QString elogMsg = BuildElogMsg(ElogSection::StartRun, &subject, &category);
+    WriteElog(elogMsg, subject, category, runID);
     // ============ update expName.sh
     WriteExpNameSh();
 
@@ -509,7 +537,8 @@ int MainWindow::StartACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+      /// on a copy, QString::replace() edits in place and startComment is reused by the stop-run elog
+      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + QString(startComment).replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=1");
     influx->WriteData(DatabaseName.toStdString());
@@ -585,24 +614,16 @@ void MainWindow::StopACQ(){
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
-  QString stopTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+  runStopDateTime = QDateTime::currentDateTime();
+  QString stopTimeStr = runStopDateTime.toString("yyyy.MM.dd hh:mm:ss");
   scalarOutputInflux = false;
 
-  if( chkSaveRun->isChecked() ){   
+  if( chkSaveRun->isChecked() ){
     LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
     LogMsg("<font style=\"color : blue;\">Please wait for collecting all remaining data.</font>");
     WriteRunTimeStampDat(false, stopTimeStr);
-
-    // ============= elog
-    QString msg = stopTimeStr + "<br />";
-    for( int i = 0; i < nDigi; i++){
-      if( digi[i]->IsDummy () ) continue;
-      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): " +  QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
-    }
-    msg += "comment : " + stopComment + "<br />"
-        + "======================";
-    AppendElog(msg, chromeWindowID);
-
+    /// the elog entry is posted further down, after the files are closed, so that the
+    /// file size and the file count it reports are the final ones.
   }else{
     LogMsg("===========================  no-Save Run stopped.");
   }
@@ -610,7 +631,8 @@ void MainWindow::StopACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + stopComment.replace(' ', '_').toStdString() + "\"");
+      /// on a copy: QString::replace() edits in place, and stopComment is still needed by the elog below
+      influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + QString(stopComment).replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=0");
     influx->WriteData(DatabaseName.toStdString());
@@ -628,6 +650,10 @@ void MainWindow::StopACQ(){
        LogMsg("Digi-" + QString::number(digi[i]->GetSerialNumber()) + " is done collecting all data.");
     }
   }
+
+  // ============= elog. here, not at the "Run stopped" message above, so that
+  //                <TotalFileSize>, <NumberOfFile> and <Bd:FileSize> are final.
+  if( chkSaveRun->isChecked() ) AppendElog(BuildElogMsg(ElogSection::StopRun), chromeWindowID);
 
   if( chkSaveRun->isChecked() ){
     LogMsg("Run " + programPath + "/scripts/endRunScript.sh" );
@@ -1358,7 +1384,12 @@ void MainWindow::UpdateScalar(){
       // }
 
       oldSavedCount[iDigi][ch] = kaka;
-      oldTimeStamp[iDigi][ch] = time; 
+      oldTimeStamp[iDigi][ch] = time;
+
+      /// keep the rates, the elog template reads them at stop-run without touching the hardware
+      lastTrgRate[iDigi][ch] = atof(haha[ch].c_str());
+      lastAcceptRate[iDigi][ch] = acceptRate[ch];
+
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
 
@@ -2599,6 +2630,172 @@ void MainWindow::AppendElog(QString appendHtmlText, int screenID){
   elog->SetLogbook(GetElogName());
   elog->Append(appendHtmlText, attachmentPath);
 
+}
+
+//^#===================================================== elog template
+
+/// 1234567 -> "1.18 MB"
+static QString FormatFileSize(uint64_t byte){
+  if( byte >= 1024ULL*1024*1024 ) return QString::number(byte/1024./1024./1024., 'f', 2) + " GB";
+  if( byte >= 1024ULL*1024      ) return QString::number(byte/1024./1024., 'f', 2) + " MB";
+  if( byte >= 1024ULL           ) return QString::number(byte/1024., 'f', 2) + " kB";
+  return QString::number(byte) + " B";
+}
+
+QString MainWindow::BuildElogMsg(ElogSection sec, QString * subject, QString * category){
+
+  const bool isStartRun = (sec == ElogSection::StartRun);
+
+  const QString startTimeStr = runStartDateTime.isValid() ? runStartDateTime.toString("yyyy.MM.dd hh:mm:ss") : "";
+  const QString stopTimeStr  = runStopDateTime.isValid()  ? runStopDateTime.toString("yyyy.MM.dd hh:mm:ss")  : "";
+
+  if( subject  ) *subject  = isStartRun ? ("Run-" + runIDStr) : QString();
+  if( category ) *category = isStartRun ? QString("Run") : QString();
+
+  /// what SOLARIS DAQ posted before elog.template existed. Used when the file is
+  /// missing or broken, so a bad template can never stop a run from being logged.
+  auto builtIn = [&]() -> QString {
+    if( isStartRun ){
+      return "=============== Run-" + runIDStr + "<br />"
+           + startTimeStr + "<br />"
+           + "comment : " + startComment + "<br />"
+           + "----------------------------------------------";
+    }
+    QString msg = stopTimeStr + "<br />";
+    for( int i = 0; i < nDigi; i++){
+      if( digi[i]->IsDummy() ) continue;
+      msg += "FileSize ("+ QString::number(digi[i]->GetSerialNumber()) +"): "
+           + QString::number(digi[i]->GetTotalFilesSize()/1024./1024.) + " MB <br />";
+    }
+    msg += "comment : " + stopComment + "<br />"
+        + "======================";
+    return msg;
+  };
+
+  const QString path = programPath + "/" + defaultElogTemplateFileName;
+
+  if( !elogTemplate->Load(path) ){
+    LogMsg("<font style=\"color : red;\">Elog template: " + elogTemplate->GetErrorMsg().toHtmlEscaped() + ". Using the built-in text.</font>");
+    return builtIn();
+  }
+
+  if( !elogTemplate->Has(sec) ){
+    LogMsg("<font style=\"color : red;\">Elog template: no \"#=== " + QString(isStartRun ? "start Run" : "stop Run")
+           + "\" section in " + path.toHtmlEscaped() + ". Using the built-in text.</font>");
+    return builtIn();
+  }
+
+  //-------- run wide numbers
+  uint64_t totalFileSize = 0;
+  int      totalNumberOfFile = 0;
+  int      nBoardValid = 0;
+  for( int i = 0; i < nDigi; i++){
+    if( digi[i]->IsDummy() ) continue;
+    totalFileSize     += digi[i]->GetTotalFilesSize();
+    totalNumberOfFile += digi[i]->GetOutFileIndex() + 1;
+    nBoardValid ++;
+  }
+
+  QString duration = "";
+  if( runStartDateTime.isValid() && runStopDateTime.isValid() ){
+    const qint64 sec = runStartDateTime.secsTo(runStopDateTime);
+    duration = QString("%1:%2:%3").arg(sec/3600, 2, 10, QChar('0'))
+                                  .arg((sec/60)%60, 2, 10, QChar('0'))
+                                  .arg(sec%60, 2, 10, QChar('0'));
+  }
+
+  elogTemplate->ClearVars();
+  elogTemplate->SetVar("ExpName"           , expName);
+  elogTemplate->SetVar("ElogName"          , GetElogName());
+  elogTemplate->SetVar("RunID"             , runID);
+  elogTemplate->SetVar("RunIDStr"          , runIDStr);
+  elogTemplate->SetVar("StartTime"         , startTimeStr);
+  elogTemplate->SetVar("StopTime"          , stopTimeStr);
+  elogTemplate->SetVar("Duration"          , duration);
+  elogTemplate->SetVar("StartComment"      , startComment);
+  elogTemplate->SetVar("StopComment"       , stopComment);
+  elogTemplate->SetVar("RunComment"        , isStartRun ? startComment : stopComment);
+  elogTemplate->SetVar("FilePath"          , runFolderPath);
+  elogTemplate->SetVar("NumberOfFile"      , totalNumberOfFile);
+  elogTemplate->SetVar("TotalFileSize"     , FormatFileSize(totalFileSize));
+  elogTemplate->SetVar("TotalFileSizeMB"   , QString::number(totalFileSize/1024./1024.));
+  elogTemplate->SetVar("TotalFileSizeByte" , QString::number(totalFileSize));
+  elogTemplate->SetVar("NumberOfBoard"     , nBoardValid);
+  elogTemplate->SetVar("DataFormat"        , cbDataFormat ? cbDataFormat->currentText() : QString());
+  elogTemplate->SetVar("AutoRun"           , cbAutoRun ? cbAutoRun->currentText() : QString());
+  elogTemplate->SetVar("Now"               , QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss"));
+  elogTemplate->SetVar("Host"              , QSysInfo::machineHostName());
+
+  //-------- the loop bounds
+  elogTemplate->nBoard     = [this](){ return (int) nDigi; };
+  elogTemplate->boardValid = [this](int bd){ return digi && bd >= 0 && bd < nDigi && !digi[bd]->IsDummy(); };
+  elogTemplate->nChannel   = [this](int bd){
+    if( !digi || bd < 0 || bd >= nDigi ) return 0;
+    return std::min((int) digi[bd]->GetNChannels(), (int) MaxNumberOfChannel);
+  };
+
+  //-------- <Bd:Prop>
+  elogTemplate->boardVar = [this](int bd, const QString & prop, bool & ok) -> QString {
+    ok = true;
+    if( !digi || bd < 0 || bd >= nDigi ){ ok = false; return QString(); }
+    Digitizer2Gen * d = digi[bd];
+
+    if( prop.compare("SN"          , Qt::CaseInsensitive) == 0 ||
+        prop.compare("SerialNumber", Qt::CaseInsensitive) == 0 ) return QString::number(d->GetSerialNumber());
+    if( prop.compare("Model"       , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(d->GetModelName());
+    if( prop.compare("FPGAType"    , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(d->GetFPGAType());
+    if( prop.compare("FPGAVer"     , Qt::CaseInsensitive) == 0 ) return QString::number(d->GetFPGAVersion());
+    if( prop.compare("NChannel"    , Qt::CaseInsensitive) == 0 ) return QString::number(d->GetNChannels());
+    if( prop.compare("FileSize"    , Qt::CaseInsensitive) == 0 ) return FormatFileSize(d->GetTotalFilesSize());
+    if( prop.compare("FileSizeMB"  , Qt::CaseInsensitive) == 0 ) return QString::number(d->GetTotalFilesSize()/1024./1024.);
+    if( prop.compare("FileSizeByte", Qt::CaseInsensitive) == 0 ) return QString::number(d->GetTotalFilesSize());
+    if( prop.compare("NumberOfFile", Qt::CaseInsensitive) == 0 ) return QString::number(d->GetOutFileIndex() + 1);
+    if( prop.compare("FileName"    , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(d->GetOutFileName());
+
+    /// any board parameter, from the settings cache, e.g. <Bd:TestPulsePeriod>
+    bool found = false;
+    const QString value = QString::fromStdString(d->GetBoardSettingByName(prop.toStdString(), &found));
+    ok = found;
+    return value;
+  };
+
+  //-------- <Bd:Ch:Prop>
+  elogTemplate->chVar = [this](int bd, int ch, const QString & prop, bool & ok) -> QString {
+    ok = true;
+    if( !digi || bd < 0 || bd >= nDigi || ch < 0 || ch >= MaxNumberOfChannel ){ ok = false; return QString(); }
+    Digitizer2Gen * d = digi[bd];
+
+    if( prop.compare("TrigRate"   , Qt::CaseInsensitive) == 0 ||
+        prop.compare("SelfTrgRate", Qt::CaseInsensitive) == 0 ) return QString::number(lastTrgRate[bd][ch], 'f', 1);
+    if( prop.compare("AcceptRate" , Qt::CaseInsensitive) == 0 ) return QString::number(lastAcceptRate[bd][ch], 'f', 1);
+    if( prop.compare("SavedCount" , Qt::CaseInsensitive) == 0 ) return QString::number(oldSavedCount[bd][ch]);
+    if( prop.compare("Realtime"   , Qt::CaseInsensitive) == 0 ) return QString::number(oldTimeStamp[bd][ch]/1e9, 'f', 3);
+
+    /// any channel parameter, from the settings cache, e.g. <Bd:Ch:TriggerThreshold>
+    bool found = false;
+    const QString value = QString::fromStdString(d->GetChSettingByName(prop.toStdString(), ch, &found));
+    ok = found;
+    return value;
+  };
+
+  QStringList unresolved;
+  const QString msg = elogTemplate->Render(sec, &unresolved);
+
+  if( subject ){
+    const QString text = elogTemplate->Subject(sec, &unresolved);
+    if( !text.isEmpty() ) *subject = text;
+  }
+  if( category ){
+    const QString text = elogTemplate->Category(sec, &unresolved);
+    if( !text.isEmpty() ) *category = text;
+  }
+
+  if( !unresolved.isEmpty() ){
+    LogMsg("<font style=\"color : red;\">Elog template: unknown variable " +
+           ("<" + unresolved.join(">, <") + ">").toHtmlEscaped() + " in " + path.toHtmlEscaped() + "</font>");
+  }
+
+  return msg;
 }
 
 void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){

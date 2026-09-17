@@ -47,6 +47,8 @@ The core digitizer control classes are independent from the Qt UI classes.
 | File | Description |
 |------|-------------|
 | ClassInfluxDB.h/cpp | InfluxDB client for scaler rate logging |
+| ClassElog.h/cpp | Wrapper around the `elog` command line client |
+| ClassElogTemplate.h/cpp | Renders the elog entry from the user editable `elog.template` |
 
 ## Data Formats
 
@@ -133,6 +135,58 @@ When the analysis path is set, the DAQ will:
 ### End Run Script
 
 When a run stops, the DAQ executes the bash script at `scripts/endRunScript.sh`.
+
+### Elog Template
+
+What the DAQ posts to the elog at the start and the stop of a run is set by `elog.template`,
+in the program directory next to `programSettings.txt`. It is re-read on every start and stop,
+so it can be edited while the DAQ is running. If it is missing, the DAQ writes a default one at
+startup; if it is missing or broken at run time, the DAQ falls back to a built-in text and says
+so in the log panel, a bad template never stops a run from being logged.
+
+The file has two sections:
+
+```
+#=== start Run
+#Subject: Run-<RunIDStr>
+#Category: Run
+=============== Run-<RunIDStr>
+<StartTime>
+comment : <StartComment>
+
+#=== stop Run
+<StopTime>
+FileSize (<Bd:SN>): <Bd:FileSizeMB> MB
+comment : <StopComment>
+```
+
+- Every other line starting with `#` is a comment. Use `\#` for a line that really starts with a `#`.
+- `#Subject:` and `#Category:` set the elog attributes of the start-run entry.
+- `<Name>` is replaced by a variable, everything else is passed through, so HTML such as
+  `<br />`, `<b>bold</b>` and `<font style="color : red;">red</font> ` keeps working.
+  An unknown `<Token>` is left in the entry and reported in the log panel.
+- Substituted values are HTML escaped, a comment like `rate < 5 & noisy` cannot break the entry.
+
+Lines are repeated over the digitizers:
+
+| the line holds | it is emitted |
+|------|-------------|
+| `<Bd:Something>` | once per digitizer (dummies are skipped) |
+| `<Bd:Ch:Something>` | once per digitizer and channel |
+| `<Bd3:Something>` / `<Bd3:Ch7:Something>` | once, for that board / channel |
+
+Inside a repeated line, `<Bd>` is the board index and `<Ch>` the channel index.
+
+| Scope | Variables |
+|------|-------------|
+| Run | `<ExpName> <ElogName> <RunID> <RunIDStr> <StartTime> <StopTime> <Duration> <StartComment> <StopComment> <RunComment> <DataFormat> <AutoRun> <FilePath> <NumberOfFile> <TotalFileSize> <TotalFileSizeMB> <TotalFileSizeByte> <NumberOfBoard> <Now> <Host>` |
+| Board | `<Bd:SN> <Bd:Model> <Bd:FPGAType> <Bd:FPGAVer> <Bd:NChannel> <Bd:FileSize> <Bd:FileSizeMB> <Bd:FileSizeByte> <Bd:NumberOfFile> <Bd:FileName>` |
+| Channel | `<Bd:Ch:TrigRate> <Bd:Ch:AcceptRate> <Bd:Ch:SavedCount> <Bd:Ch:Realtime>` |
+
+Any board or channel register can be used as well, under its CAEN name as saved in the
+`*XSetting_*.dat` file, e.g. `<Bd:TestPulsePeriod>`, `<Bd:Ch:TriggerThreshold>`,
+`<Bd:Ch:ChRecordLengthT>`. Those come from the in-memory settings cache, not from a live read
+of the hardware. The rates come from the last Scaler update.
 
 ## Known Issues
 
