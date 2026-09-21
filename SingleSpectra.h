@@ -7,9 +7,12 @@
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QGridLayout>
+#include <QVBoxLayout>
 #include <QGroupBox>
 #include <QVector>
 #include <QRandomGenerator>
+
+#include <atomic>
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
@@ -19,6 +22,24 @@
 #include "Histogram2D.h"
 
 class HistWorker; // Forward declaration
+
+#define MaxNumberOfPane 16 // the biggest split is 4x4
+
+//^====================================================
+//^ One cell of the histogram grid. The plot widget itself is NOT owned here;
+//^ hist[][] / hist2D[] own them and a pane only mounts one at a time.
+//^====================================================
+struct HistPane{
+  QWidget     * box;         // container added to histLayout
+  QVBoxLayout * boxLayout;   // index 0 = header row, index 1 = plot (or placeholder)
+  QLabel      * placeholder; // shown when the pane has no source
+  RComboBox   * cbDigi;
+  RComboBox   * cbCh;
+  int digiID;                // -1 = empty pane
+  int chID;                  // -1 = empty; == digi[digiID]->GetNChannels() => 2D overview
+  int savedDigiID;           // remembered while the pane is hidden by a smaller split
+  int savedChID;
+};
 
 //^====================================================
 //^====================================================
@@ -49,13 +70,12 @@ signals:
 
 public slots:
   void FillHistograms();
-  void ChangeHistView();
-  void startTimer(){ 
+  void startTimer(){
     // printf("timer start\n");
-    timer->start(maxFillTimeinMilliSec); 
+    timer->start(maxFillTimeinMilliSec);
     // emit startWorkerTimer(maxFillTimeinMilliSec);
-  } 
-  void stopTimer(){ 
+  }
+  void stopTimer(){
     // printf("timer stop\n");
     timer->stop();
     // emit stopWorkerTimer();
@@ -72,19 +92,38 @@ private:
   bool histVisibility[MaxNumberOfDigitizer][MaxNumberOfChannel];
   bool hist2DVisibility[MaxNumberOfDigitizer];
 
-  bool isFillingHistograms;
+  std::atomic<bool> isFillingHistograms;
+  std::atomic<bool> suspendFilling;  // set while the GUI thread re-parents plot widgets
   Histogram1D * hist[MaxNumberOfDigitizer][MaxNumberOfChannel];
   Histogram2D * hist2D[MaxNumberOfDigitizer];
 
   QCheckBox * chkIsFillHistogram;
 
-  RComboBox * cbDigi;
-  RComboBox * cbCh;
-
   QGroupBox * histBox;
   QGridLayout * histLayout;
-  int oldBd;
-  int oldChComboBoxindex[MaxNumberOfDigitizer]; // the ID of hist for display
+
+  //^---- the split grid
+  HistPane pane[MaxNumberOfPane];
+  RComboBox * cbSplit;
+  int splitRows, splitCols;
+
+  void BuildPanes();
+  void RebuildChannelCombo(int p);
+  void ApplySplit(int rows, int cols, bool autoAssign = true);
+  void SetPaneSource(int p, int digiID, int chID); // caller must fence with suspendFilling
+  void PaneSelectionChanged(int p);                // fenced wrapper used by the pane combos
+  void RefreshComboEnables();
+  void UpdateVisibilityFlags();
+  void UpdateRefreshRate();
+  void WaitForFillToDrain();
+  int  NumberOfPanes() const { return splitRows * splitCols; }
+
+  //^---- replot throttle
+  QCheckBox * chkAutoRefresh;
+  RSpinBox  * sbRefresh;
+  QLabel    * lbEffRefresh;
+  int replotDivider;
+  int replotCounter;
 
   QString settingPath;
 
