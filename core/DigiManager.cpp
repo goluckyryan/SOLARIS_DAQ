@@ -143,7 +143,7 @@ int DigiManager::GetNChannels(int d) const {
   return infoCache[d].nChannels;
 }
 
-uint16_t DigiManager::GetSerialNumber(int d) const {
+unsigned int DigiManager::GetSerialNumber(int d) const {
   if (d < 0 || d >= nDigi) return 0;
   if (mode == Mode::Standalone) return digi[d] ? digi[d]->GetSerialNumber() : 0;
   return infoCache[d].serialNumber;
@@ -159,6 +159,12 @@ std::string DigiManager::GetFPGAType(int d) const {
   if (d < 0 || d >= nDigi) return "";
   if (mode == Mode::Standalone) return digi[d] ? digi[d]->GetFPGAType() : "";
   return infoCache[d].fpgaType;
+}
+
+unsigned int DigiManager::GetFPGAVersion(int d) const {
+  if (d < 0 || d >= nDigi) return 0;
+  if (mode == Mode::Standalone) return digi[d] ? digi[d]->GetFPGAVersion() : 0;
+  return infoCache[d].fpgaVersion; // the local dummy has none, this comes from the broker
 }
 
 unsigned short DigiManager::GetTick2ns(int d) const {
@@ -358,6 +364,24 @@ uint64_t DigiManager::GetTotalFileSize(int d) const {
   return 0;
 }
 
+int DigiManager::GetOutFileIndex(int d) const {
+  if (d < 0 || d >= nDigi) return 0;
+  if (mode == Mode::Standalone) return digi[d] ? digi[d]->GetOutFileIndex() : 0;
+  if (client && client->IsConnected()) {
+    return const_cast<BrokerClient*>(client)->GetFileStatus(d).fileIndex;
+  }
+  return 0;
+}
+
+std::string DigiManager::GetOutFileName(int d) const {
+  if (d < 0 || d >= nDigi) return "";
+  if (mode == Mode::Standalone) return digi[d] ? digi[d]->GetOutFileName() : "";
+  if (client && client->IsConnected()) {
+    return const_cast<BrokerClient*>(client)->GetFileStatus(d).fileName;
+  }
+  return "";
+}
+
 //============================================ Settings
 void DigiManager::SaveSettings(int d, const std::string& fileName) {
   if (d < 0 || d >= nDigi) return;
@@ -433,8 +457,11 @@ std::string DigiManager::GetSettingFileName(int d) const {
 }
 
 //============================================ Data access
+/// d is bounds checked like every other accessor here. The scope reaches these through
+/// cbScopeDigi->currentIndex(), which is -1 while the combo box is still empty.
 RingBuffer<HitSummary, RingBufferSize>& DigiManager::GetRingBuffer(int d, int ch) {
   static RingBuffer<HitSummary, RingBufferSize> emptyHitBuf;
+  if (d < 0 || d >= nDigi || ch < 0 || ch >= MaxNumberOfChannel) return emptyHitBuf;
   if (mode == Mode::Standalone) {
     if (!digi[d]) return emptyHitBuf;
     return digi[d]->ringBuffer[ch];
@@ -445,6 +472,7 @@ RingBuffer<HitSummary, RingBufferSize>& DigiManager::GetRingBuffer(int d, int ch
 
 RingBuffer<TraceSnapshot, TraceRingBufferSize>& DigiManager::GetTraceRingBuffer(int d) {
   static RingBuffer<TraceSnapshot, TraceRingBufferSize> emptyTraceBuf;
+  if (d < 0 || d >= nDigi) return emptyTraceBuf;
   if (mode == Mode::Standalone) {
     if (!digi[d]) return emptyTraceBuf;
     return digi[d]->traceRingBuffer;
@@ -539,5 +567,6 @@ void DigiManager::RefreshDigiInfo(int index) {
   infoCache[index].fpgaType     = info.fpgaType;
   infoCache[index].nChannels    = info.nChannels;
   infoCache[index].tick2ns      = info.tick2ns;
+  infoCache[index].fpgaVersion  = info.fpgaVersion;
   infoCache[index].isConnected  = info.isConnected;
 }

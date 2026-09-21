@@ -31,7 +31,7 @@ public:
 
   struct DigiInfo {
     bool     isConnected;
-    uint16_t serialNumber;
+    uint32_t serialNumber; // 32-bit: Digitizer2Gen::GetSerialNumber() no longer fits in 16
     std::string modelName;
     std::string fpgaType;
     uint16_t nChannels;
@@ -65,6 +65,10 @@ public:
   struct FileStatus {
     uint64_t totalFileSize;
     uint32_t currentFileSize;
+    /// appended to RSP_FILE_STATUS for the elog template's <Bd:NumberOfFile> and <Bd:FileName>.
+    /// stay at these defaults when talking to a broker that predates the two fields.
+    uint16_t    fileIndex = 0;   // number of files = fileIndex + 1
+    std::string fileName;
   };
   FileStatus GetFileStatus(int digiIndex);
 
@@ -79,7 +83,7 @@ public:
 
   //=== Subscription data (populated by background SUB thread)
   struct ScalarData {
-    uint16_t serialNumber;
+    uint32_t serialNumber;
     uint8_t  nChannels;
     uint32_t trgRate[MaxNumberOfChannel];
     uint64_t savedCount[MaxNumberOfChannel];

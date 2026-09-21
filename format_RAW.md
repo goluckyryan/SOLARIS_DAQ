@@ -221,7 +221,34 @@ Identified by bit 55 of Word 0 being set. Not a physics hit -- contains per-chan
 
 ---
 
+## Output Content Configuration
 
+### Firmware-side parameters (control what the digitizer writes into the blob)
+
+| Parameter | Scope | Effect |
+|-----------|-------|--------|
+| `EnDataReduction` | board | Switches all events to single-word format — eliminates waveform, fine timestamp, and `energy_short` |
+| `EnStatEvents` | board | Embeds time/counter stat events in the blob; **forced `true`** in raw mode (required for scaler readout) |
+| `ChRecordLengthT` | channel | Waveform window length (ns); determines number of waveform sample words per event |
+| `ChPreTriggerT` | channel | Pre-trigger offset (ns) within the waveform window |
+| `WaveAnalogProbe0` / `WaveAnalogProbe1` | channel | Selects which analog signal is stored in each analog probe slot (e.g. ADC input, energy filter, CFD) |
+| `WaveDigitalProbe0`–`3` | channel | Selects which digital signal is stored in each digital probe slot (e.g. Trigger, Long Gate, Pile-up) |
+
+To acquire **no waveforms**, enable `EnDataReduction` — events become single-word and the `W` flag is never set.
+
+To acquire **waveforms**, leave `EnDataReduction` disabled and set `ChRecordLengthT` > 0. The probe type fields in the Waveform Extra Word reflect the `WaveAnalogProbe` / `WaveDigitalProbe` settings at acquisition time.
+
+### Decoder-side (`RawDecoder` / `EventBuilderRaw`)
+
+`RawDecoder::LoadBlob()` takes a `decodeWaveform` flag:
+- `false` (default in online DAQ): waveform words are skipped; only energy, timestamp, and flags are extracted.
+- `true`: waveform samples are fully parsed into `analog_probes_0/1` and `digital_probes_0–3` vectors.
+
+Waveform data is always written verbatim to the `.sol_raw` file regardless of this flag — decoding is a read-time choice.
+
+`EventBuilderRaw` (offline) does not decode waveforms; it extracts energy, timestamp, and flags only.
+
+---
 
 ## .sol_raw File Format
 

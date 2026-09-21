@@ -18,6 +18,7 @@
 #include <QDateTime>
 #include <QProcess>
 #include <QScreen>
+#include <QIntValidator>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -41,6 +42,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   digiManager = nullptr;
   digiSetting = nullptr;
   influx = nullptr;
+
+  elog = new Elog(this);
+  connect(elog, &Elog::logMsg, this, &MainWindow::LogMsg);
+
+  elogTemplate = new ElogTemplate();
+  runFolderPath = "";
+  { /// give the user something to edit the first time the program runs here
+    QFile templateFile(programPath + "/" + defaultElogTemplateFileName);
+    if( !templateFile.exists() && templateFile.open(QIODevice::Text | QIODevice::WriteOnly) ){
+      printf("-------- create %s\n", templateFile.fileName().toStdString().c_str());
+      templateFile.write(ElogTemplate::DefaultTemplate().toUtf8());
+      templateFile.close();
+    }
+  }
+  for( int i = 0; i < MaxNumberOfDigitizer; i++){
+    for( int ch = 0; ch < MaxNumberOfChannel; ch++){
+      lastTrgRate[i][ch] = 0;
+      lastAcceptRate[i][ch] = 0;
+    }
+  }
 
   runTimer = new QTimer();
   needManualComment = true;
@@ -370,6 +391,12 @@ MainWindow::~MainWindow(){
     delete influx;
   }
 
+  printf("-------- delete elog template\n");
+  if( elogTemplate ){
+    delete elogTemplate;
+    elogTemplate = nullptr;
+  }
+
   printf("--- end of %s\n", __func__);
 
 }
@@ -442,7 +469,11 @@ int MainWindow::StartACQ(){
   for( int i = nDigi-1 ; i >= 0; i --){
     if( digiManager->IsDummy(i) ) continue;
 
-    for( int ch = 0; ch < std::min((int) digiManager->GetNChannels(i), (int) MaxNumberOfChannel); ch ++) oldTimeStamp[i][ch] = 0;
+    for( int ch = 0; ch < std::min((int) digiManager->GetNChannels(i), (int) MaxNumberOfChannel); ch ++) {
+      oldTimeStamp[i][ch] = 0;
+      lastTrgRate[i][ch] = 0;
+      lastAcceptRate[i][ch] = 0;
+    }
 
     if( !useBrokerMode ){
       // Standalone: set format and wave saving before starting
@@ -458,6 +489,7 @@ int MainWindow::StartACQ(){
         runFolder += "run" + runIDStr + "/";
         CreateFolder(runFolder, "for " + runIDStr);
       }
+      runFolderPath = runFolder; /// kept for <FilePath> of the elog template
 
       //Save setting to raw data with run ID
       QString fileSetting = runFolder + expName + "_" + runIDStr + "XSetting_" + QString::number(digiManager->GetSerialNumber(i)) + ".dat";
@@ -477,14 +509,14 @@ int MainWindow::StartACQ(){
   if( singleSpectra ) singleSpectra->startTimer();
 
   if(chkSaveRun->isChecked() ){
-    QString startTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+    runStartDateTime = QDateTime::currentDateTime();
+    runStopDateTime  = QDateTime(); /// invalidate, so <StopTime> is empty and not the previous run's
+    QString startTimeStr = runStartDateTime.toString("yyyy.MM.dd hh:mm:ss");
     LogMsg("<font style=\"color : blue;\"> All Digitizers started. </font>");
     // ============ elog
-    QString elogMsg = "=============== Run-" + runIDStr + "<br />"
-                    +  startTimeStr + "<br />"
-                    + "comment : " + startComment + "<br />" + 
-                    + "----------------------------------------------";
-    WriteElog(elogMsg, "Run-" + runIDStr, "Run", runID);
+    QString subject, category;
+    QString elogMsg = BuildElogMsg(ElogSection::StartRun, &subject, &category);
+    WriteElog(elogMsg, subject, category, runID);
     // ============ update expName.sh
     WriteExpNameSh();
 
@@ -494,7 +526,8 @@ int MainWindow::StartACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + startComment.replace(' ', '_').toStdString() + "\"");
+      /// on a copy, QString::replace() edits in place and startComment is reused by the stop-run elog
+      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString() + "\",comment=\"" + QString(startComment).replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=1");
     influx->WriteData(DatabaseName.toStdString());
@@ -571,24 +604,16 @@ void MainWindow::StopACQ(){
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
 
-  QString stopTimeStr = QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss");
+  runStopDateTime = QDateTime::currentDateTime();
+  QString stopTimeStr = runStopDateTime.toString("yyyy.MM.dd hh:mm:ss");
   scalarOutputInflux = false;
 
   if( chkSaveRun->isChecked() ){
     LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
     LogMsg("<font style=\"color : blue;\">Please wait for collecting all remaining data.</font>");
     WriteRunTimeStampDat(false, stopTimeStr);
-
-    // ============= elog
-    QString msg = stopTimeStr + "<br />";
-    for( int i = 0; i < nDigi; i++){
-      if( digiManager->IsDummy(i) ) continue;
-      msg += "FileSize ("+ QString::number(digiManager->GetSerialNumber(i)) +"): " +  QString::number(digiManager->GetTotalFileSize(i)/1024./1024.) + " MB <br />";
-    }
-    msg += "comment : " + stopComment + "<br />"
-        + "======================";
-    AppendElog(msg, chromeWindowID);
-
+    /// the elog entry is posted further down, after the files are closed, so that the
+    /// file size and the file count it reports are the final ones.
   }else{
     LogMsg("===========================  no-Save Run stopped.");
   }
@@ -596,7 +621,8 @@ void MainWindow::StopACQ(){
   if( influx ){
     influx->ClearDataPointsBuffer();
     if( chkSaveRun->isChecked() ){
-      influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + stopComment.replace(' ', '_').toStdString() + "\"");
+      /// on a copy: QString::replace() edits in place, and stopComment is still needed by the elog below
+      influx->AddDataPoint("RunID,start=0 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ "\",comment=\"" + QString(stopComment).replace(' ', '_').toStdString() + "\"");
     }
     influx->AddDataPoint("StartStop value=0");
     influx->WriteData(DatabaseName.toStdString());
@@ -609,6 +635,10 @@ void MainWindow::StopACQ(){
       LogMsg("Digi-" + QString::number(digiManager->GetSerialNumber(i)) + " is done collecting all data.");
     }
   }
+
+  // ============= elog. here, not at the "Run stopped" message above, so that
+  //                <TotalFileSize>, <NumberOfFile> and <Bd:FileSize> are final.
+  if( chkSaveRun->isChecked() ) AppendElog(BuildElogMsg(ElogSection::StopRun), chromeWindowID);
 
   if( chkSaveRun->isChecked() ){
     LogMsg("Run " + programPath + "/scripts/endRunScript.sh" );
@@ -1379,9 +1409,17 @@ void MainWindow::UpdateScalar(){
         }else{
           localAcceptRate[ch] = 0;
         }
-        oldSavedCount[iDigi][ch] = kaka;
-        oldTimeStamp[iDigi][ch] = time;
       }
+
+      /// outside the if: broker mode does not need these to work out the accept rate, but the elog
+      /// template reads them for <Bd:Ch:SavedCount> and <Bd:Ch:Realtime>, which would otherwise be
+      /// stuck at zero whenever the GUI runs against the broker.
+      oldSavedCount[iDigi][ch] = kaka;
+      oldTimeStamp[iDigi][ch] = time;
+
+      /// keep the rates, the elog template reads them at stop-run without touching the hardware
+      lastTrgRate[iDigi][ch] = snap.trgRate[ch];
+      lastAcceptRate[iDigi][ch] = localAcceptRate[ch];
 
       leAccept[iDigi][ch]->setText(QString::number(localAcceptRate[ch],'f', 1));
     }
@@ -1444,7 +1482,7 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of data will store. ");  
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment and <b>Elog Folder</b>. \
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Exp Name  </font> is the name of the experiment. \
                          This set the exp. folder under the <font style=\"color : blue;\">  Data Path  </font>.\
                         The experiment data will be saved under this folder. e.g. <font style=\"color : blue;\">Data Path/Exp Name</font>.");
   helpInfo->appendHtml("For User links to Analysis folder and use the New/Change/Reload/Exp button, the Exp Name will be overwriten.");
@@ -1462,6 +1500,9 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
                            the folder of the analysis code. Can be omitted.");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Database IP </font> or <font style=\"color : blue;\">  Elog IP </font> can be empty. In that case, no database and elog will be used.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Elog Port </font> can be empty, it defaults to <b>" + defaultElogPort + "</b>.");
+  helpInfo->appendHtml("<font style=\"color : blue;\">  Elog Name </font> is the elog logbook. \
+Leave <b>same as Exp Name</b> ticked unless the logbook is named differently from the experiment.");
 
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml(" * items can be ommitted");
@@ -1577,12 +1618,49 @@ void MainWindow::ProgramSettingsPanel(){
   layout->addWidget(lbDatbaseToken, rowID, 0);
   lDatbaseToken = new QLineEdit(DatabaseToken, &dialog); layout->addWidget(lDatbaseToken, rowID, 1, 1, 2);
 
+  //-------- Elog Name
+  rowID ++;
+  QLabel *lbElogName = new QLabel("Elog Name *", &dialog);
+  lbElogName->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogName, rowID, 0);
+  /// seed from GetElogName(), not ElogName, so a ticked box shows the Exp Name instead of an empty box
+  lElogName = new QLineEdit(GetElogName(), &dialog); layout->addWidget(lElogName, rowID, 1);
+  lElogName->setEnabled(!ElogNameSameAsExp);
+
+  chkElogSameAsExp = new QCheckBox("same as Exp Name", &dialog);
+  chkElogSameAsExp->setChecked(ElogNameSameAsExp);
+  layout->addWidget(chkElogSameAsExp, rowID, 2);
+
+  connect(chkElogSameAsExp, &QCheckBox::toggled, this, [=](bool same){
+    lElogName->setEnabled(!same);
+    if( same ) lElogName->setText(lExpName->text());
+  });
+  /// keep the mirror live while the box is ticked and the user retypes the Exp Name in the same dialog
+  connect(lExpName, &QLineEdit::textChanged, this, [=](const QString & text){
+    if( chkElogSameAsExp->isChecked() ) lElogName->setText(text);
+  });
+
   //-------- Elog IP
   rowID ++;
   QLabel *lbElogIP = new QLabel("Elog IP *", &dialog);
   lbElogIP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lbElogIP, rowID, 0);
   lElogIP = new QLineEdit(ElogIP, &dialog); layout->addWidget(lElogIP, rowID, 1, 1, 2);
+
+  //-------- Elog Port
+  rowID ++;
+  QLabel *lbElogPort = new QLabel("Elog Port *", &dialog);
+  lbElogPort->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+  layout->addWidget(lbElogPort, rowID, 0);
+  lElogPort = new QLineEdit(ElogPort, &dialog); layout->addWidget(lElogPort, rowID, 1, 1, 2);
+  lElogPort->setValidator(new QIntValidator(1, 65535, lElogPort));
+  lElogPort->setPlaceholderText(defaultElogPort);
+
+  //-------- Elog SSL
+  rowID ++;
+  chkElogSSL = new QCheckBox("Use SSL (https) for elog", &dialog);
+  chkElogSSL->setChecked(ElogUseSSL);
+  layout->addWidget(chkElogSSL, rowID, 1);
 
   //-------- Elog User
   rowID ++;
@@ -1611,8 +1689,18 @@ void MainWindow::ProgramSettingsPanel(){
     masterExpDataPath = lExpDataPath->text();
     expName = lExpName->text();
     ElogIP = lElogIP->text();
+    ElogPort = lElogPort->text().isEmpty() ? defaultElogPort : lElogPort->text();
+    ElogUseSSL = chkElogSSL->isChecked();
     ElogUser = lElogUser->text();
     ElogPWD = lElogPWD->text();
+    ElogNameSameAsExp = chkElogSameAsExp->isChecked();
+    ElogName = lElogName->text();
+    /// an unticked-but-empty Elog Name is a broken state; fall back to the default rather than
+    /// silently writing to no logbook at all
+    if( !ElogNameSameAsExp && ElogName.isEmpty() ){
+      ElogNameSameAsExp = true;
+      LogMsg("Elog Name is empty, reverted to <b>same as Exp Name</b>.");
+    }
     useBrokerMode = chkBrokerMode->isChecked();
     brokerIP = lBrokerIP->text();
     brokerCmdPort = lBrokerCmdPort->text().toInt();
@@ -1632,7 +1720,7 @@ void MainWindow::ProgramSettingsPanel(){
     }
 
     SetupInflux();
-    CheckElog();
+    SetupElog();
 
     expDataPath = masterExpDataPath + "/" + expName;
     rawDataPath = expDataPath + "/data_raw/";
@@ -1692,8 +1780,12 @@ bool MainWindow::LoadProgramSettings(){
   DatabaseName = "";
   DatabaseToken = "";
   ElogIP = "";
+  ElogPort = defaultElogPort;
+  ElogUseSSL = true; // matches the default port 443
   ElogUser = "";
   ElogPWD = "";
+  ElogName = "";
+  ElogNameSameAsExp = true; // matches the old behaviour: the logbook is the expName
   useBrokerMode = false;
   brokerIP = "localhost";
   brokerCmdPort = 5555;
@@ -1723,16 +1815,25 @@ bool MainWindow::LoadProgramSettings(){
         case  8 : ElogIP          = line; break;
         case  9 : ElogUser        = line; break;
         case 10 : ElogPWD         = line; break;
-        case 11 : useBrokerMode  = (line == "1"); break;
-        case 12 : brokerIP       = line; break;
-        case 13 : brokerCmdPort  = line.toInt(); break;
-        case 14 : brokerPubPort  = line.toInt(); break;
+        case 11 : ElogPort        = line; break; // appended after ElogPWD to stay compatible with older setting files
+        case 12 : ElogUseSSL      = (line == "SSL" ? true : false); break;
+        case 13 : ElogName        = line; break; // appended after ElogUseSSL, older setting files simply stop at 12
+        case 14 : ElogNameSameAsExp = (line == "SameAsExp" ? true : false); break;
+        /// the broker fields sit after the elog block, so a programSettings.txt written by the
+        /// standalone build still reads correctly here and simply stops at 14.
+        case 15 : useBrokerMode  = (line == "1"); break;
+        case 16 : brokerIP       = line; break;
+        case 17 : brokerCmdPort  = line.toInt(); break;
+        case 18 : brokerPubPort  = line.toInt(); break;
       }
 
       count ++;
       line = in.readLine();
       // printf("%d | %s \n", count, line.toStdString().c_str());
     }
+
+    if( ElogPort.isEmpty() ) ElogPort = defaultElogPort;
+    if( count <= 12 ) ElogUseSSL = (ElogPort == "443"); // setting file older than the SSL option, derive it from the port
 
     if( count >= 3 ) {
 
@@ -1779,11 +1880,14 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("          Database Name : " + DatabaseName);
       LogMsg("         Database Token : " + maskText(DatabaseToken));
       LogMsg("                 ElogIP : " + ElogIP);
+      LogMsg("              Elog Port : " + ElogPort);
+      LogMsg("               Elog SSL : " + QString(ElogUseSSL ? "Yes" : "No"));
       LogMsg("              Elog User : " + ElogUser);
       LogMsg("          Elog Password : " + maskText(ElogPWD));
       LogMsg("          Exp Data Path : " + masterExpDataPath);
       LogMsg("Save Runs in SubFolders : " +  QString(isSaveSubFolder ? "Yes" : "No") );
-      LogMsg("  Exp. Name (Elog Name) : " + expName);
+      LogMsg("              Exp. Name : " + expName);
+      LogMsg("              Elog Name : " + GetElogName() + (ElogNameSameAsExp ? "  (same as Exp Name)" : ""));
       LogMsg("          Digi. IP List : " + IPListStr);
       LogMsg("          Broker Mode   : " + QString(useBrokerMode ? "Yes (broker detected)" : "No (standalone)"));
       logMsgHTMLMode = true;
@@ -1840,12 +1944,12 @@ bool MainWindow::LoadProgramSettings(){
       bnOpenDigitizers->setStyleSheet("color:red;");
       DecodeIPList();
       SetupInflux();
-      CheckElog();
+      SetupElog();
     }else if( useBrokerMode ){
       // Broker mode: IP list not required, broker manages digitizers
       bnOpenDigitizers->setEnabled(true);
       SetupInflux();
-      CheckElog();
+      SetupElog();
     }else{
       LogMsg("<font style=\"color : red;\">Digitizer IP list is empty.</font>");
       bnProgramSettings->setStyleSheet("color: red;");
@@ -1893,6 +1997,10 @@ void MainWindow::SaveProgramSettings(){
   file.write((ElogIP+"\n").toStdString().c_str());
   file.write((ElogUser+"\n").toStdString().c_str());
   file.write((ElogPWD+"\n").toStdString().c_str());
+  file.write((ElogPort+"\n").toStdString().c_str());
+  file.write( ElogUseSSL ? "SSL\n" : "NoSSL\n" );
+  file.write((ElogName+"\n").toStdString().c_str());
+  file.write( ElogNameSameAsExp ? "SameAsExp\n" : "OwnElogName\n" );
   file.write((QString(useBrokerMode ? "1" : "0")+"\n").toStdString().c_str());
   file.write((brokerIP+"\n").toStdString().c_str());
   file.write((QString::number(brokerCmdPort)+"\n").toStdString().c_str());
@@ -2213,7 +2321,7 @@ bool MainWindow::LoadExpNameSh(){
     LogMsg("<b>" + settingFile + "</b> not found. Create one.");
     // LogMsg("Please Open the <font style=\"color : red;\">New/Change/Reload Exp</font>");
     runID = -1;
-    elogID = 0;
+    elog->SetID(0);
     //bnOpenDigitizers->setEnabled(false);
     //leExpName->setText("no expName found.");
 
@@ -2237,7 +2345,7 @@ bool MainWindow::LoadExpNameSh(){
       case 0 : expName = haha; break;
       // case 1 : masterExpDataPath = haha; break;
       case 1 : runID = haha.toInt(); break;
-      case 2 : elogID = haha.toInt(); break;
+      case 2 : elog->SetID(haha.toInt()); break;
     }
 
     count ++;
@@ -2267,7 +2375,7 @@ void MainWindow::WriteExpNameSh(){
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
   // file2.write(("ExpDataPath="+ masterExpDataPath + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
-  file2.write(("elogID="+std::to_string(elogID)+"\n").c_str());
+  file2.write(("elogID="+std::to_string(elog->GetID())+"\n").c_str());
   file2.write("#------------end of file.");
   file2.close();
   LogMsg("Saved expName.sh to <b>"+ rawDataPath + "/expName.sh</b>.");
@@ -2302,7 +2410,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
 
   expName = newExpName;
   runID = -1;
-  elogID = 0;
+  elog->SetID(0);
 
   expDataPath = masterExpDataPath + "/" + expName;
   rawDataPath = expDataPath + "/data_raw/";
@@ -2380,9 +2488,9 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   }
 
   //TODO is there anyway to create a new elog ?? direct edit the config.cfg??
-  //CheckElog();
+  //SetupElog();
   logMsgHTMLMode = true;
-  LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + newExpName + "</b>. </font>");
+  LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + GetElogName() + "</b>. </font>");
 
   // expDataPath = masterExpDataPath + "/" + newExpName;
   // rawDataPath = expDataPath + "/data_raw/"; 
@@ -2602,120 +2710,217 @@ void MainWindow::SetupInflux(){
   }
 }
 
-void MainWindow::CheckElog(){
+void MainWindow::SetupElog(){
 
-  if( ElogIP.isEmpty() ) {
-    LogMsg("No Elog IP. No elog will be used.");
-    elogID = -1;
-    return;
-  }
+  elog->SetServer(ElogIP, ElogPort, ElogUseSSL);
+  elog->SetAuth(ElogUser, ElogPWD);
+  elog->SetLogbook(GetElogName());
 
-  WriteElog("Checking elog writing", "Testing communication", "checking");
-
-  if( elogID > 0 ){
-    LogMsg("Checked Elog writing. OK.");
-
-    AppendElog("Check Elog append.", -1);
-    if( elogID > 0 ){
-      LogMsg("Checked Elog Append. OK.");
-    }else{
-      LogMsg("<font style=\"color : red;\">Checked Elog Append. FAIL. (no elog will be used.) </font>");
-    }
-
-  }else{
-    LogMsg("<font style=\"color : red;\">Checked Elog Write. FAIL. (no elog will be used.) (probably logbook <b>" + expName + "</b> does not exist) </font>");
-  }
+  elog->Check();
 
 }
+
 void MainWindow::WriteElog(QString htmlText, QString subject, QString category, int runNumber){
-  
-  //if( elogID < 0 ) return;
-  if( expName == "" ) return;
 
-  //TODO ===== user name and pwd load from a file.
-
-  QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD
-      << "-a" << "Author=SOLARIS_DAQ" ;
-  if( runNumber > 0 ) arg << "-a" << "RunNo=" + QString::number(runNumber);
-  if( category != "" ) arg << "-a" << "Category=" + category;
-
-  arg << "-a" << "Subject=" + subject 
-      << "-n " << "2" <<  htmlText  ;
-
-  // printf("Elog command: %s\n", arg.join(" ").toStdString().c_str());
-
-  QProcess elogBash(this);
-  elogBash.start("elog", arg); 
-  elogBash.waitForFinished();
-
-  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
-
-  int index = output.indexOf("ID=");
-  if( index != -1 ){
-    elogID = output.mid(index+3).toInt();
-  }else{
-    elogID = -1;
-  }
+  elog->SetLogbook(GetElogName()); // expName can change without passing by the Program Settings
+  elog->Write(htmlText, subject, category, runNumber);
 
 }
 
 void MainWindow::AppendElog(QString appendHtmlText, int screenID){
-  if( elogID < 1 ) return;
-  if( expName == "" ) return;
-  
-  QProcess elogBash(this);
 
-  QStringList arg;
-  arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-w" << QString::number(elogID);
+  QString attachmentPath = "";
 
-  //retrevie the elog
-  elogBash.start("elog", arg); 
-  elogBash.waitForFinished();
+  if( screenID >= 0 ){
 
-  QString output = QString::fromUtf8(elogBash.readAllStandardOutput());
-  //qDebug() << output;
+    //TODO =========== chrome windowID
 
-  QString separator = "========================================";
-
-  int index = output.indexOf(separator);
-  if( index != -1){
-
-    QString originalHtml = output.mid(index + separator.length());
-
-    arg.clear();
-    arg << "-h" << ElogIP << "-p" << "8080" << "-l" << expName << "-u" << ElogUser << ElogPWD << "-e" << QString::number(elogID)
-        << "-n" << "2" << originalHtml + "<br>" + appendHtmlText;
-
-    if( screenID >= 0) {
-      
-      //TODO =========== chrome windowID
-      
-      QScreen * screen = QGuiApplication::primaryScreen();
-      if( screen){
-        QPixmap screenshot = screen->grabWindow(screenID);
-        screenshot.save("screenshot.png");
-        arg << "-f" << "screenshot.png";
-      }
+    QScreen * screen = QGuiApplication::primaryScreen();
+    if( screen ){
+      QPixmap screenshot = screen->grabWindow(screenID);
+      attachmentPath = "screenshot.png";
+      screenshot.save(attachmentPath);
     }
-
-    //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
-
-    elogBash.start("elog", arg); 
-    elogBash.waitForFinished();
-
-    output = QString::fromUtf8(elogBash.readAllStandardOutput());
-    index = output.indexOf("ID=");
-    if( index != -1 ){
-      elogID = output.mid(index+3).toInt();
-    }else{
-      elogID = -1;
-    }
-
-  }else{
-    elogID = -1;
   }
 
+  //TODO ========= add elog bash script to tell mac, capture screenshot and send it back.
+
+  elog->SetLogbook(GetElogName());
+  elog->Append(appendHtmlText, attachmentPath);
+
+}
+
+//^#===================================================== elog template
+
+/// 1234567 -> "1.18 MB"
+static QString FormatFileSize(uint64_t byte){
+  if( byte >= 1024ULL*1024*1024 ) return QString::number(byte/1024./1024./1024., 'f', 2) + " GB";
+  if( byte >= 1024ULL*1024      ) return QString::number(byte/1024./1024., 'f', 2) + " MB";
+  if( byte >= 1024ULL           ) return QString::number(byte/1024., 'f', 2) + " kB";
+  return QString::number(byte) + " B";
+}
+
+QString MainWindow::BuildElogMsg(ElogSection sec, QString * subject, QString * category){
+
+  const bool isStartRun = (sec == ElogSection::StartRun);
+
+  const QString startTimeStr = runStartDateTime.isValid() ? runStartDateTime.toString("yyyy.MM.dd hh:mm:ss") : "";
+  const QString stopTimeStr  = runStopDateTime.isValid()  ? runStopDateTime.toString("yyyy.MM.dd hh:mm:ss")  : "";
+
+  if( subject  ) *subject  = isStartRun ? ("Run-" + runIDStr) : QString();
+  if( category ) *category = isStartRun ? QString("Run") : QString();
+
+  /// what SOLARIS DAQ posted before elog.template existed. Used when the file is
+  /// missing or broken, so a bad template can never stop a run from being logged.
+  auto builtIn = [&]() -> QString {
+    if( isStartRun ){
+      return "=============== Run-" + runIDStr + "<br />"
+           + startTimeStr + "<br />"
+           + "comment : " + startComment + "<br />"
+           + "----------------------------------------------";
+    }
+    QString msg = stopTimeStr + "<br />";
+    for( int i = 0; i < nDigi; i++){
+      if( digiManager->IsDummy(i) ) continue;
+      msg += "FileSize ("+ QString::number(digiManager->GetSerialNumber(i)) +"): "
+           + QString::number(digiManager->GetTotalFileSize(i)/1024./1024.) + " MB <br />";
+    }
+    msg += "comment : " + stopComment + "<br />"
+        + "======================";
+    return msg;
+  };
+
+  const QString path = programPath + "/" + defaultElogTemplateFileName;
+
+  if( !elogTemplate->Load(path) ){
+    LogMsg("<font style=\"color : red;\">Elog template: " + elogTemplate->GetErrorMsg().toHtmlEscaped() + ". Using the built-in text.</font>");
+    return builtIn();
+  }
+
+  if( !elogTemplate->Has(sec) ){
+    LogMsg("<font style=\"color : red;\">Elog template: no \"#=== " + QString(isStartRun ? "start Run" : "stop Run")
+           + "\" section in " + path.toHtmlEscaped() + ". Using the built-in text.</font>");
+    return builtIn();
+  }
+
+  //-------- run wide numbers
+  uint64_t totalFileSize = 0;
+  int      totalNumberOfFile = 0;
+  int      nBoardValid = 0;
+  for( int i = 0; i < nDigi; i++){
+    if( digiManager->IsDummy(i) ) continue;
+    totalFileSize     += digiManager->GetTotalFileSize(i);
+    totalNumberOfFile += digiManager->GetOutFileIndex(i) + 1;
+    nBoardValid ++;
+  }
+
+  QString duration = "";
+  if( runStartDateTime.isValid() && runStopDateTime.isValid() ){
+    const qint64 sec = runStartDateTime.secsTo(runStopDateTime);
+    duration = QString("%1:%2:%3").arg(sec/3600, 2, 10, QChar('0'))
+                                  .arg((sec/60)%60, 2, 10, QChar('0'))
+                                  .arg(sec%60, 2, 10, QChar('0'));
+  }
+
+  elogTemplate->ClearVars();
+  elogTemplate->SetVar("ExpName"           , expName);
+  elogTemplate->SetVar("ElogName"          , GetElogName());
+  elogTemplate->SetVar("RunID"             , runID);
+  elogTemplate->SetVar("RunIDStr"          , runIDStr);
+  elogTemplate->SetVar("StartTime"         , startTimeStr);
+  elogTemplate->SetVar("StopTime"          , stopTimeStr);
+  elogTemplate->SetVar("Duration"          , duration);
+  elogTemplate->SetVar("StartComment"      , startComment);
+  elogTemplate->SetVar("StopComment"       , stopComment);
+  elogTemplate->SetVar("RunComment"        , isStartRun ? startComment : stopComment);
+  elogTemplate->SetVar("FilePath"          , runFolderPath);
+  elogTemplate->SetVar("NumberOfFile"      , totalNumberOfFile);
+  elogTemplate->SetVar("TotalFileSize"     , FormatFileSize(totalFileSize));
+  elogTemplate->SetVar("TotalFileSizeMB"   , QString::number(totalFileSize/1024./1024.));
+  elogTemplate->SetVar("TotalFileSizeByte" , QString::number(totalFileSize));
+  elogTemplate->SetVar("NumberOfBoard"     , nBoardValid);
+  elogTemplate->SetVar("DataFormat"        , cbDataFormat ? cbDataFormat->currentText() : QString());
+  elogTemplate->SetVar("AutoRun"           , cbAutoRun ? cbAutoRun->currentText() : QString());
+  elogTemplate->SetVar("Now"               , QDateTime::currentDateTime().toString("yyyy.MM.dd hh:mm:ss"));
+  elogTemplate->SetVar("Host"              , QSysInfo::machineHostName());
+
+  //-------- the loop bounds
+  elogTemplate->nBoard     = [this](){ return (int) nDigi; };
+  elogTemplate->boardValid = [this](int bd){ return digiManager && bd >= 0 && bd < nDigi && !digiManager->IsDummy(bd); };
+  elogTemplate->nChannel   = [this](int bd){
+    if( !digiManager || bd < 0 || bd >= nDigi ) return 0;
+    return std::min((int) digiManager->GetNChannels(bd), (int) MaxNumberOfChannel);
+  };
+
+  //-------- <Bd:Prop>
+  elogTemplate->boardVar = [this](int bd, const QString & prop, bool & ok) -> QString {
+    ok = true;
+    if( !digiManager || bd < 0 || bd >= nDigi ){ ok = false; return QString(); }
+
+    /// in broker mode each of these is a REQ/REP round trip, so only ask for what the token needs
+    if( prop.compare("SN"          , Qt::CaseInsensitive) == 0 ||
+        prop.compare("SerialNumber", Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetSerialNumber(bd));
+    if( prop.compare("Model"       , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(digiManager->GetModelName(bd));
+    if( prop.compare("FPGAType"    , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(digiManager->GetFPGAType(bd));
+    if( prop.compare("FPGAVer"     , Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetFPGAVersion(bd));
+    if( prop.compare("NChannel"    , Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetNChannels(bd));
+    if( prop.compare("FileSize"    , Qt::CaseInsensitive) == 0 ) return FormatFileSize(digiManager->GetTotalFileSize(bd));
+    if( prop.compare("FileSizeMB"  , Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetTotalFileSize(bd)/1024./1024.);
+    if( prop.compare("FileSizeByte", Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetTotalFileSize(bd));
+    if( prop.compare("NumberOfFile", Qt::CaseInsensitive) == 0 ) return QString::number(digiManager->GetOutFileIndex(bd) + 1);
+    if( prop.compare("FileName"    , Qt::CaseInsensitive) == 0 ) return QString::fromStdString(digiManager->GetOutFileName(bd));
+
+    /// any board parameter, from the settings cache, e.g. <Bd:TestPulsePeriod>. The cache lives on
+    /// the local Digitizer2Gen in both modes; DigiManager::ReadAllSettings() keeps it in sync when
+    /// the GUI is talking to the broker.
+    Digitizer2Gen * d = digiManager->GetDigitizer(bd);
+    if( !d ){ ok = false; return QString(); }
+
+    bool found = false;
+    const QString value = QString::fromStdString(d->GetBoardSettingByName(prop.toStdString(), &found));
+    ok = found;
+    return value;
+  };
+
+  //-------- <Bd:Ch:Prop>
+  elogTemplate->chVar = [this](int bd, int ch, const QString & prop, bool & ok) -> QString {
+    ok = true;
+    if( !digiManager || bd < 0 || bd >= nDigi || ch < 0 || ch >= MaxNumberOfChannel ){ ok = false; return QString(); }
+
+    if( prop.compare("TrigRate"   , Qt::CaseInsensitive) == 0 ||
+        prop.compare("SelfTrgRate", Qt::CaseInsensitive) == 0 ) return QString::number(lastTrgRate[bd][ch], 'f', 1);
+    if( prop.compare("AcceptRate" , Qt::CaseInsensitive) == 0 ) return QString::number(lastAcceptRate[bd][ch], 'f', 1);
+    if( prop.compare("SavedCount" , Qt::CaseInsensitive) == 0 ) return QString::number(oldSavedCount[bd][ch]);
+    if( prop.compare("Realtime"   , Qt::CaseInsensitive) == 0 ) return QString::number(oldTimeStamp[bd][ch]/1e9, 'f', 3);
+
+    /// any channel parameter, from the settings cache, e.g. <Bd:Ch:TriggerThreshold>
+    Digitizer2Gen * d = digiManager->GetDigitizer(bd);
+    if( !d ){ ok = false; return QString(); }
+
+    bool found = false;
+    const QString value = QString::fromStdString(d->GetChSettingByName(prop.toStdString(), ch, &found));
+    ok = found;
+    return value;
+  };
+
+  QStringList unresolved;
+  const QString msg = elogTemplate->Render(sec, &unresolved);
+
+  if( subject ){
+    const QString text = elogTemplate->Subject(sec, &unresolved);
+    if( !text.isEmpty() ) *subject = text;
+  }
+  if( category ){
+    const QString text = elogTemplate->Category(sec, &unresolved);
+    if( !text.isEmpty() ) *category = text;
+  }
+
+  if( !unresolved.isEmpty() ){
+    LogMsg("<font style=\"color : red;\">Elog template: unknown variable " +
+           ("<" + unresolved.join(">, <") + ">").toHtmlEscaped() + " in " + path.toHtmlEscaped() + "</font>");
+  }
+
+  return msg;
 }
 
 void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){

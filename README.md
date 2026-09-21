@@ -7,7 +7,7 @@ Data acquisition system for the SOLARIS (SOLenoid And Resonance Ionization Spect
 ```
 SOLARIS_DAQ/
 ├── Makefile              # Top-level: builds GUI + broker
-├── core/                 # Shared code (no Qt dependency)
+├── core/                 # Shared code, outside the GUI widgets
 │   ├── ClassDigitizer2Gen.h/cpp   # Digitizer hardware control
 │   ├── DigiManager.h/cpp          # Unified interface (standalone/broker)
 │   ├── Hit.h                      # Event data structures
@@ -15,6 +15,8 @@ SOLARIS_DAQ/
 │   ├── RingBuffer.h               # Lock-free circular buffer
 │   ├── DigiParameters.h           # Register definitions (PHA/PSD)
 │   ├── ClassInfluxDB.h/cpp        # InfluxDB client
+│   ├── ClassElog.h/cpp            # Wrapper around the `elog` command line client (Qt)
+│   ├── ClassElogTemplate.h/cpp    # Renders the entry from `elog.template` (Qt)
 │   └── macro.h                    # Global constants
 ├── GUI/                  # Qt6 GUI application
 │   ├── SOLARIS_DAQ.pro            # qmake project file
@@ -56,6 +58,9 @@ solaris-broker ──── Digitizer Hardware
      ├── SOLARIS_DAQ (GUI instance 2)
      └── solaris-cli  (command-line client)
 ```
+
+Note that `solaris-broker` and `SOLARIS_DAQ` speak a binary protocol with no version negotiation,
+so they must be built and deployed from the same commit.
 
 ### Auto-Detection
 
@@ -453,6 +458,76 @@ Tested with:
 - V2745-dpp-pha-1G / V2740-dpp-pha-1G
 - V2745-dpp-psd-1G / V2740-dpp-psd-1G
 - VX2730 DPP-PSD (firmware 2025052203+)
+
+## Additional Features
+
+### Analysis Working Directory
+
+When the analysis path is set, the DAQ will:
+- Save the expName.sh
+- Save digitizer settings
+- Load the Mapping.h from the working directory
+
+### End Run Script
+
+When a run stops, the DAQ executes the bash script at `scripts/endRunScript.sh`.
+
+### Elog Template
+
+What the DAQ posts to the elog at the start and the stop of a run is set by `elog.template`,
+in the program directory next to `programSettings.txt`. It is re-read on every start and stop,
+so it can be edited while the DAQ is running. If it is missing, the DAQ writes a default one at
+startup; if it is missing or broken at run time, the DAQ falls back to a built-in text and says
+so in the log panel, a bad template never stops a run from being logged.
+
+The file has two sections:
+
+```
+#=== start Run
+#Subject: Run-<RunIDStr>
+#Category: Run
+=============== Run-<RunIDStr>
+<StartTime>
+comment : <StartComment>
+
+#=== stop Run
+<StopTime>
+FileSize (<Bd:SN>): <Bd:FileSizeMB> MB
+comment : <StopComment>
+```
+
+- Every other line starting with `#` is a comment. Use `\#` for a line that really starts with a `#`.
+- `#Subject:` and `#Category:` set the elog attributes of the start-run entry.
+- `<Name>` is replaced by a variable, everything else is passed through, so HTML such as
+  `<br />`, `<b>bold</b>` and `<font style="color : red;">red</font> ` keeps working.
+  An unknown `<Token>` is left in the entry and reported in the log panel.
+- Substituted values are HTML escaped, a comment like `rate < 5 & noisy` cannot break the entry.
+
+Lines are repeated over the digitizers:
+
+| the line holds | it is emitted |
+|------|-------------|
+| `<Bd:Something>` | once per digitizer (dummies are skipped) |
+| `<Bd:Ch:Something>` | once per digitizer and channel |
+| `<Bd3:Something>` / `<Bd3:Ch7:Something>` | once, for that board / channel |
+
+Inside a repeated line, `<Bd>` is the board index and `<Ch>` the channel index.
+
+| Scope | Variables |
+|------|-------------|
+| Run | `<ExpName> <ElogName> <RunID> <RunIDStr> <StartTime> <StopTime> <Duration> <StartComment> <StopComment> <RunComment> <DataFormat> <AutoRun> <FilePath> <NumberOfFile> <TotalFileSize> <TotalFileSizeMB> <TotalFileSizeByte> <NumberOfBoard> <Now> <Host>` |
+| Board | `<Bd:SN> <Bd:Model> <Bd:FPGAType> <Bd:FPGAVer> <Bd:NChannel> <Bd:FileSize> <Bd:FileSizeMB> <Bd:FileSizeByte> <Bd:NumberOfFile> <Bd:FileName>` |
+| Channel | `<Bd:Ch:TrigRate> <Bd:Ch:AcceptRate> <Bd:Ch:SavedCount> <Bd:Ch:Realtime>` |
+
+Any board or channel register can be used as well, under its CAEN name as saved in the
+`*XSetting_*.dat` file, e.g. `<Bd:TestPulsePeriod>`, `<Bd:Ch:TriggerThreshold>`,
+`<Bd:Ch:ChRecordLengthT>`. Those come from the in-memory settings cache, not from a live read
+of the hardware. The rates come from the last Scaler update.
+
+All of the above resolve in broker mode as well as standalone mode, with one caveat: the register
+variables read the GUI's local settings cache, which in broker mode is filled by
+`DigiManager::ReadAllSettings()`. A register never read since the GUI connected renders empty and
+is reported as unresolved in the log panel.
 
 ## Known Issues
 

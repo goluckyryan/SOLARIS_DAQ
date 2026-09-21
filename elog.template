@@ -1,0 +1,46 @@
+#============================================================================
+# SOLARIS DAQ elog template
+#
+# "#=== start Run" and "#=== stop Run" open the two entries. Every other line
+# starting with # is a comment, use \# for a line that really starts with a #.
+#
+# <Name> is replaced by a variable. Anything else is passed through, so HTML
+# like <br />, <b>bold</b> or <font style="color : red;">red</font> still works.
+# An unknown <Token> is left in the entry and reported in the DAQ log panel.
+#
+# A line holding <Bd:Something>    is repeated once per digitizer.
+# A line holding <Bd:Ch:Something> is repeated once per digitizer and channel.
+# <Bd3:Something> / <Bd3:Ch7:Something> pick one board / channel and do not repeat.
+# Inside a repeated line, <Bd> is the board index and <Ch> the channel index.
+#
+# Run variables
+#   <ExpName> <ElogName> <RunID> <RunIDStr> <StartTime> <StopTime> <Duration>
+#   <StartComment> <StopComment> <RunComment> <DataFormat> <AutoRun>
+#   <FilePath> <NumberOfFile> <TotalFileSize> <TotalFileSizeMB> <TotalFileSizeByte>
+#   <NumberOfBoard> <Now> <Host>
+#
+# Board variables
+#   <Bd:SN> <Bd:Model> <Bd:FPGAType> <Bd:FPGAVer> <Bd:NChannel>
+#   <Bd:FileSize> <Bd:FileSizeMB> <Bd:NumberOfFile> <Bd:FileName>
+#   plus any board parameter, e.g. <Bd:TestPulsePeriod>
+#
+# Channel variables
+#   <Bd:Ch:TrigRate> <Bd:Ch:AcceptRate> <Bd:Ch:SavedCount> <Bd:Ch:Realtime>
+#   plus any channel parameter, e.g. <Bd:Ch:TriggerThreshold> <Bd:Ch:ChRecordLengthT>
+#
+# The parameter names are the CAEN names, as saved in the *XSetting_*.dat file.
+#============================================================================
+
+#=== start Run
+#Subject: Run-<RunIDStr>
+#Category: Run
+=============== Run-<RunIDStr>
+<StartTime>
+comment : <StartComment>
+----------------------------------------------
+
+#=== stop Run
+<StopTime>
+FileSize (<Bd:SN>): <Bd:FileSizeMB> MB
+comment : <StopComment>
+======================

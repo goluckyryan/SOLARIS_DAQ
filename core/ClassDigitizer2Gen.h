@@ -44,11 +44,8 @@ class Digitizer2Gen {
 
     bool isDummy;
     bool isConnected;
-    int ret;
 
-    char retValue[256];
-
-    unsigned short serialNumber;
+    unsigned int serialNumber;
     unsigned int CupVer;
     std::string  FPGAType; // look the DigitiParameter.h::PHA::DIG::FirwareType, DPP_PHA, DPP_ZLE, DPP_PSD, DPP_DAW, DPP_OPEN, and Scope
     unsigned int FPGAVer; // for checking copy setting
@@ -92,26 +89,26 @@ class Digitizer2Gen {
     Digitizer2Gen();
     ~Digitizer2Gen();
 
-    unsigned short GetSerialNumber() const {return serialNumber;}
+    unsigned int GetSerialNumber() const {return serialNumber;}
     std::string    GetFPGAType()     const {return FPGAType;}
     std::string    GetModelName()    const {return ModelName;}
     unsigned int   GetFPGAVersion()  const {return FPGAVer;}
     unsigned int   GetCupVer()       const {return CupVer;}
 
-    void  SetDummy(unsigned short sn, unsigned short nCh = 64, std::string fpga = "DPP_PHA");
+    void  SetDummy(unsigned int sn, unsigned short nCh = 64, std::string fpga = "DPP_PHA");
     bool  IsDummy()     const {return isDummy;}
     bool  IsConnected() const {return isConnected;}
 
     int  OpenDigitizer(const char * url);
     int  CloseDigitizer();
 
-    int GetRet() const {return ret;};
-
     uint64_t    GetHandle(const char * parameter);
     uint64_t    GetParentHandle(uint64_t handle);
     std::string GetPath(uint64_t handle);
 
-    std::string  ReadValue(const char * parameter, bool verbose = false);
+    /// status, when given, receives the CAEN return code of this one call. Like ErrorMsg(), it is
+    /// an out-parameter and not a member: a per-call status must not live in per-object storage.
+    std::string  ReadValue(const char * parameter, bool verbose = false, int * status = nullptr);
     std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
     bool         WriteValue(const char * parameter, std::string value, bool verbose = true);
     bool         WriteValue(const Reg para, std::string value, int ch_index = -1); // write digituzer and save to memory
@@ -122,7 +119,9 @@ class Digitizer2Gen {
     std::string GetSettingValueFromMemory(const Reg para, unsigned int ch_index = 0); // read from memory
 
     
-    std::string ErrorMsg(const char * funcName);
+    /// ret is passed in explicitly: a per-call status must not live in per-object storage,
+    /// the DAQ and GUI threads call into this object concurrently.
+    std::string ErrorMsg(const char * funcName, int ret);
 
     void StartACQ();
     void StopACQ();
@@ -160,6 +159,14 @@ class Digitizer2Gen {
     void SaveDataToFile();
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
+    unsigned short GetOutFileIndex() const {return outFileIndex;} // number of files = index + 1
+    std::string GetOutFileName() const {return outFileName;}
+
+    /// Look up a setting by its CAEN name in the in-memory cache, for the elog template.
+    /// It never touches the hardware, so the GUI thread can call it while the DAQ runs.
+    /// found is set to false when the name is not a parameter of this firmware.
+    std::string GetBoardSettingByName(const std::string & name, bool * found = nullptr) const;
+    std::string GetChSettingByName(const std::string & name, int ch, bool * found = nullptr) const;
 
     std::string GetSettingFileName() const {return settingFileName;}
     void SetSettingFileName(std::string fileName) {settingFileName = fileName;}

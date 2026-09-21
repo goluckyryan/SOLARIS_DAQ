@@ -284,13 +284,13 @@ void BrokerServer::HandleListDigi() {
   for (int i = 0; i < nDigi; i++) {
     if (digi[i] && digi[i]->IsConnected()) {
       PackU8(buf, 1); // connected
-      PackU16(buf, digi[i]->GetSerialNumber());
+      PackU32(buf, digi[i]->GetSerialNumber());
       PackString(buf, digi[i]->GetModelName());
       PackString(buf, digi[i]->GetFPGAType());
       PackU16(buf, digi[i]->GetNChannels());
     } else {
       PackU8(buf, 0); // not connected
-      PackU16(buf, 0);
+      PackU32(buf, 0); // serial number
       PackString(buf, "");
       PackString(buf, "");
       PackU16(buf, 0);
@@ -308,7 +308,7 @@ void BrokerServer::HandleGetDigiInfo(const uint8_t* data, size_t len) {
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
   std::vector<uint8_t> buf;
   PackHeader(buf, RSP_DIGI_INFO);
-  PackU16(buf, digi[idx]->GetSerialNumber());
+  PackU32(buf, digi[idx]->GetSerialNumber());
   PackString(buf, digi[idx]->GetModelName());
   PackString(buf, digi[idx]->GetFPGAType());
   PackU16(buf, digi[idx]->GetNChannels());
@@ -327,8 +327,9 @@ void BrokerServer::HandleReadValue(const uint8_t* data, size_t len) {
   if (idx >= nDigi || !digi[idx]) { SendError("invalid digi index"); return; }
 
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
-  std::string val = digi[idx]->ReadValue(param.c_str());
-  if (digi[idx]->GetRet() != CAEN_FELib_Success) {
+  int status = CAEN_FELib_GenericError;
+  std::string val = digi[idx]->ReadValue(param.c_str(), false, &status);
+  if (status != CAEN_FELib_Success) {
     SendError("ReadValue failed for " + param);
   } else {
     SendValue(val);
@@ -535,6 +536,10 @@ void BrokerServer::HandleGetFileStatus(const uint8_t* data, size_t len) {
   PackHeader(buf, RSP_FILE_STATUS);
   PackU64(buf, digi[idx]->GetTotalFilesSize());
   PackU32(buf, digi[idx]->GetFileSize());
+  /// appended for the GUI's elog template. Older clients stop reading after currentFileSize,
+  /// so adding them at the end does not break them.
+  PackU16(buf, digi[idx]->GetOutFileIndex());
+  PackString(buf, digi[idx]->GetOutFileName());
   SendReply(buf);
 }
 
@@ -674,7 +679,7 @@ void BrokerServer::PublishScalar(int digiIndex) {
   std::vector<uint8_t> buf;
   PackHeader(buf, PUB_SCALAR);
   PackU8(buf, static_cast<uint8_t>(digiIndex));
-  PackU16(buf, digi[digiIndex]->GetSerialNumber());
+  PackU32(buf, digi[digiIndex]->GetSerialNumber());
   PackU8(buf, static_cast<uint8_t>(nCh));
 
   // Read per-channel scalars — lock/unlock per channel to minimize mutex hold time

@@ -136,6 +136,7 @@ public slots:
 
 private slots:
   void UpdateScope();
+  void DrawTraceFromBuffer(int backIdx); // backIdx 0 = latest trace in the ring
   void ScopeControlOnOff(bool on);
   void ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara);
   void ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara);
@@ -182,7 +183,12 @@ private:
   QPushButton * bnScopeStop;
   
   QLineEdit * leTriggerRate;
-  
+
+  /// browse the trace ring buffer; only usable when the scope is stopped, see DrawTraceFromBuffer().
+  /// plain QSpinBox, not RSpinBox: RSpinBox ignores wheelEvent and scrolling traces is the point.
+  QSpinBox * sbTraceIdx;
+  QLabel   * lbTraceIdx;
+
   RComboBox   * cbAnaProbe[2];
   RComboBox   * cbDigProbe[4];
 
@@ -233,6 +239,9 @@ private:
   bool allowChange;
 
   void ChangeDigitizer();
+
+  void PlotSnapshot(const TraceSnapshot & ts, unsigned int traceLength, int sample2ns);
+  void RefreshTraceBrowser(); // re-range sbTraceIdx from the ring and redraw the latest
 
   void CleanUpSettingsGroupBox();
   void SetupPHA();

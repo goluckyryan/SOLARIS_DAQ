@@ -22,6 +22,8 @@ HEADERS += ../core/ClassDigitizer2Gen.h \
            ../core/RawDecoder.h \
            ../core/RingBuffer.h \
            ../core/ClassInfluxDB.h \
+           ../core/ClassElog.h \
+           ../core/ClassElogTemplate.h \
            ../core/DigiParameters.h \
            ../core/DigiManager.h \
            ../core/macro.h
@@ -45,6 +47,8 @@ HEADERS += mainwindow.h \
 # Core sources (shared with broker)
 SOURCES += ../core/ClassDigitizer2Gen.cpp \
            ../core/ClassInfluxDB.cpp \
+           ../core/ClassElog.cpp \
+           ../core/ClassElogTemplate.cpp \
            ../core/DigiManager.cpp
 
 # Broker sources

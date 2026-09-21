@@ -175,7 +175,7 @@ std::vector<BrokerClient::DigiInfo> BrokerClient::ListDigitizers() {
   for (int i = 0; i < nDigi && off < rsp.size(); i++) {
     DigiInfo info;
     info.isConnected = (UnpackU8(rsp.data(), off) != 0);
-    info.serialNumber = UnpackU16(rsp.data(), off);
+    info.serialNumber = UnpackU32(rsp.data(), off);
     info.modelName = UnpackString(rsp.data(), off);
     info.fpgaType = UnpackString(rsp.data(), off);
     info.nChannels = UnpackU16(rsp.data(), off);
@@ -200,7 +200,7 @@ BrokerClient::DigiInfo BrokerClient::GetDigiInfo(int index) {
   if (type != RSP_DIGI_INFO) return info;
 
   info.isConnected = true;
-  info.serialNumber = UnpackU16(rsp.data(), off);
+  info.serialNumber = UnpackU32(rsp.data(), off);
   info.modelName = UnpackString(rsp.data(), off);
   info.fpgaType = UnpackString(rsp.data(), off);
   info.nChannels = UnpackU16(rsp.data(), off);
@@ -322,6 +322,18 @@ BrokerClient::FileStatus BrokerClient::GetFileStatus(int digiIndex) {
 
   fs.totalFileSize = UnpackU64(rsp.data(), off);
   fs.currentFileSize = UnpackU32(rsp.data(), off);
+
+  /// fileIndex and fileName were appended to this reply later, and the Unpack helpers do no bounds
+  /// checking, so read them only when the bytes are actually there. A broker that predates them
+  /// simply leaves the struct defaults in place.
+  if( off + 2 > rsp.size() ) return fs;
+  fs.fileIndex = UnpackU16(rsp.data(), off);
+
+  if( off + 2 > rsp.size() ) return fs;
+  const uint16_t nameLen = rsp[off] | (rsp[off + 1] << 8);
+  if( off + 2 + nameLen > rsp.size() ) return fs;
+  fs.fileName = UnpackString(rsp.data(), off);
+
   return fs;
 }
 
@@ -395,7 +407,7 @@ void BrokerClient::SubscriptionLoop() {
 
         {
           std::lock_guard<std::mutex> lock(scalarMutex);
-          scalarData[digiIdx].serialNumber = UnpackU16(data, off);
+          scalarData[digiIdx].serialNumber = UnpackU32(data, off);
           scalarData[digiIdx].nChannels = UnpackU8(data, off);
           int nCh = scalarData[digiIdx].nChannels;
 

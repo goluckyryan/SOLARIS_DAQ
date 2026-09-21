@@ -33,9 +33,10 @@ public:
 
   //=== Info queries ===
   int          GetNChannels(int digi) const;
-  uint16_t     GetSerialNumber(int digi) const;
+  unsigned int GetSerialNumber(int digi) const;
   std::string  GetModelName(int digi) const;
   std::string  GetFPGAType(int digi) const;
+  unsigned int GetFPGAVersion(int digi) const; // for the elog template's <Bd:FPGAVer>
   unsigned short GetTick2ns(int digi) const;
   bool         IsDummy(int digi) const;
   bool         IsDigiConnected(int digi) const;
@@ -57,6 +58,10 @@ public:
   void     OpenFile(int digi, const std::string& fileName);
   void     CloseFile(int digi);
   uint64_t GetTotalFileSize(int digi) const;
+  /// for the elog template's <Bd:NumberOfFile> and <Bd:FileName>.
+  /// number of files = GetOutFileIndex() + 1; both return 0 / "" when unknown.
+  int         GetOutFileIndex(int digi) const;
+  std::string GetOutFileName(int digi) const;
 
   //=== Settings ===
   void        SaveSettings(int digi, const std::string& fileName);
@@ -110,11 +115,12 @@ private:
   BrokerClient*  client;
 
   struct DigiInfoCache {
-    uint16_t serialNumber = 0;
+    uint32_t serialNumber = 0;
     std::string modelName;
     std::string fpgaType;
     uint16_t nChannels = 0;
     uint16_t tick2ns = 0;
+    uint32_t fpgaVersion = 0;
     bool isConnected = false;
     bool isDummy = false;
     std::string settingFileName;
