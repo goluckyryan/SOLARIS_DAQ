@@ -12,9 +12,11 @@ The core digitizer control classes are independent from the Qt UI classes.
 |------|-------------|
 | ClassDigitizer2Gen.h/cpp | Digitizer control: connection, configuration, data readout, file I/O |
 | Hit.h | Event data structure for decoded hits |
+| LeanHit.h | 16-byte timestamped hit used by the online event builder |
+| OnlineEventBuilder.h/cpp | Online event builder: merges the per-board hit rings into time-correlated events |
 | RawDecoder.h | Decoder for raw endpoint binary blob into individual hits |
 | DigiParameters.h | Register definitions for DPP-PHA and DPP-PSD firmware |
-| RingBuffer.h | Lock-free circular buffer for per-channel energy histograms |
+| RingBuffer.h | Lock-free single-producer / multi-consumer circular buffer |
 
 ### UI Classes (Qt6)
 
@@ -37,6 +39,7 @@ The core digitizer control classes are independent from the Qt UI classes.
 | File | Description |
 |------|-------------|
 | EventBuilder.cpp | Offline event builder: merges .sol files, builds time-correlated events, outputs ROOT trees |
+| testOnlineBuilder.cpp | Verifies OnlineEventBuilder without hardware: self-test, synthetic data, .sol replay |
 | SolReader.h | Reader for .sol binary data files |
 | test.cpp | Comprehensive register and raw data decode tests |
 | debug_raw.cpp | Dumps raw blob word contents and decoded hits for debugging |
@@ -77,6 +80,176 @@ Raw mode reads from the `/endpoint/raw` endpoint, which returns many events per 
 
 However, the saving/acquisition pipeline for Raw mode is **not yet fully optimized or enabled in the GUI**. The current implementation yields one decoded hit per `ReadData()` call (to preserve the existing `ReadDataThread` loop contract), which limits throughput to roughly the same as the decoded endpoint. To achieve higher throughput, the pipeline needs to be restructured to save entire decoded blobs in batch. Raw mode is not yet selectable from the GUI data format dropdown.
 
+## Online Event Building
+
+`OnlineEventBuilder` groups hits from all digitizers into time-correlated events while the run is
+in progress. It is plain C++ — no Qt, no CAEN_FELib, no ROOT — so the same class can be driven from
+the GUI, from a console tool replaying a file, or from a separate analyzer process.
+
+### Data flow
+
+```mermaid
+flowchart LR
+  subgraph D0["Digitizer 0"]
+    T0["ReadDataThread"] --> R0["hitRing"]
+  end
+  subgraph D1["Digitizer 1"]
+    T1["ReadDataThread"] --> R1["hitRing"]
+  end
+  subgraph DN["Digitizer N"]
+    TN["ReadDataThread"] --> RN["hitRing"]
+  end
+  R0 --> OEB
+  R1 --> OEB
+  RN --> OEB
+  OEB["OnlineEventBuilder<br/>(single consumer thread)"] --> EV["onEvent(BuiltHit vector)"]
+```
+
+Each digitizer owns **one** `RingBuffer<LeanHit, 262144>` — 4 MiB, roughly 262 ms of a 1 MHz board.
+It is written only by that board's `ReadDataThread`, preserving the single-producer contract in
+`RingBuffer.h`, and read only by the builder.
+
+One ring per **board**, not per channel, because a board already emits all of its channels
+interleaved in timestamp order (see `format_RAW.md`, Aggregate Header). Splitting per channel would
+buy nothing and turn a 4-way merge into a 256-way one. `ringBuffer[]` (per-channel energies, for
+`SingleSpectra`) and `traceRingBuffer` (for the scope) are unchanged and still filled alongside.
+
+### The build horizon
+
+The core problem: when is it safe to close an event? If you emit an event at t=500 and a slower
+board then delivers its hit at t=520, you have silently turned a coincidence into two singles.
+
+Because each board emits in non-decreasing time order, once a board has delivered a hit at time
+`t` it can never deliver anything earlier. So the minimum, over boards, of *the newest timestamp
+each has delivered* is a floor under every hit still to come:
+
+```
+board 0 has delivered up to  t = 1000
+board 1 has delivered up to  t = 1500
+board 2 has delivered up to  t =  900   <-- the slowest board sets the limit
+                                  ----
+                build horizon =   900
+```
+
+An event is final only once its whole window sits below the build horizon, plus `guardTime` of
+margin.
+Two cases need care:
+
+- **A board that has delivered nothing yet** has an *unknown* floor, not an absent one, so the
+  horizon is forced to 0 and nothing is built until it speaks. Skipping such a board (as the
+  offline builder can safely do, since a file with no data never gets any) lets the horizon run
+  ahead and every hit that board later delivers arrives too late.
+- **A board that stops delivering** would otherwise pin the horizon forever. After
+  `stallTimeout` of no new data it is dropped from the minimum and building resumes. This is the
+  one place data can be lost: a hit the board later delivers below an already-settled boundary is
+  counted in `totalHitsLate` and discarded.
+
+### Algorithm
+
+```mermaid
+flowchart TD
+  A["SnapshotIndices()<br/>read every ring index once"] --> B["UpdateLiveness()<br/>mark boards active / stalled"]
+  B --> C["PullNext() for each board with no front"]
+  C --> D["PickEarliestBoard()<br/>linear scan over fronts"]
+  D --> E{"front below settledBelow?"}
+  E -- yes --> F["totalHitsLate++<br/>PullNext, re-pick"]
+  F --> D
+  E -- no --> G{"any front left?"}
+  G -- no --> Z(["return"])
+  G -- yes --> H["eventStart = earliest front"]
+  H --> I{"isFinal?"}
+  I -- yes --> L["open the event"]
+  I -- no --> J["horizon = GetBuildHorizon()"]
+  J --> K{"horizon clears<br/>eventStart plus guardTime?"}
+  K -- no --> Z
+  K -- yes --> L
+  L --> M{"next front inside<br/>eventStart plus timeWindow?"}
+  M -- yes --> N["append BuiltHit<br/>PullNext on that board"]
+  N --> M
+  M -- no --> O["settledBelow = eventStart + timeWindow"]
+  O --> P["emit onEvent"]
+  P --> D
+```
+
+The seed hit always joins its own event; later hits join while
+`timestamp - eventStart < timeWindow`. The bound is **exclusive**, matching `Aux/EventBuilder`, so
+the two builders agree hit for hit. `timeWindow = 0` means no event building: one hit per event.
+
+The merge is a linear scan over one lookahead hit per board, not a priority queue. With at most 20
+boards a scan is both faster and simpler — a heap needs side state tracking which sources are
+currently in it, and that state has to be re-synchronised every time a board runs dry and refills,
+which online is the normal case. `PickEarliestBoard()` is the only place that would change if the
+board count ever grew enough to justify a heap.
+
+### Reading one hit: `PullNext()`
+
+1. Stop if the cursor has reached this pass's snapshot index.
+2. Copy the slot, then **re-read the write index**. If the producer advanced by `size()` or more,
+   the copy may be torn: skip forward to the oldest intact slot, add the skipped hits to
+   `totalHitsDropped`, and retry. A `LeanHit` is 16 bytes and cannot be copied atomically, so this
+   check is per copy, not once per drain.
+3. Compare against that board's previous timestamp. A backwards step larger than `timeJump` is
+   treated as the board's clock restarting and re-anchors the builder; a smaller one increments
+   `monotonicityViolations`.
+
+### Parameters
+
+| Setter | Default | Meaning |
+|--------|---------|---------|
+| `SetTimeWindow(ns)` | 100 | Hits within this of the seed join the event. Exclusive bound. 0 = one hit per event. |
+| `SetGuardTime(ns)` | 1000 | Extra margin beyond the window before an event is final. Clamped to at least `timeWindow`. More margin = more latency, more tolerance to jitter between boards. |
+| `SetTimeJump(ns)` | 1e8 | A hit this far *below* the previous one from the same board means the clock restarted, not corruption. |
+| `SetStallTimeout(ms)` | 500 | Wall-clock, not timestamps. A board whose ring has not advanced for this long is dropped from the build horizon. Must exceed the longest gap you expect between deliveries from your slowest board. |
+
+`Reset()` must be called on ACQ start. `StartACQ()` restarts the board timestamp counter but does
+not clear the host ring, so without it the builder sees pre-reset hits with huge timestamps ahead
+of new hits near zero. `BuildEvents(true)` at end of run flushes whatever is left.
+
+### Counters
+
+`PrintStat()` prints these. The last three should be zero in a healthy run.
+
+| Counter | Non-zero means |
+|---------|----------------|
+| `totalHitsDropped` | The ring lapped: the builder could not keep up, or was not called often enough. |
+| `totalHitsLate` | Hits arrived below an already-settled boundary. Expected cause is a stalled board rejoining; raise `stallTimeout`. |
+| `timeJumpEvents` | A board's clock restarted. Usually a missing `Reset()` on ACQ start. |
+| `monotonicityViolations` | **Hits out of order within one board.** The merge assumes per-board time ordering; if this fires, the events are not trustworthy. |
+
+### Assumptions and limits
+
+- **Per-board timestamp ordering is load-bearing.** Documented in `format_RAW.md` and verified on
+  ~23M hits of PHA / no-waveform data. Not yet verified for PSD multi-channel or the raw-blob path;
+  `monotonicityViolations` is the tripwire.
+- **Boards must share a clock and start together.** The builder normalises units (every timestamp
+  is ns by the time it reaches the ring, scaled by that board's own `tick2ns`) but does not correct
+  for a per-board time offset.
+- **`EnDataReduction` firmware mode is incompatible.** Single-word events carry only a 32-bit
+  reduced timestamp, which wraps every ~34 s at 8 ns/LSB, and `RawDecoder` passes it up as if it
+  were the full 48-bit value.
+- **`flagsHigh` is 0 in the `Minimum` and `MiniWithFineTime` formats** — those do not read the
+  flags from the digitizer, so a pile-up cut would silently keep everything.
+- The builder is **single-consumer**; only one thread may call `BuildEvents()` / `Reset()`. The
+  `onEvent` vector is reused between events, so a consumer must copy anything it keeps.
+
+### Testing
+
+`Aux/testOnlineBuilder` verifies the builder without a digitizer:
+
+```bash
+make -C Aux tools
+
+./Aux/testOnlineBuilder --selftest                        # the full ladder, non-zero exit on failure
+./Aux/testOnlineBuilder --synth --boards 4 --dump         # synthetic multi-board data
+./Aux/testOnlineBuilder --replay run_0_51554_000.sol --window 100000000
+./Aux/testOnlineBuilder --threaded --boards 4             # pushers racing the drain; run under TSan
+```
+
+`--selftest` checks the streaming output against a simple sorted-vector reference builder, checks
+that the result is identical for push chunk sizes of 1 / 17 / 1000 / all-at-once (which is what
+really exercises the build horizon), forces a ring lap and verifies every hit is accounted for as
+either built or dropped, and confirms that a board going silent does not freeze the build.
+
 ## Build
 
 ### Prerequisites
@@ -106,6 +279,9 @@ make EventBuilder
 
 # Register and raw decode test
 make test
+
+# Online event builder test (no ROOT, no CAEN, no Qt - builds anywhere)
+make tools
 ```
 
 ### Using CAENDig2.h
