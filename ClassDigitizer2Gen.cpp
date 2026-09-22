@@ -966,6 +966,13 @@ int Digitizer2Gen::ReadData(){
       while( rawDecoder.Next(decoded) ){
         if( decoded.channel < nChannels ){
           ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
+          /// Both timestamps are raw here (RawDecoder.h:16-17), so apply the same scaling the DPP
+          /// path below applies in place: timestamp -> ns, fine_timestamp -> units of 1/1024 ns.
+          hitRing.push({ decoded.timestamp * tick2ns,
+                         decoded.energy, decoded.energy_short,
+                         (uint16_t)(decoded.fine_timestamp * tick2ns),
+                         decoded.channel,
+                         (uint8_t)(decoded.flags_high_priority & 0xFF) });
         }
       }
 
@@ -992,13 +999,30 @@ int Digitizer2Gen::ReadData(){
     return ret;
   }
 
-  hit->timestamp     *= tick2ns;
-  hit->fine_timestamp *= tick2ns;
-
-  //======== fill per-channel ring buffer for histogram
-  if( hit->dataType != DataFormat::Raw ){
+  //======== fill the ring buffers for the histograms and the event builder
+  /// Done BEFORE the in-place scaling below, so both fields are scaled explicitly here and the
+  /// raw-decode path above can apply exactly the same scaling to its own raw values.
+  /// The channel guard also covers the histogram ring, which was missing one (the raw path has it).
+  if( hit->dataType != DataFormat::Raw && hit->channel < nChannels ){
     ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
+    hitRing.push({ hit->timestamp * tick2ns,
+                   hit->energy, hit->energy_short,
+                   (uint16_t)(hit->fine_timestamp * tick2ns),
+                   hit->channel,
+                   (uint8_t)(hit->flags_high_priority & 0xFF) });
   }
+
+  hit->timestamp     *= tick2ns;
+
+  /// Both fields are meant to carry physical time: timestamp in ns, fine_timestamp in ps.
+  /// timestamp is exact. fine_timestamp is within 2.4%: the raw field is a 10-bit fraction of one
+  /// tick, so a true picosecond value is raw * tick2ns * 1000/1024 (= 7.8125 ps per LSB at
+  /// tick2ns 8, per format_RAW.md:308), while this scales by tick2ns alone and so reads 1024/1000
+  /// high. Combining coarse + fine as ts + fine/1000 therefore overshoots the tick boundary by
+  /// ~190 ps at the top of the fine range, which shows up as a sawtooth in timing spectra.
+  /// Not changed here because the same convention is in Aux/EventBuilderRaw.cpp:137 and is already
+  /// baked into every .sol file; correcting it means changing all of them together.
+  hit->fine_timestamp *= tick2ns;
 
   //======== fill trace ring buffer for scope
   if( !hit->isTraceAllZero ){

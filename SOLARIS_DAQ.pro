@@ -25,6 +25,8 @@ QMAKE_CFLAGS_RELEASE = -O0
 # Input
 HEADERS += ClassDigitizer2Gen.h \
            Hit.h \
+					 LeanHit.h \
+					 OnlineEventBuilder.h \
 					 RawDecoder.h \
 					 ClassInfluxDB.h \
 					 ClassElog.h \
@@ -43,6 +45,7 @@ HEADERS += ClassDigitizer2Gen.h \
 					 SingleSpectra.h
 
 SOURCES += ClassDigitizer2Gen.cpp \
+           OnlineEventBuilder.cpp \
            ClassInfluxDB.cpp \
 					 ClassElog.cpp \
 					 ClassElogTemplate.cpp \

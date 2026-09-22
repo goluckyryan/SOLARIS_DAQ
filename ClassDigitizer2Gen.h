@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "Hit.h"
+#include "LeanHit.h"
 #include "RingBuffer.h"
 #include "RawDecoder.h"
 
@@ -150,6 +151,12 @@ class Digitizer2Gen {
     
     RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];
     RingBuffer<TraceSnapshot, TraceRingBufferSize> traceRingBuffer;
+
+    /// Timestamped hits for online event building. ONE ring for the whole board, not one per
+    /// channel: the board already emits all channels interleaved in timestamp order
+    /// (format_RAW.md:91), so splitting per channel would only force a 64-way merge.
+    /// Written by ReadDataThread only — single producer, like the rings above.
+    RingBuffer<LeanHit, LeanHitRingSize> hitRing;
 
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
