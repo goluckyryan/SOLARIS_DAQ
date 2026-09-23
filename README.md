@@ -14,6 +14,8 @@ The core digitizer control classes are independent from the Qt UI classes.
 | Hit.h | Event data structure for decoded hits |
 | LeanHit.h | 16-byte timestamped hit used by the online event builder |
 | OnlineEventBuilder.h/cpp | Online event builder: merges the per-board hit rings into time-correlated events |
+| EventRing.h | Buffer of built events between the builder and the analysis |
+| Analysis.h | Online analysis interface (Qt-free) and the self-registration registry |
 | RawDecoder.h | Decoder for raw endpoint binary blob into individual hits |
 | DigiParameters.h | Register definitions for DPP-PHA and DPP-PSD firmware |
 | RingBuffer.h | Lock-free single-producer / multi-consumer circular buffer |
@@ -27,6 +29,8 @@ The core digitizer control classes are independent from the Qt UI classes.
 | digiSettingsPanel.h/cpp | Register editing panel for board and channel settings |
 | scope.h/cpp | Oscilloscope for waveform display |
 | SingleSpectra.h/cpp | Per-channel energy spectra (1D histograms) |
+| Analyzer.h/cpp | Online analyzer window: owns the event builder, event ring and worker threads |
+| analyzers/*.cpp | The analyses themselves; each registers itself, see Online Analyzer below |
 | SOLARISpanel.h/cpp | SOLARIS-specific detector mapping and configuration |
 | CustomThreads.h | ReadDataThread and TimingThread for async acquisition |
 | CustomWidgets.h | Custom Qt widgets (RComboBox, etc.) |
@@ -52,6 +56,35 @@ The core digitizer control classes are independent from the Qt UI classes.
 | ClassInfluxDB.h/cpp | InfluxDB client for scaler rate logging |
 | ClassElog.h/cpp | Wrapper around the `elog` command line client |
 | ClassElogTemplate.h/cpp | Renders the elog entry from the user editable `elog.template` |
+
+### Dummy digitizers
+
+When a board cannot be opened, `OpenDigitizers()` creates a **dummy** `Digitizer2Gen` in its place.
+A dummy exists for one reason: **to hold a settings set and read/write it to a settings file
+without hardware.** The settings panel is the means of editing it, not the reason it exists.
+
+The whole mechanism is one line in `Digitizer2Gen::WriteValue`:
+
+```cpp
+if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy){
+  // ... update the in-memory settings cache (boardSettings / chSettings)
+```
+
+With no board the hardware write fails, and `|| isDummy` lets the in-memory cache accept the value
+anyway, so `LoadSettingsFromFile` / `SaveSettingsToFile` round-trip normally. `isDummy` appears in
+only three places in the whole `.cpp` — initialised false, set by `SetDummy()`, and this line.
+
+**A dummy is a settings object, never a data source.** `readDataThread[i]` is `NULL` for one, and
+it never produces a hit. Any code that reads data or talks to hardware must therefore guard on
+`IsDummy()` — as `scope.cpp`, `SOLARISpanel.cpp`, `digiSettingsPanel.cpp` and `mainwindow.cpp`'s
+scaler and elog paths already do.
+
+How much that matters depends on the consumer, and the gap is worth knowing. `SingleSpectra` has no
+`IsDummy()` check at all and gets away with it: a dummy's ring never advances, so its histogram
+simply stays empty. The event builder cannot be so relaxed, because its build horizon is a
+**minimum over boards** — a board that never delivers pins the horizon at zero and *no events are
+built at all* until the stall timeout, after every reset. The same omission is cosmetic in one
+place and a whole-system failure in the other, so new data consumers should assume the strict rule.
 
 ## Data Formats
 
@@ -249,6 +282,213 @@ make -C Aux tools
 that the result is identical for push chunk sizes of 1 / 17 / 1000 / all-at-once (which is what
 really exercises the build horizon), forces a ring lap and verifies every hit is accounted for as
 either built or dropped, and confirms that a board going silent does not freeze the build.
+
+## Online Analyzer
+
+The Analyzer window turns built events into histograms. It owns the event builder, the event ring
+and two worker threads, and an analysis is a small Qt-free class that says what to plot.
+
+### Control model
+
+**Nothing is tied to ACQ start/stop.** If the window is not open, no builder exists and nothing
+runs. When it is open, a single checkbox enables event building and analysis together, and while
+that box is unticked the digitizers do not even fill their hit rings — so the feature costs the DAQ
+read path one predictable branch and nothing else.
+
+Toggling off stops the builder, flushes the tail through the analysis, clears the fill flag, and
+clears the event ring and every hit ring. Toggling on clears again (now provably with no producer
+running), resets the builder's cursors, then starts filling. The toggle is the only run boundary,
+which is why there is no epoch or generation counter anywhere.
+
+Restarting ACQ while the toggle is on is safe: the board timestamp counter restarts, the builder
+sees a large backwards jump, and the `timeJump` rule re-anchors and counts it.
+
+### Threads
+
+```mermaid
+flowchart LR
+  H["per-board hitRing"] --> B["builder thread<br/>BuildEvents()"]
+  B --> R["EventRing"]
+  R --> A["analysis thread<br/>ProcessEvent()"]
+  A --> C["atomic count arrays"]
+  C --> G["GUI thread<br/>histogram widgets, 2 Hz"]
+```
+
+Two threads rather than one is what makes the ring earn its keep: if an analysis is slow, events
+queue in the ring instead of the builder stalling and letting the per-board hit rings lap. Losing
+events is recoverable; losing raw hits is not.
+
+Ownership is strict, and that is what removes every lock:
+
+| Thread | Owns |
+|--------|------|
+| builder | `OnlineEventBuilder` state — cursors, fronts, build horizon |
+| analysis | the `EventRing::Reader`, the `Analysis` instance, its parameter variables |
+| GUI | every Qt widget |
+
+The only cross-thread paths are the lock-free `EventRing` and `Qt::BlockingQueuedConnection` calls
+into the worker that owns the state. **That marshalling is the fence** — a parameter change runs on
+the analysis thread between two `ProcessEvent()` calls, which is why an analysis can keep plain
+`int` members with no atomics, and why there is no hand-rolled suspend/drain flag here.
+
+### Never fill a histogram from a worker thread
+
+`Histogram1D::Fill()` assigns a `QString` into a `QCPItemText` on every call. The refcount is
+atomic but the d-pointer store is not, so a worker can free the buffer the GUI thread is reading in
+`draw()`. `Histogram2D::Fill()` additionally walks `cutList` while the operator may be drawing a
+cut. Both are use-after-free, not cosmetic.
+
+So the registry accumulates into plain `std::atomic<uint32_t>` arrays on the worker, and only the
+GUI thread publishes them into the widgets, through `Histogram1D::SetBinContents()` and
+`Histogram2D::SetCellContents()`. An analysis never sees a widget, so it cannot get this wrong.
+
+(`SingleSpectra` still fills from its worker. That predates this and should eventually move to the
+same discipline; do not copy it.)
+
+### Writing an analysis
+
+Drop one `.cpp` in `analyzers/`. No other file changes.
+
+```cpp
+#include "../Analysis.h"
+
+class MyAnalysis : public Analysis {
+  int digiA = 0, chA = 0;      // plain members: the host writes them on the analysis thread
+  int hE = -1, hEE = -1;
+public:
+  void Declare(HistRegistry & reg, const AnalysisContext & ctx) override {
+    reg.ChannelParam("Channel A", &digiA, &chA);          // host builds the combo boxes
+    hE  = reg.Hist1D("Energy", "E [ch]", 512, 0, 30000, /*row*/0, /*col*/0);
+    hEE = reg.Hist2D("E vs E", "E(A)", "E(B)", 256, 0, 30000, 256, 0, 30000, 0, 1);
+  }
+
+  void ProcessEvent(const BuiltHit * hits, int n, HistRegistry & reg) override {
+    for( int i = 0; i < n; i++ ){
+      if( hits[i].digi == digiA && hits[i].channel == chA ) reg.Fill1(hE, hits[i].energy);
+    }
+  }
+};
+
+REGISTER_ANALYSIS(MyAnalysis, "My Analysis");
+```
+
+`Fill1` and `Fill2` are named apart on purpose: 1D and 2D ids are separate spaces, so filling a 2D
+histogram with a 1D call cannot silently land data in the wrong plot.
+
+#### What a hit contains
+
+`ProcessEvent` receives `n` hits **in ascending timestamp order**, so `hits[0]` is the earliest and
+`hits[n-1].timestamp - hits[0].timestamp` is below the configured time window.
+
+| `BuiltHit` field | |
+|---|---|
+| `timestamp` | `uint64_t`, ns |
+| `fine_timestamp` | `uint16_t`, sub-tick time scaled by `tick2ns` (see `LeanHit.h`) |
+| `energy` | `uint16_t` |
+| `energy_short` | `uint16_t`, PSD only; 0 under PHA firmware |
+| `sn` | `uint16_t`, board serial number |
+| `digi` | `uint8_t`, the board number the GUI shows |
+| `channel` | `uint8_t` |
+| `flagsHigh` | `uint8_t`, quality flags — see `LeanHitFlag` in `LeanHit.h` |
+
+`flagsHigh` carries `PileUp`, `EventSaturation`, `PostSaturation`, `ChargeOverflow`, `SCASelected`
+and `FineTSValid`, so `if( hits[i].flagsHigh & LeanHitFlag::PileUp ) continue;` is the usual veto.
+**But those bits are zero in the `Minimum` and `MiniWithFineTime` data formats** — the digitizer is
+not asked for flags there — so a pile-up cut silently keeps everything. Check the data format
+before relying on them.
+
+#### What the host tells you
+
+```cpp
+struct AnalysisContext {
+  int             nBoards;     // boards feeding the builder; dummies and unconnected are excluded
+  const uint8_t * nChannels;   // nBoards entries; boards can differ
+  uint64_t        timeWindow;  // the builder's window in ns, so dt binning can match
+};
+```
+
+Note `nBoards` counts only real boards, so it is not necessarily `nDigi` — but `BuiltHit::digi` is
+still the GUI's board number, so the two agree on labelling.
+
+#### Full registry API
+
+```cpp
+int  Hist1D(name, xLabel, nBin, xMin, xMax, row, col);
+int  Hist2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, row, col);
+void Fill1(id, x);
+void Fill2(id, x, y);
+void ChannelParam(label, int * digi, int * channel);   // host builds two combo boxes
+void BoolParam(label, bool * value);                   // host builds a checkbox
+```
+
+`row`/`col` place the plot in the window's grid. Parameters are written by the host on the analysis
+thread and **the histograms are cleared whenever one changes**, so a plot never mixes counts from
+two different channel selections.
+
+#### Testing without a digitizer
+
+An analysis can be driven over a `.sol` file or synthetic data with no hardware, no Qt and no GUI —
+which also proves the registration works before you ever open the window:
+
+```bash
+make -C Aux tools
+
+# real data
+./Aux/testOnlineBuilder --replay run_0_51554_000.sol --window 100000000 \
+                        --analysis "My Analysis" --chA 0 0 --chB 0 1
+
+# synthetic two-board coincidences, when the real file has only one channel
+./Aux/testOnlineBuilder --synth --boards 2 --coinc 20000 --seconds 1 --window 200 \
+                        --analysis "My Analysis" --chA 0 0 --chB 1 0
+```
+
+It prints the declared histograms, the parameters, and a fill tally per histogram with means and
+under/overflow counts — enough to see whether the analysis is doing what you expect.
+
+Thread contract: `Declare()` runs on the GUI thread with the workers stopped (it is where widgets
+get created); `ProcessEvent()`, `OnRunStart()` and `OnRunStop()` run on the analysis thread. Nothing
+an analysis implements is ever entered concurrently with anything else it implements.
+
+`analyzers/Coincidence.cpp` is the worked example: E(A) vs E(B), tB − tA, and multiplicity, with
+both channels chosen at runtime.
+
+#### What gets rebuilt
+
+Only your file. Measured on this project:
+
+| | recompiled | time |
+|---|---|---|
+| edit an analysis | 1 file | ~0.9 s |
+| add an analysis | 1 file (+ qmake) | ~0.9 s |
+| change `Analysis.h` | 7 files | ~20 s |
+
+`qcustomplot.o` and the rest of the GUI are never touched; the 34 MB binary relinks in under a
+second. You do still have to restart the DAQ to pick up the new binary — removing that is what the
+eventual out-of-process `.so` analyzer is for, and why `Analysis.h` is kept free of Qt.
+
+Three rules for `analyzers/`:
+
+1. **Re-run qmake after adding a file.** `$$files()` is evaluated at qmake time, so
+   `qmake6 -o Makefile SOLARIS_DAQ.pro && make`, not bare `make`.
+   **After *removing* one, also force a relink** — `rm SOLARIS_DAQ && make`. qmake drops it from the
+   object list, but the existing binary is newer than every remaining object, so `make` reports
+   nothing to do and the deleted analysis stays linked in and still appears in the menu.
+2. **Unique basenames.** `OBJECTS_DIR` is the project root, so `analyzers/Foo.cpp` produces
+   `./Foo.o` and a clash with another source is silent.
+3. **Never move `analyzers/` into a static library** without `-Wl,--whole-archive`. The linker
+   discards unreferenced archive members, and every self-registration would vanish.
+
+### Reading the status line
+
+The window shows `totalHitsDropped`, `totalHitsLate`, `monotonicityViolations` and the reader's
+`eventsDropped`. They exist so an operator can tell the online events are wrong:
+
+| Non-zero | Means |
+|---|---|
+| hits dropped | the builder could not keep up and a hit ring lapped |
+| late | hits arrived below an already-settled boundary; usually a stalled board rejoining |
+| ring dropped | the analysis could not keep up — events lost, raw hits fine. This is the ring doing its job |
+| **monotonicity** | **hits out of order within one board. The merge assumes per-board time ordering; if this fires, the events are not trustworthy** |
 
 ## Build
 
