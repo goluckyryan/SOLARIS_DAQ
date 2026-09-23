@@ -101,6 +101,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   scope = nullptr;
   digiSetting = nullptr;
   singleSpectra = nullptr;
+  analyzer = nullptr;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -153,6 +154,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSingleSpectra->setEnabled(false);
     connect(bnSingleSpectra, &QPushButton::clicked, this, &MainWindow::OpenSingleSpectra);
 
+    bnAnalyzer = new QPushButton("Analyzer", this);
+    bnAnalyzer->setEnabled(false);
+    connect(bnAnalyzer, &QPushButton::clicked, this, &MainWindow::OpenAnalyzer);
+
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -167,6 +172,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
     layout1->addWidget(bnSingleSpectra, 3, 0);
+    layout1->addWidget(bnAnalyzer, 3, 1);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -345,6 +351,12 @@ MainWindow::~MainWindow(){
   if( singleSpectra ){
     delete singleSpectra;
     singleSpectra = nullptr;
+  }
+
+  printf("-------- delete analyzer\n");
+  if( analyzer ){
+    delete analyzer;
+    analyzer = nullptr;
   }
 
   printf("-------- delete Solaris panel\n");
@@ -827,6 +839,9 @@ void MainWindow::OpenDigitizers(){
     singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
     bnSingleSpectra->setEnabled(true);
 
+    analyzer = new Analyzer(digi, nDigi, this);
+    bnAnalyzer->setEnabled(true);
+
   }
 
   bnDigiSettings->setEnabled(true);
@@ -863,6 +878,13 @@ void MainWindow::CloseDigitizers(){
     singleSpectra->close();
     delete singleSpectra;
     singleSpectra = NULL;
+  }
+  /// Before digi[] goes: the Analyzer's builder holds pointers into each board's hitRing, and its
+  /// destructor joins both worker threads.
+  if( analyzer ){
+    analyzer->close();
+    delete analyzer;
+    analyzer = NULL;
   }
   
   if( digiSetting ){
@@ -920,6 +942,7 @@ void MainWindow::CloseDigitizers(){
   cbAutoRun->setEnabled(false);
   cbDataFormat->setEnabled(false);
   bnSingleSpectra->setEnabled(false);
+  bnAnalyzer->setEnabled(false);
 
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
@@ -2497,6 +2520,14 @@ void MainWindow::CreateDataSymbolicLink(){
 
 //*###################################################################### 
 //*###################################################################### Single Spectrum
+void MainWindow::OpenAnalyzer(){
+  /// Unlike OpenSingleSpectra, never construct here: the button is only enabled once
+  /// OpenDigitizers() has made one, so a null pointer would mean digi[] is not ready.
+  if( analyzer == nullptr ) return;
+  analyzer->show();
+  analyzer->activateWindow();
+}
+
 void MainWindow::OpenSingleSpectra(){
 
   if( singleSpectra == nullptr ) {

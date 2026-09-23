@@ -8,7 +8,7 @@ INCLUDEPATH += .
 
 QT += core widgets charts printsupport
 
-LIBS += -lcurl -lCAEN_FELib -lX11
+LIBS += -lcurl -lCAEN_FELib -lX11 -ldl
 
 #=========== for GDB debug
 QMAKE_CXXFLAGS += -g  # for gdb debug
@@ -27,6 +27,11 @@ HEADERS += ClassDigitizer2Gen.h \
            Hit.h \
 					 LeanHit.h \
 					 OnlineEventBuilder.h \
+					 EventRing.h \
+					 Analysis.h \
+					 Analyzer.h \
+					 AnalysisPlugin.h \
+					 BuiltHit.h \
 					 RawDecoder.h \
 					 ClassInfluxDB.h \
 					 ClassElog.h \
@@ -46,6 +51,8 @@ HEADERS += ClassDigitizer2Gen.h \
 
 SOURCES += ClassDigitizer2Gen.cpp \
            OnlineEventBuilder.cpp \
+           Analyzer.cpp \
+           AnalysisPlugin.cpp \
            ClassInfluxDB.cpp \
 					 ClassElog.cpp \
 					 ClassElogTemplate.cpp \
@@ -55,4 +62,8 @@ SOURCES += ClassDigitizer2Gen.cpp \
 					 scope.cpp \
 					 SOLARISpanel.cpp \
 					 qcustomplot.cpp \
-					 SingleSpectra.cpp 
+					 SingleSpectra.cpp
+
+# Analyses are NOT compiled into this binary. They are shared objects built by analyzers/Makefile
+# and loaded at runtime, so they can be recompiled and swapped without restarting the DAQ.
+#   make -C analyzers

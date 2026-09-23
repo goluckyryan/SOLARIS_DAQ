@@ -5,6 +5,7 @@
 #include "macro.h"
 #include <QFileDialog>
 #include <QDir>
+#include <limits>
 
 inline const QList<QPair<QColor, QString>> colorCycle = { {QColor(Qt::red), "Red"},
                                                          {QColor(Qt::blue), "Blue"},
@@ -38,6 +39,15 @@ public:
   void Clear(); // Clear Data and histrogram
 
   void Fill(double x, double y);
+
+  /// Replace the whole colormap in one go, from counts accumulated elsewhere. See the long note on
+  /// Histogram1D::SetBinContents: Fill() mutates QCPItemText and walks cutList, both of which race
+  /// the GUI thread, so a worker must never call it. GUI THREAD ONLY.
+  ///
+  /// `z` is row-major, nx*ny entries, indexed z[ix*ny + iy]. A zero count is written as NaN so it
+  /// renders as background, the same as an unfilled cell.
+  void SetCellContents(const uint32_t * z, int nx, int ny, unsigned long total,
+                       unsigned long under, unsigned long over);
 
   void DrawCut();
   void ClearAllCuts();
@@ -268,6 +278,30 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
   connect(this, &QCustomPlot::mouseRelease, this, [=](){
 
   });
+}
+
+inline void Histogram2D::SetCellContents(const uint32_t * z, int nx, int ny, unsigned long total,
+                                         unsigned long under, unsigned long over){
+
+  if( isBusy || z == nullptr ) return;
+
+  /// xBin/yBin include the two guard bins Rebin() adds, so only the inner cells are ours.
+  if( nx > xBin ) nx = xBin;
+  if( ny > yBin ) ny = yBin;
+
+  for( int ix = 0; ix < xBin; ix++ ){
+    for( int iy = 0; iy < yBin; iy++ ){
+      const uint32_t c = ( ix < nx && iy < ny ) ? z[ix*ny + iy] : 0u;
+      colorMap->data()->setCell(ix, iy, c ? (double) c : std::numeric_limits<double>::quiet_NaN());
+    }
+  }
+
+  entry[1][1] = (int) total;
+  entry[0][1] = (int) under;
+  entry[2][1] = (int) over;
+  txt[1][1]->setText(QString::number(entry[1][1]));
+  txt[0][1]->setText(QString::number(entry[0][1]));
+  txt[2][1]->setText(QString::number(entry[2][1]));
 }
 
 inline void Histogram2D::Fill(double x, double y){

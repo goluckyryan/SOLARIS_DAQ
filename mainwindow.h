@@ -33,6 +33,7 @@
 #include "scope.h"
 #include "SOLARISpanel.h"
 #include "SingleSpectra.h"
+#include "Analyzer.h"
 
 const int chromeWindowID = -1; // disable capture screenshot
 
@@ -96,6 +97,7 @@ private slots:
   void RepositionScalar();
 
   void OpenSingleSpectra();
+  void OpenAnalyzer();
 
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
   void AppendElog(QString appendHtmlText, int screenID = -1);
@@ -270,6 +272,9 @@ private:
 
   QPushButton * bnSingleSpectra;
   SingleSpectra * singleSpectra;
+
+  QPushButton * bnAnalyzer;
+  Analyzer * analyzer;
 
 };
 

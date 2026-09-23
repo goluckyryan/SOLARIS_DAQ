@@ -349,6 +349,39 @@ public:
     if( showHist[ID] && yList[ID][index1] > yMax ) yMax = yList[ID][index1];
   }
 
+  /// Replace the whole histogram in one go, from counts accumulated elsewhere.
+  ///
+  /// This exists so a worker thread never has to call Fill(). Fill() writes to the QCPItemText
+  /// stat labels, and a QString assignment races the GUI thread's replot()/draw() reading them —
+  /// the refcount is atomic but the d-pointer store is not, so the reader can be left holding a
+  /// freed buffer. The online analyzer therefore accumulates into plain count arrays on its worker
+  /// and calls this from the GUI thread instead.
+  ///
+  /// GUI THREAD ONLY. `y` holds `n` bin contents; extra bins are zeroed, and n is clamped to xBin.
+  void SetBinContents(const uint32_t * y, int n, unsigned long total,
+                      unsigned long under, unsigned long over, unsigned int ID = 0){
+
+    if( ID >= (unsigned int) nData || y == nullptr ) return;
+    if( n > xBin ) n = xBin;
+
+    yMax = 0;
+    for( int b = 0; b < xBin; b++ ){
+      const double v = ( b < n ) ? (double) y[b] : 0.0;
+      const int index1 = 2*b + 1;
+      const int index2 = index1 + 1;
+      if( index1 <= 2*xBin ) yList[ID][index1] = v;
+      if( index2 <= 2*xBin ) yList[ID][index2] = v;
+      if( showHist[ID] && v > yMax ) yMax = v;
+    }
+
+    totalEntry = total;
+    underFlow  = under;
+    overFlow   = over;
+    txt[0]->setText("Under Flow : " + QString::number(underFlow));
+    txt[1]->setText("Total Entry : "+ QString::number(totalEntry));
+    txt[2]->setText("Over Flow : " + QString::number(overFlow));
+  }
+
   void Print(unsigned int ID = 0){
     for( int i = 0; i < xList.count(); i++){
       printf("%f  %f\n", xList[i], yList[ID][i]);
