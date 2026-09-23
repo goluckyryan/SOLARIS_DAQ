@@ -6,6 +6,7 @@
 #include <functional>
 #include <vector>
 
+#include "BuiltHit.h"
 #include "LeanHit.h"
 #include "RingBuffer.h"
 
@@ -22,20 +23,18 @@
 /// case, not the exception). PickEarliestBoard() is the one place to swap in a heap if
 /// monotonicityViolations ever shows the sorting assumption has broken.
 
-struct BuiltHit {
-  uint64_t timestamp;       ///< ns
-  uint16_t sn;              ///< board serial number
-  uint16_t energy;
-  uint16_t energy_short;
-  uint16_t fine_timestamp;  ///< sub-tick time, scaled by tick2ns; see LeanHit.h
-  uint8_t  digi;            ///< index into the view list given to the constructor
-  uint8_t  channel;
-  uint8_t  flagsHigh;       ///< see LeanHitFlag in LeanHit.h
-};
+
+class EventRing;   // EventRing.h; only the .cpp needs the definition
 
 /// One hit source. The ring must outlive the builder.
+///
+/// `digiIndex` is the caller's own index for this board — the position in MainWindow's digi[], say.
+/// It is carried separately because the view list is a SUBSET of the boards (dummies and
+/// unconnected boards are excluded), so a view's position is not the digitizer's number and
+/// labelling a plot with the wrong one silently disagrees with the rest of the GUI.
 struct DigiHitView {
   uint16_t sn;
+  uint8_t  digiIndex;
   const RingBuffer<LeanHit, LeanHitRingSize> * ring;
 };
 
@@ -81,9 +80,15 @@ public:
   /// maxEvents < 0 means unbounded. Returns the number of events emitted by this call.
   long BuildEvents(bool isFinal = false, long maxEvents = -1);
 
-  /// Called once per completed event, on the caller's thread. Must not block — the caller is
-  /// typically draining a ring the DAQ thread is still filling. The vector is reused between
-  /// events, so copy anything you need to keep.
+  /// Where completed events are published. Non-owning — EventRing is ~8 MiB and must be heap
+  /// allocated by the caller; keeping it out of this class is also what keeps the builder
+  /// stack-constructible, which Aux/testOnlineBuilder.cpp relies on. May be null.
+  void SetEventSink(EventRing * sink) { eventSink = sink; }
+  EventRing * GetEventSink() const { return eventSink; }
+
+  /// Called once per completed event, on the caller's thread, after the event reaches the sink.
+  /// Must not block — the caller is typically draining a ring the DAQ thread is still filling.
+  /// The vector is reused between events, so copy anything you need to keep.
   std::function<void(const std::vector<BuiltHit> &)> onEvent;
 
   void PrintStat() const;
@@ -117,6 +122,8 @@ private:
   std::vector<DigiHitView> views;
   std::vector<BoardState>  board;
   std::vector<BuiltHit>    event;   ///< reused across events so there is no malloc per event
+
+  EventRing * eventSink;
 
   uint64_t timeWindow;
   uint64_t guardTime;

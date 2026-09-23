@@ -968,11 +968,14 @@ int Digitizer2Gen::ReadData(){
           ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
           /// Both timestamps are raw here (RawDecoder.h:16-17), so apply the same scaling the DPP
           /// path below applies in place: timestamp -> ns, fine_timestamp -> units of 1/1024 ns.
-          hitRing.push({ decoded.timestamp * tick2ns,
-                         decoded.energy, decoded.energy_short,
-                         (uint16_t)(decoded.fine_timestamp * tick2ns),
-                         decoded.channel,
-                         (uint8_t)(decoded.flags_high_priority & 0xFF) });
+          /// Only filled when something is actually analysing; see fillHitRing.
+          if( fillHitRing.load(std::memory_order_relaxed) ){
+            hitRing.push({ decoded.timestamp * tick2ns,
+                           decoded.energy, decoded.energy_short,
+                           (uint16_t)(decoded.fine_timestamp * tick2ns),
+                           decoded.channel,
+                           (uint8_t)(decoded.flags_high_priority & 0xFF) });
+          }
         }
       }
 
@@ -1005,11 +1008,14 @@ int Digitizer2Gen::ReadData(){
   /// The channel guard also covers the histogram ring, which was missing one (the raw path has it).
   if( hit->dataType != DataFormat::Raw && hit->channel < nChannels ){
     ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
-    hitRing.push({ hit->timestamp * tick2ns,
-                   hit->energy, hit->energy_short,
-                   (uint16_t)(hit->fine_timestamp * tick2ns),
-                   hit->channel,
-                   (uint8_t)(hit->flags_high_priority & 0xFF) });
+    /// Only filled when something is actually analysing; see fillHitRing.
+    if( fillHitRing.load(std::memory_order_relaxed) ){
+      hitRing.push({ hit->timestamp * tick2ns,
+                     hit->energy, hit->energy_short,
+                     (uint16_t)(hit->fine_timestamp * tick2ns),
+                     hit->channel,
+                     (uint8_t)(hit->flags_high_priority & 0xFF) });
+    }
   }
 
   hit->timestamp     *= tick2ns;

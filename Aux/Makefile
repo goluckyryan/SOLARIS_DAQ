@@ -10,9 +10,9 @@ all: EventBuilder EventBuilderRaw
 # Tools that need neither ROOT nor CAEN. Kept out of "all" so they build on any machine.
 tools: testOnlineBuilder
 
-testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp \
-                   ../OnlineEventBuilder.h ../LeanHit.h ../RingBuffer.h ../Hit.h
-	$(CC) $(CFLAG) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp -o testOnlineBuilder
+testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp ../EventRing.h ../Analysis.h ../analyzers/Coincidence.cpp \
+                   ../OnlineEventBuilder.h ../LeanHit.h ../BuiltHit.h ../RingBuffer.h ../Hit.h
+	$(CC) $(CFLAG) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp ../analyzers/*.cpp -o testOnlineBuilder
 
 EventBuilder: EventBuilder.cpp SolReader.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilder.cpp -o EventBuilder ${ROOTFLAG}

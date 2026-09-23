@@ -24,6 +24,8 @@
 #include <vector>
 
 #include "SolReader.h"
+#include "../Analysis.h"
+#include "../EventRing.h"
 #include "../LeanHit.h"
 #include "../OnlineEventBuilder.h"
 
@@ -151,7 +153,7 @@ static std::vector<Event> StreamBuild(std::vector<Board> & boards, uint64_t wind
 
   std::vector<DigiHitView> views;
   for( size_t b = 0; b < boards.size(); b++ ){
-    DigiHitView v; v.sn = boards[b].sn; v.ring = boards[b].ring.get();
+    DigiHitView v; v.sn = boards[b].sn; v.digiIndex = (uint8_t)b; v.ring = boards[b].ring.get();
     views.push_back(v);
   }
 
@@ -190,7 +192,7 @@ static std::vector<Event> LapBuild(std::vector<Board> & boards, uint64_t window,
 
   std::vector<DigiHitView> views;
   for( size_t b = 0; b < boards.size(); b++ ){
-    DigiHitView v; v.sn = boards[b].sn; v.ring = boards[b].ring.get();
+    DigiHitView v; v.sn = boards[b].sn; v.digiIndex = (uint8_t)b; v.ring = boards[b].ring.get();
     views.push_back(v);
   }
 
@@ -223,7 +225,7 @@ static void ThreadedRun(std::vector<Board> & boards, uint64_t window){
 
   std::vector<DigiHitView> views;
   for( size_t b = 0; b < boards.size(); b++ ){
-    DigiHitView v; v.sn = boards[b].sn; v.ring = boards[b].ring.get();
+    DigiHitView v; v.sn = boards[b].sn; v.digiIndex = (uint8_t)b; v.ring = boards[b].ring.get();
     views.push_back(v);
   }
 
@@ -383,6 +385,168 @@ static std::vector<Board> MakeReplay(const std::vector<std::string> & files){
   return boards;
 }
 
+//^===================================================================== analysis driver
+
+/// A HistRegistry that owns no widgets and just tallies. Enough to prove the interface is
+/// genuinely Qt-free, that the registrar self-registers, and that an analysis fills what it says.
+class TallyRegistry : public HistRegistry {
+public:
+  struct Hist {
+    std::string name;
+    int    nX, nY, row, col;
+    double xLo, xHi, yLo, yHi;
+    long   fills, under, over;
+    double xSum, ySum;
+  };
+  std::vector<Hist> h1, h2;
+
+  struct Chan { std::string label; int * digi; int * ch; };
+  struct Flag { std::string label; bool * value; };
+  std::vector<Chan> chans;
+  std::vector<Flag> flags;
+
+  int Hist1D(const char * name, const char *, int nBin, double xMin, double xMax,
+             int row, int col) override {
+    Hist h{}; h.name = name; h.nX = nBin; h.xLo = xMin; h.xHi = xMax; h.row = row; h.col = col;
+    h1.push_back(h);
+    return (int)h1.size() - 1;
+  }
+
+  int Hist2D(const char * name, const char *, const char *,
+             int nX, double xMin, double xMax,
+             int nY, double yMin, double yMax, int row, int col) override {
+    Hist h{}; h.name = name; h.nX = nX; h.xLo = xMin; h.xHi = xMax;
+    h.nY = nY; h.yLo = yMin; h.yHi = yMax; h.row = row; h.col = col;
+    h2.push_back(h);
+    return (int)h2.size() - 1;
+  }
+
+  void Fill1(int id, double x) override {
+    if( id < 0 || id >= (int)h1.size() ) return;
+    Hist & h = h1[id];
+    if( x < h.xLo ) { h.under++; return; }
+    if( x >= h.xHi ){ h.over++;  return; }
+    h.fills++; h.xSum += x;
+  }
+
+  void Fill2(int id, double x, double y) override {
+    if( id < 0 || id >= (int)h2.size() ) return;
+    Hist & h = h2[id];
+    if( x < h.xLo || x >= h.xHi || y < h.yLo || y >= h.yHi ){ h.over++; return; }
+    h.fills++; h.xSum += x; h.ySum += y;
+  }
+
+  void ChannelParam(const char * label, int * digi, int * channel) override {
+    chans.push_back({std::string(label), digi, channel});
+  }
+  void BoolParam(const char * label, bool * value) override {
+    flags.push_back({std::string(label), value});
+  }
+
+  void Print() const {
+    for( size_t i = 0; i < h1.size(); i++ ){
+      const Hist & h = h1[i];
+      printf("  1D %-16s [%g, %g) %4d bins : %8ld fills, mean %10.2f, under %ld, over %ld\n",
+             h.name.c_str(), h.xLo, h.xHi, h.nX, h.fills,
+             h.fills ? h.xSum / h.fills : 0.0, h.under, h.over);
+    }
+    for( size_t i = 0; i < h2.size(); i++ ){
+      const Hist & h = h2[i];
+      printf("  2D %-16s x[%g, %g) y[%g, %g) : %8ld fills, mean (%.1f, %.1f), outside %ld\n",
+             h.name.c_str(), h.xLo, h.xHi, h.yLo, h.yHi, h.fills,
+             h.fills ? h.xSum / h.fills : 0.0, h.fills ? h.ySum / h.fills : 0.0, h.over);
+    }
+  }
+};
+
+/// Drive a registered analysis over the boards, through the real builder and the real event ring.
+static bool RunAnalysis(std::vector<Board> & boards, uint64_t window, const std::string & name,
+                        int dA, int cA, int dB, int cB){
+
+  Analysis * ana = AnalysisRegistry::Instance().Create(name);
+  if( ana == nullptr ){
+    printf("no analysis called \"%s\". Registered:", name.c_str());
+    std::vector<std::string> n = AnalysisRegistry::Instance().Names();
+    for( size_t i = 0; i < n.size(); i++ ) printf(" %s", n[i].c_str());
+    printf("\n");
+    return false;
+  }
+
+  std::vector<uint8_t> nCh;
+  std::vector<DigiHitView> views;
+  for( size_t b = 0; b < boards.size(); b++ ){
+    DigiHitView v; v.sn = boards[b].sn; v.digiIndex = (uint8_t)b; v.ring = boards[b].ring.get();
+    views.push_back(v);
+    nCh.push_back(64);
+  }
+
+  AnalysisContext ctx;
+  ctx.nBoards    = (int)boards.size();
+  ctx.nChannels  = nCh.data();
+  ctx.timeWindow = window;
+
+  TallyRegistry reg;
+  ana->Declare(reg, ctx);
+
+  //---- apply the channel selection the way the GUI would
+  if( reg.chans.size() >= 1 ){ *reg.chans[0].digi = dA; *reg.chans[0].ch = cA; }
+  if( reg.chans.size() >= 2 ){ *reg.chans[1].digi = dB; *reg.chans[1].ch = cB; }
+  printf("analysis \"%s\": %zu channel params, %zu flags, %zu 1D, %zu 2D\n",
+         name.c_str(), reg.chans.size(), reg.flags.size(), reg.h1.size(), reg.h2.size());
+  for( size_t i = 0; i < reg.chans.size(); i++ ){
+    printf("  param %-12s = digi %d ch %d\n",
+           reg.chans[i].label.c_str(), *reg.chans[i].digi, *reg.chans[i].ch);
+  }
+
+  RewindBoards(boards);
+
+  std::unique_ptr<EventRing> ring(new EventRing());
+  EventRing::Reader reader;
+  reader.Rewind(*ring);
+
+  OnlineEventBuilder eb(views);
+  eb.SetTimeWindow(window);
+  eb.SetGuardTime(window);
+  eb.SetStallTimeout(1u << 30);
+  eb.SetEventSink(ring.get());
+  eb.Reset();
+
+  ana->OnRunStart();
+
+  Event scratch;
+  long nEvents = 0;
+  bool more = true;
+  while( more ){
+    more = false;
+    for( size_t b = 0; b < boards.size(); b++ ){
+      Board & bd = boards[b];
+      const size_t n = std::min((size_t)500, bd.hits.size() - bd.pushed);
+      for( size_t k = 0; k < n; k++ ) bd.ring->push(bd.hits[bd.pushed++]);
+      if( bd.pushed < bd.hits.size() ) more = true;
+    }
+    eb.BuildEvents(false);
+    while( reader.Next(*ring, scratch) ){
+      ana->ProcessEvent(scratch.data(), (int)scratch.size(), reg);
+      nEvents++;
+    }
+  }
+  eb.BuildEvents(true);
+  while( reader.Next(*ring, scratch) ){
+    ana->ProcessEvent(scratch.data(), (int)scratch.size(), reg);
+    nEvents++;
+  }
+
+  ana->OnRunStop();
+
+  printf("\n%ld events through the analysis (ring dropped %ld, torn %ld)\n",
+         nEvents, reader.eventsDropped, reader.eventsTorn);
+  reg.Print();
+  eb.PrintStat();
+
+  delete ana;
+  return reader.eventsDropped == 0 && reader.eventsTorn == 0;
+}
+
 //^===================================================================== output
 
 static void DumpEvents(const std::vector<Event> & evs, size_t maxPrint){
@@ -406,6 +570,136 @@ static void Summary(const std::vector<Event> & evs){
   }
   printf("  %zu events, %zu hits, mean multiplicity %.3f, max %zu\n",
          evs.size(), hits, evs.empty() ? 0.0 : (double)hits/evs.size(), maxMult);
+}
+
+//^===================================================================== event ring
+
+/// The ring in isolation: round-trip fidelity, then deliberate overrun.
+static bool RingTest(){
+
+  bool ok = true;
+  printf("\n--- 7. event ring round trip ---\n");
+
+  std::unique_ptr<EventRing> ring(new EventRing());   // ~8 MiB, never on the stack
+  EventRing::Reader reader;
+  reader.Rewind(*ring);
+
+  //---- round trip: varying multiplicity, every field must survive
+  std::vector<Event> sent;
+  std::mt19937 rng(4242);
+  std::uniform_int_distribution<int> multPick(1, 12);
+  for( int i = 0; i < 5000; i++ ){
+    Event ev;
+    const int m = multPick(rng);
+    for( int k = 0; k < m; k++ ){
+      BuiltHit h;
+      h.timestamp = (uint64_t)i * 1000 + k;
+      h.sn = (uint16_t)(50000 + k);  h.energy = (uint16_t)(i + k);
+      h.energy_short = (uint16_t)k;  h.fine_timestamp = (uint16_t)(k * 7);
+      h.digi = (uint8_t)(k % 4);     h.channel = (uint8_t)k;
+      h.flagsHigh = (uint8_t)(i & 0xFF);
+      ev.push_back(h);
+    }
+    sent.push_back(ev);
+    ring->Publish(ev);
+  }
+
+  std::vector<Event> got;
+  Event scratch;
+  while( reader.Next(*ring, scratch) ) got.push_back(scratch);
+
+  bool same = SameEvents(sent, got, "ring round trip");
+  printf("  %zu events in, %zu out, dropped %ld, torn %ld : %s\n",
+         sent.size(), got.size(), reader.eventsDropped, reader.eventsTorn,
+         (same && reader.eventsDropped == 0 && reader.eventsTorn == 0) ? "OK" : "FAILED");
+  ok &= same && reader.eventsDropped == 0 && reader.eventsTorn == 0;
+
+  //---- overrun: publish far more than the ring holds without draining
+  printf("\n--- 8. event ring overrun accounting ---\n");
+  std::unique_ptr<EventRing> ring2(new EventRing());
+  EventRing::Reader r2;
+  r2.Rewind(*ring2);
+
+  const long nPublish = (long)EventRingSize * 3;      // 3x the index ring depth
+  for( long i = 0; i < nPublish; i++ ){
+    Event ev;
+    BuiltHit h; h.timestamp = (uint64_t)i; h.sn = 1; h.energy = (uint16_t)i;
+    h.energy_short = 0; h.fine_timestamp = 0; h.digi = 0; h.channel = 0; h.flagsHigh = 0;
+    ev.push_back(h);
+    ring2->Publish(ev);
+  }
+
+  long drained = 0;
+  while( r2.Next(*ring2, scratch) ) drained++;
+
+  /// Every published event is either read or accounted as dropped/torn. The hit ring is deeper
+  /// than the index ring here (1 hit per event), so the index ring is what laps.
+  const long accounted = drained + r2.eventsDropped + r2.eventsTorn;
+  const bool balances  = (accounted == nPublish);
+  const bool lapped    = (r2.eventsDropped > 0);
+  printf("  published %ld, read %ld, dropped %ld, torn %ld\n",
+         nPublish, drained, r2.eventsDropped, r2.eventsTorn);
+  printf("  lap occurred %s, accounting %s\n",
+         lapped ? "yes" : "NO (test did not exercise the path)",
+         balances ? "OK" : "MISMATCH");
+  ok &= lapped && balances;
+
+  return ok;
+}
+
+/// The sink and the callback are two views of the same stream and must agree exactly. Drains the
+/// ring as it goes so it never laps; any loss here would be a bug, not backpressure.
+static bool SinkTest(uint64_t window){
+
+  printf("\n--- 9. event sink vs onEvent ---\n");
+
+  std::vector<Board> boards = MakeSynth(3, 16, 30000, 4000, 0.3, window, 31337);
+  RewindBoards(boards);
+
+  std::vector<DigiHitView> views;
+  for( size_t b = 0; b < boards.size(); b++ ){
+    DigiHitView v; v.sn = boards[b].sn; v.digiIndex = (uint8_t)b; v.ring = boards[b].ring.get();
+    views.push_back(v);
+  }
+
+  std::unique_ptr<EventRing> ring(new EventRing());
+  EventRing::Reader reader;
+  reader.Rewind(*ring);
+
+  OnlineEventBuilder eb(views);
+  eb.SetTimeWindow(window);
+  eb.SetGuardTime(window);
+  eb.SetStallTimeout(1u << 30);
+  eb.SetEventSink(ring.get());
+  eb.Reset();
+
+  std::vector<Event> viaCallback;
+  eb.onEvent = [&viaCallback](const Event & e){ viaCallback.push_back(e); };
+
+  std::vector<Event> viaRing;
+  Event scratch;
+
+  bool more = true;
+  while( more ){
+    more = false;
+    for( size_t b = 0; b < boards.size(); b++ ){
+      Board & bd = boards[b];
+      const size_t n = std::min((size_t)500, bd.hits.size() - bd.pushed);
+      for( size_t k = 0; k < n; k++ ) bd.ring->push(bd.hits[bd.pushed++]);
+      if( bd.pushed < bd.hits.size() ) more = true;
+    }
+    eb.BuildEvents(false);
+    while( reader.Next(*ring, scratch) ) viaRing.push_back(scratch);
+  }
+  eb.BuildEvents(true);
+  while( reader.Next(*ring, scratch) ) viaRing.push_back(scratch);
+
+  const bool same = SameEvents(viaCallback, viaRing, "sink vs callback");
+  const bool ok   = same && reader.eventsDropped == 0 && reader.eventsTorn == 0;
+  printf("  %zu via callback, %zu via ring, dropped %ld, torn %ld : %s\n",
+         viaCallback.size(), viaRing.size(), reader.eventsDropped, reader.eventsTorn,
+         ok ? "OK" : "FAILED");
+  return ok;
 }
 
 //^===================================================================== selftest
@@ -435,7 +729,7 @@ static bool StallTest(){
 
   std::vector<DigiHitView> views;
   for( size_t b = 0; b < st.size(); b++ ){
-    DigiHitView v; v.sn = st[b].sn; v.ring = st[b].ring.get();
+    DigiHitView v; v.sn = st[b].sn; v.digiIndex = (uint8_t)b; v.ring = st[b].ring.get();
     views.push_back(v);
   }
 
@@ -539,6 +833,8 @@ static bool SelfTest(uint64_t window){
   ok &= lapHappened && balances;
 
   ok &= StallTest();
+  ok &= RingTest();
+  ok &= SinkTest(window);
 
   return ok;
 }
@@ -548,6 +844,8 @@ static bool SelfTest(uint64_t window){
 int main(int argc, char ** argv){
 
   enum Mode { SYNTH, REPLAY, SELFTEST, THREADED } mode = SELFTEST;
+  std::string anaName;
+  int dA = 0, cA = 0, dB = 0, cB = 1;
 
   int      nBoards = 4, nCh = 16;
   double   singlesHz = 20000, coincHz = 5000, seconds = 0.5;
@@ -573,10 +871,14 @@ int main(int argc, char ** argv){
     else if ( a == "--window"  && i+1 < argc ) window    = strtoull(argv[++i], NULL, 10);
     else if ( a == "--chunk"   && i+1 < argc ) chunk     = (size_t) strtoull(argv[++i], NULL, 10);
     else if ( a == "--seed"    && i+1 < argc ) seed      = (unsigned) strtoul(argv[++i], NULL, 10);
+    else if ( a == "--analysis"&& i+1 < argc ) anaName   = argv[++i];
+    else if ( a == "--chA"     && i+2 < argc ){ dA = atoi(argv[++i]); cA = atoi(argv[++i]); }
+    else if ( a == "--chB"     && i+2 < argc ){ dB = atoi(argv[++i]); cB = atoi(argv[++i]); }
     else {
       printf("usage: %s [--selftest | --synth | --threaded | --replay f1.sol ...]\n"
              "          [--boards N] [--channels N] [--rate Hz] [--coinc Hz] [--seconds S]\n"
-             "          [--window ns] [--chunk N] [--seed N] [--dump]\n", argv[0]);
+             "          [--window ns] [--chunk N] [--seed N] [--dump]\n"
+             "          [--analysis <name>] [--chA <digi> <ch>] [--chB <digi> <ch>]\n", argv[0]);
       return a == "--help" ? 0 : 1;
     }
   }
@@ -603,6 +905,10 @@ int main(int argc, char ** argv){
   }
   printf("  %zu hits total\n", TotalHits(boards));
   if( TotalHits(boards) == 0 ){ printf("no hits, nothing to do\n"); return 1; }
+
+  if( !anaName.empty() ){
+    return RunAnalysis(boards, window, anaName, dA, cA, dB, cB) ? 0 : 1;
+  }
 
   if( mode == THREADED ){
     printf("\n--- threaded push while draining ---\n");

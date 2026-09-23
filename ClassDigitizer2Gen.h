@@ -3,6 +3,7 @@
 
 
 #include <CAEN_FELib.h>
+#include <atomic>
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
@@ -157,6 +158,11 @@ class Digitizer2Gen {
     /// (format_RAW.md:91), so splitting per channel would only force a 64-way merge.
     /// Written by ReadDataThread only — single producer, like the rings above.
     RingBuffer<LeanHit, LeanHitRingSize> hitRing;
+
+    /// Filling hitRing is opt-in, so the DAQ pays nothing for online event building when nobody is
+    /// analysing. Set by the Analyzer window's enable toggle; read on the DAQ hot path, where a
+    /// relaxed load is a plain mov. Off by default: hitRing stays empty until something asks.
+    std::atomic<bool> fillHitRing{false};
 
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary

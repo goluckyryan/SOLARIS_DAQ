@@ -1,11 +1,15 @@
 #include "OnlineEventBuilder.h"
 
+#include "EventRing.h"
+
 #include <cstdio>
 
 OnlineEventBuilder::OnlineEventBuilder(const std::vector<DigiHitView> & viewList){
 
   views = viewList;
   board.resize(views.size());
+
+  eventSink = nullptr;
 
   timeWindow     = 100;    // ns
   guardTime      = 1000;   // ns
@@ -279,7 +283,7 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
       bh.energy         = f.energy;
       bh.energy_short   = f.energy_short;
       bh.fine_timestamp = f.fine_timestamp;
-      bh.digi           = (uint8_t) k;
+      bh.digi           = views[k].digiIndex;   // the caller's board number, not the view position
       bh.channel        = f.channel;
       bh.flagsHigh      = f.flagsHigh;
       event.push_back(bh);
@@ -293,7 +297,8 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
     totalEventsBuilt++;
     built++;
 
-    if( onEvent ) onEvent(event);
+    if( eventSink ) eventSink->Publish(event);
+    if( onEvent )   onEvent(event);
   }
 
   return built;
