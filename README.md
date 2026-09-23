@@ -620,6 +620,11 @@ and which alternatives were tried and rejected. The README says how things work;
 
 | File | |
 |------|--|
+| docs/sol-file-format.md | The on-disk `.sol` data format, field by field, per data format |
+| docs/experiment-workflow.md | `programSettings.txt`, the experiment-as-git-branch model, and the analysis folder |
+| docs/run-lifecycle.md | What happens between Start and Stop, and which ordering is load-bearing |
+| docs/threading-model.md | Every thread, what state it owns, and what is safe to call from where |
+| docs/settings-system.md | `Reg` / `DigiParameters.h`, the settings panel, and the `.dat` file format |
 | docs/online-analysis-design.md | Event builder, event ring, analyzer and plugin design decisions, with the measurements behind them |
 | docs/plan-dummy-generator.md | Approved plan for making dummy digitizers generate synthetic signal |
 
