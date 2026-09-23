@@ -613,6 +613,16 @@ of the hardware. The rates come from the last Scaler update.
 - Event/Wave trigger source cannot be set as SWTrigger.
 - After updating to CAEN_FELib v1.2.5 and CAEN_DIG2 v1.5.10, firmware versions before 202309XXXX are not supported.
 
+## Design documents
+
+`docs/` records the reasoning behind the online analysis chain — why the choices are what they are,
+and which alternatives were tried and rejected. The README says how things work; these say why.
+
+| File | |
+|------|--|
+| docs/online-analysis-design.md | Event builder, event ring, analyzer and plugin design decisions, with the measurements behind them |
+| docs/plan-dummy-generator.md | Approved plan for making dummy digitizers generate synthetic signal |
+
 ## Wiki
 
 https://fsunuc.physics.fsu.edu/wiki/index.php/FRIB_SOLARIS_Collaboration
