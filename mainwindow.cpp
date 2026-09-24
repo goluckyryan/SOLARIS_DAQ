@@ -652,6 +652,10 @@ void MainWindow::StopACQ(){
 
   if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
   for( int i = nDigi -1; i >=0; i--){
+    /// NULL for a dummy (OpenDigitizers), which also never opened an out file. Unlike the
+    /// StopACQ loop above, this one does not skip dummies, so without this it segfaults on
+    /// every run that had an unreachable IP.
+    if( readDataThread[i] == NULL ) continue;
     if( readDataThread[i]->isRunning()){
       if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
       readDataThread[i]->quit();

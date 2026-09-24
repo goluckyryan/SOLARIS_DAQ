@@ -645,7 +645,9 @@ void Scope::StartScope(){
 
   for( int iDigi = 0 ; iDigi < nDigi; iDigi ++ ){
 
-    if( digi[iDigi]->IsDummy() ) return;
+    /// continue, not return: a dummy at index 0 would otherwise abandon the whole loop and
+    /// StartScope() would silently do nothing for every real board after it.
+    if( digi[iDigi]->IsDummy() ) continue;
 
     int ch = cbScopeCh->currentIndex();
 

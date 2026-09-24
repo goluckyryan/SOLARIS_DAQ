@@ -765,6 +765,13 @@ void Digitizer2Gen::PrintStat(){
 int Digitizer2Gen::ReadData(){
   //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
 
+  /// Above the FPGAType guard, because that guard does NOT stop a dummy: SetDummy() sets
+  /// FPGAType to DPP_PHA, so a dummy falls straight through to hit->dataType below — and hit is
+  /// null for a dummy, since only SetDataFormat() allocates it and that returns early when the
+  /// CAEN handle is 0. Stop rather than Timeout: ReadDataThread::run() has no sleep of its own,
+  /// so every other code loops straight back in and spins a core.
+  if( isDummy || hit == NULL ) return CAEN_FELib_Stop;
+
   if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
 
   /// local, not a member: the GUI thread calls ReadValue() on this same object while we are here,
