@@ -13,6 +13,8 @@
 #include <QRandomGenerator>
 
 #include <atomic>
+#include <memory>
+#include <vector>
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
@@ -89,13 +91,51 @@ private:
   unsigned int nDigi;
 
   long lastFilledIndex[MaxNumberOfDigitizer][MaxNumberOfChannel]; // ring-buffer fill index per channel
-  bool histVisibility[MaxNumberOfDigitizer][MaxNumberOfChannel];
-  bool hist2DVisibility[MaxNumberOfDigitizer];
+
+  /// Which plots are mounted in a pane. Written by UpdateVisibilityFlags() on the GUI thread and
+  /// read by the fill worker, hence atomic. They gate the fill: only what is on screen is drained.
+  std::atomic<bool> histVisibility[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  std::atomic<bool> hist2DVisibility[MaxNumberOfDigitizer];
 
   std::atomic<bool> isFillingHistograms;
   std::atomic<bool> suspendFilling;  // set while the GUI thread re-parents plot widgets
+
+  /// Mirrors of GUI state the worker used to read straight off the widgets. QWidget accessors are
+  /// not safe to call from another thread, so the GUI writes these and the worker reads them.
+  std::atomic<bool> fillEnabled;     // mirrors chkIsFillHistogram
+  std::atomic<bool> windowVisible;   // mirrors isVisible(), via show/hideEvent
+
   Histogram1D * hist[MaxNumberOfDigitizer][MaxNumberOfChannel];
   Histogram2D * hist2D[MaxNumberOfDigitizer];
+
+  //^==================================================================== counters
+  //^ The worker only ever increments these; the GUI alone touches the widgets, publishing through
+  //^ Histogram1D::SetBinContents / Histogram2D::SetCellContents. Fill() mutates QCPItemText and
+  //^ the colormap array, which the GUI thread is concurrently drawing -- see the notes on those
+  //^ two methods. Same split QtHistRegistry (Analyzer.h) already uses for the online analyzer.
+  struct H1Counts {
+    int    nBin = 0;
+    double lo = 0, hi = 0, dx = 1;
+    int    nSeries = 1;                                   ///< 2 under PSD: long gate + short gate
+    std::unique_ptr<std::atomic<uint32_t>[]> c[2];
+    std::atomic<uint64_t> total{0}, under{0}, over{0};
+  };
+  struct H2Counts {
+    Histogram2D::CellGeom g;   ///< the widget's real cell grid; never the requested bin count
+    std::unique_ptr<std::atomic<uint32_t>[]> c;
+    std::atomic<uint64_t> total{0}, out{0};
+  };
+  H1Counts c1[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  H2Counts c2[MaxNumberOfDigitizer];
+  std::vector<uint32_t> scratch;   ///< GUI thread only
+
+  void ResizeCounts1D(int d, int ch);   ///< (re)size from the widget's binning and zero
+  void ResizeCounts2D(int d);
+  void ClearAllCounts();
+  void PublishHist1D(int d, int ch);    ///< counts -> widget. GUI thread.
+  void PublishHist2D(int d);
+  void AddCount1D(int d, int ch, int series, double v);   ///< worker thread
+  void AddCount2D(int d, int ch, double e);
 
   QCheckBox * chkIsFillHistogram;
 
@@ -116,6 +156,13 @@ private:
   void UpdateVisibilityFlags();
   void UpdateRefreshRate();
   void WaitForFillToDrain();
+
+  /// Connected to Histogram1D/Histogram2D AboutToRebin/ReBinned. The right-click Rebin frees and
+  /// reallocates the very buffers the fill worker writes into, so the worker has to be drained
+  /// across the whole operation -- the same suspendFilling fence SetPaneSource() uses.
+  void BeginHistogramEdit();
+  void EndHistogramEdit();
+
   int  NumberOfPanes() const { return splitRows * splitCols; }
 
   //^---- replot throttle
@@ -134,6 +181,11 @@ private:
   QThread * workerThread;
   HistWorker * histWorker;
   QTimer * timer;
+
+protected:
+  /// Keep windowVisible in step without the worker having to call isVisible() itself.
+  void showEvent(QShowEvent * event) override;
+  void hideEvent(QHideEvent * event) override;
 
 };
 

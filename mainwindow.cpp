@@ -903,8 +903,27 @@ void MainWindow::CloseDigitizers(){
     solarisSetting = NULL;
   }
 
-  for( int i = 0; i < nDigi; i++){    
+  for( int i = 0; i < nDigi; i++){
     if( digi[i] == NULL) continue;
+
+    /// The read thread is joined FIRST, before anything touches digi[i]. ReadDataThread::run()
+    /// loops on digi->ReadData(), so closing or deleting the digitizer underneath it is a
+    /// use-after-free -- and it is reachable, because StartACQ()/AutoRun() never disable
+    /// bnCloseDigitizers: this button is live during a run. Stop() makes run() leave at its next
+    /// pass, and ReadData()'s own 100 ms endpoint timeout bounds how long that takes.
+    if( readDataThread[i] != NULL ){
+      LogMsg("Waiting for readData Thread .....");
+      readDataThread[i]->Stop();
+      readDataThread[i]->quit();
+      readDataThread[i]->wait();
+      delete readDataThread[i];
+      readDataThread[i] = NULL;
+    }
+
+    /// Only now is it safe to flush the run file. Closing mid-run used to leave it open, so the
+    /// tail sitting in the stdio buffer was lost and the file never got its read-only bit.
+    /// CloseOutFile() is a no-op when no file is open and is safe to call twice.
+    digi[i]->CloseOutFile();
 
     if( digi[i]->IsConnected() ){
       int digiSN = digi[i]->GetSerialNumber();
@@ -917,19 +936,15 @@ void MainWindow::CloseDigitizers(){
     digi[i] = NULL;
 
     LogMsg("Closed Digitizer : " + QString::number(closedSN));
-
-    if( readDataThread[i] != NULL ){
-      LogMsg("Waiting for readData Thread .....");
-      readDataThread[i]->Stop();
-      readDataThread[i]->quit();
-      readDataThread[i]->wait();
-      delete readDataThread[i];
-    }
   }
   delete [] digi;
   delete [] readDataThread;
   digi = NULL;
   readDataThread = NULL;
+
+  /// Closing the digitizers ends any run that was in progress, so the flag must follow. Leaving it
+  /// set made StopACQ() believe a run was still live after the boards were gone.
+  isACQRunning = false;
 
   bnSyncHelper->setEnabled(false);
   bnOpenDigitizers->setEnabled(true);
@@ -1389,8 +1404,13 @@ void MainWindow::UpdateScalar(){
       std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
       // digiMTX[iDigi].unlock();
       
-      unsigned long kaka = std::stoul(kakaStr.c_str()) ;
-      unsigned long time = std::stoul(timeStr.c_str()) ;
+      /// strtoul, not std::stoul: ReadValue() returns "not connected", or ErrorMsg()'s text
+      /// ("Timeout", "Communication error", ...), whenever the board does not answer. std::stoul
+      /// throws std::invalid_argument on those, and an exception out of a QTimer slot is
+      /// std::terminate -- so one board blipping off the network took the whole DAQ down.
+      /// strtoul yields 0, which the rate calculation below already treats as "no update".
+      unsigned long kaka = strtoul(kakaStr.c_str(), nullptr, 10);
+      unsigned long time = strtoul(timeStr.c_str(), nullptr, 10);
       ///* it seems that the ChannelRealtime is not in ns for VX2730
       if( digi[iDigi]->GetModelName() == "VX2730" ){ time = time / 4;}
 

@@ -20,7 +20,8 @@ inline const QList<QPair<QColor, QString>> colorCycle = { {QColor(Qt::red), "Red
 //^==============================================
 //^==============================================
 class Histogram2D : public QCustomPlot{
-  
+  Q_OBJECT
+
 public:
   Histogram2D(QString title, QString xLabel, QString yLabel, 
               int xbin, double xmin, double xmax, 
@@ -49,6 +50,25 @@ public:
   void SetCellContents(const uint32_t * z, int nx, int ny, unsigned long total,
                        unsigned long under, unsigned long over);
 
+  /// The cell grid this widget actually renders.
+  ///
+  /// Anything that accumulates counts for SetCellContents() must take its geometry from here, and
+  /// index with CoordToCell(), or the plot is drawn on the wrong scale. Two things conspire:
+  /// Rebin() stores xBin = requested + 2, and QCPColorMapData::coordToCell spreads [xMin,xMax]
+  /// over (nx - 1) intervals rather than nx. An accumulator that bins over `requested` cells and
+  /// writes cell i therefore disagrees with where the widget draws cell i by nx/(nx+1) -- 0.1% at
+  /// 1000 bins, but ~6% plus two permanently empty columns on a 16-channel map.
+  struct CellGeom {
+    int    nx = 0, ny = 0;            ///< INCLUDING the two guard cells Rebin() adds
+    double xLo = 0, xHi = 0, yLo = 0, yHi = 0;
+  };
+  CellGeom GetCellGeom() const { return { xBin, yBin, xMin, xMax, yMin, yMax }; }
+
+  /// Exactly QCPColorMapData::coordToCell's arithmetic, but off a cached CellGeom so a worker
+  /// thread can bin without touching the widget at all. False when the point falls outside the
+  /// grid, is not finite, or the geometry is degenerate -- callers count those as out-of-range.
+  static bool CoordToCell(const CellGeom & g, double x, double y, int * ix, int * iy);
+
   void DrawCut();
   void ClearAllCuts();
 
@@ -66,6 +86,14 @@ public:
 
   void SaveCuts(QString cutFileName);
   void LoadCuts(QString cutFileName);
+
+signals:
+  /// Same contract as the Histogram1D pair. Rebin() reaches QCPColorMapData::setSize(), which does
+  /// delete[] mData, so an owner filling this plot from another thread must be stopped before it.
+  /// The isBusy flag is not enough on its own: a worker can already be past Fill()'s isBusy check
+  /// and inside setCell() by the time the array is freed.
+  void AboutToRebin();
+  void ReBinned();
 
 private:
   double xMin, xMax, yMin, yMax;
@@ -278,6 +306,23 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
   connect(this, &QCustomPlot::mouseRelease, this, [=](){
 
   });
+}
+
+inline bool Histogram2D::CoordToCell(const CellGeom & g, double x, double y, int * ix, int * iy){
+
+  if( g.nx < 2 || g.ny < 2 ) return false;
+  if( g.xHi == g.xLo || g.yHi == g.yLo ) return false;
+  if( !std::isfinite(x) || !std::isfinite(y) ) return false;
+
+  /// Bounded in double before the cast: a point far outside the range would otherwise overflow
+  /// the int conversion, which is undefined rather than merely wrong.
+  const double fx = (x - g.xLo)/(g.xHi - g.xLo)*(g.nx - 1) + 0.5;
+  const double fy = (y - g.yLo)/(g.yHi - g.yLo)*(g.ny - 1) + 0.5;
+  if( fx < 0 || fx >= g.nx || fy < 0 || fy >= g.ny ) return false;
+
+  if( ix ) *ix = (int) fx;
+  if( iy ) *iy = (int) fy;
+  return true;
 }
 
 inline void Histogram2D::SetCellContents(const uint32_t * z, int nx, int ny, unsigned long total,
@@ -724,9 +769,11 @@ inline void Histogram2D::rightMouseClickRebin(){
   QObject::connect(&buttonBox, &QDialogButtonBox::rejected, [&]() { dialog.reject();});
 
   if( dialog.exec() == QDialog::Accepted ){
+    emit AboutToRebin();
     isBusy = true;
     Rebin((int)number[0][0], number[1][0], number[2][0], (int)number[0][1], number[1][1], number[2][1]);
     isBusy = false;
+    emit ReBinned();
   }
 
 }

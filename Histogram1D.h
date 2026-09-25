@@ -176,6 +176,9 @@ public:
           QObject::connect(&buttonBox, &QDialogButtonBox::rejected, [&]() { dialog.reject();});
 
           if( dialog.exec() == QDialog::Accepted ){
+            /// Direct connection on the GUI thread, so every AboutToRebin handler has returned --
+            /// and any worker filling this plot has drained -- before Rebin() touches yList.
+            emit AboutToRebin();
             Rebin((int)number[0], number[1], number[2]);
             emit ReBinned();
             UpdatePlot();
@@ -358,13 +361,19 @@ public:
   /// and calls this from the GUI thread instead.
   ///
   /// GUI THREAD ONLY. `y` holds `n` bin contents; extra bins are zeroed, and n is clamped to xBin.
+  ///
+  /// With more than one series (PSD adds a short-gate graph) call this for ID 0 first, then in
+  /// ascending ID. yMax is only reset on ID 0 and grows from there, so the y-range ends up
+  /// covering every series -- resetting it on each call would leave the axis scaled to whichever
+  /// series happened to be published last. This matches Fill(), which also only ever grows yMax;
+  /// Clear() and Rebin() are what zero it.
   void SetBinContents(const uint32_t * y, int n, unsigned long total,
                       unsigned long under, unsigned long over, unsigned int ID = 0){
 
     if( ID >= (unsigned int) nData || y == nullptr ) return;
     if( n > xBin ) n = xBin;
 
-    yMax = 0;
+    if( ID == 0 ) yMax = 0;
     for( int b = 0; b < xBin; b++ ){
       const double v = ( b < n ) ? (double) y[b] : 0.0;
       const int index1 = 2*b + 1;
@@ -389,7 +398,14 @@ public:
   }
 
 signals:
-  void ReBinned(); //ONLY for right click rebin
+  /// Both ONLY for the right-click rebin.
+  ///
+  /// Rebin() clears and re-appends yList, which frees the QVector buffer. An owner that
+  /// accumulates into this plot from another thread has to be stopped BEFORE that happens, so it
+  /// gets AboutToRebin() first and ReBinned() once the new binning is in place. Emitting only
+  /// afterwards would be useless: by then the buffer the other thread is indexing is already gone.
+  void AboutToRebin();
+  void ReBinned();
 
 private:
   double xMin, xMax, dX;

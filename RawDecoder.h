@@ -282,7 +282,12 @@ private:
             uint64_t wfHeader = words[pos];
             pos++;
             uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
-            size_t nSamples = wfNWords * 2;
+            /// Clamp BEFORE sizing anything. wfNWords is a raw 32-bit field off the wire, so a
+            /// corrupt or misaligned waveform header asks the six resize() calls below for up to
+            /// ~34 GB and throws bad_alloc. The sample loop is already bounded by nAggWords; this
+            /// makes the allocation agree with it, the same way the skip branch clamps pos.
+            if( wfNWords > nAggWords - pos ) wfNWords = (uint32_t)(nAggWords - pos);
+            size_t nSamples = (size_t) wfNWords * 2;
             hit.hasWaveform = true;
             hit.traceLenght = nSamples;
             hit.analog_probes_0.resize(nSamples);

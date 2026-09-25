@@ -61,11 +61,12 @@ int QtHistRegistry::Hist2D(const char * name, const char * xLabel, const char * 
   if( nY < 1 ) nY = 1;
 
   std::unique_ptr<H2> h(new H2());
-  h->w   = new Histogram2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, plotParent);
-  h->nX  = nX;  h->xLo = xMin;  h->xHi = xMax;  h->dx = (xMax - xMin) / nX;
-  h->nY  = nY;  h->yLo = yMin;  h->yHi = yMax;  h->dy = (yMax - yMin) / nY;
-  h->c.reset(new std::atomic<uint32_t>[(size_t)nX * nY]);
-  for( size_t i = 0; i < (size_t)nX * nY; i++ ) h->c[i].store(0, std::memory_order_relaxed);
+  h->w = new Histogram2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, plotParent);
+  /// Geometry from the widget, never from nX/nY: they differ by the guard cells. See H2::g.
+  h->g = h->w->GetCellGeom();
+  const size_t n = (size_t)h->g.nx * h->g.ny;
+  h->c.reset(new std::atomic<uint32_t>[n]);
+  for( size_t i = 0; i < n; i++ ) h->c[i].store(0, std::memory_order_relaxed);
 
   plotLayout->addWidget(h->w, row, col);
   h2.push_back(std::move(h));
@@ -108,6 +109,9 @@ void QtHistRegistry::Fill1(int id, double x){
   if( id < 0 || id >= (int)h1.size() ) return;
   H1 & h = *h1[id];
   h.total.fetch_add(1, std::memory_order_relaxed);
+  /// NaN fails both range tests below and would reach the (int) cast, which is undefined for a
+  /// non-finite value. An analysis computing a ratio or a log makes NaN easily, so check first.
+  if( !std::isfinite(x) ){ h.over.fetch_add(1, std::memory_order_relaxed); return; }
   if( x <  h.lo ){ h.under.fetch_add(1, std::memory_order_relaxed); return; }
   if( x >= h.hi ){ h.over .fetch_add(1, std::memory_order_relaxed); return; }
   const int b = (int)((x - h.lo) / h.dx);
@@ -118,15 +122,14 @@ void QtHistRegistry::Fill2(int id, double x, double y){
   if( id < 0 || id >= (int)h2.size() ) return;
   H2 & h = *h2[id];
   h.total.fetch_add(1, std::memory_order_relaxed);
-  if( x < h.xLo || x >= h.xHi || y < h.yLo || y >= h.yHi ){
+  /// CoordToCell reproduces the widget's own cell mapping and rejects out-of-range and non-finite
+  /// input, so the NaN guard and the geometry fix are the same call.
+  int ix = 0, iy = 0;
+  if( !Histogram2D::CoordToCell(h.g, x, y, &ix, &iy) ){
     h.out.fetch_add(1, std::memory_order_relaxed);
     return;
   }
-  const int ix = (int)((x - h.xLo) / h.dx);
-  const int iy = (int)((y - h.yLo) / h.dy);
-  if( ix >= 0 && ix < h.nX && iy >= 0 && iy < h.nY ){
-    h.c[(size_t)ix * h.nY + iy].fetch_add(1, std::memory_order_relaxed);
-  }
+  h.c[(size_t)ix * h.g.ny + iy].fetch_add(1, std::memory_order_relaxed);
 }
 
 void QtHistRegistry::Publish(){
@@ -144,15 +147,37 @@ void QtHistRegistry::Publish(){
 
   for( size_t i = 0; i < h2.size(); i++ ){
     H2 & h = *h2[i];
-    const size_t n = (size_t)h.nX * h.nY;
+    const size_t n = (size_t)h.g.nx * h.g.ny;
     scratch.resize(n);
     for( size_t k = 0; k < n; k++ ) scratch[k] = h.c[k].load(std::memory_order_relaxed);
-    h.w->SetCellContents(scratch.data(), h.nX, h.nY,
+    h.w->SetCellContents(scratch.data(), h.g.nx, h.g.ny,
                          (unsigned long) h.total.load(std::memory_order_relaxed),
                          0,
                          (unsigned long) h.out.load(std::memory_order_relaxed));
     h.w->UpdatePlot();
   }
+}
+
+void QtHistRegistry::Resize1(int id){
+  if( id < 0 || id >= (int)h1.size() ) return;
+  H1 & h = *h1[id];
+  h.nBin = h.w->GetNBin();
+  h.lo   = h.w->GetXMin();
+  h.hi   = h.w->GetXMax();
+  h.dx   = ( h.nBin > 0 ) ? (h.hi - h.lo) / h.nBin : 1;
+  h.c.reset(new std::atomic<uint32_t>[h.nBin > 0 ? h.nBin : 1]);
+  for( int b = 0; b < h.nBin; b++ ) h.c[b].store(0, std::memory_order_relaxed);
+  h.total.store(0); h.under.store(0); h.over.store(0);
+}
+
+void QtHistRegistry::Resize2(int id){
+  if( id < 0 || id >= (int)h2.size() ) return;
+  H2 & h = *h2[id];
+  h.g = h.w->GetCellGeom();
+  const size_t n = (size_t)h.g.nx * h.g.ny;
+  h.c.reset(new std::atomic<uint32_t>[n > 0 ? n : 1]);
+  for( size_t k = 0; k < n; k++ ) h.c[k].store(0, std::memory_order_relaxed);
+  h.total.store(0); h.out.store(0);
 }
 
 void QtHistRegistry::ClearCounts(){
@@ -163,7 +188,7 @@ void QtHistRegistry::ClearCounts(){
   }
   for( size_t i = 0; i < h2.size(); i++ ){
     H2 & h = *h2[i];
-    const size_t n = (size_t)h.nX * h.nY;
+    const size_t n = (size_t)h.g.nx * h.g.ny;
     for( size_t k = 0; k < n; k++ ) h.c[k].store(0, std::memory_order_relaxed);
     h.total.store(0); h.out.store(0);
   }
@@ -604,6 +629,26 @@ void Analyzer::SelectAnalysis(const QString & name){
       QMetaObject::invokeMethod(anaWorker, [v, on](){ if( v ) *v = on; },
                                 Qt::BlockingQueuedConnection);
       if( registry ) registry->ClearCounts();
+    });
+  }
+
+  //^---- a right-click rebin moves the widget's binning out from under counters sized to the old
+  //^     one. Resize on the analysis thread, so it cannot land in the middle of a ProcessEvent --
+  //^     the same fence the channel pickers above use.
+  for( int i = 0; i < registry->NumH1(); i++ ){
+    Histogram1D * w = registry->Widget1(i);
+    if( w == nullptr ) continue;
+    connect(w, &Histogram1D::ReBinned, this, [this, i](){
+      QMetaObject::invokeMethod(anaWorker, [this, i](){ if( registry ) registry->Resize1(i); },
+                                Qt::BlockingQueuedConnection);
+    });
+  }
+  for( int i = 0; i < registry->NumH2(); i++ ){
+    Histogram2D * w = registry->Widget2(i);
+    if( w == nullptr ) continue;
+    connect(w, &Histogram2D::ReBinned, this, [this, i](){
+      QMetaObject::invokeMethod(anaWorker, [this, i](){ if( registry ) registry->Resize2(i); },
+                                Qt::BlockingQueuedConnection);
     });
   }
 

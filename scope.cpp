@@ -741,9 +741,15 @@ void Scope::UpdateScope(){
 
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
-  int sample2ns = PHA::TraceStep * (1 << cbWaveRes->currentIndex());
+  const int waveRes = cbWaveRes->currentIndex();
+  /// An empty or not-yet-populated combo gives currentIndex() == -1. digi[-1] is an out-of-bounds
+  /// read and 1 << -1 is undefined; RefreshTraceBrowser() and DrawTraceFromBuffer() below already
+  /// guard this and UpdateScope() was the one that did not.
+  int sample2ns = PHA::TraceStep * (1 << (waveRes < 0 ? 0 : waveRes));
 
   emit UpdateScalar();
+
+  if( iDigi < 0 || ch < 0 || !digi || !digi[iDigi] ) return;
 
   /// the settings are the same for PHA and PSD
 
@@ -863,18 +869,26 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
     model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
+    /// A combo that is not backed by a QStandardItemModel cannot have its items enabled or
+    /// disabled at all, so there is nothing to do rather than a null to dereference.
+    if( model[i] == NULL ) return;
   }
 
   /// Enable all items
   for( int i = 0; i < cb[0]->count(); i++) {
-    for( int j = 0; j < size; j ++ ) model[j]->item(i)->setEnabled(true);
+    for( int j = 0; j < size; j ++ ) {
+      QStandardItem * item = model[j]->item(i);
+      if( item ) item->setEnabled(true);   // combos need not be the same length
+    }
   }
 
   for( int i = 0; i < size; i++){
     int index = cb[i]->currentIndex();
+    if( index < 0 ) continue;              // empty combo: item(-1) is null
     for( int j = 0; j < size; j++){
       if( i == j ) continue;
-      model[j]->item(index)->setEnabled(false);
+      QStandardItem * item = model[j]->item(index);
+      if( item ) item->setEnabled(false);
     }
   }
 

@@ -76,6 +76,19 @@ public:
   void ClearCounts();  ///< zero everything; used when a parameter changes
   void Destroy();      ///< delete every widget this registry created
 
+  /// Re-read a widget's binning after a right-click rebin and resize/zero its counters. Without
+  /// this the counters stay on the binning the analysis declared while the widget moves to the
+  /// new one, and the plot shows counts binned against the wrong axis. Must run with the analysis
+  /// worker parked -- Analyzer wires it through a BlockingQueuedConnection, as it does for the
+  /// channel pickers.
+  void Resize1(int id);
+  void Resize2(int id);
+
+  int  NumH1() const { return (int) h1.size(); }
+  int  NumH2() const { return (int) h2.size(); }
+  Histogram1D * Widget1(int id) const { return ( id >= 0 && id < (int)h1.size() ) ? h1[id]->w : nullptr; }
+  Histogram2D * Widget2(int id) const { return ( id >= 0 && id < (int)h2.size() ) ? h2[id]->w : nullptr; }
+
   /// Widgets the host built for declared parameters, so the window can wire them up.
   struct ChanWidget { RComboBox * cbDigi; RComboBox * cbCh; int * digi; int * ch; };
   std::vector<ChanWidget> chanWidget;
@@ -91,7 +104,11 @@ private:
   };
   struct H2 {
     Histogram2D * w = nullptr;
-    int nX = 0, nY = 0; double xLo = 0, xHi = 0, dx = 1, yLo = 0, yHi = 0, dy = 1;
+    /// The widget's real cell grid, not the bin count the analysis asked for. See
+    /// Histogram2D::GetCellGeom(): Rebin() adds two guard cells and coordToCell spreads the range
+    /// over nx-1 intervals, so binning over the requested count draws everything on the wrong
+    /// scale. Cached here so Fill2() never touches the widget from the analysis thread.
+    Histogram2D::CellGeom g;
     std::unique_ptr<std::atomic<uint32_t>[]> c;
     std::atomic<uint64_t> total{0}, out{0};
   };

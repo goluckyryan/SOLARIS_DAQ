@@ -1070,9 +1070,14 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
 
 }
 
+/// Idempotent: outFile is nulled, so a second call does nothing. Two paths reach here -- the
+/// end-of-run loop in MainWindow::StopACQ() and MainWindow::CloseDigitizers() -- and without the
+/// null, the second fclose() would be on an already-closed FILE*, and SaveDataToFile()'s
+/// "if( outFile == NULL ) return" guard would be looking at a dangling pointer.
 void Digitizer2Gen::CloseOutFile(){
   if( outFile != NULL ) {
     fclose(outFile);
+    outFile = NULL;
     int result = chmod(outFileName, S_IRUSR | S_IRGRP | S_IROTH);
     if( result != 0 ) printf("somewrong when set file (%s) to read only.", outFileName);
   }
