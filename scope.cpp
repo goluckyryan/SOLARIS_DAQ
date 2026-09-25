@@ -114,8 +114,19 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   connect(bnScopeReset, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
+    if( iDigi < 0 || !digi || !digi[iDigi] ) return;
     //digi[iDigi]->Reset();
     digi[iDigi]->ProgramChannels();
+
+    /// ProgramChannels() writes through the raw-string WriteValue(const char *, ...) overload,
+    /// which does NOT update the in-memory settings cache -- only the Reg overload does. Without
+    /// this re-read the cache still holds the pre-reprogram values, and everything downstream
+    /// believes them: ReadScopeSettings() below only reads memory, the panels this notifies read
+    /// memory, and worst of all StartACQ()'s per-run SaveSettingsToFile() would record the OLD
+    /// configuration next to the raw data while the board ran the new one.
+    /// DigiSettingsPanel::SetDefaultPHASettigns() already does this via RefreshSettings().
+    digi[iDigi]->ReadAllSettings();
+
     //SendLogMsg("Reset Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " and Set Default PHA.");
     ReadScopeSettings();
     UpdateOtherPanels();

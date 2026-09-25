@@ -12,6 +12,14 @@ Digitizer2Gen::Digitizer2Gen(){
 Digitizer2Gen::~Digitizer2Gen(){
   printf("========Digitizer2Gen::%s (%d)\n",__func__, serialNumber);
   if(isConnected ) CloseDigitizer();
+
+  /// hit is allocated by SetDataFormat() and was never freed here, so every digitizer leaked its
+  /// whole Hit on destruction: 97 KB of probe arrays under the DPP formats, and 20 MB under Raw
+  /// because of the blob buffer. CloseDigitizers() deletes every board, so an open/close cycle on
+  /// 20 boards in Raw leaked ~400 MB. ~Hit() releases everything it owns.
+  /// Safe here: MainWindow::CloseDigitizers() joins the read thread before deleting the digitizer,
+  /// and ReadDataThread::run() is the only other thing that touches hit.
+  if( hit ){ delete hit; hit = NULL; }
 }
 
 void Digitizer2Gen::Initialization(){
