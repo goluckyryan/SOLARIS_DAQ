@@ -35,7 +35,11 @@ public:
   static std::vector<Info> Scan(const std::string & dir);
 
   AnalysisPlugin() {}
-  ~AnalysisPlugin() {}
+  /// Removes the per-process temp directory of .so copies. The dlopen handles stay leaked on
+  /// purpose (see above) and the files remain mapped, so unlinking them is safe on Linux -- the
+  /// inode lives until the process exits. Without this every DAQ run leaves a directory of copies
+  /// behind in /tmp, one per Reload.
+  ~AnalysisPlugin();
 
   /// Copy, dlopen, check the ABI version, and create an analysis.
   /// Returns null on any failure, with the reason in `err`. Never throws, never aborts: a bad or
@@ -59,6 +63,7 @@ private:
   void       (*destroyFn)(Analysis *)  = nullptr;
   std::string declaredName;
   std::string loadedFrom;
+  std::string tempDir;                  ///< /tmp/solaris-analyzers-<pid>, removed by ~AnalysisPlugin
   int         loadCount = 0;
 };
 

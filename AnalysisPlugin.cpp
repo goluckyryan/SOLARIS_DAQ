@@ -33,6 +33,28 @@ std::vector<AnalysisPlugin::Info> AnalysisPlugin::Scan(const std::string & dir){
   return out;
 }
 
+AnalysisPlugin::~AnalysisPlugin(){
+
+  if( tempDir.empty() ) return;
+
+  /// Unlink the copies, then the directory. Only entries this class created are removed, by the
+  /// exact names it generated, so a stray file in there is left alone and rmdir simply fails.
+  for( int i = 0; i < loadCount; i++ ){
+    DIR * d = opendir(tempDir.c_str());
+    if( d == nullptr ) break;
+    struct dirent * e;
+    while( (e = readdir(d)) != nullptr ){
+      const std::string f = e->d_name;
+      if( f == "." || f == ".." ) continue;
+      if( f.size() < 3 || f.compare(f.size()-3, 3, ".so") != 0 ) continue;
+      unlink((tempDir + "/" + f).c_str());
+    }
+    closedir(d);
+    break;
+  }
+  rmdir(tempDir.c_str());
+}
+
 bool AnalysisPlugin::CopyFile(const std::string & from, const std::string & to, std::string & err){
 
   std::ifstream in(from, std::ios::binary);
@@ -54,6 +76,7 @@ Analysis * AnalysisPlugin::Load(const std::string & path, std::string & err){
   char dirBuf[256];
   snprintf(dirBuf, sizeof(dirBuf), "/tmp/solaris-analyzers-%d", (int) getpid());
   mkdir(dirBuf, 0700);                        // fine if it already exists
+  tempDir = dirBuf;                           // remembered so ~AnalysisPlugin can clean it up
 
   std::string base = path;
   const size_t slash = base.find_last_of('/');

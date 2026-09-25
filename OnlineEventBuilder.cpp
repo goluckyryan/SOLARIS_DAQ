@@ -23,13 +23,13 @@ OnlineEventBuilder::OnlineEventBuilder(const std::vector<DigiHitView> & viewList
 }
 
 void OnlineEventBuilder::ResetStat(){
-  totalEventsBuilt      = 0;
-  totalHitsConsumed     = 0;
-  totalHitsDropped      = 0;
-  totalHitsLate         = 0;
-  monotonicityViolations = 0;
-  timeJumpEvents        = 0;
-  stallEvents           = 0;
+  totalEventsBuilt      .store(0, std::memory_order_relaxed);
+  totalHitsConsumed     .store(0, std::memory_order_relaxed);
+  totalHitsDropped      .store(0, std::memory_order_relaxed);
+  totalHitsLate         .store(0, std::memory_order_relaxed);
+  monotonicityViolations.store(0, std::memory_order_relaxed);
+  timeJumpEvents        .store(0, std::memory_order_relaxed);
+  stallEvents           .store(0, std::memory_order_relaxed);
 }
 
 void OnlineEventBuilder::Reset(){
@@ -96,7 +96,7 @@ bool OnlineEventBuilder::PullNext(size_t b){
     const unsigned long w2 = r->index();
     if( w2 - s.cursor >= r->size() ){
       const unsigned long safe = w2 - r->size() + 1; // oldest slot still guaranteed intact
-      totalHitsDropped += (long)(safe - s.cursor);
+      Bump(totalHitsDropped, (long)(safe - s.cursor));
       s.cursor = safe;
       continue;
     }
@@ -109,13 +109,13 @@ bool OnlineEventBuilder::PullNext(size_t b){
         /// The board's timestamp counter restarted (a new ACQ without a Reset(), typically).
         /// Nothing to repair here: the event in progress closes on its own because the window
         /// test below rejects a hit earlier than the seed, and the next seed re-anchors.
-        timeJumpEvents++;
+        Bump(timeJumpEvents);
         settledBelow = 0;
       }else{
         /// Small backwards step. The whole merge assumes a board's hits are time-ordered
         /// (format_RAW.md:91). If this fires, that assumption is broken and the events built
         /// from this point are not trustworthy.
-        monotonicityViolations++;
+        Bump(monotonicityViolations);
       }
     }
 
@@ -123,7 +123,7 @@ bool OnlineEventBuilder::PullNext(size_t b){
     s.hasLastPulledTs = true;
     s.front           = h;
     s.hasFront        = true;
-    totalHitsConsumed++;
+    Bump(totalHitsConsumed);
     return true;
   }
 }
@@ -172,7 +172,7 @@ void OnlineEventBuilder::UpdateLiveness(){
     const long idleMs = (long) std::chrono::duration_cast<std::chrono::milliseconds>(now - s.lastAdvance).count();
     if( idleMs >= (long) stallTimeoutMs ){
       s.active = false;
-      stallEvents++;
+      Bump(stallEvents);
     }
   }
 }
@@ -239,7 +239,7 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
     /// the build horizon makes this impossible; it happens when a stalled board rejoins with buffered
     /// data. Dropping them is a bounded, counted loss — the alternative is mis-binning them.
     while( b >= 0 && board[b].front.timestamp < settledBelow ){
-      totalHitsLate++;
+      Bump(totalHitsLate);
       PullNext(b);
       b = PickEarliestBoard();
     }
@@ -294,7 +294,7 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
     if( event.empty() ) break; // defensive; PickEarliestBoard said there was a hit
 
     settledBelow = eventStart + timeWindow;
-    totalEventsBuilt++;
+    Bump(totalEventsBuilt);
     built++;
 
     if( eventSink ) eventSink->Publish(event);
@@ -312,16 +312,16 @@ void OnlineEventBuilder::PrintStat() const {
   printf("  window %lu ns, guard %lu ns, timeJump %lu ns, stall timeout %u ms\n",
          (unsigned long) timeWindow, (unsigned long) GetGuardTime(),
          (unsigned long) timeJump, stallTimeoutMs);
-  printf("  events built  : %ld\n", totalEventsBuilt);
-  printf("  hits consumed : %ld\n", totalHitsConsumed);
-  printf("  hits dropped  : %ld%s\n", totalHitsDropped,
-         totalHitsDropped ? "   <== ring lapped, the builder could not keep up" : "");
-  printf("  hits late     : %ld%s\n", totalHitsLate,
-         totalHitsLate ? "   <== hits arrived below an already-settled boundary "
+  printf("  events built  : %ld\n", totalEventsBuilt.load(std::memory_order_relaxed));
+  printf("  hits consumed : %ld\n", totalHitsConsumed.load(std::memory_order_relaxed));
+  printf("  hits dropped  : %ld%s\n", totalHitsDropped.load(std::memory_order_relaxed),
+         totalHitsDropped.load(std::memory_order_relaxed) ? "   <== ring lapped, the builder could not keep up" : "");
+  printf("  hits late     : %ld%s\n", totalHitsLate.load(std::memory_order_relaxed),
+         totalHitsLate.load(std::memory_order_relaxed) ? "   <== hits arrived below an already-settled boundary "
                          "(a stalled board rejoining is the expected cause)" : "");
-  printf("  time jumps    : %ld%s\n", timeJumpEvents,
-         timeJumpEvents ? "   <== a board clock restarted; call Reset() on ACQ start" : "");
-  printf("  board stalls  : %ld\n", stallEvents);
-  printf("  monotonicity  : %ld%s\n", monotonicityViolations,
-         monotonicityViolations ? "   <== HITS OUT OF ORDER, EVENTS ARE NOT TRUSTWORTHY" : "");
+  printf("  time jumps    : %ld%s\n", timeJumpEvents.load(std::memory_order_relaxed),
+         timeJumpEvents.load(std::memory_order_relaxed) ? "   <== a board clock restarted; call Reset() on ACQ start" : "");
+  printf("  board stalls  : %ld\n", stallEvents.load(std::memory_order_relaxed));
+  printf("  monotonicity  : %ld%s\n", monotonicityViolations.load(std::memory_order_relaxed),
+         monotonicityViolations.load(std::memory_order_relaxed) ? "   <== HITS OUT OF ORDER, EVENTS ARE NOT TRUSTWORTHY" : "");
 }

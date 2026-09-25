@@ -388,7 +388,6 @@ MainWindow::~MainWindow(){
   printf("-------- delete scalar Thread\n");
   if( scalarThread->isRunning()){
     scalarThread->Stop();
-    scalarThread->quit();
     scalarThread->wait();
   }
   CleanUpScalar();
@@ -658,7 +657,6 @@ void MainWindow::StopACQ(){
     if( readDataThread[i] == NULL ) continue;
     if( readDataThread[i]->isRunning()){
       if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
-      readDataThread[i]->quit();
       readDataThread[i]->wait();
     }
     if( chkSaveRun->isChecked() ) {
@@ -872,7 +870,6 @@ void MainWindow::CloseDigitizers(){
     scalar->close();
     if( scalarThread->isRunning()){
       scalarThread->Stop();
-      scalarThread->quit();
       scalarThread->wait();
     }
     CleanUpScalar(); // this use digi->GetNChannels(); 
@@ -914,7 +911,6 @@ void MainWindow::CloseDigitizers(){
     if( readDataThread[i] != NULL ){
       LogMsg("Waiting for readData Thread .....");
       readDataThread[i]->Stop();
-      readDataThread[i]->quit();
       readDataThread[i]->wait();
       delete readDataThread[i];
       readDataThread[i] = NULL;
@@ -1192,6 +1188,15 @@ bool MainWindow::CheckSOLARISpanelOK(){
       }
       QStringList list = line.replace(' ', "").split(",");
       for( int i = 0; i < list.size() ; i ++){
+        /// Bounded by the hardware maximum. SOLARISpanel indexes fixed [MaxNumberOfChannel]
+        /// arrays with this position and passes it to GetSettingValueFromMemory(), so a
+        /// Mapping.h listing more channels than a board has would run off the end of both.
+        if( (int) singleDigiMap.size() >= MaxNumberOfChannel ){
+          LogMsg("<font style=\"color: red;\">Mapping.h: more than "
+                 + QString::number(MaxNumberOfChannel) + " channels for one digitizer; "
+                 "the extra entries are ignored.</font>");
+          break;
+        }
         singleDigiMap.push_back(list[i].toInt());
       }
     }
@@ -1211,6 +1216,14 @@ bool MainWindow::CheckSOLARISpanelOK(){
 
   if( (int) detMaxID.size() != detType.size() ){
     LogMsg("Size of detector Name and detctor max ID does not match.");
+    return false;
+  }
+
+  /// The check above passes when BOTH are empty -- a Mapping.h with no //C= or //C# line -- and
+  /// SOLARISpanel then reads detMaxID[0] on an empty vector.
+  if( detMaxID.empty() || detType.isEmpty() ){
+    LogMsg("<font style=\"color: red;\">Mapping.h has no detector type (//C=) or max ID (//C#) "
+           "line. SOLARIS panel disabled.</font>");
     return false;
   }
 

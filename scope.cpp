@@ -327,7 +327,6 @@ Scope::~Scope(){
   printf("------- %s \n", __func__);
   StopScope();
   updateTraceThread->Stop();
-  updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
   for( int i = 0; i < 6; i++) delete dataTrace[i];
@@ -706,7 +705,6 @@ void Scope::StopScope(){
   printf("%s\n", __func__);
 
   updateTraceThread->Stop();
-  updateTraceThread->quit();
   updateTraceThread->wait();
 
   /// the settings are the same for PHA and PSD
@@ -716,7 +714,6 @@ void Scope::StopScope(){
       if( digi[i]->IsDummy() ) continue;
 
       readDataThread[i]->Stop();
-      readDataThread[i]->quit();
       readDataThread[i]->wait();
 
       digiMTX[i].lock();

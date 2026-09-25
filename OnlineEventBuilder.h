@@ -1,6 +1,7 @@
 #ifndef ONLINE_EVENT_BUILDER_H
 #define ONLINE_EVENT_BUILDER_H
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -94,13 +95,27 @@ public:
   void PrintStat() const;
 
   //^---- counters. Non-zero values of the last three mean something is wrong; see PrintStat().
-  long totalEventsBuilt;
-  long totalHitsConsumed;
-  long totalHitsDropped;        ///< lapped: the producer overwrote hits before we read them
-  long totalHitsLate;           ///< arrived after their event was already settled
-  long monotonicityViolations;  ///< a board's hits went backwards in time (small step)
-  long timeJumpEvents;          ///< a board's hits went backwards by more than timeJump
-  long stallEvents;             ///< a board went quiet and was dropped from the build horizon
+  //^
+  //^ Atomic because the GUI thread reads them for its status line while the builder thread is
+  //^ writing -- Analyzer::UpdateStatus(). Read them with .load(); an implicit conversion works
+  //^ in most contexts but not through printf's varargs.
+  //^
+  //^ Written ONLY by the thread driving BuildEvents(), so Bump() is a relaxed load+store rather
+  //^ than fetch_add: on x86-64 that is a plain add instead of a lock-prefixed one, which matters
+  //^ because totalHitsConsumed is incremented once per hit. Same reasoning, and the same trick, as
+  //^ RingBuffer::advance().
+  typedef std::atomic<long> Counter;
+  static void Bump(Counter & c, long n = 1){
+    c.store(c.load(std::memory_order_relaxed) + n, std::memory_order_relaxed);
+  }
+
+  Counter totalEventsBuilt;
+  Counter totalHitsConsumed;
+  Counter totalHitsDropped;        ///< lapped: the producer overwrote hits before we read them
+  Counter totalHitsLate;           ///< arrived after their event was already settled
+  Counter monotonicityViolations;  ///< a board's hits went backwards in time (small step)
+  Counter timeJumpEvents;          ///< a board's hits went backwards by more than timeJump
+  Counter stallEvents;             ///< a board went quiet and was dropped from the build horizon
 
 private:
   struct BoardState {

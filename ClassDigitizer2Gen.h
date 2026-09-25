@@ -13,7 +13,10 @@
 #include "RingBuffer.h"
 #include "RawDecoder.h"
 
-#define MaxOutFileSize 2*1024*1024*1024  //2GB
+/// UL, and parenthesised. As bare `2*1024*1024*1024` this is signed-int overflow, i.e. undefined;
+/// it only produced the intended value because its single use casts the leading 2 to unsigned,
+/// which quietly made the whole expression unsigned arithmetic. Any other use would have been UB.
+#define MaxOutFileSize (2UL*1024*1024*1024)  //2GB
 //#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
 #define MaxNumberOfGroup 16

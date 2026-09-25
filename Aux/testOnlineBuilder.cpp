@@ -143,6 +143,18 @@ static bool SameEvents(std::vector<Event> a, std::vector<Event> b, const char * 
 
 //^===================================================================== streaming runs
 
+/// The builder is no longer copyable: its counters are std::atomic, which has no copy assignment.
+/// Only the counters were ever wanted from the copy this replaces, so move just those across.
+static void CopyStats(const OnlineEventBuilder & from, OnlineEventBuilder & to){
+  to.totalEventsBuilt      .store(from.totalEventsBuilt      .load());
+  to.totalHitsConsumed     .store(from.totalHitsConsumed     .load());
+  to.totalHitsDropped      .store(from.totalHitsDropped      .load());
+  to.totalHitsLate         .store(from.totalHitsLate         .load());
+  to.monotonicityViolations.store(from.monotonicityViolations.load());
+  to.timeJumpEvents        .store(from.timeJumpEvents        .load());
+  to.stallEvents           .store(from.stallEvents           .load());
+}
+
 /// Push `chunk` hits per board per round, draining between rounds, so the build horizon has to
 /// do the work. The stall timeout is pushed out of reach: these runs must not depend on
 /// wall-clock speed.
@@ -179,7 +191,7 @@ static std::vector<Event> StreamBuild(std::vector<Board> & boards, uint64_t wind
   }
   eb.BuildEvents(true);
 
-  if( statOut ) *statOut = eb;
+  if( statOut ) CopyStats(eb, *statOut);
   return out;
 }
 
@@ -257,8 +269,11 @@ static void ThreadedRun(std::vector<Board> & boards, uint64_t window){
   eb.BuildEvents(true);
 
   const size_t pushedTotal = TotalHits(boards);
+  /// .load() rather than the implicit conversion: the counters are std::atomic<long> and a
+  /// class type cannot go through printf's varargs.
   printf("  pushed %zu, in events %zu, dropped %ld, late %ld\n",
-         pushedTotal, hitsInEvents, eb.totalHitsDropped, eb.totalHitsLate);
+         pushedTotal, hitsInEvents,
+         eb.totalHitsDropped.load(), eb.totalHitsLate.load());
   eb.PrintStat();
 
   const long accounted = (long)hitsInEvents + eb.totalHitsDropped + eb.totalHitsLate;
@@ -763,7 +778,7 @@ static bool StallTest(){
   const bool stalled = eb.stallEvents > 0;
 
   printf("  board 1 silent after ts 4000; built up to ts %" PRIu64 ", stalls %ld, late %ld\n",
-         maxTs, eb.stallEvents, eb.totalHitsLate);
+         maxTs, eb.stallEvents.load(), eb.totalHitsLate.load());
   printf("  %s\n", (flowed && stalled) ? "OK" :
                    (!stalled ? "FAILED: the board was never declared stalled"
                              : "FAILED: builder froze behind the silent board"));

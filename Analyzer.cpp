@@ -698,9 +698,12 @@ void Analyzer::SetEnabled(bool on){
     QMetaObject::invokeMethod(anaWorker,   [this](){ anaWorker->Stop(); },
                               Qt::BlockingQueuedConnection);
 
+    /// Flag off only -- do NOT clear the ring here. A DAQ thread that read fillHitRing as true a
+    /// moment ago can still be inside push(), and clear() memsets the buffer and resets the write
+    /// index underneath it. The enable path above does the clearing instead, where the flag has
+    /// been false for the whole idle period and no producer can be mid-push.
     for( size_t k = 0; k < boardIndex.size(); k++ ){
       digi[boardIndex[k]]->fillHitRing.store(false, std::memory_order_relaxed);
-      digi[boardIndex[k]]->hitRing.clear();
     }
     ring->Clear();
 
@@ -720,9 +723,9 @@ void Analyzer::UpdateStatus(){
                             "monotonicity %6 | ring dropped %7")
                     .arg(on ? "RUNNING" : "idle")
                     .arg(boardIndex.size())
-                    .arg(eb->totalEventsBuilt)
-                    .arg(eb->totalHitsDropped)
-                    .arg(eb->totalHitsLate)
-                    .arg(eb->monotonicityViolations)
+                    .arg(eb->totalEventsBuilt.load(std::memory_order_relaxed))
+                    .arg(eb->totalHitsDropped.load(std::memory_order_relaxed))
+                    .arg(eb->totalHitsLate.load(std::memory_order_relaxed))
+                    .arg(eb->monotonicityViolations.load(std::memory_order_relaxed))
                     .arg(anaWorker ? anaWorker->reader.eventsDropped : 0));
 }
