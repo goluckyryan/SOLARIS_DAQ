@@ -100,6 +100,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   scope = nullptr;
   digiSetting = nullptr;
   singleSpectra = nullptr;
+  analyzer = nullptr;
 
   QWidget * mainLayoutWidget = new QWidget(this);
   setCentralWidget(mainLayoutWidget);
@@ -152,6 +153,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSingleSpectra->setEnabled(false);
     connect(bnSingleSpectra, &QPushButton::clicked, this, &MainWindow::OpenSingleSpectra);
 
+    bnAnalyzer = new QPushButton("Analyzer", this);
+    bnAnalyzer->setEnabled(false);
+    connect(bnAnalyzer, &QPushButton::clicked, this, &MainWindow::OpenAnalyzer);
+
     layout1->addWidget(bnProgramSettings, 0, 0);
     layout1->addWidget(bnNewExp, 0, 1);
     layout1->addWidget(lExpName, 0, 2);
@@ -166,6 +171,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
     layout1->addWidget(bnSingleSpectra, 3, 0);
+    layout1->addWidget(bnAnalyzer, 3, 1);
 
     layout1->setColumnStretch(0, 2);
     layout1->setColumnStretch(1, 2);
@@ -352,6 +358,12 @@ MainWindow::~MainWindow(){
     singleSpectra = nullptr;
   }
 
+  printf("-------- delete analyzer\n");
+  if( analyzer ){
+    delete analyzer;
+    analyzer = nullptr;
+  }
+
   printf("-------- delete Solaris panel\n");
   if( solarisSetting ) {
     delete solarisSetting;
@@ -377,7 +389,6 @@ MainWindow::~MainWindow(){
   printf("-------- delete scalar Thread\n");
   if( scalarThread->isRunning()){
     scalarThread->Stop();
-    scalarThread->quit();
     scalarThread->wait();
   }
   CleanUpScalar();
@@ -628,7 +639,9 @@ void MainWindow::StopACQ(){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-  // DigiManager::StopACQ already handles read thread join and file close
+  /// No readDataThread join or CloseOutFile() here as on master: DigiManager::StopACQ() owns the
+  /// read threads and closes the out file. Dummies are skipped, which is master's fix for the
+  /// segfault on every run that had an unreachable IP.
   if( chkSaveRun->isChecked() ){
     for( int i = nDigi -1; i >=0; i--){
       if( digiManager->IsDummy(i) ) continue;
@@ -862,6 +875,22 @@ void MainWindow::OpenDigitizers(){
     singleSpectra = new SingleSpectra(digiManager, nDigi, rawDataPath, this);
     bnSingleSpectra->setEnabled(true);
 
+    /// The online analyzer event-builds out of each board's in-process hitRing, which only the
+    /// process holding the CAEN connection ever fills. In broker mode that is the daemon: every
+    /// GetDigitizer() here hands back a local dummy whose ring stays empty forever. Constructing
+    /// the window anyway would look like it worked -- BuildViewList() skips dummies, so it would
+    /// open with no boards, no spectra and no error. Say why instead. Run the analysis alongside
+    /// the broker, or start the GUI standalone.
+    if( digiManager->GetMode() == DigiManager::Mode::Broker ){
+      bnAnalyzer->setEnabled(false);
+      bnAnalyzer->setToolTip("Online analysis is unavailable in broker mode:\n"
+                             "hit data stays in the broker process.");
+      LogMsg("Analyzer disabled: no hit data in broker mode.");
+    }else{
+      analyzer = new Analyzer(digiManager, nDigi, this);
+      bnAnalyzer->setEnabled(true);
+    }
+
   }
 
   bnDigiSettings->setEnabled(true);
@@ -888,7 +917,6 @@ void MainWindow::CloseDigitizers(bool closeRemote){
     scalar->close();
     if( scalarThread->isRunning()){
       scalarThread->Stop();
-      scalarThread->quit();
       scalarThread->wait();
     }
     CleanUpScalar();
@@ -898,6 +926,13 @@ void MainWindow::CloseDigitizers(bool closeRemote){
     singleSpectra->close();
     delete singleSpectra;
     singleSpectra = nullptr;
+  }
+  /// Before the digitizers go: the Analyzer's builder holds pointers into each board's hitRing, and
+  /// its destructor joins both worker threads.
+  if( analyzer ){
+    analyzer->close();
+    delete analyzer;
+    analyzer = NULL;
   }
 
   if( digiSetting ){
@@ -913,6 +948,9 @@ void MainWindow::CloseDigitizers(bool closeRemote){
   }
 
   LogMsg("CloseDigitizers: useBrokerMode=" + QString(useBrokerMode ? "true" : "false") + ", closeRemote=" + QString(closeRemote ? "true" : "false"));
+
+  /// The read-thread join and the CloseOutFile() that master does inline here now live in
+  /// DigiManager::CloseDigitizer(), which both paths below reach via CloseAll().
 
   if( !useBrokerMode ){
     // Standalone: save settings and close each digitizer
@@ -941,6 +979,10 @@ void MainWindow::CloseDigitizers(bool closeRemote){
   delete digiManager;
   digiManager = nullptr;
 
+  /// Closing the digitizers ends any run that was in progress, so the flag must follow. Leaving it
+  /// set made StopACQ() believe a run was still live after the boards were gone.
+  isACQRunning = false;
+
   bnSyncHelper->setEnabled(false);
   bnOpenDigitizers->setEnabled(true);
   bnOpenDigitizers->setFocus();
@@ -956,6 +998,7 @@ void MainWindow::CloseDigitizers(bool closeRemote){
   cbAutoRun->setEnabled(false);
   cbDataFormat->setEnabled(false);
   bnSingleSpectra->setEnabled(false);
+  bnAnalyzer->setEnabled(false);
 
   bnProgramSettings->setEnabled(true);
   bnNewExp->setEnabled(true);
@@ -1186,6 +1229,15 @@ bool MainWindow::CheckSOLARISpanelOK(){
       }
       QStringList list = line.replace(' ', "").split(",");
       for( int i = 0; i < list.size() ; i ++){
+        /// Bounded by the hardware maximum. SOLARISpanel indexes fixed [MaxNumberOfChannel]
+        /// arrays with this position and passes it to GetSettingValueFromMemory(), so a
+        /// Mapping.h listing more channels than a board has would run off the end of both.
+        if( (int) singleDigiMap.size() >= MaxNumberOfChannel ){
+          LogMsg("<font style=\"color: red;\">Mapping.h: more than "
+                 + QString::number(MaxNumberOfChannel) + " channels for one digitizer; "
+                 "the extra entries are ignored.</font>");
+          break;
+        }
         singleDigiMap.push_back(list[i].toInt());
       }
     }
@@ -1205,6 +1257,14 @@ bool MainWindow::CheckSOLARISpanelOK(){
 
   if( (int) detMaxID.size() != detType.size() ){
     LogMsg("Size of detector Name and detctor max ID does not match.");
+    return false;
+  }
+
+  /// The check above passes when BOTH are empty -- a Mapping.h with no //C= or //C# line -- and
+  /// SOLARISpanel then reads detMaxID[0] on an empty vector.
+  if( detMaxID.empty() || detType.isEmpty() ){
+    LogMsg("<font style=\"color: red;\">Mapping.h has no detector type (//C=) or max ID (//C#) "
+           "line. SOLARIS panel disabled.</font>");
     return false;
   }
 
@@ -1382,6 +1442,8 @@ void MainWindow::UpdateScalar(){
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
   if( influx && scalarOutputInflux) influx->ClearDataPointsBuffer();
+  /// The unguarded std::stoul that master fixes here is gone from this layer: the scalar read now
+  /// happens in DigiManager::GetScalarSnapshot(), where ParseCounter() does the non-throwing parse.
   double localAcceptRate[MaxNumberOfChannel] = {0};
 
   unsigned long totalFileSize = 0;
@@ -2615,6 +2677,15 @@ void MainWindow::CreateDataSymbolicLink(){
 
 //*###################################################################### 
 //*###################################################################### Single Spectrum
+void MainWindow::OpenAnalyzer(){
+  /// Unlike OpenSingleSpectra, never construct here: the button is only enabled once
+  /// OpenDigitizers() has made one, so a null pointer means the boards are not ready --
+  /// or that we are in broker mode, where there is deliberately no analyzer at all.
+  if( analyzer == nullptr ) return;
+  analyzer->show();
+  analyzer->activateWindow();
+}
+
 void MainWindow::OpenSingleSpectra(){
 
   if( singleSpectra == nullptr ) {

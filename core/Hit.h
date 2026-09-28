@@ -105,16 +105,18 @@ class Hit {
       isTraceAllZero = true; // indicate trace are all zero
     }
 
+    /// Every pointer is nulled after the delete. Without that, only the callers that immediately
+    /// reallocate are safe -- and `data` is reallocated only on the Raw branch of SetDataType(),
+    /// so a Raw -> non-Raw transition on the same Hit left it dangling for ~Hit() to free twice.
     void ClearMemory(){
-      if( data != NULL ) delete[] data;
+      if( data != NULL ) { delete[] data; data = NULL; }
 
-      if( analog_probes[0] != NULL) delete[] analog_probes[0];
-      if( analog_probes[1] != NULL) delete[] analog_probes[1];
-      
-      if( digital_probes[0] != NULL) delete[] digital_probes[0];
-      if( digital_probes[1] != NULL) delete[] digital_probes[1];
-      if( digital_probes[2] != NULL) delete[] digital_probes[2];
-      if( digital_probes[3] != NULL) delete[] digital_probes[3];
+      for( int i = 0; i < 2; i++ ){
+        if( analog_probes[i] != NULL ) { delete[] analog_probes[i]; analog_probes[i] = NULL; }
+      }
+      for( int i = 0; i < 4; i++ ){
+        if( digital_probes[i] != NULL ) { delete[] digital_probes[i]; digital_probes[i] = NULL; }
+      }
 
       isTraceAllZero = true;
     }

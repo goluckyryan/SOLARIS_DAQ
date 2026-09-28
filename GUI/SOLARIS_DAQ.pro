@@ -9,7 +9,8 @@ INCLUDEPATH += . ../core ../broker
 
 QT += core widgets charts printsupport
 
-LIBS += -lcurl -lCAEN_FELib -lX11 -lzmq
+# -ldl: AnalysisPlugin dlopen()s the analysis .so files at runtime.
+LIBS += -lcurl -lCAEN_FELib -lX11 -lzmq -ldl
 
 #=========== for GDB debug
 QMAKE_CXXFLAGS += -g  # for gdb debug
@@ -26,7 +27,13 @@ HEADERS += ../core/ClassDigitizer2Gen.h \
            ../core/ClassElogTemplate.h \
            ../core/DigiParameters.h \
            ../core/DigiManager.h \
-           ../core/macro.h
+           ../core/macro.h \
+           ../core/LeanHit.h \
+           ../core/BuiltHit.h \
+           ../core/EventRing.h \
+           ../core/Analysis.h \
+           ../core/AnalysisPlugin.h \
+           ../core/OnlineEventBuilder.h
 
 # Broker headers
 HEADERS += ../broker/BrokerClient.h \
@@ -42,14 +49,17 @@ HEADERS += mainwindow.h \
            qcustomplot.h \
            Histogram1D.h \
            Histogram2D.h \
-           SingleSpectra.h
+           SingleSpectra.h \
+           Analyzer.h
 
 # Core sources (shared with broker)
 SOURCES += ../core/ClassDigitizer2Gen.cpp \
            ../core/ClassInfluxDB.cpp \
            ../core/ClassElog.cpp \
            ../core/ClassElogTemplate.cpp \
-           ../core/DigiManager.cpp
+           ../core/DigiManager.cpp \
+           ../core/OnlineEventBuilder.cpp \
+           ../core/AnalysisPlugin.cpp
 
 # Broker sources
 SOURCES += ../broker/BrokerClient.cpp
@@ -61,4 +71,8 @@ SOURCES += main.cpp \
            scope.cpp \
            SOLARISpanel.cpp \
            qcustomplot.cpp \
-           SingleSpectra.cpp
+           SingleSpectra.cpp \
+           Analyzer.cpp
+
+# Analyses are NOT compiled into the binary: they are built separately into .so files by
+# analyzers/Makefile and dlopen()ed at runtime.

@@ -92,6 +92,7 @@ CMakeLists.txt.user*
 
 EventBuilder
 EventBuilderRaw
+testOnlineBuilder
 Aux/debug_raw
 Aux/check*
 *.sol_raw

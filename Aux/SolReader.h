@@ -9,7 +9,7 @@
 #include <time.h> // time in nano-sec
 #include <inttypes.h>
 
-#include "../Hit.h"
+#include "../core/Hit.h"
 
 class SolReader {
   private:
@@ -120,8 +120,12 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
   }
 
 
-  if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw ){
-    hit->SetDataType(DataFormat::Raw, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);  
+  /// Only when the format actually changes. SetDataType() frees and reallocates the 20 MB raw
+  /// buffer and all six probe arrays, and this runs once per BLOCK -- so on a .sol_raw file, which
+  /// is Raw from end to end, it was doing a 20 MB delete[]/new[] plus ~600 KB of probe arrays for
+  /// every block read.
+  if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw && hit->dataType != DataFormat::Raw ){
+    hit->SetDataType(DataFormat::Raw, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);
   }
   hit->dataType = blockStartIdentifier & 0xF;
   hit->DPPType = ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
@@ -232,7 +236,7 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
 
   if( debug ) {
     hit->PrintAll(); 
-    printf(" file Pos : %u/%u\n", filePos, inFileSize);
+    printf(" file Pos : %" PRIu64 "/%" PRIu64 "\n", (uint64_t) filePos, (uint64_t) inFileSize);
   }
   return 0;
 }

@@ -111,7 +111,18 @@ Scope::Scope(DigiManager *digiManager, unsigned int nDigi, QMainWindow *parent) 
   connect(bnScopeReset, &QPushButton::clicked, this, [=](){
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
-    if( digiManager->GetDigitizer(iDigi) ) digiManager->GetDigitizer(iDigi)->ProgramChannels();
+    if( !digiManager->GetDigitizer(iDigi) ) return;
+    digiManager->GetDigitizer(iDigi)->ProgramChannels();
+
+    /// ProgramChannels() writes through the raw-string WriteValue(const char *, ...) overload,
+    /// which does NOT update the in-memory settings cache -- only the Reg overload does. Without
+    /// this re-read the cache still holds the pre-reprogram values, and everything downstream
+    /// believes them: ReadScopeSettings() below only reads memory, the panels this notifies read
+    /// memory, and worst of all StartACQ()'s per-run SaveSettingsToFile() would record the OLD
+    /// configuration next to the raw data while the board ran the new one.
+    /// DigiSettingsPanel::SetDefaultPHASettigns() already does this via RefreshSettings().
+    digiManager->ReadAllSettings(iDigi);
+
     //SendLogMsg("Reset Digi-" + QString::number(digiManager->GetSerialNumber(iDigi)) + " and Set Default PHA.");
     ReadScopeSettings();
     UpdateOtherPanels();
@@ -311,7 +322,6 @@ Scope::~Scope(){
   printf("------- %s \n", __func__);
   StopScope();
   updateTraceThread->Stop();
-  updateTraceThread->quit();
   updateTraceThread->wait();
   delete updateTraceThread;
   for( int i = 0; i < 6; i++) delete dataTrace[i];
@@ -627,7 +637,9 @@ void Scope::StartScope(){
 
   for( int iDigi = 0 ; iDigi < nDigi; iDigi ++ ){
 
-    if( digiManager->IsDummy(iDigi) ) return;
+    /// continue, not return: a dummy at index 0 would otherwise abandon the whole loop and
+    /// StartScope() would silently do nothing for every real board after it.
+    if( digiManager->IsDummy(iDigi) ) continue;
 
     int ch = cbScopeCh->currentIndex();
 
@@ -681,7 +693,6 @@ void Scope::StopScope(){
   printf("%s\n", __func__);
 
   updateTraceThread->Stop();
-  updateTraceThread->quit();
   updateTraceThread->wait();
 
   /// the settings are the same for PHA and PSD
@@ -690,6 +701,8 @@ void Scope::StopScope(){
     for(int i = 0; i < nDigi; i++){
       if( digiManager->IsDummy(i) ) continue;
 
+      /// No readDataThread[i]->Stop()/wait() here as on master: DigiManager owns the read threads
+      /// now, and StopACQ() joins them.
       digiManager->StopACQ(i);
       for( int ch2 = 0 ; ch2 < digiManager->GetNChannels(i); ch2 ++){
         digiManager->WriteValue(i, PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
@@ -710,9 +723,15 @@ void Scope::UpdateScope(){
 
   int iDigi = cbScopeDigi->currentIndex();
   int ch = cbScopeCh->currentIndex();
-  int sample2ns = PHA::TraceStep * (1 << cbWaveRes->currentIndex());
+  const int waveRes = cbWaveRes->currentIndex();
+  /// An empty or not-yet-populated combo gives currentIndex() == -1. Indexing a digitizer with -1
+  /// is an out-of-bounds read and 1 << -1 is undefined; RefreshTraceBrowser() and
+  /// DrawTraceFromBuffer() below already guard this and UpdateScope() was the one that did not.
+  int sample2ns = PHA::TraceStep * (1 << (waveRes < 0 ? 0 : waveRes));
 
   emit UpdateScalar();
+
+  if( iDigi < 0 || ch < 0 || !digiManager || !digiManager->GetDigitizer(iDigi) ) return;
 
   /// the settings are the same for PHA and PSD
 
@@ -844,18 +863,26 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
   QStandardItemModel * model[size] = {NULL};
   for( int i = 0; i < size; i++){
     model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
+    /// A combo that is not backed by a QStandardItemModel cannot have its items enabled or
+    /// disabled at all, so there is nothing to do rather than a null to dereference.
+    if( model[i] == NULL ) return;
   }
 
   /// Enable all items
   for( int i = 0; i < cb[0]->count(); i++) {
-    for( int j = 0; j < size; j ++ ) model[j]->item(i)->setEnabled(true);
+    for( int j = 0; j < size; j ++ ) {
+      QStandardItem * item = model[j]->item(i);
+      if( item ) item->setEnabled(true);   // combos need not be the same length
+    }
   }
 
   for( int i = 0; i < size; i++){
     int index = cb[i]->currentIndex();
+    if( index < 0 ) continue;              // empty combo: item(-1) is null
     for( int j = 0; j < size; j++){
       if( i == j ) continue;
-      model[j]->item(index)->setEnabled(false);
+      QStandardItem * item = model[j]->item(index);
+      if( item ) item->setEnabled(false);
     }
   }
 

@@ -7,8 +7,8 @@
 #include <cmath>
 #include <sys/stat.h>
 
-#include "../ClassDigitizer2Gen.h"
-#include "../RawDecoder.h"
+#include "../core/ClassDigitizer2Gen.h"
+#include "../core/RawDecoder.h"
 #include "SolReader.h"
 
 //^####################################################

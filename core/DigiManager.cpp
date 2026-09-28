@@ -1,6 +1,8 @@
 #include "DigiManager.h"
 
 #include <cstring>
+#include <cstdlib>
+#include <cerrno>
 #include <chrono>
 
 DigiManager::DigiManager(Mode mode) : mode(mode), nDigi(0), client(nullptr) {
@@ -106,6 +108,12 @@ void DigiManager::CloseDigitizer(int index) {
         readThreadStop[index] = true;
         readThread[index].join();
       }
+      /// Only once the read thread is joined is it safe to flush the run file. Closing mid-run used
+      /// to leave it open: the tail sitting in the stdio buffer was lost and the file never got its
+      /// read-only bit. This path is reachable because StartACQ()/AutoRun() never disable
+      /// bnCloseDigitizers, so Close is live during a run. CloseOutFile() is a no-op when no file
+      /// is open and is safe to call twice.
+      digi[index]->CloseOutFile();
       digi[index]->CloseDigitizer();
       delete digi[index];
       digi[index] = nullptr;
@@ -482,6 +490,20 @@ RingBuffer<TraceSnapshot, TraceRingBufferSize>& DigiManager::GetTraceRingBuffer(
 }
 
 //============================================ Scalar data
+/// Digitizer2Gen::ReadValue() reports failure in-band: it returns "not connected" when the board is
+/// down, or ErrorMsg() text when CAEN refuses the read. Those are not numbers. std::stoull would
+/// throw, and this runs in a QTimer slot on the GUI thread, where an escaping exception is
+/// std::terminate() -- one board dropping off the network would take the whole DAQ down. Parse
+/// without throwing and treat anything unparseable as zero, which is what a stalled counter means.
+static uint64_t ParseCounter(const std::string & s) {
+  if( s.empty() ) return 0;
+  errno = 0;
+  char * end = nullptr;
+  unsigned long long v = strtoull(s.c_str(), &end, 10);
+  if( end == s.c_str() || errno == ERANGE ) return 0;  // no digits consumed, or overflow
+  return v;
+}
+
 DigiManager::ScalarSnapshot DigiManager::GetScalarSnapshot(int d) {
   ScalarSnapshot snap = {};
   if (d < 0 || d >= nDigi) return snap;
@@ -495,9 +517,9 @@ DigiManager::ScalarSnapshot DigiManager::GetScalarSnapshot(int d) {
       std::string timeStr  = digi[d]->ReadValue(PHA::CH::ChannelRealtime, ch);
       std::string rateStr  = digi[d]->ReadValue(PHA::CH::SelfTrgRate, ch);
       std::string countStr = digi[d]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      snap.realTime[ch]   = timeStr.empty()  ? 0 : std::stoull(timeStr);
-      snap.trgRate[ch]    = rateStr.empty()  ? 0 : std::stoul(rateStr);
-      snap.savedCount[ch] = countStr.empty() ? 0 : std::stoull(countStr);
+      snap.realTime[ch]   = ParseCounter(timeStr);
+      snap.trgRate[ch]    = (uint32_t)ParseCounter(rateStr);
+      snap.savedCount[ch] = ParseCounter(countStr);
     }
     snap.totalFileSize = digi[d]->GetTotalFilesSize();
     snap.acqOn = digi[d]->IsAcqOn();

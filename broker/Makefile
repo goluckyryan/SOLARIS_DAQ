@@ -13,7 +13,7 @@ all: $(OUTDIR)/solaris-broker $(OUTDIR)/solaris-cli
 #--- Core objects (shared, compile without Qt) ---
 $(DIGI_OBJ): $(CORE)/ClassDigitizer2Gen.cpp $(CORE)/ClassDigitizer2Gen.h \
              $(CORE)/DigiParameters.h $(CORE)/macro.h $(CORE)/Hit.h \
-             $(CORE)/RingBuffer.h $(CORE)/RawDecoder.h
+             $(CORE)/RingBuffer.h $(CORE)/RawDecoder.h $(CORE)/LeanHit.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(INFLUX_OBJ): $(CORE)/ClassInfluxDB.cpp $(CORE)/ClassInfluxDB.h

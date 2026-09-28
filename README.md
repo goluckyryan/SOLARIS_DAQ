@@ -17,6 +17,12 @@ SOLARIS_DAQ/
 │   ├── ClassInfluxDB.h/cpp        # InfluxDB client
 │   ├── ClassElog.h/cpp            # Wrapper around the `elog` command line client (Qt)
 │   ├── ClassElogTemplate.h/cpp    # Renders the entry from `elog.template` (Qt)
+│   ├── LeanHit.h                  # 16-byte timestamped hit, fed to the online builder
+│   ├── BuiltHit.h                 # One hit inside a built event
+│   ├── OnlineEventBuilder.h/cpp   # Merges the per-board hit rings into time-correlated events
+│   ├── EventRing.h                # Buffer of built events, builder -> analysis
+│   ├── Analysis.h                 # Online analysis interface + plugin ABI (Qt-free)
+│   ├── AnalysisPlugin.h/cpp       # Scans and dlopen()s the analysis .so files
 │   └── macro.h                    # Global constants
 ├── GUI/                  # Qt6 GUI application
 │   ├── SOLARIS_DAQ.pro            # qmake project file
@@ -24,6 +30,7 @@ SOLARIS_DAQ/
 │   ├── digiSettingsPanel.h/cpp    # Register editing panel
 │   ├── scope.h/cpp                # Oscilloscope waveform display
 │   ├── SingleSpectra.h/cpp        # Energy spectra histograms
+│   ├── Analyzer.h/cpp             # Online analyzer: event builder, ring, worker threads
 │   ├── SOLARISpanel.h/cpp         # SOLARIS detector configuration
 │   └── ...                        # Custom widgets, plotting
 ├── broker/               # Digitizer broker (daemon + CLI)
@@ -32,7 +39,9 @@ SOLARIS_DAQ/
 │   ├── BrokerProtocol.h           # Binary protocol definitions
 │   ├── solaris-broker.cpp         # Broker daemon entry point
 │   └── solaris-cli.cpp            # Command-line interface
-└── Aux/                  # Offline tools (EventBuilder, etc.)
+├── analyzers/            # Online analyses; one .cpp -> one build/<name>.so
+├── docs/                 # Design documents
+└── Aux/                  # Offline tools (EventBuilder, testOnlineBuilder, etc.)
 ```
 
 ## Operating Modes
@@ -376,6 +385,325 @@ Multiple GUIs on different machines can connect by setting the broker IP in thei
 - **Multiple GUIs**: all see the same scalar/histogram data via PUB/SUB; commands are serialized via REQ/REP
 - **DAQ lock**: only active in standalone mode; skipped in broker mode (multiple GUIs allowed)
 
+## Online Event Building
+
+`OnlineEventBuilder` groups hits from all digitizers into time-correlated events while the run is
+in progress. It is plain C++ — no Qt, no CAEN_FELib, no ROOT — so the same class can be driven from
+the GUI, from a console tool replaying a file, or from a separate analyzer process.
+
+### Data flow
+
+```
+ReadDataThread (board 0) ──> hitRing 0 ─┐
+ReadDataThread (board 1) ──> hitRing 1 ─┼──> OnlineEventBuilder ──> EventRing ──> analysis
+ReadDataThread (board N) ──> hitRing N ─┘     (single consumer)
+```
+
+Each digitizer owns **one** `RingBuffer<LeanHit, 262144>` — 4 MiB, roughly 262 ms of a 1 MHz board.
+It is written only by that board's `ReadDataThread`, preserving the single-producer contract in
+`RingBuffer.h`, and read only by the builder.
+
+One ring per **board**, not per channel, because a board already emits all of its channels
+interleaved in timestamp order (see `format_RAW.md`, Aggregate Header). Splitting per channel would
+buy nothing and turn a 4-way merge into a 256-way one. `ringBuffer[]` (per-channel energies, for
+`SingleSpectra`) and `traceRingBuffer` (for the scope) are unchanged and still filled alongside.
+
+Filling the hit ring is gated by an atomic flag that is only set while the Analyzer's enable
+checkbox is ticked, so when nobody is analysing the DAQ read path pays one predictable branch.
+
+### The build horizon
+
+The core problem: when is it safe to close an event? If you emit an event at t=500 and a slower
+board then delivers its hit at t=520, you have silently turned a coincidence into two singles.
+
+Because each board emits in non-decreasing time order, once a board has delivered a hit at time
+`t` it can never deliver anything earlier. So the minimum, over boards, of *the newest timestamp
+each has delivered* is a floor under every hit still to come:
+
+```
+board 0 has delivered up to  t = 1000
+board 1 has delivered up to  t = 1500
+board 2 has delivered up to  t =  900   <-- the slowest board sets the limit
+                                  ----
+                build horizon =   900
+```
+
+An event is final only once its whole window sits below the build horizon, plus `guardTime` of
+margin. Two cases need care:
+
+- **A board that has delivered nothing yet** has an *unknown* floor, not an absent one, so the
+  horizon is forced to 0 and nothing is built until it speaks. Skipping such a board (as the
+  offline builder can safely do, since a file with no data never gets any) lets the horizon run
+  ahead and every hit that board later delivers arrives too late.
+- **A board that stops delivering** would otherwise pin the horizon forever. After `stallTimeout`
+  of no new data it is dropped from the minimum and building resumes. This is the one place data
+  can be lost: a hit the board later delivers below an already-settled boundary is counted in
+  `totalHitsLate` and discarded.
+
+The seed hit always joins its own event; later hits join while `timestamp - eventStart <
+timeWindow`. The bound is **exclusive**, matching `Aux/EventBuilder`, so the two builders agree hit
+for hit. `timeWindow = 0` means no event building: one hit per event.
+
+The merge is a linear scan over one lookahead hit per board, not a priority queue. With at most 20
+boards a scan is both faster and simpler — a heap needs side state tracking which sources are
+currently in it, and that state has to be re-synchronised every time a board runs dry and refills,
+which online is the normal case.
+
+### Parameters
+
+| Setter | Default | Meaning |
+|--------|---------|---------|
+| `SetTimeWindow(ns)` | 100 | Hits within this of the seed join the event. Exclusive bound. 0 = one hit per event. |
+| `SetGuardTime(ns)` | 1000 | Extra margin beyond the window before an event is final. Clamped to at least `timeWindow`. More margin = more latency, more tolerance to jitter between boards. |
+| `SetTimeJump(ns)` | 1e8 | A hit this far *below* the previous one from the same board means the clock restarted, not corruption. |
+| `SetStallTimeout(ms)` | 500 | Wall-clock, not timestamps. A board whose ring has not advanced for this long is dropped from the build horizon. Must exceed the longest gap you expect between deliveries from your slowest board. |
+
+`Reset()` must be called on ACQ start. `StartACQ()` restarts the board timestamp counter but does
+not clear the host ring, so without it the builder sees pre-reset hits with huge timestamps ahead
+of new hits near zero. `BuildEvents(true)` at end of run flushes whatever is left.
+
+### Counters
+
+`PrintStat()` prints these, and the Analyzer window shows them. They should be zero in a healthy
+run.
+
+| Counter | Non-zero means |
+|---------|----------------|
+| `totalHitsDropped` | The ring lapped: the builder could not keep up, or was not called often enough. |
+| `totalHitsLate` | Hits arrived below an already-settled boundary. Expected cause is a stalled board rejoining; raise `stallTimeout`. |
+| `timeJumpEvents` | A board's clock restarted. Usually a missing `Reset()` on ACQ start. |
+| `monotonicityViolations` | **Hits out of order within one board.** The merge assumes per-board time ordering; if this fires, the events are not trustworthy. |
+| `eventsDropped` (event ring) | The analysis could not keep up — events lost, raw hits fine. This is the ring doing its job. |
+
+### Assumptions and limits
+
+- **Per-board timestamp ordering is load-bearing.** Documented in `format_RAW.md` and verified on
+  ~23M hits of PHA / no-waveform data. Not yet verified for PSD multi-channel or the raw-blob path;
+  `monotonicityViolations` is the tripwire.
+- **Boards must share a clock and start together.** The builder normalises units (every timestamp
+  is ns by the time it reaches the ring, scaled by that board's own `tick2ns`) but does not correct
+  for a per-board time offset.
+- **`EnDataReduction` firmware mode is incompatible.** Single-word events carry only a 32-bit
+  reduced timestamp, which wraps every ~34 s at 8 ns/LSB, and `RawDecoder` passes it up as if it
+  were the full 48-bit value.
+- **`flagsHigh` is 0 in the `Minimum` and `MiniWithFineTime` formats** — those do not read the
+  flags from the digitizer, so a pile-up cut would silently keep everything.
+- The builder is **single-consumer**; only one thread may call `BuildEvents()` / `Reset()`.
+
+### Testing without hardware
+
+`Aux/testOnlineBuilder` verifies the builder with no digitizer, no Qt and no ROOT:
+
+```bash
+make -C Aux tools
+
+./Aux/testOnlineBuilder --selftest                        # the full ladder, non-zero exit on failure
+./Aux/testOnlineBuilder --synth --boards 4 --dump         # synthetic multi-board data
+./Aux/testOnlineBuilder --replay run_0_51554_000.sol --window 100000000
+./Aux/testOnlineBuilder --threaded --boards 4             # pushers racing the drain; run under TSan
+```
+
+`--selftest` checks the streaming output against a simple sorted-vector reference builder, checks
+that the result is identical for push chunk sizes of 1 / 17 / 1000 / all-at-once (which is what
+really exercises the build horizon), forces a ring lap and verifies every hit is accounted for as
+either built or dropped, and confirms that a board going silent does not freeze the build.
+
+## Online Analyzer
+
+The Analyzer window turns built events into histograms. It owns the event builder, the event ring
+and two worker threads, and an analysis is a small Qt-free class, built into its own `.so` and
+loaded at runtime.
+
+> **Standalone mode only.** The builder reads each board's in-process hit ring, which is filled by
+> whichever process holds the CAEN connection. In broker mode that is the daemon, so the GUI has no
+> hit data and the Analyzer button stays disabled. Run the GUI standalone to use it.
+
+### Control model
+
+**Nothing is tied to ACQ start/stop.** If the window is not open, no builder exists and nothing
+runs. When it is open, a single checkbox enables event building and analysis together, and while
+that box is unticked the digitizers do not even fill their hit rings.
+
+Toggling off stops the builder, flushes the tail through the analysis, clears the fill flag, and
+clears the event ring and every hit ring. Toggling on clears again (now provably with no producer
+running), resets the builder's cursors, then starts filling. The toggle is the only run boundary,
+which is why there is no epoch or generation counter anywhere.
+
+Restarting ACQ while the toggle is on is safe: the board timestamp counter restarts, the builder
+sees a large backwards jump, and the `timeJump` rule re-anchors and counts it.
+
+### Threads
+
+```
+per-board hitRing ──> builder thread ──> EventRing ──> analysis thread ──> atomic count arrays
+                      BuildEvents()                    ProcessEvent()             │
+                                                                                  v
+                                                              GUI thread, 2 Hz: histogram widgets
+```
+
+Two threads rather than one is what makes the ring earn its keep: if an analysis is slow, events
+queue in the ring instead of the builder stalling and letting the per-board hit rings lap. Losing
+events is recoverable; losing raw hits is not.
+
+Ownership is strict, and that is what removes every lock:
+
+| Thread | Owns |
+|--------|------|
+| builder | `OnlineEventBuilder` state — cursors, fronts, build horizon |
+| analysis | the `EventRing::Reader`, the `Analysis` instance, its parameter variables |
+| GUI | every Qt widget |
+
+The only cross-thread paths are the lock-free `EventRing` and `Qt::BlockingQueuedConnection` calls
+into the worker that owns the state. **That marshalling is the fence** — a parameter change runs on
+the analysis thread between two `ProcessEvent()` calls, which is why an analysis can keep plain
+`int` members with no atomics.
+
+### Never fill a histogram from a worker thread
+
+`Histogram1D::Fill()` assigns a `QString` into a `QCPItemText` on every call. The refcount is
+atomic but the d-pointer store is not, so a worker can free the buffer the GUI thread is reading in
+`draw()`. `Histogram2D::Fill()` additionally walks `cutList` while the operator may be drawing a
+cut. Both are use-after-free, not cosmetic.
+
+So the registry accumulates into plain `std::atomic<uint32_t>` arrays on the worker, and only the
+GUI thread publishes them into the widgets, through `Histogram1D::SetBinContents()` and
+`Histogram2D::SetCellContents()`. An analysis never sees a widget, so it cannot get this wrong.
+
+(`SingleSpectra` still fills from its worker. That predates this and should eventually move to the
+same discipline; do not copy it.)
+
+### Writing an analysis
+
+Drop one `.cpp` in `analyzers/` and run `make -C analyzers`. No other file changes, and no DAQ
+rebuild — each analysis compiles into its own `analyzers/build/<name>.so`, which the window loads
+at runtime.
+
+```cpp
+#include "../core/Analysis.h"
+
+class MyAnalysis : public Analysis {
+  int digiA = 0, chA = 0;      // plain members: the host writes them on the analysis thread
+  int hE = -1, hEE = -1;
+public:
+  void Declare(HistRegistry & reg, const AnalysisContext & ctx) override {
+    reg.ChannelParam("Channel A", &digiA, &chA);          // host builds the combo boxes
+    hE  = reg.Hist1D("Energy", "E [ch]", 512, 0, 30000, /*row*/0, /*col*/0);
+    hEE = reg.Hist2D("E vs E", "E(A)", "E(B)", 256, 0, 30000, 256, 0, 30000, 0, 1);
+  }
+
+  void ProcessEvent(const BuiltHit * hits, int n, HistRegistry & reg) override {
+    for( int i = 0; i < n; i++ ){
+      if( hits[i].digi == digiA && hits[i].channel == chA ) reg.Fill1(hE, hits[i].energy);
+    }
+  }
+};
+
+ANALYSIS_ENTRY(MyAnalysis, "My Analysis");
+```
+
+`ANALYSIS_ENTRY` works in both link modes: it emits the plugin's C entry points when built as a
+`.so` (`-DANALYSIS_PLUGIN_BUILD`, which `analyzers/Makefile` sets), and a static registrar when
+linked directly into `Aux/testOnlineBuilder`. `REGISTER_ANALYSIS` is the older spelling and is
+static-only.
+
+**One analysis per file.** The plugin entry points are `extern "C"` with fixed names, so a second
+`ANALYSIS_ENTRY` in the same `.so` is a duplicate-symbol error.
+
+`Fill1` and `Fill2` are named apart on purpose: 1D and 2D ids are separate spaces, so filling a 2D
+histogram with a 1D call cannot silently land data in the wrong plot.
+
+#### What a hit contains
+
+`ProcessEvent` receives `n` hits **in ascending timestamp order**, so `hits[0]` is the earliest and
+`hits[n-1].timestamp - hits[0].timestamp` is below the configured time window.
+
+| `BuiltHit` field | |
+|---|---|
+| `timestamp` | `uint64_t`, ns |
+| `fine_timestamp` | `uint16_t`, sub-tick time scaled by `tick2ns` (see `core/LeanHit.h`) |
+| `energy` | `uint16_t` |
+| `energy_short` | `uint16_t`, PSD only; 0 under PHA firmware |
+| `sn` | `uint16_t`, board serial number |
+| `digi` | `uint8_t`, the board number the GUI shows |
+| `channel` | `uint8_t` |
+| `flagsHigh` | `uint8_t`, quality flags — see `LeanHitFlag` in `core/LeanHit.h` |
+
+`flagsHigh` carries `PileUp`, `EventSaturation`, `PostSaturation`, `ChargeOverflow`, `SCASelected`
+and `FineTSValid`, so `if( hits[i].flagsHigh & LeanHitFlag::PileUp ) continue;` is the usual veto.
+**But those bits are zero in the `Minimum` and `MiniWithFineTime` data formats** — the digitizer is
+not asked for flags there — so a pile-up cut silently keeps everything. Check the data format
+before relying on them.
+
+#### What the host tells you
+
+```cpp
+struct AnalysisContext {
+  int             nBoards;     // boards feeding the builder; dummies and unconnected are excluded
+  const uint8_t * nChannels;   // nBoards entries; boards can differ
+  uint64_t        timeWindow;  // the builder's window in ns, so dt binning can match
+};
+```
+
+Note `nBoards` counts only real boards, so it is not necessarily `nDigi` — but `BuiltHit::digi` is
+still the GUI's board number, so the two agree on labelling.
+
+#### Full registry API
+
+```cpp
+int  Hist1D(name, xLabel, nBin, xMin, xMax, row, col);
+int  Hist2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, row, col);
+void Fill1(id, x);
+void Fill2(id, x, y);
+void ChannelParam(label, int * digi, int * channel);   // host builds two combo boxes
+void BoolParam(label, bool * value);                   // host builds a checkbox
+```
+
+`row`/`col` place the plot in the window's grid. Parameters are written by the host on the analysis
+thread and **the histograms are cleared whenever one changes**, so a plot never mixes counts from
+two different channel selections.
+
+Thread contract: `Declare()` runs on the GUI thread with the workers stopped (it is where widgets
+get created); `ProcessEvent()`, `OnRunStart()` and `OnRunStop()` run on the analysis thread. Nothing
+an analysis implements is ever entered concurrently with anything else it implements.
+
+`analyzers/Coincidence.cpp` is the worked example: E(A) vs E(B), tB − tA, and multiplicity, with
+both channels chosen at runtime.
+
+#### Edit, rebuild and reload without restarting
+
+The window has **Rebuild** and **Reload** buttons. Rebuild shells out to
+`make -C analyzers build/<name>.so` and shows the compiler output in the log pane; if the build
+fails the running analysis is left untouched, so a typo mid-run costs nothing. Reload stops both
+workers, flushes, re-scans `analyzers/build/` and `dlopen`s the new `.so`.
+
+The host refuses a `.so` whose `ANALYSIS_ABI_VERSION` does not match its own rather than crashing
+in a vtable call. Bump that constant in `core/Analysis.h` whenever `Analysis`, `HistRegistry`,
+`AnalysisContext` or `BuiltHit` changes shape.
+
+An analysis references no host symbol — `Analysis` and `HistRegistry` are pure abstract, so every
+call crosses a vtable. Check it stays that way with `nm -D -u analyzers/build/Coincidence.so`:
+only libc / libstdc++ should appear.
+
+#### Testing an analysis without a digitizer
+
+An analysis can be driven over a `.sol` file or synthetic data with no hardware, no Qt and no GUI —
+which also proves the registration works before you ever open the window:
+
+```bash
+make -C Aux tools
+
+# real data
+./Aux/testOnlineBuilder --replay run_0_51554_000.sol --window 100000000 \
+                        --analysis "My Analysis" --chA 0 0 --chB 0 1
+
+# synthetic two-board coincidences, when the real file has only one channel
+./Aux/testOnlineBuilder --synth --boards 2 --coinc 20000 --seconds 1 --window 200 \
+                        --analysis "My Analysis" --chA 0 0 --chB 1 0
+```
+
+It prints the declared histograms, the parameters, and a fill tally per histogram with means and
+under/overflow counts — enough to see whether the analysis is doing what you expect.
+
 ## Build
 
 ### Prerequisites
@@ -403,12 +731,27 @@ All executables are placed in the project root:
 - `solaris-broker` — broker daemon
 - `solaris-cli` — command-line client
 
+### Compile the Online Analyses
+
+Analyses are **not** linked into the GUI. Each builds into its own shared object, loaded at
+runtime by the Analyzer window:
+
+```bash
+make -C analyzers                 # every analysis -> analyzers/build/*.so
+make -C analyzers build/Foo.so    # just one
+make -C analyzers clean
+```
+
+No Qt, CAEN or ROOT is needed, and the DAQ does not have to be rebuilt or restarted — use the
+window's Rebuild / Reload buttons.
+
 ### Compile Auxiliary Tools
 
 ```bash
 cd Aux/
 make EventBuilder   # requires ROOT
 make test           # register and raw decode tests
+make tools          # testOnlineBuilder: no ROOT, no CAEN, no Qt - builds anywhere
 ```
 
 ### Using CAENDig2.h
@@ -537,6 +880,22 @@ is reported as unresolved in the log panel.
 - Sometimes the digitizer halts after `/cmd/armacquisition` (CAEN library issue).
 - Event/Wave trigger source cannot be set as SWTrigger.
 - After CAEN_FELib v1.2.5 and CAEN_DIG2 v1.5.10, firmware before 202309XXXX not supported.
+
+## Design documents
+
+`docs/` holds the reasoning behind the design — why things are the way they are, rather than how to
+use them. Read these before changing the threading, the settings handling or the file format.
+
+| Document | |
+|---|---|
+| [docs/threading-model.md](docs/threading-model.md) | Threading and data ownership: which thread owns what, and why there are so few locks |
+| [docs/online-analysis-design.md](docs/online-analysis-design.md) | Online analysis: the pipeline, the build horizon, and the alternatives that were rejected |
+| [docs/run-lifecycle.md](docs/run-lifecycle.md) | The run lifecycle, start to stop |
+| [docs/settings-system.md](docs/settings-system.md) | The settings system: the register cache, and when it is written through |
+| [docs/sol-file-format.md](docs/sol-file-format.md) | The `.sol` file format (see also `format_RAW.md` for the CAEN aggregate layout) |
+| [docs/experiment-workflow.md](docs/experiment-workflow.md) | Experiment setup: settings file, git, and the analysis folder |
+| [docs/plan-dummy-generator.md](docs/plan-dummy-generator.md) | Plan (not implemented): dummy digitizers as signal generators |
+| [docs/plan-broker-analysis.md](docs/plan-broker-analysis.md) | Plan (not implemented): online analysis in broker mode |
 
 ## Wiki
 

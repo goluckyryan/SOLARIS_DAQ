@@ -34,7 +34,9 @@ InfluxDB::~InfluxDB(){
 
 void InfluxDB::SetURL(std::string url){
   // check the last char of url is "/"
-  if( url.back() != '/') {
+  if( url.empty() ){          // std::string::back() on an empty string is undefined
+    this->databaseIP = "";
+  }else if( url.back() != '/') {
     this->databaseIP = url + "/";
   }else{
     this->databaseIP = url;
@@ -77,7 +79,9 @@ std::string InfluxDB::CheckInfluxVersion(bool debug){
     influxVersionStr = match[1];
 
     size_t dotPosition = influxVersionStr.find('.');
-    if( dotPosition != std::string::npos){
+    /// dotPosition > 0, not just "found": at position 0 the substr() below underflows size_t and
+    /// throws std::out_of_range, out of a function nobody wraps in a try.
+    if( dotPosition != std::string::npos && dotPosition > 0 ){
       influxVersion = atoi(influxVersionStr.substr(dotPosition-1, 1).c_str());
     }
   }
@@ -249,6 +253,20 @@ void InfluxDB::WriteData(std::string databaseName){
 
 void InfluxDB::Execute(){
   // printf(" InfluxDB::%s \n", __func__);
+  if( curl == nullptr ){ respond = CURLE_FAILED_INIT; return; }
+
+  /// Bounded, because this is called from MainWindow::UpdateScalar() on the GUI THREAD, every two
+  /// seconds, for the whole run. With no timeout set, curl's default is effectively forever: a
+  /// database host that accepts the TCP connection and then stalls -- a wedged container, a
+  /// firewall that blackholes established flows -- freezes the entire DAQ user interface, with no
+  /// indication that the database is what is wrong. Losing a couple of scalar points is the right
+  /// trade.
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 1000L);
+  curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS,        3000L);
+  /// Without this, libcurl's DNS resolver can take the whole process down when it times out in a
+  /// thread that is not the one that armed the alarm.
+  curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
   try{
     respond = curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &respondCode);

@@ -1,4 +1,4 @@
-#include "../RawDecoder.h"
+#include "../core/RawDecoder.h"
 #include <cstdio>
 #include <cstdlib>
 #include <vector>

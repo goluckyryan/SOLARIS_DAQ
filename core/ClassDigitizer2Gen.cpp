@@ -12,6 +12,14 @@ Digitizer2Gen::Digitizer2Gen(){
 Digitizer2Gen::~Digitizer2Gen(){
   printf("========Digitizer2Gen::%s (%d)\n",__func__, serialNumber);
   if(isConnected ) CloseDigitizer();
+
+  /// hit is allocated by SetDataFormat() and was never freed here, so every digitizer leaked its
+  /// whole Hit on destruction: 97 KB of probe arrays under the DPP formats, and 20 MB under Raw
+  /// because of the blob buffer. CloseDigitizers() deletes every board, so an open/close cycle on
+  /// 20 boards in Raw leaked ~400 MB. ~Hit() releases everything it owns.
+  /// Safe here: MainWindow::CloseDigitizers() joins the read thread before deleting the digitizer,
+  /// and ReadDataThread::run() is the only other thing that touches hit.
+  if( hit ){ delete hit; hit = NULL; }
 }
 
 void Digitizer2Gen::Initialization(){
@@ -166,12 +174,14 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
 
   int index = FindIndex(para);
   if( index < 0 ) return ans; // unknown parameter, nothing to cache
+  /// All four indexed cases are bounded, not just CH. ch_index defaults to -1, and the VGA, LVDS
+  /// and GROUP arrays are 4, 4 and 16 long -- far shorter than the channel counts that reach here.
   switch( para.GetType()){
-    case TYPE::CH  : if( ch_index >= 0 && ch_index < MaxNumberOfChannel ) chSettings[ch_index][index].SetValue(ans); break;
-    case TYPE::DIG : boardSettings[index].SetValue(ans); break;
-    case TYPE::VGA : VGASetting[ch_index].SetValue(ans); break;
-    case TYPE::LVDS: LVDSSettings[ch_index][index].SetValue(ans);break;
-    case TYPE::GROUP: InputDelay[ch_index].SetValue(ans); break;
+    case TYPE::CH  : if( ch_index >= 0 && ch_index < MaxNumberOfChannel && index < (int) chSettings[ch_index].size() ) chSettings[ch_index][index].SetValue(ans); break;
+    case TYPE::DIG : if( index < (int) boardSettings.size() ) boardSettings[index].SetValue(ans); break;
+    case TYPE::VGA : if( ch_index >= 0 && ch_index < 4 ) VGASetting[ch_index].SetValue(ans); break;
+    case TYPE::LVDS: if( ch_index >= 0 && ch_index < 4 && index < (int) LVDSSettings[ch_index].size() ) LVDSSettings[ch_index][index].SetValue(ans);break;
+    case TYPE::GROUP: if( ch_index >= 0 && ch_index < MaxNumberOfGroup ) InputDelay[ch_index].SetValue(ans); break;
   }
   
   //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
@@ -238,9 +248,12 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
       switch(para.GetType()){
         case TYPE::CH :{
           if( ch_index >= 0 ){
-            chSettings[ch_index][index].SetValue(value);
+            if( ch_index < MaxNumberOfChannel && index < (int) chSettings[ch_index].size() )
+              chSettings[ch_index][index].SetValue(value);
           }else{
-            for( int ch = 0; ch < nChannels; ch++ ) chSettings[ch][index].SetValue(value);
+            for( int ch = 0; ch < nChannels && ch < MaxNumberOfChannel; ch++ ){
+              if( index < (int) chSettings[ch].size() ) chSettings[ch][index].SetValue(value);
+            }
           }
 
           //if( ch_index < 0 ) ch_index = 0;
@@ -250,7 +263,9 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
         }break;
         
         case TYPE::VGA : {
-          VGASetting[ch_index].SetValue(value); 
+          /// Bounded like the CH case above: VGASetting is 4 long and ch_index defaults to -1.
+          if( ch_index < 0 || ch_index >= 4 ) break;
+          VGASetting[ch_index].SetValue(value);
 
           //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
           //                      VGASetting[ch_index].GetFullPara(ch_index).c_str(), 
@@ -258,6 +273,7 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
         }break;
 
         case TYPE::DIG : {
+          if( index >= (int) boardSettings.size() ) break;
           boardSettings[index].SetValue(value);
           //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
           //                     boardSettings[index].GetFullPara(ch_index).c_str(), 
@@ -265,11 +281,15 @@ bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
         }break;
         
         case TYPE::LVDS : {
-          LVDSSettings[ch_index][index].SetValue(value); 
+          if( ch_index < 0 || ch_index >= 4 || index >= (int) LVDSSettings[ch_index].size() ) break;
+          LVDSSettings[ch_index][index].SetValue(value);
         }break;
-        
+
         case TYPE::GROUP : {
-          InputDelay[ch_index].SetValue(value); 
+          /// InputDelay is MaxNumberOfGroup (16) long, but the panel can hand this a channel
+          /// number when a GROUP parameter is edited with the channel picker active.
+          if( ch_index < 0 || ch_index >= MaxNumberOfGroup ) break;
+          InputDelay[ch_index].SetValue(value);
           // printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
           //                     InputDelay[ch_index].GetFullPara(ch_index).c_str(), 
           //                     InputDelay[ch_index].GetValue().c_str()); 
@@ -756,6 +776,12 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
 
 int Digitizer2Gen::ReadStat(){
 
+  /// Under Raw, ReadData() on the DAQ thread already fills realTime/deadTime/liveTime/
+  /// triggerCount/savedEventCount from the decoder's time-counter events. Reading the stats
+  /// endpoint here, from the GUI timer thread, would write the same five arrays concurrently --
+  /// and the decoder's numbers are the authoritative ones on that path anyway.
+  if( hit && hit->dataType == DataFormat::Raw ) return CAEN_FELib_Success;
+
   int ret = CAEN_FELib_ReadData(stat_handle, 100,
         realTime,
         deadTime,
@@ -783,6 +809,13 @@ void Digitizer2Gen::PrintStat(){
 
 int Digitizer2Gen::ReadData(){
   //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
+
+  /// Above the FPGAType guard, because that guard does NOT stop a dummy: SetDummy() sets
+  /// FPGAType to DPP_PHA, so a dummy falls straight through to hit->dataType below — and hit is
+  /// null for a dummy, since only SetDataFormat() allocates it and that returns early when the
+  /// CAEN handle is 0. Stop rather than Timeout: ReadDataThread::run() has no sleep of its own,
+  /// so every other code loops straight back in and spins a core.
+  if( isDummy || hit == NULL ) return CAEN_FELib_Stop;
 
   if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
 
@@ -985,6 +1018,16 @@ int Digitizer2Gen::ReadData(){
       while( rawDecoder.Next(decoded) ){
         if( decoded.channel < nChannels ){
           ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
+          /// Both timestamps are raw here (RawDecoder.h:16-17), so apply the same scaling the DPP
+          /// path below applies in place: timestamp -> ns, fine_timestamp -> units of 1/1024 ns.
+          /// Only filled when something is actually analysing; see fillHitRing.
+          if( fillHitRing.load(std::memory_order_relaxed) ){
+            hitRing.push({ decoded.timestamp * tick2ns,
+                           decoded.energy, decoded.energy_short,
+                           (uint16_t)(decoded.fine_timestamp * tick2ns),
+                           decoded.channel,
+                           (uint8_t)(decoded.flags_high_priority & 0xFF) });
+          }
         }
       }
 
@@ -1011,13 +1054,33 @@ int Digitizer2Gen::ReadData(){
     return ret;
   }
 
-  hit->timestamp     *= tick2ns;
-  hit->fine_timestamp *= tick2ns;
-
-  //======== fill per-channel ring buffer for histogram
-  if( hit->dataType != DataFormat::Raw ){
+  //======== fill the ring buffers for the histograms and the event builder
+  /// Done BEFORE the in-place scaling below, so both fields are scaled explicitly here and the
+  /// raw-decode path above can apply exactly the same scaling to its own raw values.
+  /// The channel guard also covers the histogram ring, which was missing one (the raw path has it).
+  if( hit->dataType != DataFormat::Raw && hit->channel < nChannels ){
     ringBuffer[hit->channel].push({hit->energy, hit->energy_short});
+    /// Only filled when something is actually analysing; see fillHitRing.
+    if( fillHitRing.load(std::memory_order_relaxed) ){
+      hitRing.push({ hit->timestamp * tick2ns,
+                     hit->energy, hit->energy_short,
+                     (uint16_t)(hit->fine_timestamp * tick2ns),
+                     hit->channel,
+                     (uint8_t)(hit->flags_high_priority & 0xFF) });
+    }
   }
+
+  hit->timestamp     *= tick2ns;
+
+  /// Both fields are meant to carry physical time: timestamp in ns, fine_timestamp in ps.
+  /// timestamp is exact. fine_timestamp is within 2.4%: the raw field is a 10-bit fraction of one
+  /// tick, so a true picosecond value is raw * tick2ns * 1000/1024 (= 7.8125 ps per LSB at
+  /// tick2ns 8, per format_RAW.md:308), while this scales by tick2ns alone and so reads 1024/1000
+  /// high. Combining coarse + fine as ts + fine/1000 therefore overshoots the tick boundary by
+  /// ~190 ps at the top of the fine range, which shows up as a sawtooth in timing spectra.
+  /// Not changed here because the same convention is in Aux/EventBuilderRaw.cpp:137 and is already
+  /// baked into every .sol file; correcting it means changing all of them together.
+  hit->fine_timestamp *= tick2ns;
 
   //======== fill trace ring buffer for scope
   if( !hit->isTraceAllZero ){
@@ -1052,9 +1115,14 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
 
 }
 
+/// Idempotent: outFile is nulled, so a second call does nothing. Two paths reach here -- the
+/// end-of-run loop in MainWindow::StopACQ() and MainWindow::CloseDigitizers() -- and without the
+/// null, the second fclose() would be on an already-closed FILE*, and SaveDataToFile()'s
+/// "if( outFile == NULL ) return" guard would be looking at a dangling pointer.
 void Digitizer2Gen::CloseOutFile(){
   if( outFile != NULL ) {
     fclose(outFile);
+    outFile = NULL;
     int result = chmod(outFileName, S_IRUSR | S_IRGRP | S_IROTH);
     if( result != 0 ) printf("somewrong when set file (%s) to read only.", outFileName);
   }
@@ -1064,7 +1132,7 @@ void Digitizer2Gen::SaveDataToFile(){
 
   if( outFile == NULL ) return;
 
-  if( outFileSize > (unsigned int) MaxOutFileSize){
+  if( (unsigned long) outFileSize > MaxOutFileSize ){
     FinishedOutFilesSize += ftell(outFile);
     CloseOutFile();
     outFileIndex ++;
@@ -1560,8 +1628,11 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
     }
 
     if( setReadOnly ){
-      int result = chmod(saveFileName, S_IRUSR | S_IRGRP | S_IROTH);
-      if( result != 0 ) printf("somewrong when set file (%s) to read only.", saveFileName);
+      /// settingFileName, not saveFileName: the parameter defaults to NULL (meaning "reuse the
+      /// stored name"), and chmod(NULL, ...) is undefined. settingFileName is the name actually
+      /// written to, whichever way the caller asked.
+      int result = chmod(settingFileName.c_str(), S_IRUSR | S_IRGRP | S_IROTH);
+      if( result != 0 ) printf("somewrong when set file (%s) to read only.", settingFileName.c_str());
     }
 
     //printf("Saved setting files to %s\n", saveFileName);
@@ -1600,13 +1671,19 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       int count = 0;
       while( token != nullptr){
 
-        char * end = std::remove_if(token, token + std::strlen(token), [](char c) {
-          return std::isspace(c);
-        });
-        *end = '\0';
-
+        /// Trim the ends only. This used to remove_if() every space in the token, which also
+        /// collapsed spaces INSIDE a value: a multi-source setting saved as "SwTrg | TestPulse"
+        /// (the form ProgramChannels() writes) came back as "SwTrg|TestPulse" and was written to
+        /// the board in that shape.
         size_t len = std::strcspn(token, "\n");
-        if( len > 0 ) token[len] = '\0';
+        token[len] = '\0';
+
+        char * beg = token;
+        while( *beg != '\0' && std::isspace((unsigned char) *beg) ) beg++;
+        char * end = beg + std::strlen(beg);
+        while( end > beg && std::isspace((unsigned char) *(end-1)) ) end--;
+        *end = '\0';
+        token = beg;
 
         if( count == 0 ) para = token;
         if( count == 1 ) readWrite = token;
@@ -1619,10 +1696,15 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       }
 
       int id = atoi(idStr.c_str());
-      if( id < 7000){ // channel
+      /// A malformed or missing id used to fall through to the channel branch and index with a
+      /// negative value. Only the upper bounds were ever checked.
+      if( id < 0 ){
+        printf("LoadSettingsFromFile: ignoring line with bad id |%s| (%s)\n",
+               idStr.c_str(), para.c_str());
+      }else if( id < 7000){ // channel
         int ch = id / 100;
         int index = id - ch * 100;
-        if( ch < nChannels && index < (int) chSettings[ch].size() )
+        if( ch < nChannels && index >= 0 && index < (int) chSettings[ch].size() )
           chSettings[ch][index].SetValue(value.c_str());
         //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
         //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(),
@@ -1662,15 +1744,28 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
   
 }
 
+/// Every index is bounded here. The arrays have very different lengths -- chSettings[64],
+/// VGASetting[4], LVDSSettings[4], InputDelay[16] -- and ch_index reaches this from panel code and
+/// from a user-supplied Mapping.h, so a channel number landing on the VGA or LVDS case walks off
+/// the end of a Reg array and reads std::strings out of unrelated memory. Same guard style as
+/// GetChSettingByName() below.
 std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned int ch_index) {
   int index = FindIndex(para);
   if( index < 0 ) return "invalid";
+  const unsigned int ch = ch_index;
   switch (para.GetType()){
-    case TYPE::DIG:   return boardSettings[index].GetValue();
-    case TYPE::CH:    return chSettings[ch_index][index].GetValue();
-    case TYPE::VGA:   return VGASetting[ch_index].GetValue();
-    case TYPE::LVDS:  return LVDSSettings[ch_index][index].GetValue();
-    case TYPE::GROUP: return InputDelay[ch_index].GetValue();
+    case TYPE::DIG:
+      return ( index < (int) boardSettings.size() ) ? boardSettings[index].GetValue() : "invalid";
+    case TYPE::CH:
+      if( ch >= MaxNumberOfChannel || index >= (int) chSettings[ch].size() ) return "invalid";
+      return chSettings[ch][index].GetValue();
+    case TYPE::VGA:
+      return ( ch < 4 ) ? VGASetting[ch].GetValue() : "invalid";
+    case TYPE::LVDS:
+      if( ch >= 4 || index >= (int) LVDSSettings[ch].size() ) return "invalid";
+      return LVDSSettings[ch][index].GetValue();
+    case TYPE::GROUP:
+      return ( ch < MaxNumberOfGroup ) ? InputDelay[ch].GetValue() : "invalid";
     default : return "invalid";
   }
   return "no such parameter";

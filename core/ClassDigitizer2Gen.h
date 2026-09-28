@@ -3,15 +3,20 @@
 
 
 #include <CAEN_FELib.h>
+#include <atomic>
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
 
 #include "Hit.h"
+#include "LeanHit.h"
 #include "RingBuffer.h"
 #include "RawDecoder.h"
 
-#define MaxOutFileSize 2*1024*1024*1024  //2GB
+/// UL, and parenthesised. As bare `2*1024*1024*1024` this is signed-int overflow, i.e. undefined;
+/// it only produced the intended value because its single use casts the leading 2 to unsigned,
+/// which quietly made the whole expression unsigned arithmetic. Any other use would have been UB.
+#define MaxOutFileSize (2UL*1024*1024*1024)  //2GB
 //#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
 #define MaxNumberOfGroup 16
@@ -152,6 +157,17 @@ class Digitizer2Gen {
     
     RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];
     RingBuffer<TraceSnapshot, TraceRingBufferSize> traceRingBuffer;
+
+    /// Timestamped hits for online event building. ONE ring for the whole board, not one per
+    /// channel: the board already emits all channels interleaved in timestamp order
+    /// (format_RAW.md:91), so splitting per channel would only force a 64-way merge.
+    /// Written by ReadDataThread only — single producer, like the rings above.
+    RingBuffer<LeanHit, LeanHitRingSize> hitRing;
+
+    /// Filling hitRing is opt-in, so the DAQ pays nothing for online event building when nobody is
+    /// analysing. Set by the Analyzer window's enable toggle; read on the DAQ hot path, where a
+    /// relaxed load is a plain mov. Off by default: hitRing stays empty until something asks.
+    std::atomic<bool> fillHitRing{false};
 
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
