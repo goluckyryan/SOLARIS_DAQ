@@ -92,4 +92,5 @@ EventBuilderRaw
 Aux/debug_raw
 Aux/check*
 Aux/testOnlineBuilder
-*.sol_raw
+Aux/testRawDecoder
+*.raw

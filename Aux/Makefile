@@ -29,5 +29,8 @@ ClassInfluxDB.o : ../ClassInfluxDB.cpp ../ClassInfluxDB.h
 test: test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit.h
 	$(CC) $(CFLAG) test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o test -lcurl -lCAEN_FELib -lX11
 
+testRawDecoder: testRawDecoder.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit.h
+	$(CC) $(CFLAG) testRawDecoder.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o testRawDecoder -lcurl -lCAEN_FELib -lX11
+
 clean:
-	-rm EventBuilder EventBuilderRaw test testOnlineBuilder
+	-rm EventBuilder EventBuilderRaw test testRawDecoder testOnlineBuilder

@@ -1,7 +1,7 @@
 # The `.sol` file format
 
 The on-disk format the DAQ writes for every normal run. `format_RAW.md` covers a different thing —
-the raw endpoint blob and the `.sol_raw` container — so this is the one you need to read ordinary
+the raw endpoint blob and the `.raw` container — so this is the one you need to read ordinary
 SOLARIS data.
 
 **The format is defined by two pieces of code that must agree byte for byte:**
@@ -26,7 +26,7 @@ built in `MainWindow::StartACQ` (`mainwindow.cpp:498-511`) and finished by
 `Digitizer2Gen::OpenOutFile()`, which appends `_%03d` and the extension. `digiIdx` is
 right-justified to 2 digits, `fileIndex` to 3.
 
-- Extension is **`.sol_raw`** when the data format is `Raw`, **`.sol`** otherwise.
+- Extension is **`.raw`** when the data format is `Raw`, **`.sol`** otherwise.
 - One file per **board**, so a run with 3 boards produces at least 3 files.
 - At `MaxOutFileSize` (2 GB) the writer closes the file, increments `fileIndex` and opens the next.
   Those parts are a single continuous stream — the offline `Aux/EventBuilder` groups them by
@@ -65,7 +65,7 @@ property of this format, since a file is self-describing block by block.
 | `0xAA02` / `0xAA12` | NoTrace | metadata only |
 | `0xAA03` / `0xAA13` | Minimum | channel, energy, timestamp |
 | `0xAA04` / `0xAA14` | MiniWithFineTime | Minimum + fine timestamp |
-| `0xAA0A` / `0xAA1A` | Raw | opaque blob, `.sol_raw` — see `format_RAW.md` |
+| `0xAA0A` / `0xAA1A` | Raw | opaque blob, `.raw` — see `format_RAW.md` |
 
 All fields are **little-endian**, written with raw `fwrite` of the in-memory value. There is no
 padding and no alignment: fields are packed back to back.
@@ -138,7 +138,7 @@ Note this is **not** `OneTrace` plus extras — the metadata block is longer and
 | analog_probes[1] | `traceLenght * 4` | |
 | digital_probes[0..3] | `traceLenght` each | 1 byte per sample |
 
-### `Raw` (0xAA0A / 0xAA1A) — `.sol_raw`
+### `Raw` (0xAA0A / 0xAA1A) — `.raw`
 
 | field | size |
 |---|---|
@@ -148,6 +148,17 @@ Note this is **not** `OneTrace` plus extras — the metadata block is longer and
 
 The blob is the digitizer's own format; `format_RAW.md` documents its contents and `RawDecoder`
 unpacks it.
+
+Two consequences of the data never being decoded on the way in:
+
+- **`EnStatEvents` must be on.** `ReadStat()` returns early under Raw, because the DAQ thread
+  already fills `realTime`/`deadTime`/`liveTime`/`triggerCount`/`savedEventCount` from the
+  decoder's time-counter events; reading the stats endpoint from the GUI timer thread as well
+  would race it. So those events *are* the rate display. `StartACQ()` forces the setting on when
+  Raw is selected, but a board programmed elsewhere will show zero rates without it.
+- **The scope cannot run on Raw.** `ReadData()` sets `isTraceAllZero`, so no trace ever reaches
+  `traceRingBuffer`. `StartScope()` forces `DataFormat::ALL` for the duration; `StartACQ()`
+  re-reads the combo box on the next run, so the Raw selection restores itself.
 
 ---
 
@@ -204,5 +215,5 @@ while( !reader.IsEndOfFile() ){
 `hit` is one reusable object, not a new allocation per block — copy anything you need to keep.
 
 To turn files into time-correlated events offline, use `Aux/EventBuilder` (`.sol`, needs ROOT) or
-`Aux/EventBuilderRaw` (`.sol_raw`). Both merge the per-board streams by timestamp and apply a
+`Aux/EventBuilderRaw` (`.raw`). Both merge the per-board streams by timestamp and apply a
 coincidence window; see `online-analysis-design.md` for how the online builder differs.

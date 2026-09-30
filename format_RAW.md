@@ -244,13 +244,13 @@ To acquire **waveforms**, leave `EnDataReduction` disabled and set `ChRecordLeng
 - `false` (default in online DAQ): waveform words are skipped; only energy, timestamp, and flags are extracted.
 - `true`: waveform samples are fully parsed into `analog_probes_0/1` and `digital_probes_0–3` vectors.
 
-Waveform data is always written verbatim to the `.sol_raw` file regardless of this flag — decoding is a read-time choice.
+Waveform data is always written verbatim to the `.raw` file regardless of this flag — decoding is a read-time choice.
 
 `EventBuilderRaw` (offline) does not decode waveforms; it extracts energy, timestamp, and flags only.
 
 ---
 
-## .sol_raw File Format
+## .raw File Format
 
 ```
 ┌──────────────┬──────────────┬──────────────────────────┐
@@ -266,7 +266,7 @@ Waveform data is always written verbatim to the `.sol_raw` file regardless of th
   blob data:  big-endian 64-bit words (aggregates)
 ```
 
-Use `EventBuilderRaw` to decode `.sol_raw` files into ROOT trees.
+Use `EventBuilderRaw` to decode `.raw` files into ROOT trees.
 
 ---
 

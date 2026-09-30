@@ -232,6 +232,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     cbDataFormat->addItem("No trace", DataFormat::NoTrace);
     cbDataFormat->addItem("Minimum", DataFormat::Minimum);
     cbDataFormat->addItem("Min + fineTimestamp", DataFormat::MiniWithFineTime);
+    cbDataFormat->addItem("Raw", DataFormat::Raw);
+    cbDataFormat->setToolTip("Raw saves the undecoded board blob to *.raw (all other formats write *.sol).\n"
+                             "Decode it offline with Aux/EventBuilderRaw. Traces follow WaveSaving in the\n"
+                             "settings panel. The scope always falls back to \"Everything\" while it runs.");
     cbDataFormat->setCurrentIndex(3);
     cbDataFormat->setEnabled(false);
 
@@ -487,7 +491,21 @@ int MainWindow::StartACQ(){
     int dataFormatID = cbDataFormat->currentData().toInt();
     digi[i]->SetDataFormat(dataFormatID);
 
-    if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
+    if( dataFormatID == DataFormat::Raw ){
+      /// WaveSaving is deliberately left alone here -- the blob is written verbatim, so whether it
+      /// carries traces is the settings panel's call, not the data format's.
+      ///
+      /// EnStatEvents is not optional though. ReadStat() returns early under Raw (the DAQ thread
+      /// already owns those five arrays), so the rate display is fed only by the decoder's
+      /// time-counter events. With stat events off every rate silently reads zero, with nothing
+      /// anywhere reporting why.
+      if( digi[i]->ReadValue(PHA::DIG::EnableStatisticEvents) != "True" ){
+        LogMsg("digi-" + QString::number(digi[i]->GetSerialNumber()) +
+               " : Raw format needs EnStatEvents, turning it on (rates come from stat events).");
+      }
+      digi[i]->WriteValue(PHA::DIG::EnableStatisticEvents, "True");
+
+    }else if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
       digi[i]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
     }else{
       digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);

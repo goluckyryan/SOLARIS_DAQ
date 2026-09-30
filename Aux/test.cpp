@@ -694,12 +694,12 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
     printf("  No stat events found in raw stream (EnStatEvents may need enabling)\n");
   }
 
-  // 5. Test file round-trip (.sol_raw)
-  printf("  Step 5: Test .sol_raw file round-trip\n");
+  // 5. Test file round-trip (.raw)
+  printf("  Step 5: Test .raw file round-trip\n");
   const char * testFile = "/tmp/test_raw_decode";
   // Clean up stale files from previous runs (CloseOutFile sets read-only)
   char cleanupFile[200];
-  snprintf(cleanupFile, sizeof(cleanupFile), "%s_%03d.sol_raw", testFile, 0);
+  snprintf(cleanupFile, sizeof(cleanupFile), "%s_%03d.raw", testFile, 0);
   chmod(cleanupFile, S_IWUSR | S_IRUSR);
   remove(cleanupFile);
 
@@ -722,12 +722,12 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
   }
   digi->CloseOutFile();
   digi->StopACQ();
-  printf("  Saved %d blobs to .sol_raw file\n", savedBlobs);
+  printf("  Saved %d blobs to .raw file\n", savedBlobs);
 
-  // Read back .sol_raw file and decode
+  // Read back .raw file and decode
   if( savedBlobs > 0 ){
     char solRawFile[200];
-    snprintf(solRawFile, sizeof(solRawFile), "%s_%03d.sol_raw", testFile, 0);
+    snprintf(solRawFile, sizeof(solRawFile), "%s_%03d.raw", testFile, 0);
     FILE * rf = fopen(solRawFile, "rb");
     if( rf ){
       int readBlobs = 0;

@@ -121,7 +121,7 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
 
 
   /// Only when the format actually changes. SetDataType() frees and reallocates the 20 MB raw
-  /// buffer and all six probe arrays, and this runs once per BLOCK -- so on a .sol_raw file, which
+  /// buffer and all six probe arrays, and this runs once per BLOCK -- so on a .raw file, which
   /// is Raw from end to end, it was doing a 20 MB delete[]/new[] plus ~600 KB of probe arrays for
   /// every block read.
   if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw && hit->dataType != DataFormat::Raw ){

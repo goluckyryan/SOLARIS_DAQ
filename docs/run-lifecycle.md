@@ -23,7 +23,10 @@ For each board:
 - reset the per-channel scaler bookkeeping
 - `SetDataFormat(dataFormatID)` from the combo. **This is where the Raw-vs-decoded fork is chosen**,
   and therefore which of the two hit-push paths in `ReadData()` will run
-- `WaveSaving` = `Always` for `ALL`/`OneTrace`, else `OnRequest`
+- `WaveSaving` = `Always` for `ALL`/`OneTrace`, else `OnRequest`. Raw is the exception: it leaves
+  `WaveSaving` alone (the blob is written verbatim, so traces are the settings panel's call) and
+  instead forces `EnStatEvents = True`, without which the Raw rate display is dead — see
+  `sol-file-format.md`
 - if saving: create the run folder, dump the board's settings to
   `<expName>_<runID>XSetting_<SN>.dat`, and `OpenOutFile()`
 - `digi[i]->StartACQ()` — `/cmd/armacquisition` then `/cmd/swstartacquisition`

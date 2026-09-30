@@ -216,15 +216,15 @@ void fillData(int &fileID){
 int main(int argc, char ** argv){
 
   printf("=======================================================\n");
-  printf("===    SOLARIS Raw Event Builder sol_raw --> root    ===\n");
+  printf("===    SOLARIS Raw Event Builder raw --> root    ===\n");
   printf("=======================================================\n");
 
   if( argc <= 3){
-    printf("%s [outfile] [timeWindow] [tick2ns] [sol_raw-1] [sol_raw-2] ... \n", argv[0]);
+    printf("%s [outfile] [timeWindow] [tick2ns] [raw-1] [raw-2] ... \n", argv[0]);
     printf("      outfile : output root file name\n");
     printf("   timeWindow : nano-sec; if < 0, no event build\n");
     printf("      tick2ns : time tick in ns (2 for VX2730 500Msps, 8 for VX2740 125Msps)\n");
-    printf("    sol_raw-X : the sol_raw file(s)\n");
+    printf("    raw-X : the raw file(s)\n");
     return -1;
   }
 

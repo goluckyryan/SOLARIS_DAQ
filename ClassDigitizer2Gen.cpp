@@ -1024,7 +1024,11 @@ int Digitizer2Gen::ReadData(){
       }
     }
 
-    hit->isTraceAllZero = true; // hit struct itself has no trace, traces go directly to traceRingBuffer
+    /// Suppresses the trace-ring fill below, which is the intent: under Raw the waveform stays
+    /// inside the undecoded blob and is never unpacked here, so there is nothing to push. The
+    /// scope therefore cannot run on Raw -- StartScope() forces DataFormat::ALL for exactly this
+    /// reason.
+    hit->isTraceAllZero = true;
 
   }else{
     return CAEN_FELib_UNKNOWN;
@@ -1083,7 +1087,7 @@ int Digitizer2Gen::ReadData(){
 
 void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   outFileNameBase = fileName;
-  const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "sol_raw" : "sol";
+  const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "raw" : "sol";
   snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
   outFile = fopen(outFileName, mode);
   if( outFile == NULL ){
@@ -1117,7 +1121,7 @@ void Digitizer2Gen::SaveDataToFile(){
     FinishedOutFilesSize += ftell(outFile);
     CloseOutFile();
     outFileIndex ++;
-    const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "sol_raw" : "sol";
+    const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "raw" : "sol";
     snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", outFileNameBase.c_str(), outFileIndex, ext);
     outFile = fopen(outFileName, "wb"); //overwrite binary
     if( outFile == NULL ){
