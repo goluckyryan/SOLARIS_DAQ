@@ -39,9 +39,10 @@ AnalysisPlugin::~AnalysisPlugin(){
 
   /// Unlink the copies, then the directory. Only entries this class created are removed, by the
   /// exact names it generated, so a stray file in there is left alone and rmdir simply fails.
-  for( int i = 0; i < loadCount; i++ ){
-    DIR * d = opendir(tempDir.c_str());
-    if( d == nullptr ) break;
+  /// tempDir is only ever set after loadCount has been incremented, so reaching here means there
+  /// is a directory to clean; the loop this used to be ran at most once anyway.
+  DIR * d = opendir(tempDir.c_str());
+  if( d != nullptr ){
     struct dirent * e;
     while( (e = readdir(d)) != nullptr ){
       const std::string f = e->d_name;
@@ -50,7 +51,6 @@ AnalysisPlugin::~AnalysisPlugin(){
       unlink((tempDir + "/" + f).c_str());
     }
     closedir(d);
-    break;
   }
   rmdir(tempDir.c_str());
 }

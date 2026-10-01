@@ -98,7 +98,7 @@ public:
     }
 
     // Detect DPP type from identifier
-    dppType = ((identifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+    dppType = DPPTypeOf(identifier);
 
     // Read blob size (8 bytes)
     if( fread(&blobSize, 8, 1, inFile) != 1 ) return -1;

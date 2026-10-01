@@ -48,8 +48,12 @@ void Digitizer2Gen::Initialization(){
 
   settingFileName = "";
 
+  /// Nothing is known about the board yet, so claim the fewest sensors any model has. Raised by
+  /// ResolveModelSensors() once ModelName has been read. A dummy never gets that far and keeps 1.
+  nTempSensADC = 1;
+
   boardSettings = PHA::DIG::AllSettings;
-  for( int ch = 0; ch < MaxNumberOfChannel ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
+  SetChSettingTable(PHA::CH::AllSettings);
   for( int index = 0 ; index < 4; index ++) {
     VGASetting[index] = PHA::VGA::VGAGain;
     LVDSSettings[index] = PHA::LVDS::AllSettings;
@@ -64,6 +68,17 @@ void Digitizer2Gen::Initialization(){
   for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
 
 
+}
+
+/// Point the channel parameters at a firmware's table and give every channel -- all 64, not just
+/// the ones this board has -- a matching row of empty values. Sizing all 64 is what makes the
+/// stale-slot case impossible: an index that is in range for the table is in range for every
+/// channel, whatever the board reported.
+void Digitizer2Gen::SetChSettingTable(const std::vector<Reg> & table){
+  chSettingTable = table;
+  for( int ch = 0; ch < MaxNumberOfChannel; ch ++){
+    chValue[ch].assign(chSettingTable.size(), "");
+  }
 }
 
 void Digitizer2Gen::SetDummy(unsigned int sn){
@@ -117,7 +132,7 @@ static int LookUp(const std::unordered_map<std::string, int> & map, const std::s
   return ( it == map.end() ) ? -1 : it->second;
 }
 
-int Digitizer2Gen::FindIndex(const Reg para){
+int Digitizer2Gen::FindIndex(const Reg &para){
   switch (para.GetType() ){
     case TYPE::CH: return LookUp(chMap, para.GetPara());
     case TYPE::DIG: return LookUp(boardMap, para.GetPara());
@@ -150,7 +165,7 @@ std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
   return retValue;
 }
 
-std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose){
+std::string Digitizer2Gen::ReadValue(const Reg &para, int ch_index,  bool verbose){
   std:: string ans = ReadValue(para.GetFullPara(ch_index, nChannels).c_str(), verbose); 
 
   int index = FindIndex(para);
@@ -158,14 +173,14 @@ std::string Digitizer2Gen::ReadValue(const Reg para, int ch_index,  bool verbose
   /// All four indexed cases are bounded, not just CH. ch_index defaults to -1, and the VGA, LVDS
   /// and GROUP arrays are 4, 4 and 16 long -- far shorter than the channel counts that reach here.
   switch( para.GetType()){
-    case TYPE::CH  : if( ch_index >= 0 && ch_index < MaxNumberOfChannel && index < (int) chSettings[ch_index].size() ) chSettings[ch_index][index].SetValue(ans); break;
+    case TYPE::CH  : if( ch_index >= 0 && ch_index < MaxNumberOfChannel && index < (int) chValue[ch_index].size() ) chValue[ch_index][index] = ans; break;
     case TYPE::DIG : if( index < (int) boardSettings.size() ) boardSettings[index].SetValue(ans); break;
     case TYPE::VGA : if( ch_index >= 0 && ch_index < 4 ) VGASetting[ch_index].SetValue(ans); break;
     case TYPE::LVDS: if( ch_index >= 0 && ch_index < 4 && index < (int) LVDSSettings[ch_index].size() ) LVDSSettings[ch_index][index].SetValue(ans);break;
     case TYPE::GROUP: if( ch_index >= 0 && ch_index < MaxNumberOfGroup ) InputDelay[ch_index].SetValue(ans); break;
   }
   
-  //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chSettings[ch_index][index].GetValue().c_str());
+  //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chValue[ch_index][index].c_str());
 
   return ans;
 }
@@ -180,29 +195,30 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
   const char * parName = strrchr(parameter, '/');
   if( parName ) parName++; else parName = parameter;
 
-  auto clampToRange = [&](const std::vector<Reg>& settings) {
-    for( const auto& reg : settings ){
-      if( reg.GetPara() == parName && reg.GetAnswerType() == ANSTYPE::INTEGER ){
-        auto answers = reg.GetAnswers();
-        if( answers.size() >= 3 ){
-          long long minVal = atoll(answers[0].first.c_str());
-          long long maxVal = atoll(answers[1].first.c_str());
-          long long step   = atoll(answers[2].first.c_str());
-          long long val    = atoll(value.c_str());
-          if( val < minVal ) val = minVal;
-          if( val > maxVal ) val = maxVal;
-          if( step > 0 ) val = ((val - minVal + step/2) / step) * step + minVal;
-          value = std::to_string(val);
-        }
-        break;
-      }
-    }
+  /// The name->index maps exist for exactly this. Scanning the table with string compares was a
+  /// second, divergent way of finding a parameter, and it ran on every write.
+  auto clampToRange = [&](const std::unordered_map<std::string, int> & map,
+                          const std::vector<Reg> & settings) {
+    const int index = LookUp(map, parName);
+    if( index < 0 || index >= (int) settings.size() ) return;
+    const Reg & reg = settings[index];
+    if( reg.GetAnswerType() != ANSTYPE::INTEGER ) return;
+    const auto & answers = reg.GetAnswers();
+    if( answers.size() < 3 ) return;
+    long long minVal = atoll(answers[0].first.c_str());
+    long long maxVal = atoll(answers[1].first.c_str());
+    long long step   = atoll(answers[2].first.c_str());
+    long long val    = atoll(value.c_str());
+    if( val < minVal ) val = minVal;
+    if( val > maxVal ) val = maxVal;
+    if( step > 0 ) val = ((val - minVal + step/2) / step) * step + minVal;
+    value = std::to_string(val);
   };
 
   if( strstr(parameter, "/ch/") != nullptr ){
-    clampToRange(chSettings[0]);
+    clampToRange(chMap, chSettingTable);
   } else {
-    clampToRange(boardSettings);
+    clampToRange(boardMap, boardSettings);
   }
 
   if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
@@ -222,25 +238,25 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
   return true;
 }
 
-bool Digitizer2Gen::WriteValue(const Reg para, std::string value, int ch_index){
+bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index){
   if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy){
     int index = FindIndex(para);
     if( index != -1 ){    
       switch(para.GetType()){
         case TYPE::CH :{
           if( ch_index >= 0 ){
-            if( ch_index < MaxNumberOfChannel && index < (int) chSettings[ch_index].size() )
-              chSettings[ch_index][index].SetValue(value);
+            if( ch_index < MaxNumberOfChannel && index < (int) chValue[ch_index].size() )
+              chValue[ch_index][index] = value;
           }else{
             for( int ch = 0; ch < nChannels && ch < MaxNumberOfChannel; ch++ ){
-              if( index < (int) chSettings[ch].size() ) chSettings[ch][index].SetValue(value);
+              if( index < (int) chValue[ch].size() ) chValue[ch][index] = value;
             }
           }
 
           //if( ch_index < 0 ) ch_index = 0;
           //printf("%s %s %s |%s|\n", __func__, para.GetPara().c_str(),
-          //                     chSettings[ch_index][index].GetFullPara(ch_index).c_str(), 
-          //                     chSettings[ch_index][index].GetValue().c_str());
+          //                     chSettingTable[index].GetFullPara(ch_index).c_str(),
+          //                     chValue[ch_index][index].c_str());
         }break;
         
         case TYPE::VGA : {
@@ -323,6 +339,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   FPGAVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   nChannels = atoi(ReadValue(PHA::DIG::NumberOfChannel).c_str());
   ModelName = ReadValue(PHA::DIG::ModelName);
+  ResolveModelSensors();
   CupVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
   int adcRate = atoi(ReadValue(PHA::DIG::ADC_SampleRate).c_str());
   tick2ns = (adcRate > 0) ? 1000/adcRate : 1;
@@ -342,7 +359,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     printf("========== defining setting arrays for %s \n", FPGAType.c_str());
 
     boardSettings = PHA::DIG::AllSettings;
-    for( int ch = 0; ch < nChannels ; ch ++) chSettings[ch] = PHA::CH::AllSettings;
+    SetChSettingTable(PHA::CH::AllSettings);
     for( int index = 0 ; index < 4; index ++) {
       VGASetting[index] = PHA::VGA::VGAGain;
       LVDSSettings[index] = PHA::LVDS::AllSettings;
@@ -361,7 +378,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
     printf("========== defining setting arrays for %s \n", FPGAType.c_str());
 
     boardSettings = PSD::DIG::AllSettings;
-    for( int ch = 0; ch < nChannels ; ch ++) chSettings[ch] = PSD::CH::AllSettings;
+    SetChSettingTable(PSD::CH::AllSettings);
     for( int index = 0 ; index < 4; index ++) {
       VGASetting[index] = PSD::VGA::VGAGain;
       LVDSSettings[index] = PSD::LVDS::AllSettings;
@@ -409,12 +426,13 @@ void Digitizer2Gen::AdjustParameterRanges(){
   printf("Digitizer2Gen::%s | Model=%s, FPGA=%s\n", __func__, ModelName.c_str(), FPGAType.c_str());
 
   // Helper to update a channel parameter's answers (min/max/step for INTEGER, or value list for COMBOX)
+  /// One table, so one write -- this used to loop over nChannels setting the same answer list 64
+  /// times, and it skipped the channels above nChannels, which is where the stale-range half of
+  /// the old per-channel-table bug came from.
   auto updateChParam = [&](const std::string & paraName, std::vector<std::pair<std::string,std::string>> newAnswers){
-    if( chMap.find(paraName) == chMap.end() ) return;
-    int idx = chMap[paraName];
-    for( int ch = 0; ch < nChannels; ch++ ){
-      chSettings[ch][idx].SetAnswers(newAnswers);
-    }
+    const int idx = LookUp(chMap, paraName);
+    if( idx < 0 || idx >= (int) chSettingTable.size() ) return;
+    chSettingTable[idx].SetAnswers(newAnswers);
   };
 
   //========== VX2730 adjustments
@@ -757,6 +775,11 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
 
 int Digitizer2Gen::ReadStat(){
 
+  /// SelfTrgRate is the one field the statistics endpoint does not carry, so it is read per
+  /// channel either way. It sits above the Raw early-out because the scalar panel has always read
+  /// it live on the Raw path too, and it lands in chValue, not in the five arrays below.
+  for( int ch = 0; ch < nChannels && ch < MaxNumberOfChannel; ch++) ReadValue( PHA::CH::SelfTrgRate, ch);
+
   /// Under Raw, ReadData() on the DAQ thread already fills realTime/deadTime/liveTime/
   /// triggerCount/savedEventCount from the decoder's time-counter events. Reading the stats
   /// endpoint here, from the GUI timer thread, would write the same five arrays concurrently --
@@ -773,18 +796,18 @@ int Digitizer2Gen::ReadStat(){
 
   if (ret != CAEN_FELib_Success) ErrorMsg("Read Statistics", ret);
 
-  for( int ch = 0; ch < nChannels; ch++) ReadValue( PHA::CH::SelfTrgRate, ch);
-
   return ret; // the status of the stat read; the ReadValue calls above no longer clobber it
 }
 
 void Digitizer2Gen::PrintStat(){
   printf("ch | Real Time[ns] | Dead Time[ns] | Live Time[ns] | Trigger |  Saved  | Rate[Hz] | Self Trig Rate [Hz] \n");
-  for( int i = 0; i < nChannels; i++){
+  for( int i = 0; i < nChannels && i < MaxNumberOfChannel; i++){
     //if( triggerCount[i] == 0 ) continue;
-    if( atoi(chSettings[i][0].GetValue().c_str()) == 0 ) continue;
-    printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %8.3f | %d\n", 
-         i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i], atoi(chSettings[i][0].GetValue().c_str()));
+    if( chValue[i].empty() ) continue;
+    const int chEnable = atoi(chValue[i][0].c_str());
+    if( chEnable == 0 ) continue;
+    printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %8.3f | %d\n",
+         i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i], chEnable);
   }
 }
 
@@ -1370,21 +1393,35 @@ void Digitizer2Gen::ProgramChannels(bool testPulse){
   }
 }
 
+/// Model -> sensor complement. One rule, one place. Everything else about a model stays where it
+/// is; this is deliberately only the environment sensors, which is where the duplication was.
+void Digitizer2Gen::ResolveModelSensors(){
+  /// Measured on the test station: a VX2745 answers TempSensADC0 through TempSensADC7.
+  /// The other models are carried over from the exclusion lists this replaces, which agreed that
+  /// only ADC0 is present -- unverified, no such board here.
+  nTempSensADC = ( ModelName == "VX2745" ) ? 8 : 1;
+}
+
+bool Digitizer2Gen::IsSensorReadable(const Reg & para) const {
+  const std::string & name = para.GetPara();
+
+  for( int i = nTempSensADC; i < (int) PHA::DIG::TempSensADC.size(); i++ ){
+    if( name == PHA::DIG::TempSensADC[i].GetPara() ) return false;
+  }
+
+  /// VX2740 only. A VX2745 returns CAEN_FELib error -6 for both, confirmed on hardware, which is
+  /// what the "(not readable)" in the original comment meant.
+  if( name == PHA::DIG::FreqSensCore.GetPara() ||
+      name == PHA::DIG::DutyCycleSensDCDC.GetPara() ) return ModelName == "VX2740";
+
+  return true;
+}
+
 void Digitizer2Gen::PrintBoardSettings(){
 
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
-    
-    //--- exclude some TempSens for Not VX2745
-    if( ModelName != "VX2745" && 
-        ( boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
-          boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
-          boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
-          boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
-          boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
-          boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara() ) ) {
-      continue;
-    }
+    if( !IsSensorReadable(boardSettings[i]) ) continue;
 
     printf("%-45s  %d  %s\n", boardSettings[i].GetFullPara().c_str(),  
                               boardSettings[i].ReadWrite() ,
@@ -1420,11 +1457,12 @@ void Digitizer2Gen::PrintBoardSettings(){
 
 void Digitizer2Gen::PrintChannelSettings(unsigned short ch){
 
-  for( int i = 0; i < (int) chSettings[0].size(); i++){
-    if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
-    printf("%-45s  %d  %s\n", chSettings[ch][i].GetFullPara(ch, nChannels).c_str(), 
-                              chSettings[ch][i].ReadWrite(),
-                              chSettings[ch][i].GetValue().c_str());
+  if( ch >= MaxNumberOfChannel ) return;
+  for( int i = 0; i < (int) chSettingTable.size(); i++){
+    if( chSettingTable[i].ReadWrite() == RW::WriteOnly) continue;
+    printf("%-45s  %d  %s\n", chSettingTable[i].GetFullPara(ch, nChannels).c_str(),
+                              chSettingTable[i].ReadWrite(),
+                              chValue[ch][i].c_str());
   }
 }
 
@@ -1451,14 +1489,11 @@ void Digitizer2Gen::ReadAllSettings(){
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
 
-    // here TempSens is same for PHA and PSD
-    if( ModelName == "VX2740" && boardSettings[i].GetPara() != PHA::DIG::TempSensADC0.GetPara()) continue;
-
-    if( ModelName != "VX2740" && 
-      (boardSettings[i].GetPara() == PHA::DIG::FreqSensCore.GetPara() ||  
-       boardSettings[i].GetPara() == PHA::DIG::DutyCycleSensDCDC.GetPara()
-      )
-    ) continue;
+    /// Same sensor rule as the print and save loops -- see IsSensorReadable. This site used to
+    /// carry its own, and it was the broken one: "ModelName == VX2740 && para != TempSensADC0"
+    /// without the ReadOnly qualifier its twin in SaveSettingsToFile has, so on a VX2740 this
+    /// loop skipped EVERY board setting and left the whole board cache empty.
+    if( !IsSensorReadable(boardSettings[i]) ) continue;
     ReadValue(boardSettings[i]);
   }
 
@@ -1476,11 +1511,11 @@ void Digitizer2Gen::ReadAllSettings(){
     }
   }
 
-  for(int ch = 0; ch < nChannels ; ch++ ){
-    for( int i = 0; i < (int) chSettings[ch].size(); i++){
-      if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
-      if( ModelName != "VX2730" && chSettings[ch][i].GetPara() == PSD::CH::ChGain.GetPara()) continue;
-      ReadValue(chSettings[ch][i], ch);
+  for(int ch = 0; ch < nChannels && ch < MaxNumberOfChannel ; ch++ ){
+    for( int i = 0; i < (int) chSettingTable.size(); i++){
+      if( chSettingTable[i].ReadWrite() == RW::WriteOnly) continue;
+      if( ModelName != "VX2730" && chSettingTable[i].GetPara() == PSD::CH::ChGain.GetPara()) continue;
+      ReadValue(chSettingTable[i], ch);
     }
   }
 
@@ -1489,45 +1524,47 @@ void Digitizer2Gen::ReadAllSettings(){
 int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnly){
   if( saveFileName != NULL) settingFileName = saveFileName;
 
+  /// The file's id column encodes a channel setting as ch*100 + index, with 7000 reserved for the
+  /// start of the LVDS block. That leaves two ceilings, and the reader cannot detect either one:
+  /// past them the decoded (ch, index) pair is self-consistent, just wrong, so a violated file
+  /// loads silently into the wrong channel. Neither is reachable on today's hardware -- 64
+  /// channels and 61 PSD settings -- but there is no headroom to speak of, so fail here rather
+  /// than write a file that will misroute.
+  ///
+  /// This is a stopgap. The real fix is a wider id field, which is a file-format change.
+  if( nChannels * 100 >= 7000 ){
+    printf("%s : %d channels needs ids up to %d, which collides with the LVDS block at 7000. "
+           "Not saving.\n", __func__, nChannels, nChannels * 100);
+    return -1;
+  }
+  if( chSettingTable.size() > 100 ){
+    printf("%s : %zu channel settings does not fit the 100-per-channel id range; channel ids "
+           "would overlap. Not saving.\n", __func__, chSettingTable.size());
+    return -1;
+  }
+
   int totCount = 0;
   int count = 0;
   FILE * saveFile = fopen(settingFileName.c_str(), "w");
   if( saveFile ){
     for(int i = 0; i < (int) boardSettings.size(); i++){
       if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
-      totCount ++;
+
       //--- exclude Gateway
-      if( boardSettings[i].GetPara() == PHA::DIG::Gateway.GetPara()) {
-        totCount --;
-        continue;
-      }
+      if( boardSettings[i].GetPara() == PHA::DIG::Gateway.GetPara()) continue;
 
-      //--- exclude some TempSens for Not VX2745
-      if( ModelName != "VX2745" &&
-         ( boardSettings[i].GetPara() == PHA::DIG::TempSensADC1.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::TempSensADC2.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::TempSensADC3.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::TempSensADC4.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::TempSensADC5.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::TempSensADC6.GetPara() ) ) {
-        totCount --;
-        continue;
-      }
+      /// Same sensor rule as the read and print loops -- see IsSensorReadable. The three lists
+      /// this replaces disagreed with each other; this site's third clause, "on a VX2740 no
+      /// read-only setting but TempSensADC0", also swallowed FreqSensCore and DutyCycleSensDCDC,
+      /// which its own clause above exists to keep. Both are ReadOnly, so on a VX2740 they were
+      /// never saved at all -- the two clauses cancelled.
+      if( !IsSensorReadable(boardSettings[i]) ) continue;
 
-      //--- exclude FreqSensCore, DutyCycleSensDCDC for non-VX2740 (not readable)
-      if( ModelName != "VX2740" &&
-         ( boardSettings[i].GetPara() == PHA::DIG::FreqSensCore.GetPara() ||
-           boardSettings[i].GetPara() == PHA::DIG::DutyCycleSensDCDC.GetPara() ) ) {
-        totCount --;
-        continue;
-      }
-
-      //--- for VX2740, only TempSensADC0 is readable
-      if( ModelName == "VX2740" && boardSettings[i].ReadWrite() == RW::ReadOnly &&
-          boardSettings[i].GetPara() != PHA::DIG::TempSensADC0.GetPara() ) {
-        totCount --;
-        continue;
-      }
+      /// Counted only once the setting is known to be one we mean to write, so that totCount and
+      /// count differ in exactly one case: the empty value below, which is what the
+      /// count != totCount check at the end of this function reports. The channel loop further
+      /// down already has this shape.
+      totCount ++;
 
       if( boardSettings[i].GetValue() == "") {
         printf(" No value for %s \n", boardSettings[i].GetPara().c_str());
@@ -1586,25 +1623,25 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       }
     }
 
-    for( int i = 0; i < (int) chSettings[0].size(); i++){
-      for(int ch = 0; ch < nChannels ; ch++ ){
-        if( chSettings[ch][i].ReadWrite() == RW::WriteOnly) continue;
+    for( int i = 0; i < (int) chSettingTable.size(); i++){
+      for(int ch = 0; ch < nChannels && ch < MaxNumberOfChannel ; ch++ ){
+        if( chSettingTable[i].ReadWrite() == RW::WriteOnly) continue;
         //--- exclude ChGain for non-VX2730 (not readable)
-        if( ModelName != "VX2730" && chSettings[ch][i].GetPara() == PSD::CH::ChGain.GetPara()) {
+        if( ModelName != "VX2730" && chSettingTable[i].GetPara() == PSD::CH::ChGain.GetPara()) {
           continue;
         }
         totCount ++;
-        if( chSettings[ch][i].GetValue() == "") {
-          printf("[%i] No value for %s , ch-%02d\n", i, chSettings[ch][i].GetPara().c_str(), ch);
+        if( chValue[ch][i] == "") {
+          printf("[%i] No value for %s , ch-%02d\n", i, chSettingTable[i].GetPara().c_str(), ch);
           continue;
         }
-        fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettings[ch][i].GetFullPara(ch, nChannels).c_str(), 
-                                               chSettings[ch][i].ReadWrite(),
+        fprintf(saveFile, "%-45s!%d!%4d!%s\n", chSettingTable[i].GetFullPara(ch, nChannels).c_str(),
+                                               chSettingTable[i].ReadWrite(),
                                                ch*100 + i,
-                                               chSettings[ch][i].GetValue().c_str());
+                                               chValue[ch][i].c_str());
         count ++;
       }
-    }    
+    }
     fclose(saveFile);
 
     if( count != totCount ) {
@@ -1689,12 +1726,12 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
       }else if( id < 7000){ // channel
         int ch = id / 100;
         int index = id - ch * 100;
-        if( ch < nChannels && index >= 0 && index < (int) chSettings[ch].size() )
-          chSettings[ch][index].SetValue(value.c_str());
+        if( ch < nChannels && ch < MaxNumberOfChannel && index >= 0 && index < (int) chValue[ch].size() )
+          chValue[ch][index] = value;
         //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
-        //printf("%s|%d|%d|%s|\n", chSettings[ch][index].GetFullPara(ch).c_str(),
-        //                         chSettings[ch][index].ReadWrite(), id,
-        //                         chSettings[ch][index].GetValue().c_str());
+        //printf("%s|%d|%d|%s|\n", chSettingTable[index].GetFullPara(ch).c_str(),
+        //                         chSettingTable[index].ReadWrite(), id,
+        //                         chValue[ch][index].c_str());
 
       }else if ( 7000 <= id && id < 8000){ // LVDS
         int index = (id-7000) % 4;
@@ -1729,12 +1766,12 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
   
 }
 
-/// Every index is bounded here. The arrays have very different lengths -- chSettings[64],
+/// Every index is bounded here. The arrays have very different lengths -- chValue[64],
 /// VGASetting[4], LVDSSettings[4], InputDelay[16] -- and ch_index reaches this from panel code and
 /// from a user-supplied Mapping.h, so a channel number landing on the VGA or LVDS case walks off
 /// the end of a Reg array and reads std::strings out of unrelated memory. Same guard style as
 /// GetChSettingByName() below.
-std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned int ch_index) {
+std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg &para, unsigned int ch_index) {
   int index = FindIndex(para);
   if( index < 0 ) return "invalid";
   const unsigned int ch = ch_index;
@@ -1742,8 +1779,8 @@ std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned in
     case TYPE::DIG:
       return ( index < (int) boardSettings.size() ) ? boardSettings[index].GetValue() : "invalid";
     case TYPE::CH:
-      if( ch >= MaxNumberOfChannel || index >= (int) chSettings[ch].size() ) return "invalid";
-      return chSettings[ch][index].GetValue();
+      if( ch >= MaxNumberOfChannel || index >= (int) chValue[ch].size() ) return "invalid";
+      return chValue[ch][index];
     case TYPE::VGA:
       return ( ch < 4 ) ? VGASetting[ch].GetValue() : "invalid";
     case TYPE::LVDS:
@@ -1768,10 +1805,10 @@ std::string Digitizer2Gen::GetBoardSettingByName(const std::string & name, bool 
 
 std::string Digitizer2Gen::GetChSettingByName(const std::string & name, int ch, bool * found) const {
   const int index = LookUp(chMap, name);
-  if( index < 0 || ch < 0 || ch >= MaxNumberOfChannel || index >= (int) chSettings[ch].size() ){
+  if( index < 0 || ch < 0 || ch >= MaxNumberOfChannel || index >= (int) chValue[ch].size() ){
     if( found ) *found = false;
     return "";
   }
   if( found ) *found = true;
-  return chSettings[ch][index].GetValue();
+  return chValue[ch][index];
 }

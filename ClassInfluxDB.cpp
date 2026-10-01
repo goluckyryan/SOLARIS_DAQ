@@ -45,6 +45,12 @@ void InfluxDB::SetURL(std::string url){
 
 void InfluxDB::SetToken(std::string token){
   this->token = token;
+  /// Rebuild rather than append: calling this twice on one object would otherwise send Accept and
+  /// Authorization twice, with the stale token still in the list.
+  if( headers ){
+    curl_slist_free_all(headers);
+    headers = nullptr;
+  }
   headers = curl_slist_append(headers, "Accept: application/csv");
   if( !token.empty() ) headers = curl_slist_append(headers, ("Authorization: Token " + token).c_str());
 }
@@ -128,8 +134,7 @@ std::string InfluxDB::CheckDatabases(){
     lines.push_back(line);
   }
 
-  // Extract the third column from each line and store it in a vector
-  std::vector<std::string> thirdColumn;
+  // Extract the third column from each line and store it in databaseList
   for (const auto& l : lines) {
       std::istringstream lineIss(l);
       std::string token;

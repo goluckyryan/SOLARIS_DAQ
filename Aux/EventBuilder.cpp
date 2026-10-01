@@ -1,6 +1,7 @@
 #include "SolReader.h"
 #include <cstdio>
 #include <cstdlib>
+#include <climits>
 
 #include "TFile.h"
 #include "TTree.h"
@@ -39,16 +40,12 @@ std::vector<std::vector<int>> group; // group[i][j], i = group ID, j = group mem
 
 void findEarliestTime(int &fileID, int &groupID){
 
-  unsigned long firstTime = 0;
+  /// Seeded at the maximum so i == 0 needs no special case. Keep the <= : it makes a tie resolve
+  /// to the LAST tied entry, which is the behaviour the builder was tuned against. An empty
+  /// activeFileID still leaves fileID and groupID untouched, as before.
+  unsigned long firstTime = ULONG_MAX;
   for( int i = 0; i < (int) activeFileID.size(); i++){
     int id = activeFileID[i];
-    if( i == 0 ) {
-      firstTime = hit[id]->timestamp;
-      fileID = id;
-      groupID = i;
-      //printf("%d | %d %lu %d | %d \n", id, reader[id]->GetBlockID(), hit[id]->timestamp, hit[id]->channel, (int) activeFileID.size());
-      continue;
-    }
     if( hit[id]->timestamp <= firstTime) {
       firstTime = hit[id]->timestamp;
       fileID = id;
@@ -71,7 +68,19 @@ unsigned short       e_f[MAX_MULTI] = {0};
 unsigned short   lowFlag[MAX_MULTI] = {0};
 unsigned short  highFlag[MAX_MULTI] = {0};
 int             traceLen[MAX_MULTI] = {0};
-int trace[MAX_MULTI][MAX_TRACE_LEN] = {0};
+
+/// Flat [MAX_MULTI][MAX_TRACE_LEN] backing store for the "trace" branch, allocated only when
+/// traces are actually being saved. As a plain global this was exactly 1 GB of BSS committed on
+/// every run -- including the far more common no-trace run, which never touches a byte of it.
+///
+/// Two properties the ROOT leaflist depends on, both preserved here:
+///   - the stride stays MAX_TRACE_LEN, so the on-disk layout is byte-for-byte what it was;
+///   - the buffer is sized once, before tree->Branch() captures its address, and never resized
+///     afterwards -- a reallocation would silently leave the branch pointing at freed memory.
+/// Value-initialisation matches the zeroed BSS it replaces, so the bytes written past
+/// traceLen[multi] are unchanged too.
+std::vector<int> traceBuf;
+inline int * traceRow(unsigned int m){ return traceBuf.data() + (size_t) m * MAX_TRACE_LEN; }
 
 void fillData(int &fileID, const bool &saveTrace){
   if( multi >= MAX_MULTI ) {
@@ -91,8 +100,9 @@ void fillData(int &fileID, const bool &saveTrace){
 
   if( saveTrace ){
     traceLen[multi] = hit[fileID]->traceLenght;
+    int * row = traceRow(multi);
     for( int i = 0; i < TMath::Min(traceLen[multi], MAX_TRACE_LEN); i++){
-      trace[multi][i] = hit[fileID]->analog_probes[0][i];
+      row[i] = hit[fileID]->analog_probes[0][i];
     }
   }
 
@@ -249,8 +259,10 @@ int main(int argc, char ** argv){
   tree->Branch("highFlag",  highFlag, "highFlag[multi]/s");
 
   if( saveTrace){
+    /// Must be sized before Branch() takes the address, and never resized after.
+    traceBuf.assign((size_t) MAX_MULTI * MAX_TRACE_LEN, 0);
     tree->Branch("traceLen",  traceLen, "traceLen[multi]/I");
-    tree->Branch("trace",        trace, Form("trace[multi][%d]/I", MAX_TRACE_LEN));
+    tree->Branch("trace", traceBuf.data(), Form("trace[multi][%d]/I", MAX_TRACE_LEN));
     tree->GetBranch("trace")->SetCompressionSettings(205);
   }
 
@@ -317,20 +329,25 @@ int main(int argc, char ** argv){
     }
     
     ///========= calculate progress
-    processedFileSize = 0;
-    for( int p = 0; p < (int) activeGroupID.size(); p ++){
-      int gID = activeGroupID[p];
-      for( int q = 0; q <= groupIndex[p]; q++){
-        int id = group[gID][q];
-        processedFileSize += reader[id]->GetFilePos();
+    /// Only when we might print. This re-sums every open file's position, an O(nFiles) walk, and
+    /// it used to run once per hit -- hundreds of millions of times on a real run -- for a number
+    /// that is thrown away unless the percentage has moved.
+    if( (evID & 0xFFFF) == 0 ){
+      processedFileSize = 0;
+      for( int p = 0; p < (int) activeGroupID.size(); p ++){
+        int gID = activeGroupID[p];
+        for( int q = 0; q <= groupIndex[p]; q++){
+          int id = group[gID][q];
+          processedFileSize += reader[id]->GetFilePos();
+        }
       }
-    }
-    double percentage = processedFileSize * 100/ totFileSize;
-    if( percentage >= last_percentage ) {
-      printf("Processed : %llu, %.0f%% | %lu/%lu | ", evID, percentage, processedFileSize, totFileSize);
-      for( int i = 0; i < (int) activeFileID.size(); i++) printf("%d, ", activeFileID[i]);
-      printf(" \n\033[A\r");
-      last_percentage = percentage + 1.0;
+      double percentage = processedFileSize * 100.0 / totFileSize; // both operands are unsigned long
+      if( percentage >= last_percentage ) {
+        printf("Processed : %llu, %.0f%% | %lu/%lu | ", evID, percentage, processedFileSize, totFileSize);
+        for( int i = 0; i < (int) activeFileID.size(); i++) printf("%d, ", activeFileID[i]);
+        printf(" \n\033[A\r");
+        last_percentage = percentage + 1.0;
+      }
     }
   }; ///====== end of event building loop
 
@@ -341,7 +358,7 @@ int main(int argc, char ** argv){
      processedFileSize += reader[id]->GetFilePos();
    }
   }
-  double percentage = processedFileSize * 100/ totFileSize;
+  double percentage = processedFileSize * 100.0 / totFileSize;
   printf("Processed : %llu, %.0f%% | %lu/%lu            \n", evID, percentage, processedFileSize, totFileSize);
 
   lastTimeStamp = e_t[0];

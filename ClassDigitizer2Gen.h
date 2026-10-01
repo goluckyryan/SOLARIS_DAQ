@@ -58,6 +58,14 @@ class Digitizer2Gen {
     unsigned short tick2ns;
     std::string ModelName;
 
+    /// How many TempSensADCn this model answers, resolved from ModelName once the board has been
+    /// opened. It replaces three hand-written exclusion lists that had drifted apart -- and all
+    /// three were wrong in the same way: they said a VX2745 has TempSensADC0..6 and forgot
+    /// TempSensADC7, so ADC7 was read, printed and saved on every model, including the ones that
+    /// do not have it. Probed on the test station, a VX2745 answers all eight (32.6 .. 42.9 C).
+    int nTempSensADC;
+    void ResolveModelSensors();
+
     void Initialization();
 
     uint64_t realTime[MaxNumberOfChannel];
@@ -80,8 +88,19 @@ class Digitizer2Gen {
 
     //all read and read/write settings
     std::string settingFileName;
-    std::vector<Reg> boardSettings; 
-    std::vector<Reg> chSettings[MaxNumberOfChannel];
+    std::vector<Reg> boardSettings;
+    /// ONE channel table, not 64. Everything a Reg carries -- name, type, RW flag, unit, the whole
+    /// allowed-answer list -- is identical for every channel; only the value differs. The code has
+    /// always assumed that (clampToRange reads channel 0's table as representative for all of
+    /// them), it just paid for 64 private copies anyway: 3328 Reg copies per digitizer in the
+    /// constructor, dummies included, then again on open. It also had a bug by construction -- the
+    /// PSD open path refilled only slots [0, nChannels), leaving the constructor's PHA Regs in
+    /// [nChannels, 64) on a PSD board.
+    std::vector<Reg> chSettingTable;
+    /// The per-channel half, sized to chSettingTable by SetChSettingTable().
+    std::vector<std::string> chValue[MaxNumberOfChannel];
+    void SetChSettingTable(const std::vector<Reg> & table);
+
     std::vector<Reg> LVDSSettings[4];
     Reg VGASetting[4]; 
     Reg InputDelay[16];
@@ -112,14 +131,14 @@ class Digitizer2Gen {
     std::string GetPath(uint64_t handle);
 
     std::string  ReadValue(const char * parameter, bool verbose = false);
-    std::string  ReadValue(const Reg para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
+    std::string  ReadValue(const Reg &para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
     bool         WriteValue(const char * parameter, std::string value, bool verbose = true);
-    bool         WriteValue(const Reg para, std::string value, int ch_index = -1); // write digituzer and save to memory
+    bool         WriteValue(const Reg &para, std::string value, int ch_index = -1); // write digituzer and save to memory
     void         SendCommand(const char * parameter);
     void         SendCommand(std::string shortPara);
 
-    int FindIndex(const Reg para); // get index from DIGIPARA
-    std::string GetSettingValueFromMemory(const Reg para, unsigned int ch_index = 0); // read from memory
+    int FindIndex(const Reg &para); // get index from DIGIPARA
+    std::string GetSettingValueFromMemory(const Reg &para, unsigned int ch_index = 0); // read from memory
 
     
     /// ret is passed in explicitly: a per-call status must not live in per-object storage,
@@ -135,12 +154,22 @@ class Digitizer2Gen {
     int  ReadData();
     int  ReadStat(); // digitizer update it every 500 msec
     void PrintStat();
-    uint32_t GetTriggerCount(int ch) const {return triggerCount[ch];}
-    uint64_t GetRealTime(int ch) const {return realTime[ch];}
+    /// Bounded: these are read from the GUI timer with whatever channel count the board reported.
+    uint32_t GetTriggerCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? triggerCount[ch] : 0;}
+    uint64_t GetRealTime(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? realTime[ch] : 0;}
+    uint32_t GetSavedEventCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? savedEventCount[ch] : 0;}
 
     void Reset();
     void ProgramBoard();
     void ProgramChannels(bool testPulse = false);
+
+    /// Whether this model answers a given environment-sensor board parameter. The one place that
+    /// knows which sensors a model has; the loops that read, print and save board settings all
+    /// ask it rather than carrying their own list. Non-sensor parameters are always true, so it
+    /// is safe to apply to a whole table.
+    bool IsSensorReadable(const Reg & para) const;
+    /// For the settings panel, which lays out one box per ADC temperature sensor.
+    int  GetNTempSensADC() const {return nTempSensADC;}
 
     void PrintBoardSettings();
     void PrintChannelSettings(unsigned short ch);
@@ -150,7 +179,9 @@ class Digitizer2Gen {
     unsigned short GetTick2ns()     const {return tick2ns;}
     uint64_t       GetHandle()    const {return handle;}
 
-    const std::vector<Reg>& GetChSettings(int ch) const {return chSettings[ch];}
+    /// The shared channel table. Used to be GetChSettings(ch); there is no longer a per-channel
+    /// table to hand out, and both callers only ever read the immutable half of it.
+    const std::vector<Reg>& GetChSettingTable() const {return chSettingTable;}
     const std::vector<Reg>& GetBoardSettings() const {return boardSettings;}
     
     RingBuffer<HitSummary, RingBufferSize> ringBuffer[MaxNumberOfChannel];

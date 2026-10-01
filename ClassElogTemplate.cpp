@@ -72,7 +72,12 @@ void ElogTemplate::ClearVars(){
 }
 
 void ElogTemplate::SetVar(const QString & name, const QString & value){
-  const int index = varName.indexOf(name);
+  /// Match the way Resolve() looks the name up. A case-sensitive indexOf here would let "RunID"
+  /// and "runid" both into the list, and Resolve() would then return whichever came first.
+  int index = -1;
+  for( int i = 0; i < varName.size(); i++ ){
+    if( varName.at(i).compare(name, Qt::CaseInsensitive) == 0 ){ index = i; break; }
+  }
   if( index >= 0 ){
     varValue[index] = value;
   }else{

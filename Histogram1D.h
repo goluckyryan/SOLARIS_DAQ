@@ -32,6 +32,7 @@ public:
 
     addGraph();
     graph(0)->setName(title);
+    graph(0)->setLineStyle(QCPGraph::lsStepCenter);
     graph(0)->setPen(QPen(Qt::blue));
     graph(0)->setBrush(QBrush(QColor(0, 0, 255, 20)));
 
@@ -69,10 +70,12 @@ public:
 
     connect(this, &QCustomPlot::mouseMove, this, [=](QMouseEvent *event){
       double x = this->xAxis->pixelToCoord(event->pos().x());
-      double bin = (x - xMin)/dX;
-      double z = yList[0][2*qFloor(bin) + 1];
+      int bin = qFloor((x - xMin)/dX);
+      /// The plot is zoomable and draggable, so the cursor reaches coordinates outside [xMin,xMax)
+      /// and this used to subscript yList with the resulting out-of-range bin.
+      if( bin < 0 || bin >= yList[0].count() ) return;
 
-      QString coordinates = QString("Bin: %1, Value: %2").arg(qFloor(bin)).arg(z);
+      QString coordinates = QString("Bin: %1, Value: %2").arg(bin).arg(yList[0][bin]);
       QToolTip::showText(event->globalPosition().toPoint(), coordinates, this);
     });
 
@@ -251,6 +254,7 @@ public:
     nData ++;
     addGraph();
     graph(nData - 1)->setName(title);
+    graph(nData - 1)->setLineStyle(QCPGraph::lsStepCenter);
     SetColor(color, nData-1);
     yList[nData-1].clear();
     for( int i = 0; i < xList.count(); i++) yList[nData-1].append(0);
@@ -302,13 +306,19 @@ public:
     xList.clear();
     for( int i = 0 ; i < nData ; i ++) yList[i].clear();
 
-    for( int i = 0; i <= xBin; i ++ ){
-      xList.append(xMin + i*dX-(dX)*0.000001); 
-      xList.append(xMin + i*dX); 
-      for( int ID = 0 ; ID < nData; ID ++ ){
-        yList[ID].append(0); 
-        yList[ID].append(0); 
-      }
+    /// One vertex per bin, at the bin CENTRE, and the graph draws the steps (lsStepCenter, set
+    /// where each graph is added). This used to emit two x samples per bin edge -- one of them
+    /// nudged down by a millionth of a bin -- and carry the count in two slots, so every index in
+    /// the class was written as 2*bin+1 and Fill() incremented twice per hit on the hottest path
+    /// in online histogramming. QCustomPlot has rendered steps natively all along; the default
+    /// lsLine was what the doubling was faking.
+    ///
+    /// The centres, not the edges: lsStepCenter puts the step boundary midway between two
+    /// vertices, which for a uniform binning is exactly the bin edge. The visible difference is
+    /// at the two ends, where the outer half of the first and last bin is no longer drawn.
+    for( int i = 0; i < xBin; i ++ ){
+      xList.append(xMin + (i + 0.5)*dX);
+      for( int ID = 0 ; ID < nData; ID ++ ) yList[ID].append(0);
     }
 
     yMax = 0;
@@ -324,6 +334,8 @@ public:
 
   void Fill(double value, unsigned int ID = 0){
     // DebugPrint("%s", "Histogram1D");
+    /// SetBinContents has always checked this; Fill never did, and yList is a plain [MaxNHist].
+    if( ID >= (unsigned int) nData ) return;
     if( ID == 0 ){
       totalEntry ++;
       txt[1]->setText("Total Entry : "+ QString::number(totalEntry));
@@ -343,13 +355,11 @@ public:
     }
 
     int bin = qFloor((value - xMin)/dX);
-    int index1 = 2*bin + 1;
-    int index2 = index1 + 1;
+    if( bin < 0 || bin >= yList[ID].count() ) return;
 
-    if( 0 <= index1 && index1 <= 2*xBin) yList[ID][index1] += 1;
-    if( 0 <= index1 && index2 <= 2*xBin) yList[ID][index2] += 1;
+    yList[ID][bin] += 1;
 
-    if( showHist[ID] && yList[ID][index1] > yMax ) yMax = yList[ID][index1];
+    if( showHist[ID] && yList[ID][bin] > yMax ) yMax = yList[ID][bin];
   }
 
   /// Replace the whole histogram in one go, from counts accumulated elsewhere.
@@ -374,12 +384,9 @@ public:
     if( n > xBin ) n = xBin;
 
     if( ID == 0 ) yMax = 0;
-    for( int b = 0; b < xBin; b++ ){
+    for( int b = 0; b < yList[ID].count(); b++ ){
       const double v = ( b < n ) ? (double) y[b] : 0.0;
-      const int index1 = 2*b + 1;
-      const int index2 = index1 + 1;
-      if( index1 <= 2*xBin ) yList[ID][index1] = v;
-      if( index2 <= 2*xBin ) yList[ID][index2] = v;
+      yList[ID][b] = v;
       if( showHist[ID] && v > yMax ) yMax = v;
     }
 

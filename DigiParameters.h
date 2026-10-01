@@ -57,10 +57,12 @@ class Reg {
     TYPE        GetType() const {return type;}
     ANSTYPE     GetAnswerType() const {return ansType;}
     std::string GetUnit() const {return answerUnit;}
-    std::vector<std::pair<std::string,std::string>> GetAnswers() const {return answer;}
+    /// By reference. This used to copy the whole answer list -- dozens of string pairs -- on every
+    /// call, and several call sites call it twice per loop iteration just to index it.
+    const std::vector<std::pair<std::string,std::string>> & GetAnswers() const {return answer;}
     void SetAnswers(std::vector<std::pair<std::string,std::string>> ans) { answer = ans; }
 
-    std::string GetPara()   const {return name;}
+    const std::string & GetPara() const {return name;}
     std::string GetFullPara(int ch_index = -1, int nChannals = MaxNumberOfChannel) const {
       switch (type){
         case TYPE::DIG:{

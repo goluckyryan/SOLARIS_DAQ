@@ -1023,11 +1023,12 @@ void SingleSpectra::LoadSetting(){
           data.push_back(list[i].toFloat());
         }
 
-        if( 0 <= data[0] && data[0] < digi[digiID]->GetNChannels() && data.size() >= 4 ){
+        /// Size first, so each guard stands on its own rather than leaning on the isEmpty() above.
+        if( data.size() >= 4 && 0 <= data[0] && data[0] < digi[digiID]->GetNChannels() ){
           hist[digiID][int(data[0])]->Rebin(data[1], data[2], data[3]);
         }
 
-        if( int(data[0]) == digi[digiID]->GetNChannels() && data.size() == 7 ){
+        if( data.size() == 7 && int(data[0]) == digi[digiID]->GetNChannels() ){
           hist2D[digiID]->Rebin(int(data[1]), data[2], data[3], int(data[4]), data[5], data[6]);
         }
 

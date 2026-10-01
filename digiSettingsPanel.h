@@ -306,23 +306,54 @@ private:
   void SetStartSource();
   void SetGlobalTriggerSource();
 
-  void SetupShortComboBox(RComboBox * &cbb, Reg para);
+  void SetupShortComboBox(RComboBox * &cbb, const Reg & para);
 
-  void SetupComboBox(RComboBox * &cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
-  void SetupSpinBox(RSpinBox * &spb, const Reg para, int ch_index, bool isMaster,  QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupComboBox(RComboBox * &cbb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
+  void SetupSpinBox(RSpinBox * &spb, const Reg & para, int ch_index, bool isMaster,  QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1);
 
   void SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);
   void SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], int ch);
 
-  void SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
-  void SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
+  void SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel+1], const Reg & para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel, int nCol = 4);
+  void SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg & para, QString text, QTabWidget * tabWidget, int iDigi, int nChannel);
 
-  void FillComboBoxValueFromMemory(RComboBox * &cbb, const Reg para, int ch_index = -1);
-  void FillSpinBoxValueFromMemory(RSpinBox * &spb, const Reg para, int ch_index = -1 );
+  void FillComboBoxValueFromMemory(RComboBox * &cbb, const Reg & para, int ch_index = -1);
+  void FillSpinBoxValueFromMemory(RSpinBox * &spb, const Reg & para, int ch_index = -1 );
+
+  /// Push the digitizer's cached channel settings into one row of channel widgets. `row` is the
+  /// widget row to write -- a channel's own row, or the master "All" row at index nChannels --
+  /// and `ch` is the channel whose cached value to show. UpdatePanelFromMemory passes the same
+  /// number for both; the channel-picker combo passes the master row and the picked channel.
+  ///
+  /// These are the (widget, parameter) runs that used to be written out longhand at every site:
+  /// the common one three times (both channel-picker lambdas and UpdatePanelFromMemory) and the
+  /// two firmware ones twice each. Adding a parameter meant remembering every copy.
+  ///
+  /// Common means common to both firmwares, not "PHA" -- the shared registers are spelled with
+  /// PHA::CH:: constants everywhere in this file, including inside the PSD paths, because the
+  /// two tables carry the same entries for them.
+  void FillCommonChannelWidgets(int row, int ch);
+  void FillPHAChannelWidgets(int row, int ch);
+  void FillPSDChannelWidgets(int row, int ch);
 
   void SetupPHAChannels(unsigned short digiID);
   void SetupPSDChannels(unsigned short digiID);
 
+  /// The Inquiry/Copy tab's six read-back widgets, in either the Board row or the Channel row.
+  /// There is one such row per kind, not one per digitizer, so these are plain pointers.
+  struct InquiryWidgets {
+    QLineEdit * type;
+    QLineEdit * read;
+    QLineEdit * unit;
+    QLineEdit * write;
+    RComboBox * combo;
+    RSpinBox  * spin;
+  };
+
+  /// The shared body behind ReadBoardSetting/ReadChannelSetting, which were ~100-line copies of
+  /// each other and had already drifted apart in three places. ch < 0 means a board parameter --
+  /// the same convention WriteValue(para, value, ch_index) uses.
+  void ReadSetting(const std::vector<Reg> & table, int cbIndex, int ch, const InquiryWidgets & w);
   void ReadBoardSetting(int cbIndex);
   void ReadChannelSetting(int cbIndex);
 

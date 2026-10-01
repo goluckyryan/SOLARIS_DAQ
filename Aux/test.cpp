@@ -243,7 +243,7 @@ static bool TestAllChannelRegisters(Digitizer2Gen *digi) {
   int passCount = 0, failCount = 0, skipCount = 0;
 
   // Use runtime-adjusted settings from digitizer (not static definitions)
-  const std::vector<Reg> &chAllSettings = digi->GetChSettings(0);
+  const std::vector<Reg> &chAllSettings = digi->GetChSettingTable();
 
   // test on ch 0 and last channel
   int testChannels[] = {0, nCh - 1};
@@ -365,7 +365,7 @@ static bool TestWriteAllChannels(Digitizer2Gen *digi) {
   int passCount = 0, failCount = 0, skipCount = 0;
 
   // Use runtime-adjusted settings from digitizer
-  const std::vector<Reg> &chAllSettings = digi->GetChSettings(0);
+  const std::vector<Reg> &chAllSettings = digi->GetChSettingTable();
 
   for (size_t i = 0; i < chAllSettings.size(); i++) {
     const Reg &reg = chAllSettings[i];
@@ -742,7 +742,7 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
         if( fread(&blobSize, 8, 1, rf) != 1 ) break;
         if( fread(buf, blobSize, 1, rf) != 1 ) break;
 
-        std::string dppT = ((ident >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+        std::string dppT = DPPTypeOf(ident);
         dec.LoadBlob(buf, blobSize, dppT);
         RawDecoder::DecodedHit dh;
         while( dec.Next(dh) ) readHits++;

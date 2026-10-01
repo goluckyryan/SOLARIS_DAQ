@@ -7,6 +7,8 @@
 #include <QLabel>
 #include <QHBoxLayout>
 
+#include <vector>
+
 #define MaxDisplayTraceDataLength 2000 //data point, 
 #define MiniTraceUpdateTimeSec 0.1
 
@@ -651,7 +653,12 @@ void Scope::RestoreSettings(bool changeBoard){
 
 void Scope::StartScope(){
 
-  if( !digi ) return; 
+  if( !digi ) return;
+
+  /// Reads the board named by cbScopeDigi, not any loop variable, so once is enough.
+  ReadScopeSettings();
+
+  bool anyStarted = false;
 
   for( int iDigi = 0 ; iDigi < nDigi; iDigi ++ ){
 
@@ -663,8 +670,6 @@ void Scope::StartScope(){
 
     //*---- set digitizer to take full trace; since in scope mode, no data saving, speed would be fast (How fast?)
     //* when the input rate is faster than trigger rate, Digitizer will stop data taking.
-
-    ReadScopeSettings();
 
     /// the settings are the same for PHA and PSD
     for( int ch2 = 0 ; ch2 < digi[iDigi]->GetNChannels(); ch2 ++){
@@ -702,11 +707,17 @@ void Scope::StartScope(){
     readDataThread[iDigi]->SetSaveData(false);
     readDataThread[iDigi]->start(QThread::HighestPriority);
 
-    updateTraceThread->start();
+    anyStarted = true;
+  }
 
+  /// One trace thread and one control state for the whole scope, not one per board. Restarting an
+  /// already-running QThread once per digitizer was the visible part of having these inside.
+  if( anyStarted ){
+    updateTraceThread->start();
     ScopeControlOnOff(false);
     emit TellSettingsPanelControlOnOff();
   }
+
   emit TellACQOnOff(true);
   allowChange = true;
 }
@@ -751,8 +762,8 @@ void Scope::UpdateScope(){
   int ch = cbScopeCh->currentIndex();
   const int waveRes = cbWaveRes->currentIndex();
   /// An empty or not-yet-populated combo gives currentIndex() == -1. digi[-1] is an out-of-bounds
-  /// read and 1 << -1 is undefined; RefreshTraceBrowser() and DrawTraceFromBuffer() below already
-  /// guard this and UpdateScope() was the one that did not.
+  /// read and 1 << -1 is undefined, so every site that shifts by the wave-resolution index has to
+  /// clamp it first.
   int sample2ns = PHA::TraceStep * (1 << (waveRes < 0 ? 0 : waveRes));
 
   emit UpdateScalar();
@@ -864,7 +875,8 @@ void Scope::DrawTraceFromBuffer(int backIdx){
 
   const TraceSnapshot & ts = digi[iDigi]->traceRingBuffer.ref(nWritten - 1 - backIdx);
   unsigned int traceLength = qMin((unsigned int) ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
-  int sample2ns = PHA::TraceStep * (1 << cbWaveRes->currentIndex());
+  const int waveRes = cbWaveRes->currentIndex();
+  int sample2ns = PHA::TraceStep * (1 << (waveRes < 0 ? 0 : waveRes));
 
   PlotSnapshot(ts, traceLength, sample2ns);
 }
@@ -874,7 +886,9 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
   if( allowChange == false ) return;
 
   //printf("%s\n", __func__);
-  QStandardItemModel * model[size] = {NULL};
+  /// Not QStandardItemModel * model[size]: size is a run-time argument, so that is a VLA, and a
+  /// VLA with an initialiser at that -- two GCC extensions, neither of them standard C++.
+  std::vector<QStandardItemModel *> model(size, nullptr);
   for( int i = 0; i < size; i++){
     model[i] = qobject_cast<QStandardItemModel*>(cb[i]->model());
     /// A combo that is not backed by a QStandardItemModel cannot have its items enabled or

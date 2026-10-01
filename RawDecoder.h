@@ -104,26 +104,25 @@ private:
     return __builtin_bswap64(val);
   }
 
+  /// Random access to the blob's big-endian words, swapped at the point of use. The decoder used
+  /// to swap the whole blob into a std::vector<uint64_t> up front -- an allocation plus a full
+  /// extra pass over every byte -- for a walk that only ever reads one word at a time anyway.
+  static uint64_t W(const uint8_t* base, size_t i){ return ReadBE64(base + i * 8); }
+
   void ParseBlob(const uint8_t* data, size_t dataSize, const std::string& dppType){
 
     // dataSize must be a multiple of 8
     size_t nTotalWords = dataSize / 8;
     if( nTotalWords == 0 ) return;
 
-    // Convert entire blob to host-endian words
-    std::vector<uint64_t> words(nTotalWords);
-    for( size_t i = 0; i < nTotalWords; i++ ){
-      words[i] = ReadBE64(data + i * 8);
-    }
-
     size_t pos = 0;
     while( pos < nTotalWords ){
-      uint64_t w0 = words[pos];
+      uint64_t w0 = W(data, pos);
       uint8_t format = (w0 >> 60) & 0xF;
 
       if( format == 0x2 ){
         // Individual Trigger Mode aggregate
-        pos += ParseAggregate(&words[pos], nTotalWords - pos, dppType);
+        pos += ParseAggregate(data + pos * 8, nTotalWords - pos, dppType);
       } else if( format == 0x3 ){
         // Special event (Start Run / Stop Run)
         uint32_t nWords = w0 & 0xFFFFFFFF;
@@ -136,10 +135,10 @@ private:
     }
   }
 
-  size_t ParseAggregate(const uint64_t* words, size_t remaining, const std::string& dppType){
+  size_t ParseAggregate(const uint8_t* aggData, size_t remaining, const std::string& dppType){
     if( remaining < 1 ) return 1;
 
-    uint64_t header = words[0];
+    uint64_t header = W(aggData, 0);
     uint32_t nAggWords = header & 0xFFFFFFFF;
     if( nAggWords == 0 || nAggWords > remaining ) return remaining; // safety
 
@@ -151,7 +150,7 @@ private:
     while( pos < nAggWords ){
 
       if( pos >= nAggWords ) break;
-      uint64_t w0 = words[pos];
+      uint64_t w0 = W(aggData, pos);
 
       // Check if this is a special event embedded in the aggregate
       uint8_t topNibble = (w0 >> 60) & 0xF;
@@ -209,13 +208,13 @@ private:
         // Parse extra words until we find one with bit 63 set or run out
         // Extra Word 0: dead_time
         if( pos < nAggWords ){
-          uint64_t ew0 = words[pos];
+          uint64_t ew0 = W(aggData, pos);
           su.deadTime = ew0 & 0x0000FFFFFFFFFFFF;
           pos++;
         }
         // Extra Word 1: trigger counter + saved event counter
         if( pos < nAggWords ){
-          uint64_t ew1 = words[pos];
+          uint64_t ew1 = W(aggData, pos);
           su.triggerCount    = (ew1 >> 24) & 0x00FFFFFF;
           su.savedEventCount = ew1 & 0x00FFFFFF;
           pos++;
@@ -229,7 +228,7 @@ private:
       pos++; // consumed Word 0
       if( pos >= nAggWords ) break;
 
-      uint64_t w1 = words[pos];
+      uint64_t w1 = W(aggData, pos);
       pos++;
 
       DecodedHit hit;
@@ -242,7 +241,7 @@ private:
 
       // Word 1 fields
       bool lastWord = (w1 >> 63) & 0x1;
-      bool W        = (w1 >> 62) & 0x1;
+      bool hasWf    = (w1 >> 62) & 0x1;   // named hasWf, not W, so it does not shadow W()
       hit.flags_low_priority  = (w1 >> 50) & 0x0FFF;
       hit.flags_high_priority = (w1 >> 42) & 0xFF;
       hit.energy_short        = (dppType == DPPType::PSD) ? ((w1 >> 26) & 0xFFFF) : 0;
@@ -250,19 +249,19 @@ private:
       hit.energy              = w1 & 0xFFFF;
 
       // If not last word, scan forward for extra words.
-      // The last header word (bit 63=1) is the waveform extra word when W=1.
+      // The last header word (bit 63=1) is the waveform extra word when hasWf=1.
       uint64_t lastHeaderWord = w1;
       if( !lastWord ){
         while( pos < nAggWords ){
-          lastHeaderWord = words[pos];
+          lastHeaderWord = W(aggData, pos);
           pos++;
           if( (lastHeaderWord >> 63) & 0x1 ) break; // last extra word
         }
       }
 
-      // If waveform present (W=1), handle waveform data
+      // If waveform present (hasWf=1), handle waveform data
       // The waveform extra word is the last header word (already consumed above)
-      if( W ){
+      if( hasWf ){
         if( decodeWaveform_ ){
           // Parse waveform extra word (probe info)
           uint64_t wfExtra = lastHeaderWord;
@@ -279,7 +278,7 @@ private:
 
           // Waveform header word
           if( pos < nAggWords ){
-            uint64_t wfHeader = words[pos];
+            uint64_t wfHeader = W(aggData, pos);
             pos++;
             uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
             /// Clamp BEFORE sizing anything. wfNWords is a raw 32-bit field off the wire, so a
@@ -299,7 +298,7 @@ private:
 
             size_t sampleIdx = 0;
             for( uint32_t wi = 0; wi < wfNWords && pos < nAggWords; wi++, pos++ ){
-              uint64_t sw = words[pos];
+              uint64_t sw = W(aggData, pos);
               if( sampleIdx < nSamples ){
                 uint32_t s0 = sw & 0xFFFFFFFF;
                 hit.analog_probes_0[sampleIdx] = (int32_t)((s0 & 0x3FFF) | ((s0 & 0x2000) ? 0xFFFFC000 : 0));
@@ -325,7 +324,7 @@ private:
         } else {
           // Skip waveform: just advance past the waveform words
           if( pos < nAggWords ){
-            uint64_t wfHeader = words[pos];
+            uint64_t wfHeader = W(aggData, pos);
             pos++;
             uint32_t wfNWords = wfHeader & 0xFFFFFFFF;
             pos += wfNWords;

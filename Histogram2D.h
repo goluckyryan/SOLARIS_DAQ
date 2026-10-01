@@ -72,9 +72,23 @@ public:
   void DrawCut();
   void ClearAllCuts();
 
-  QList<QPolygonF> GetCutList() const{return cutList;} // this list may contain empty element
-  QList<int> GetCutEntryList() const{ return cutEntryList;}
-  QList<QString> GetCutNameList() const { return cutNameList;}
+  /// One cut. This used to be five index-aligned QLists plus three loose scalars, which the
+  /// delete path had to keep in step by hand and which the three accessors below handed out
+  /// separately, leaving every caller to re-correlate them by index.
+  ///
+  /// A deleted cut is tombstoned, not erased: the remaining entries' indices must not move,
+  /// because the delete menu carries them in QAction::setData and the QCustomPlot item and
+  /// plottable indices are renumbered relative to it. An empty poly is what marks one.
+  struct Cut {
+    QPolygonF poly;            ///< empty once deleted
+    QString   name;
+    int       entries     = 0; ///< hits inside the polygon; -1 once deleted
+    int       id          = -1;///< only ever increasing, picks the colour out of colorCycle
+    int       textID      = -1;///< index into this plot's QCPAbstractItem list
+    int       plottableID = -1;///< index into this plot's plottable list
+  };
+
+  const QList<Cut> & GetCuts() const { return cutList; } // may contain deleted (empty-poly) entries
   void PrintCutEntry() const;
 
   double GetXNBin() const {return xBin;}
@@ -116,12 +130,12 @@ private:
   QPolygonF tempCut;
   int tempCutID; // only incresing;
   int numCut;
-  QList<QPolygonF> cutList;
-  QList<QString> cutNameList; // name of the cut
-  QList<int> cutEntryList;   // number of entry inside the cut.
-  QList<int> cutIDList;      // ID of the cut
-  QList<int> cutTextIDList;  // 
-  QList<int> plottableIDList; 
+  QList<Cut> cutList;
+  /// Turn tempCut into a committed Cut: draw its curve, place its label, append it. The three
+  /// call sites (finishing a cut by double-click, and the two end-of-polygon branches in
+  /// LoadCuts) were byte-for-byte copies of each other, except that one of them was missing the
+  /// empty-polygon guard.
+  void CommitCut(const QString & name);
   bool isDrawCut;
   int lastPlottableID;
 
@@ -211,7 +225,6 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
   }
 
   cutList.clear();
-  cutEntryList.clear();
 
   rescaleAxes();
 
@@ -273,33 +286,16 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
   //connect( this, &QCustomPlot::mouseDoubleClick, this, [=](QMouseEvent *event){
   connect( this, &QCustomPlot::mouseDoubleClick, this, [=](){
     if( isDrawCut) {
-      tempCut.push_back(tempCut[0]);
-      DrawCut();
       isDrawCut = false;
       line->setVisible(false);
-
-      plottableIDList.push_back(plottableCount() -1 );
-
-      cutNameList.push_back("Cut-" + QString::number(cutList.count()));
-      cutEntryList.push_back(0);
-
-      QCPItemText * text = new QCPItemText(this);
-      text->setText(cutNameList.last());
-      text->position->setCoords(tempCut[0].rx(), tempCut[0].ry());
-      int colorID = tempCutID% colorCycle.count();
-      text->setColor(colorCycle[colorID].first);
-      cutTextIDList.push_back(itemCount() - 1);
-
+      /// Nothing clicked yet, so there is no first vertex to close the polygon on -- tempCut[0]
+      /// on an empty polygon is out of bounds. The mouseMove handler above already knows
+      /// isDrawCut can be true with tempCut empty.
+      if( !tempCut.isEmpty() ){
+        tempCut.push_back(tempCut[0]);
+        CommitCut("Cut-" + QString::number(cutList.count()));
+      }
       replot();
-
-      cutList.push_back(tempCut);
-      cutIDList.push_back(tempCutID);
-
-      // qDebug() << "----------- end of create cut";
-      // qDebug() << "      cutIDList " << cutIDList ;
-      // qDebug() << "plottableIDList " << plottableIDList << ", " << plottableCount();
-      // qDebug() << "  cutTextIDList "  << cutTextIDList << ", " << itemCount();
-
     }
   });
 
@@ -373,9 +369,9 @@ inline void Histogram2D::Fill(double x, double y){
       colorMap->data()->setCell(xIndex, yIndex, value + 1);
     }
 
-    for( int i = 0; i < cutList.count(); i++){
-      if( cutList[i].isEmpty() ) continue;
-      if( cutList[i].containsPoint(QPointF(x,y), Qt::OddEvenFill) ) cutEntryList[i] ++;
+    for( Cut & cut : cutList ){
+      if( cut.poly.isEmpty() ) continue;
+      if( cut.poly.containsPoint(QPointF(x,y), Qt::OddEvenFill) ) cut.entries ++;
     }
   }
 }
@@ -450,28 +446,44 @@ inline void Histogram2D::ClearAllCuts(){
   numCut = 0;
   tempCutID = -1;
   lastPlottableID = -1;
-  cutList.clear();
-  cutIDList.clear();
-  for( int i = cutTextIDList.count() - 1; i >= 0 ; i--){
-    if( cutTextIDList[i] < 0 ) continue;
-    removeItem(cutTextIDList[i]);
-    removePlottable(plottableIDList[i]);
+  /// Back to front: removeItem/removePlottable renumber everything after the one removed.
+  for( int i = cutList.count() - 1; i >= 0 ; i--){
+    if( cutList[i].textID < 0 ) continue;
+    removeItem(cutList[i].textID);
+    removePlottable(cutList[i].plottableID);
   }
+  cutList.clear();
   replot();
+}
 
-  cutTextIDList.clear();
-  plottableIDList.clear();
-  cutNameList.clear();
-  cutEntryList.clear();
+inline void Histogram2D::CommitCut(const QString & name){
+  if( tempCut.isEmpty() ) return;
+
+  DrawCut();
+
+  Cut cut;
+  cut.poly        = tempCut;
+  cut.name        = name;
+  cut.entries     = 0;
+  cut.id          = tempCutID;
+  cut.plottableID = plottableCount() - 1;
+
+  QCPItemText * text = new QCPItemText(this);
+  text->setText(name);
+  text->position->setCoords(tempCut[0].rx(), tempCut[0].ry());
+  text->setColor(colorCycle[ (tempCutID < 0 ? 0 : tempCutID) % colorCycle.count() ].first);
+  cut.textID = itemCount() - 1;
+
+  cutList.push_back(cut);
 }
 
 inline void Histogram2D::PrintCutEntry() const{
   DebugPrint("%s", "Histogram2D");
   if( numCut == 0 ) return;
-  printf("=============== There are %d cuts. (%lld, %lld)\n", numCut, cutList.count(), cutEntryList.count());
-  for( int i = 0; i < cutList.count(); i++){
-    if( cutList[i].isEmpty() ) continue;
-    printf("%10s | %d \n", cutNameList[i].toStdString().c_str(), cutEntryList[i]);  
+  printf("=============== There are %d cuts. (%lld)\n", numCut, cutList.count());
+  for( const Cut & cut : cutList ){
+    if( cut.poly.isEmpty() ) continue;
+    printf("%10s | %d \n", cut.name.toStdString().c_str(), cut.entries);
   }
 }
 
@@ -529,9 +541,11 @@ inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
     b1 = menu->addAction("Clear all Cuts");
   }
   for( int i = 0; i < cutList.size(); i++){
-    if( cutList[i].isEmpty()) continue;
-    QString haha = "";
-    menu->addAction("Delete " + cutNameList[i] + " ["+ colorCycle[cutIDList[i]%colorCycle.count()].second+"]");
+    if( cutList[i].poly.isEmpty()) continue;
+    QAction * delAction = menu->addAction("Delete " + cutList[i].name + " ["+ colorCycle[cutList[i].id%colorCycle.count()].second+"]");
+    /// Carry the index on the action. Recovering it by parsing the label back out only ever
+    /// worked for the auto-generated "Cut-N" names, and a renamed cut deleted the wrong one.
+    delAction->setData(i);
   }
 
   QAction *selectedAction = menu->exec(event->globalPosition().toPoint());
@@ -620,18 +634,18 @@ inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
 
     QFormLayout layout(&dialog);
 
-    for(int i = 0; i < cutTextIDList.count(); i++){
-      if( cutTextIDList[i] < 0 ) continue;
+    for(int i = 0; i < cutList.count(); i++){
+      if( cutList[i].textID < 0 ) continue;
       QLineEdit * le = new QLineEdit(&dialog);
       layout.addRow(colorCycle[i%colorCycle.count()].second, le);
-      le->setText( cutNameList[i] );
+      le->setText( cutList[i].name );
       connect(le, &QLineEdit::textChanged, this, [=](){
         le->setStyleSheet("color : blue;");
       });
       connect(le, &QLineEdit::returnPressed, this, [=](){
         le->setStyleSheet("");
-        cutNameList[i] = le->text();
-        ((QCPItemText *) this->item(cutTextIDList[i]))->setText(le->text());
+        cutList[i].name = le->text();
+        ((QCPItemText *) this->item(cutList[i].textID))->setText(le->text());
         replot();
       });
     }
@@ -640,37 +654,38 @@ inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
 
   if( selectedAction && numCut > 0 && selectedAction->text().contains("Delete ") ){
 
-    QString haha = selectedAction->text();
-    int index1 = haha.indexOf("-");
-    int index2 = haha.indexOf("[");
-    int cutID = haha.mid(index1+1, index2-index1-1).remove(' ').toInt();
-    
-    removeItem(cutTextIDList[cutID]);
-    removePlottable(plottableIDList[cutID]);
+    /// The index rides on the action, see where the menu is built. It used to be recovered by
+    /// parsing the label -- which only ever worked for the auto-generated "Cut-N" names, and
+    /// silently deleted cut 0 for anything else.
+    bool isCutID = false;
+    const int cutID = selectedAction->data().toInt(&isCutID);
+    if( !isCutID || cutID < 0 || cutID >= cutList.count() ){
+      usingMenu = false;
+      return;
+    }
+
+    if( cutList[cutID].textID >= 0 )      removeItem(cutList[cutID].textID);
+    if( cutList[cutID].plottableID >= 0 ) removePlottable(cutList[cutID].plottableID);
     replot();
 
     numCut --;
-    cutList[cutID].clear();
-    cutIDList[cutID] = -1;
-    cutTextIDList[cutID] = -1;
-    plottableIDList[cutID] = -1;
-    cutNameList[cutID] = "";
-    cutEntryList[cutID] = -1;
+    /// Tombstone, do not erase -- the surviving cuts keep their indices, which is what the
+    /// delete actions' setData values and the shift below both refer to.
+    cutList[cutID] = Cut();
+    cutList[cutID].entries = -1;
 
-    for( int i = cutID + 1; i < cutTextIDList.count() ; i++){
-        cutTextIDList[i] --;
-        plottableIDList[i] --;
+    /// Everything after the removed item has shifted down by one in QCustomPlot's own lists.
+    /// Skip the tombstones: they have nothing left to renumber, and the old code walked them
+    /// down past -1 on every subsequent delete.
+    for( int i = cutID + 1; i < cutList.count() ; i++){
+      if( cutList[i].textID >= 0 )      cutList[i].textID --;
+      if( cutList[i].plottableID >= 0 ) cutList[i].plottableID --;
     }
 
     if( numCut == 0 ){
       tempCutID = -1;
       lastPlottableID = -1;
       cutList.clear();
-      cutIDList.clear();
-      cutTextIDList.clear();
-      plottableIDList.clear();
-      cutNameList.clear();
-      cutEntryList.clear();
     }
   }
 
@@ -756,12 +771,18 @@ inline void Histogram2D::rightMouseClickRebin(){
         if( number[2][0] > number[1][0] && number[2][1] > number[1][1]  ) {
           dialog.accept();
         }else{
-          if( number[2][0] > number[1][0] ){
-            msg->setText(nameListX[2] + " is smaller than " + nameListX[1]);
+          /// These are the negation of the accept test, not a copy of it. Written as a copy, an
+          /// invalid y-range was reported as an x-range fault and both being invalid said nothing
+          /// at all -- the dialog just refused to close. Collect them so both axes are reported.
+          QString err;
+          if( number[2][0] <= number[1][0] ){
+            err = nameListX[2] + " is not larger than " + nameListX[1];
           }
-          if( number[2][1] > number[1][1] ){
-            msg->setText(nameListY[2] + " is smaller than " + nameListY[1]);
+          if( number[2][1] <= number[1][1] ){
+            if( !err.isEmpty() ) err += "; ";
+            err += nameListY[2] + " is not larger than " + nameListY[1];
           }
+          msg->setText(err);
         }
       }
   });
@@ -787,10 +808,14 @@ inline void Histogram2D::SaveCuts(QString cutFileName){
     // Define the text to write
     QStringList lines;
 
-    for( int i = 0; i < cutList.size(); i++){
-      lines << "====== "+ cutNameList[i];
-      for( int pt = 0 ; pt < cutList[i].size(); pt ++){
-        lines << QString::number(cutList[i][pt].rx(), 'g', 5) + "," +  QString::number(cutList[i][pt].ry(), 'g', 5);
+    /// Deleted cuts are skipped. They used to be written out as a bare "====== " header with no
+    /// points, which on reload advances the cut counter and the colour cycle for a cut that is
+    /// never created.
+    for( const Cut & cut : cutList ){
+      if( cut.poly.isEmpty() ) continue;
+      lines << "====== "+ cut.name;
+      for( const QPointF & pt : cut.poly ){
+        lines << QString::number(pt.x(), 'g', 5) + "," +  QString::number(pt.y(), 'g', 5);
       }
     }
 
@@ -826,20 +851,8 @@ inline void Histogram2D::LoadCuts(QString cutFileName){
         QString line = in.readLine();
 
         if( line.contains("======") ){
-          if( !tempCut.isEmpty() ) {
-            DrawCut();
-            plottableIDList.push_back(plottableCount() -1 );
-            cutNameList.push_back(cutNameTemp);
-            cutEntryList.push_back(0);
-            QCPItemText * text = new QCPItemText(this);
-            text->setText(cutNameList.last());
-            text->position->setCoords(tempCut[0].rx(), tempCut[0].ry());
-            int colorID = tempCutID% colorCycle.count();
-            text->setColor(colorCycle[colorID].first);
-            cutTextIDList.push_back(itemCount() - 1);
-            cutList.push_back(tempCut);
-            cutIDList.push_back(tempCutID);
-          }
+          /// The header closes the PREVIOUS cut, if there was one.
+          CommitCut(cutNameTemp);
           tempCut.clear();
           tempCutID ++;
           numCut ++;
@@ -850,18 +863,10 @@ inline void Histogram2D::LoadCuts(QString cutFileName){
         }
 
         if( line.contains("#==") ) {
-          DrawCut();
-          plottableIDList.push_back(plottableCount() -1 );
-          cutNameList.push_back(cutNameTemp);
-          cutEntryList.push_back(0);
-          QCPItemText * text = new QCPItemText(this);
-          text->setText(cutNameList.last());
-          text->position->setCoords(tempCut[0].rx(), tempCut[0].ry());
-          int colorID = tempCutID% colorCycle.count();
-          text->setColor(colorCycle[colorID].first);
-          cutTextIDList.push_back(itemCount() - 1);
-          cutList.push_back(tempCut);
-          cutIDList.push_back(tempCutID);
+          /// End-of-file marker closes the last cut. CommitCut() does nothing on an empty
+          /// polygon, which is the case for a file whose last "====== name" header is followed
+          /// straight by this marker -- tempCut[0] there would be out of bounds.
+          CommitCut(cutNameTemp);
           break;
         }else{
           QStringList haha = line.split(",");

@@ -144,9 +144,16 @@ private:
   QGridLayout  * scalarLayout;
   TimingThread * scalarThread;
   QPushButton  * bnOpenScalar;
-  QLabel      ** lbFileSize;// need to delete manually
-  QLineEdit  *** leTrigger; // need to delete manually
-  QLineEdit  *** leAccept; // need to delete manually
+  /// The scalar panel is torn down and rebuilt whenever the digitizer list changes, so these
+  /// cannot be plain fixed arrays -- but they used to be hand-managed new[]/delete[], and
+  /// CleanUpScalar() recovered the inner lengths by asking the digitizers for their channel
+  /// count again at delete time. If a board had been reopened with a different count in between,
+  /// that freed the wrong number of widgets. The vectors carry their own lengths.
+  /// The QWidgets they point at are still deleted explicitly; they outlive a rebuild otherwise,
+  /// since their Qt parent is the scalar window, not this list.
+  std::vector<QLabel *> lbFileSize;
+  std::vector<std::vector<QLineEdit *>> leTrigger;
+  std::vector<std::vector<QLineEdit *>> leAccept;
   QLabel       * lbLastUpdateTime;
   QLabel       * lbScalarACQStatus;
   bool           scalarOutputInflux;
@@ -255,6 +262,11 @@ private:
   //@------ custom comment;
   QPushButton * bnComment;
   void AppendComment();
+
+  /// The one-line OK/Cancel comment prompt. It existed verbatim three times -- start run, stop
+  /// run, append -- differing only in the window title and the label. Returns false on Cancel;
+  /// `text` is written only on OK.
+  bool AskRunComment(const QString & title, const QString & labelHtml, QString & text);
 
   QString maskText(const QString &password) {
     if (password.length() <= 3) {

@@ -87,9 +87,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     scalarLayout->setSpacing(0);
     scalarLayout->setAlignment(Qt::AlignTop);
 
-    leTrigger = nullptr;
-    leAccept = nullptr;
-    lbFileSize = nullptr;
+    /// Empty, not null -- these are vectors now. CleanUpScalar() uses emptiness as its
+    /// "nothing built yet" test, the way it used to use the null pointer.
+    leTrigger.clear();
+    leAccept.clear();
+    lbFileSize.clear();
 
     scalarThread = new TimingThread(); // 2 sec is default
     //scalarThread->SetWaitTimeSec(2); 
@@ -429,29 +431,9 @@ int MainWindow::StartACQ(){
     LogMsg("=========================== Start <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b>");
 
     if( needManualComment  ){
-      QDialog * dOpen = new QDialog(this);
-      dOpen->setWindowTitle("Start Run Comment");
-      dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-      dOpen->setMinimumWidth(600);
-      connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
-
-      QGridLayout * vlayout = new QGridLayout(dOpen);
-      QLabel *label = new QLabel("Enter Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
-      QLineEdit *lineEdit = new QLineEdit(dOpen);
-      QPushButton *button1 = new QPushButton("OK", dOpen);
-      QPushButton *button2 = new QPushButton("Cancel", dOpen);
-
-      vlayout->addWidget(label, 0, 0, 1, 2);
-      vlayout->addWidget(lineEdit, 1, 0, 1, 2);
-      vlayout->addWidget(button1, 2, 0);
-      vlayout->addWidget(button2, 2, 1);
-
-      connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
-      connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
-      int result = dOpen->exec();
-
-      if(result == QDialog::Accepted ){
-        startComment = lineEdit->text();
+      if( AskRunComment("Start Run Comment",
+                        "Enter Run comment for <font style=\"color : red;\">Run-" + runIDStr + "</font> : ",
+                        startComment) ){
         if( startComment == "") startComment = "No commet was typed.";
         startComment = "Start Comment: " + startComment;
       }else{
@@ -593,29 +575,9 @@ void MainWindow::StopACQ(){
   if( chkSaveRun->isChecked() ){
     //============ stop comment
     if( needManualComment ){
-      QDialog * dOpen = new QDialog(this);
-      dOpen->setWindowTitle("Stop Run Comment");
-      dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-      dOpen->setMinimumWidth(600);
-      connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
-
-      QGridLayout * vlayout = new QGridLayout(dOpen);
-      QLabel *label = new QLabel("Enter Run comment for ending <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
-      QLineEdit *lineEdit = new QLineEdit(dOpen);
-      QPushButton *button1 = new QPushButton("OK", dOpen);
-      QPushButton *button2 = new QPushButton("Cancel", dOpen);
-
-      vlayout->addWidget(label, 0, 0, 1, 2);
-      vlayout->addWidget(lineEdit, 1, 0, 1, 2);
-      vlayout->addWidget(button1, 2, 0);
-      vlayout->addWidget(button2, 2, 1);
-
-      connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
-      connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
-      int result = dOpen->exec();
-
-      if(result == QDialog::Accepted ){
-        stopComment = lineEdit->text();
+      if( AskRunComment("Stop Run Comment",
+                        "Enter Run comment for ending <font style=\"color : red;\">Run-" + runIDStr + "</font> : ",
+                        stopComment) ){
         if( stopComment == "") stopComment = "No commet was typed.";
         stopComment = "Stop Comment: " + stopComment;
         leRunComment->setText(stopComment);
@@ -1131,6 +1093,21 @@ bool MainWindow::CheckSOLARISpanelOK(){
   detMaxID.clear();
   detGroupName.clear();
 
+  /// All four //C tag lines carry the same thing -- a brace-delimited, comma-separated list --
+  /// and each used to extract it with its own copy of this, building a fresh QRegularExpression
+  /// every time. The regex is now built once for the whole program; it never varies.
+  static const QRegularExpression quoteOrBackslash("[\"\\\\]");
+  auto ParseBraceList = [this](const QString & line, QStringList & out) -> bool {
+    int in1 = line.indexOf("{");
+    int in2 = line.lastIndexOf("}");
+    if( in2 <= in1 ){
+      LogMsg("Problem Found for the Mapping.h.");
+      return false;
+    }
+    out = line.mid(in1 + 1, in2 - in1 - 1).trimmed().remove(quoteOrBackslash).split(",");
+    return true;
+  };
+
   bool startRecord = false;
   QTextStream in(&file);
   while (!in.atEnd()) {
@@ -1141,50 +1118,30 @@ bool MainWindow::CheckSOLARISpanelOK(){
     if( line.contains("////")) continue;
 
     if( line.contains("//C=")){ // detType
-      int in1 = line.indexOf("{");
-      int in2 = line.lastIndexOf("}");
-      if( in2 > in1){
-        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
-        detType = subLine.split(",");
-      }else{
-        LogMsg("Problem Found for the Mapping.h.");
-        return false;
-      }
+      if( !ParseBraceList(line, detType) ) return false;
     }
     if( line.contains("//C%")){ // groupName
-      int in1 = line.indexOf("{");
-      int in2 = line.lastIndexOf("}");
-      if( in2 > in1){
-        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
-        detGroupName = subLine.split(",");
-      }else{
-        LogMsg("Problem Found for the Mapping.h.");
-        return false;
-      }
+      if( !ParseBraceList(line, detGroupName) ) return false;
     }
     if( line.contains("//C&")){ //groupID
-      int in1 = line.indexOf("{");
-      int in2 = line.lastIndexOf("}");
-      if( in2 > in1){
-        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
-        QStringList haha = subLine.split(",");
-        for( int i = 0; i < haha.size(); i++) detGroupID.push_back(haha[i].toInt());
-      }else{
-        LogMsg("Problem Found for the Mapping.h.");
-        return false;
+      QStringList haha;
+      if( !ParseBraceList(line, haha) ) return false;
+      for( int i = 0; i < haha.size(); i++) {
+        int groupID = haha[i].toInt();
+        /// Every group ID reaches SOLARISpanel as an index into chkAll[MaxDetGroup],
+        /// groupBox[MaxDetGroup][..][..] and cbTrigger[MaxDetGroup][..]. Nothing downstream
+        /// clamps it, so an out-of-range value here writes through a widget array.
+        if( groupID < 0 || groupID >= MaxDetGroup ){
+          LogMsg("Mapping.h : detector group ID " + QString::number(groupID) + " is out of range [0, " + QString::number(MaxDetGroup) + ").");
+          return false;
+        }
+        detGroupID.push_back(groupID);
+      }
     }
-      }
     if( line.contains("//C#")){ //detMaxID
-      int in1 = line.indexOf("{");
-      int in2 = line.lastIndexOf("}");
-      if( in2 > in1){
-        QString subLine = line.mid(in1+1, in2 - in1 -1).trimmed().remove(QRegularExpression("[\"\\\\]"));
-        QStringList haha = subLine.split(",");
-        for( int i = 0; i < haha.size(); i++) detMaxID.push_back(haha[i].toInt());
-      }else{
-        LogMsg("Problem Found for the Mapping.h.");
-        return false;
-      }
+      QStringList haha;
+      if( !ParseBraceList(line, haha) ) return false;
+      for( int i = 0; i < haha.size(); i++) detMaxID.push_back(haha[i].toInt());
     }
     if( line.contains("//C ") ) {
       startRecord = true;
@@ -1339,16 +1296,19 @@ void MainWindow::SetUpScalar(){
   }
   
   ///===== create the trigger and accept
-  leTrigger = new QLineEdit**[nDigi];
-  leAccept = new QLineEdit**[nDigi];
-  lbFileSize = new QLabel *[nDigi];
+  leTrigger.assign(nDigi, {});
+  leAccept.assign(nDigi, {});
+  lbFileSize.assign(nDigi, nullptr);
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
     rowID = 3;
     lbFileSize[iDigi] = new QLabel("file Size", scalar);
     lbFileSize[iDigi]->setAlignment(Qt::AlignCenter);
-    leTrigger[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
-    leAccept[iDigi] = new QLineEdit *[digi[iDigi]->GetNChannels()];
-    for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++){
+    /// Clamped the same way UpdateScalar() clamps its own loops. A board reporting more
+    /// channels than MaxNumberOfChannel would otherwise build rows that nothing ever fills.
+    const int nCh = std::min<int>(digi[iDigi]->GetNChannels(), MaxNumberOfChannel);
+    leTrigger[iDigi].assign(nCh, nullptr);
+    leAccept[iDigi].assign(nCh, nullptr);
+    for( int ch = 0; ch < nCh; ch++){
 
       if( ch == 0 ){
           QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
@@ -1387,23 +1347,20 @@ void MainWindow::SetUpScalar(){
 
 void MainWindow::CleanUpScalar(){
 
-  if( leTrigger == nullptr ) return;
+  if( leTrigger.empty() ) return;
 
-  for( int i = 0; i < nDigi; i++){
-    for( int ch = 0; ch < digi[i]->GetNChannels(); ch ++){
-      delete leTrigger[i][ch];
-      delete leAccept[i][ch];
-    }
-    delete lbFileSize[i];
-    delete [] leTrigger[i];
-    delete [] leAccept[i];
+  /// Lengths come from the vectors, not from asking the digitizers how many channels they have
+  /// now. That is the point of the change: the old loop re-read GetNChannels() at delete time,
+  /// so a board reopened with a different count between build and teardown made this free the
+  /// wrong number of widgets.
+  for( size_t i = 0; i < leTrigger.size(); i++){
+    for( size_t ch = 0; ch < leTrigger[i].size(); ch ++) delete leTrigger[i][ch];
+    for( size_t ch = 0; ch < leAccept[i].size(); ch ++)  delete leAccept[i][ch];
   }
-  delete [] lbFileSize;
-  delete [] leTrigger;
-  delete [] leAccept;
-  lbFileSize = nullptr;
-  leTrigger = nullptr;
-  leAccept = nullptr;
+  for( size_t i = 0; i < lbFileSize.size(); i++) delete lbFileSize[i];
+  lbFileSize.clear();
+  leTrigger.clear();
+  leAccept.clear();
 
   //Clean up QLabel
   QList<QLabel *> labelChildren = scalar->findChildren<QLabel *>();
@@ -1419,34 +1376,52 @@ void MainWindow::UpdateScalar(){
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 
   if( influx && scalarOutputInflux) influx->ClearDataPointsBuffer();
-  std::string haha[MaxNumberOfChannel] = {""};
-  double acceptRate[MaxNumberOfChannel] = {0};
+  std::string haha[MaxNumberOfChannel];
+  double acceptRate[MaxNumberOfChannel];
 
   ///===== Get trigger for all channel
   unsigned long totalFileSize  = 0;
   for( int iDigi = 0; iDigi < nDigi; iDigi ++ ){
     if( digi[iDigi]->IsDummy() ) continue;
 
-    //=========== another method, directly readValue
-    for( int ch = 0; ch < std::min((int) digi[iDigi]->GetNChannels(), (int) MaxNumberOfChannel); ch ++){
-      // digiMTX[iDigi].lock();
-      std::string timeStr = digi[iDigi]->ReadValue(PHA::CH::ChannelRealtime, ch); // for refreashing SelfTrgRate and SavedCount
-      haha[ch] = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
-      std::string kakaStr = digi[iDigi]->ReadValue(PHA::CH::ChannelSavedCount, ch);
-      // digiMTX[iDigi].unlock();
-      
-      /// strtoul, not std::stoul: ReadValue() returns "not connected", or ErrorMsg()'s text
-      /// ("Timeout", "Communication error", ...), whenever the board does not answer. std::stoul
-      /// throws std::invalid_argument on those, and an exception out of a QTimer slot is
-      /// std::terminate -- so one board blipping off the network took the whole DAQ down.
-      /// strtoul yields 0, which the rate calculation below already treats as "no update".
-      unsigned long kaka = strtoul(kakaStr.c_str(), nullptr, 10);
-      unsigned long time = strtoul(timeStr.c_str(), nullptr, 10);
-      ///* it seems that the ChannelRealtime is not in ns for VX2730
+    /// The scalar panel is built once per digitizer list. If the list has grown since, these are
+    /// shorter than nDigi and there is no row to write into.
+    if( iDigi >= (int) leTrigger.size() ) break;
+
+    /// One bound for both loops below. haha[] and acceptRate[] are std::string[64]/double[64] and
+    /// the InfluxDB loop used to run to GetNChannels() unclamped, so a board reporting more than
+    /// 64 channels read a non-trivial object out of bounds. The widget row's own length is in the
+    /// min too, so a board that reports a different channel count than it did when the panel was
+    /// built cannot walk off the end of it.
+    const int nCh = std::min<int>({ (int) digi[iDigi]->GetNChannels(),
+                                    (int) MaxNumberOfChannel,
+                                    (int) leTrigger[iDigi].size() });
+
+    /// Reset per board. These live outside the iDigi loop, so a channel whose read failed used to
+    /// report the *previous* board's value rather than nothing.
+    for( int ch = 0; ch < MaxNumberOfChannel; ch ++){ haha[ch] = "0"; acceptRate[ch] = 0; }
+
+    /// One statistics read per board instead of three blocking round-trips per channel. ReadStat()
+    /// fills realTime/savedEventCount for every channel in a single CAEN_FELib_ReadData and
+    /// refreshes the SelfTrgRate cache; at 4 boards x 64 channels this was 768 synchronous
+    /// round-trips every 2 s, on the GUI thread.
+    // digiMTX[iDigi].lock();
+    digi[iDigi]->ReadStat();
+    // digiMTX[iDigi].unlock();
+
+    for( int ch = 0; ch < nCh; ch ++){
+      haha[ch] = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, ch);
+
+      unsigned long kaka = digi[iDigi]->GetSavedEventCount(ch);
+      unsigned long time = digi[iDigi]->GetRealTime(ch);
+      ///* it seems that the ChannelRealtime is not in ns for VX2730.
+      /// Carried over from the per-parameter read this replaced and NOT re-verified against the
+      /// statistics endpoint -- the test station is a VX2745, which needs no divisor. Check the
+      /// rates on a VX2730 before trusting them.
       if( digi[iDigi]->GetModelName() == "VX2730" ){ time = time / 4;}
 
       leTrigger[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
-      
+
       if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
         acceptRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
       }else{
@@ -1471,13 +1446,15 @@ void MainWindow::UpdateScalar(){
       //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), acceptRate);
       leAccept[iDigi][ch]->setText(QString::number(acceptRate[ch],'f', 1));
 
-      lbFileSize[iDigi]->setText(QString::number(digi[iDigi]->GetTotalFilesSize()/1024./1024.) + " MB");
-
     }
+
+    /// Board-level label, so once per board -- it was inside the channel loop, rebuilding the
+    /// same string 64 times a tick.
+    lbFileSize[iDigi]->setText(QString::number(digi[iDigi]->GetTotalFilesSize()/1024./1024.) + " MB");
 
     ///============== push the trigger, acceptRate rate database
     if( influx && scalarOutputInflux ){
-      for( int ch = 0; ch < digi[iDigi]->GetNChannels(); ch++ ){
+      for( int ch = 0; ch < nCh; ch++ ){
         influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + haha[ch]);
         if( !std::isnan(acceptRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(acceptRate[ch]));
       }
@@ -1522,16 +1499,6 @@ void MainWindow::ProgramSettingsPanel(){
   helpInfo->setLineWrapMode(QPlainTextEdit::LineWrapMode::WidgetWidth);
   
   
-  helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
-                           the folder of the analysis code. Can be omitted.");
-
-  helpInfo->appendHtml("<p></p>");
- 
-  helpInfo->appendHtml("<p></p>");
-  helpInfo->appendHtml("<font style=\"color : blue;\">  Analysis Path  </font> is the path of \
-                           the folder of the analysis code. Can be omitted.");
-
   helpInfo->appendHtml("<p></p>");
   helpInfo->appendHtml("<font style=\"color : blue;\">  Data Path  </font> is the path of the \
                              <b>parents folder</b> of data will store. ");  
@@ -1991,7 +1958,15 @@ void MainWindow::DecodeIPList(){
   //------- decode IPListStr
   nDigi = 0;
   IPList.clear();
-  QStringList parts = IPListStr.replace(' ', "").split(".");
+  /// Strip into a local. IPListStr is what gets written back to programSettings.txt, so mutating
+  /// it here would persist the stripped form as the user's setting.
+  QStringList parts = QString(IPListStr).replace(' ', "").split(".");
+  /// The string is free-form -- a QLineEdit, or line 4 of programSettings.txt -- and the callers
+  /// only check it is non-empty, so "192.168.1" would index past the end.
+  if( parts.size() < 4 ){
+    LogMsg("<font style=\"color:red;\">Digitizer IP list \"" + IPListStr + "\" is not of the form xxx.xxx.xxx.n[,n][-n]. No digitizer configured.</font>");
+    return;
+  }
   QString IPDomain = parts[0] + "." + parts[1] + "." + parts[2] + ".";
   parts = parts[3].split(",");
   for(int i = 0; i < parts.size(); i++){
@@ -2921,51 +2896,57 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
 
 }
 
-void MainWindow::AppendComment(){
+/// The three copies of this all did new + deleteLater and then read lineEdit->text() after
+/// exec() returned -- safe only because deleteLater has not been serviced yet. On the stack the
+/// dialog and its children die at the closing brace instead, after the text has been taken.
+bool MainWindow::AskRunComment(const QString & title, const QString & labelHtml, QString & text){
 
-  //if Started ACQ, append Comment, if ACQ stopped, disbale
+  QDialog dOpen(this);
+  dOpen.setWindowTitle(title);
+  dOpen.setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+  dOpen.setMinimumWidth(600);
 
-  if( !chkSaveRun->isChecked() ) return;
-
-  QDialog * dOpen = new QDialog(this);
-  dOpen->setWindowTitle("Append Run Comment");
-  dOpen->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
-  dOpen->setMinimumWidth(600);
-  connect(dOpen, &QDialog::finished, dOpen, &QDialog::deleteLater);
-
-  QGridLayout * vlayout = new QGridLayout(dOpen);
-  QLabel *label = new QLabel("Enter Append Run comment for <font style=\"color : red;\">Run-" +  runIDStr + "</font> : ", dOpen);
-  QLineEdit *lineEdit = new QLineEdit(dOpen);
-  QPushButton *button1 = new QPushButton("OK", dOpen);
-  QPushButton *button2 = new QPushButton("Cancel", dOpen);
+  QGridLayout * vlayout  = new QGridLayout(&dOpen);
+  QLabel * label         = new QLabel(labelHtml, &dOpen);
+  QLineEdit * lineEdit   = new QLineEdit(&dOpen);
+  QPushButton * button1  = new QPushButton("OK", &dOpen);
+  QPushButton * button2  = new QPushButton("Cancel", &dOpen);
 
   vlayout->addWidget(label, 0, 0, 1, 2);
   vlayout->addWidget(lineEdit, 1, 0, 1, 2);
   vlayout->addWidget(button1, 2, 0);
   vlayout->addWidget(button2, 2, 1);
 
-  connect(button1, &QPushButton::clicked, dOpen, &QDialog::accept);
-  connect(button2, &QPushButton::clicked, dOpen, &QDialog::reject);
-  int result = dOpen->exec();
+  connect(button1, &QPushButton::clicked, &dOpen, &QDialog::accept);
+  connect(button2, &QPushButton::clicked, &dOpen, &QDialog::reject);
 
-  if(result == QDialog::Accepted ){
-    appendComment = lineEdit->text();
-    if( appendComment == "") return;
+  if( dOpen.exec() != QDialog::Accepted ) return false;
+  text = lineEdit->text();
+  return true;
+}
 
-    appendComment = QDateTime::currentDateTime().toString("[MM.dd hh:mm:ss]") + appendComment;
+void MainWindow::AppendComment(){
 
-    AppendElog(appendComment);
+  //if Started ACQ, append Comment, if ACQ stopped, disbale
 
-    leRunComment->setText("Append Comment: " + appendComment);
+  if( !chkSaveRun->isChecked() ) return;
 
-    if( influx ){
-      influx->ClearDataPointsBuffer();
-      influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + appendComment.replace(' ', '_').toStdString() + "\"");
-      influx->WriteData(DatabaseName.toStdString());
-    }
+  if( !AskRunComment("Append Run Comment",
+                     "Enter Append Run comment for <font style=\"color : red;\">Run-" + runIDStr + "</font> : ",
+                     appendComment) ) return;
 
-  }else{
-    return;
+  if( appendComment == "") return;
+
+  appendComment = QDateTime::currentDateTime().toString("[MM.dd hh:mm:ss]") + appendComment;
+
+  AppendElog(appendComment);
+
+  leRunComment->setText("Append Comment: " + appendComment);
+
+  if( influx ){
+    influx->ClearDataPointsBuffer();
+    influx->AddDataPoint("RunID,start=1 value=" + std::to_string(runID) + ",expName=\"" + expName.toStdString()+ + "\",comment=\"" + appendComment.replace(' ', '_').toStdString() + "\"");
+    influx->WriteData(DatabaseName.toStdString());
   }
 
 }

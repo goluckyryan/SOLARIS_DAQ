@@ -13,7 +13,7 @@
 
 class SolReader {
   private:
-    FILE * inFile;
+    FILE * inFile = nullptr; /// init() sets every other member; ~SolReader() closes this one
     uint64_t inFileSize;
     uint64_t filePos;
     unsigned int totNumBlock;
@@ -81,6 +81,7 @@ SolReader::~SolReader(){
 }
 
 inline void SolReader::OpenFile(std::string fileName){
+  if( inFile ) fclose(inFile); /// reopening on a live reader would otherwise leak the old handle
   inFile = fopen(fileName.c_str(), "rb");
   if( inFile == NULL ){
     printf("Cannot open file : %s \n", fileName.c_str());
@@ -125,10 +126,10 @@ inline int SolReader::ReadNextBlock(bool fastRead, bool debug){
   /// is Raw from end to end, it was doing a 20 MB delete[]/new[] plus ~600 KB of probe arrays for
   /// every block read.
   if( ( blockStartIdentifier & 0xF ) == DataFormat::Raw && hit->dataType != DataFormat::Raw ){
-    hit->SetDataType(DataFormat::Raw, ((blockStartIdentifier >> 1) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD);
+    hit->SetDataType(DataFormat::Raw, DPPTypeOf(blockStartIdentifier));
   }
   hit->dataType = blockStartIdentifier & 0xF;
-  hit->DPPType = ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+  hit->DPPType = DPPTypeOf(blockStartIdentifier);
 
   if( debug ) {
     printf("  DPP Type : %s \n", hit->DPPType.c_str());

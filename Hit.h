@@ -1,8 +1,9 @@
 #ifndef HIT_H
 #define HIT_H
 
-#include <stdio.h> 
+#include <stdio.h>
 #include <cstdlib>
+#include <cstring>
 #include <stdint.h>
 #include <string>
 
@@ -25,6 +26,13 @@ namespace DPPType{
   const std::string PSD = "DPP_PSD";
 
 };
+
+/// A block starts with 0xAA00 | dataFormat, and Digitizer2Gen::SetDataFormat() ORs in 0x0010 for
+/// PSD -- so the firmware flag is bit 4, not bit 1. Decoding it by hand in four places had already
+/// produced one site that shifted by 1 and silently labelled every PHA block as PSD.
+inline const std::string & DPPTypeOf(unsigned short blockStartIdentifier){
+  return ((blockStartIdentifier >> 4) & 0xF) == 0 ? DPPType::PHA : DPPType::PSD;
+}
 
 class Hit {
   public:
@@ -145,15 +153,16 @@ class Hit {
     void ClearTrace(){
       if( isTraceAllZero ) return; // no need to clear again
 
-      for( int i = 0; i < MaxTraceLenght; i++){
-        analog_probes[0][i] = 0;
-        analog_probes[1][i] = 0;
+      /// All six are flat arrays of trivial types, so clear them wholesale. SetDataType always
+      /// allocates all six, which is why none of these needs a null check -- see the comment there.
+      std::memset(analog_probes[0], 0, MaxTraceLenght * sizeof(int32_t));
+      std::memset(analog_probes[1], 0, MaxTraceLenght * sizeof(int32_t));
 
-        digital_probes[0][i] = 0;
-        digital_probes[1][i] = 0;
-        digital_probes[2][i] = 0;
-        digital_probes[3][i] = 0;
-      }
+      std::memset(digital_probes[0], 0, MaxTraceLenght * sizeof(uint8_t));
+      std::memset(digital_probes[1], 0, MaxTraceLenght * sizeof(uint8_t));
+      std::memset(digital_probes[2], 0, MaxTraceLenght * sizeof(uint8_t));
+      std::memset(digital_probes[3], 0, MaxTraceLenght * sizeof(uint8_t));
+
       isTraceAllZero = true;
     }
 

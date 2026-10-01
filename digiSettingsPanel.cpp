@@ -1533,56 +1533,14 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
         enableSignalSlot = false;
         unsigned short ch = digi[digiID]->GetNChannels();
         //printf("index = %d, ch = %d\n", index, ch);
-        FillComboBoxValueFromMemory(cbbOnOff[ID][ch], PHA::CH::ChannelEnable, index);
-        FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], PHA::CH::DC_Offset, index);
-        FillSpinBoxValueFromMemory(spbThreshold[ID][ch], PHA::CH::TriggerThreshold, index);
-        FillComboBoxValueFromMemory(cbbParity[ID][ch], PHA::CH::Polarity, index);
-        FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], PHA::CH::RecordLength, index);
-        FillSpinBoxValueFromMemory(spbPreTrigger[ID][ch], PHA::CH::PreTrigger, index);
-
-        FillComboBoxValueFromMemory(cbbWaveSource[ID][ch], PHA::CH::WaveDataSource, index);
-        FillComboBoxValueFromMemory(cbbWaveRes[ID][ch], PHA::CH::WaveResolution, index);
-        FillComboBoxValueFromMemory(cbbWaveSave[ID][ch], PHA::CH::WaveSaving, index);
-
-        FillComboBoxValueFromMemory(cbbAnaProbe0[ID][ch], PHA::CH::WaveAnalogProbe0, index);
-        FillComboBoxValueFromMemory(cbbAnaProbe1[ID][ch], PHA::CH::WaveAnalogProbe1, index);
-        FillComboBoxValueFromMemory(cbbDigProbe0[ID][ch], PHA::CH::WaveDigitalProbe0, index);
-        FillComboBoxValueFromMemory(cbbDigProbe1[ID][ch], PHA::CH::WaveDigitalProbe1, index);
-        FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], PHA::CH::WaveDigitalProbe2, index);
-        FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], PHA::CH::WaveDigitalProbe3, index);
-
-        FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], PHA::CH::EventSelector, index);
-        FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], PHA::CH::WaveSelector, index);
-        FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][ch], PHA::CH::EnergySkimLowDiscriminator, index);
-        FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][ch], PHA::CH::EnergySkimHighDiscriminator, index);
-
-        FillComboBoxValueFromMemory(cbbEvtTrigger[ID][ch], PHA::CH::EventTriggerSource, index);
-        FillComboBoxValueFromMemory(cbbWaveTrigger[ID][ch], PHA::CH::WaveTriggerSource, index);
-        FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], PHA::CH::ChannelVetoSource, index);
-        FillComboBoxValueFromMemory(cbbCoinMask[ID][ch], PHA::CH::CoincidenceMask, index);
-        FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, index);
-        FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
-        FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
+        /// The master "All" row is at widget index nChannels; the value shown is the picked channel's.
+        FillCommonChannelWidgets(ch, index);
 
         unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
 
         //-------- PHA
-        FillSpinBoxValueFromMemory(spbInputRiseTime[ID][ch], PHA::CH::TimeFilterRiseTime, index);
-        FillSpinBoxValueFromMemory(spbTriggerGuard[ID][ch], PHA::CH::TimeFilterRetriggerGuard, index);
-        FillComboBoxValueFromMemory(cbbLowFilter[ID][ch], PHA::CH::EnergyFilterLowFreqFilter, index);
-
-        FillSpinBoxValueFromMemory(spbTrapRiseTime[ID][ch], PHA::CH::EnergyFilterRiseTime, index);
-        FillSpinBoxValueFromMemory(spbTrapFlatTop[ID][ch], PHA::CH::EnergyFilterFlatTop, index);
-        FillSpinBoxValueFromMemory(spbTrapPoleZero[ID][ch], PHA::CH::EnergyFilterPoleZero, index);
-
-        FillSpinBoxValueFromMemory(spbPeaking[ID][ch], PHA::CH::EnergyFilterPeakingPosition, index);
-        FillSpinBoxValueFromMemory(spbBaselineGuard[ID][ch], PHA::CH::EnergyFilterBaselineGuard, index);
-        FillSpinBoxValueFromMemory(spbPileupGuard[ID][ch], PHA::CH::EnergyFilterPileUpGuard, index);
-
-        FillComboBoxValueFromMemory(cbbBaselineAvg[ID][ch], PHA::CH::EnergyFilterBaselineAvg, index);
-        FillComboBoxValueFromMemory(cbbPeakingAvg[ID][ch], PHA::CH::EnergyFilterPeakingAvg, index);
-        FillSpinBoxValueFromMemory(spbFineGain[ID][ch], PHA::CH::EnergyFilterFineGain, index);
+        FillPHAChannelWidgets(ch, index);
 
         enableSignalSlot = true;
       }
@@ -1921,65 +1879,14 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
         enableSignalSlot = false;
         unsigned short ch = digi[digiID]->GetNChannels();
         //printf("index = %d, ch = %d\n", index, ch);
-        FillComboBoxValueFromMemory(cbbOnOff[ID][ch], PHA::CH::ChannelEnable, index);
-        FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], PHA::CH::DC_Offset, index);
-        FillSpinBoxValueFromMemory(spbThreshold[ID][ch], PHA::CH::TriggerThreshold, index);
-        FillComboBoxValueFromMemory(cbbParity[ID][ch], PHA::CH::Polarity, index);
-        FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], PHA::CH::RecordLength, index);
-        FillSpinBoxValueFromMemory(spbPreTrigger[ID][ch], PHA::CH::PreTrigger, index);
-
-        FillComboBoxValueFromMemory(cbbWaveSource[ID][ch], PHA::CH::WaveDataSource, index);
-        FillComboBoxValueFromMemory(cbbWaveRes[ID][ch], PHA::CH::WaveResolution, index);
-        FillComboBoxValueFromMemory(cbbWaveSave[ID][ch], PHA::CH::WaveSaving, index);
-
-        FillComboBoxValueFromMemory(cbbAnaProbe0[ID][ch], PHA::CH::WaveAnalogProbe0, index);
-        FillComboBoxValueFromMemory(cbbAnaProbe1[ID][ch], PHA::CH::WaveAnalogProbe1, index);
-        FillComboBoxValueFromMemory(cbbDigProbe0[ID][ch], PHA::CH::WaveDigitalProbe0, index);
-        FillComboBoxValueFromMemory(cbbDigProbe1[ID][ch], PHA::CH::WaveDigitalProbe1, index);
-        FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], PHA::CH::WaveDigitalProbe2, index);
-        FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], PHA::CH::WaveDigitalProbe3, index);
-
-        FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], PHA::CH::EventSelector, index);
-        FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], PHA::CH::WaveSelector, index);
-        FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][ch], PHA::CH::EnergySkimLowDiscriminator, index);
-        FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][ch], PHA::CH::EnergySkimHighDiscriminator, index);
-
-        FillComboBoxValueFromMemory(cbbEvtTrigger[ID][ch], PHA::CH::EventTriggerSource, index);
-        FillComboBoxValueFromMemory(cbbWaveTrigger[ID][ch], PHA::CH::WaveTriggerSource, index);
-        FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], PHA::CH::ChannelVetoSource, index);
-        FillComboBoxValueFromMemory(cbbCoinMask[ID][ch], PHA::CH::CoincidenceMask, index);
-        FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, index);
-        FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
-        FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
+        /// The master "All" row is at widget index nChannels; the value shown is the picked channel's.
+        FillCommonChannelWidgets(ch, index);
 
         unsigned long  mask = Utility::TenBase(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
 
         //-------- PSD
-        FillComboBoxValueFromMemory(cbbADCInputBaselineAvg[ID][ch], PSD::CH::ADCInputBaselineAvg, index);
-        FillSpinBoxValueFromMemory(spbAbsBaseline[ID][ch], PSD::CH::AbsoluteBaseline, index);
-        FillSpinBoxValueFromMemory(spbADCInputBaselineGuard[ID][ch], PSD::CH::ADCInputBaselineGuard, index);
-
-        FillComboBoxValueFromMemory(cbbTriggerFilter[ID][ch], PSD::CH::TriggerFilterSelection, index);
-        FillComboBoxValueFromMemory(cbbTriggerHysteresis[ID][ch], PSD::CH::TriggerHysteresis, index);
-        FillSpinBoxValueFromMemory(spbCFDDelay[ID][ch], PSD::CH::CFDDelay, index);
-        FillSpinBoxValueFromMemory(spbCFDFraction[ID][ch], PSD::CH::CFDFraction, index);
-        FillComboBoxValueFromMemory(cbbSmoothingFactor[ID][ch], PSD::CH::SmoothingFactor, index);
-        FillComboBoxValueFromMemory(cbbChargeSmooting[ID][ch], PSD::CH::ChargeSmoothing, index);
-        FillComboBoxValueFromMemory(cbbTimeFilterSmoothing[ID][ch], PSD::CH::TimeFilterSmoothing, index);
-        FillSpinBoxValueFromMemory(spbTimeFilterReTriggerGuard[ID][ch], PSD::CH::TimeFilterRetriggerGuard, index);
-        FillSpinBoxValueFromMemory(spbPileupGap[ID][ch], PSD::CH::PileupGap, index);
-
-        FillSpinBoxValueFromMemory(spbGateLong[ID][ch], PSD::CH::GateLongLength, index);
-        FillSpinBoxValueFromMemory(spbGateShort[ID][ch], PSD::CH::GateShortLength, index);
-        FillSpinBoxValueFromMemory(spbGateOffset[ID][ch], PSD::CH::GateOffset, index);
-        FillSpinBoxValueFromMemory(spbLongChargeIntergratorPedestal[ID][ch], PSD::CH::LongChargeIntegratorPedestal, index);
-        FillSpinBoxValueFromMemory(spbShortChargeIntergratorPedestal[ID][ch], PSD::CH::ShortChargeIntegratorPedestal, index);
-        FillComboBoxValueFromMemory(cbbEnergyGain[ID][ch], PSD::CH::EnergyGain, index);
-
-        FillSpinBoxValueFromMemory(spbNeutronThreshold[ID][ch], PSD::CH::NeutronThreshold, index);
-        FillComboBoxValueFromMemory(cbbEventNeutronReject[ID][ch], PSD::CH::EventNeutronReject, index);
-        FillComboBoxValueFromMemory(cbbWaveNeutronReject[ID][ch], PSD::CH::WaveNeutronReject, index);
+        FillPSDChannelWidgets(ch, index);
 
         enableSignalSlot = true;
       }
@@ -2427,8 +2334,13 @@ void DigiSettingsPanel::EnableControl(){
 
   UpdatePanelFromMemory();
 
+  /// icBox1/icBox2 are the single Inquiry/Copy tab, not per-digitizer, so they must reflect every
+  /// board: copying settings while any board is acquiring is what has to be blocked.
+  bool anyAcqOn = false;
+
   for( int id = 0; id < nDigi; id ++){
     bool enable = !digi[id]->IsAcqOn();
+    if( !enable ) anyAcqOn = true;
 
     //digiBox[id]->setEnabled(enable);
     //if( digi[id]->GetFPGAType() == "DPP_PHA") VGABox[id]->setEnabled(enable);
@@ -2465,20 +2377,18 @@ void DigiSettingsPanel::EnableControl(){
       for( int i = 0; i < tempArray[k]->count(); i++) {
         if( k == 0 && (i == 0 || i == 1 || i == 2 ) ) continue;
         QWidget* currentTab = tempArray[k]->widget(i);
-        if( currentTab ){
-          QList<QWidget*> childWidgets = currentTab->findChildren<QWidget*>();
-          for(int j=0; j<childWidgets.count(); j++) {
-              childWidgets[j]->setEnabled(enable);
-          }
-        }
+        /// Disable the page and let Qt propagate. Walking every descendant instead used to
+        /// re-enable bdVGA on a non-VX2745 board, undoing the line above.
+        if( currentTab ) currentTab->setEnabled(enable);
       }
     }
-    
+
     //triggerMapTab[ID]->setEnabled(enable);
 
-    icBox1->setEnabled(enable);
-    icBox2->setEnabled(enable);
   }
+
+  icBox1->setEnabled(!anyAcqOn);
+  icBox2->setEnabled(!anyAcqOn);
 
 }
 
@@ -2590,8 +2500,18 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   }
 
   //-------- temperature
+  /// Only the sensors this model has. The panel used to fill all eight boxes unconditionally
+  /// while Digitizer2Gen read only some of them, so on a board with one ADC sensor the other
+  /// seven boxes showed whatever the cache happened to hold -- blank, or a stale value from a
+  /// previous board on the same tab. The digitizer is now the single authority on the count.
+  const int nTemp = digi[ID]->GetNTempSensADC();
   for( int i = 0; i < 8; i++){
-    leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::DIG::TempSensADC[i]))); // same for PSD
+    if( i < nTemp ){
+      leTemp[ID][i]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::DIG::TempSensADC[i]))); // same for PSD
+    }else{
+      leTemp[ID][i]->clear();
+    }
+    leTemp[ID][i]->setEnabled( i < nTemp );
   }
   
   if( onlyStatus ) {
@@ -2706,7 +2626,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
   for( int ch = 0; ch < digi[ID]->GetNChannels(); ch++){
 
-    unsigned int status = atoi(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelStatus).c_str());
+    unsigned int status = atoi(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelStatus, ch).c_str());
     for( int i = 0; i < 9; i++){
       if( (status >> i) & 0x1 ) {
         chStatus[ID][ch][i]->setStyleSheet("background-color:green;");
@@ -2717,37 +2637,8 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     chGainFactor[ID][ch]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::CH::GainFactor, ch)));
     chADCToVolts[ID][ch]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::CH::ADCToVolts, ch)));
 
-    FillComboBoxValueFromMemory(cbbOnOff[ID][ch], PHA::CH::ChannelEnable, ch);
-    FillSpinBoxValueFromMemory(spbRecordLength[ID][ch], PHA::CH::RecordLength, ch);
-    FillSpinBoxValueFromMemory(spbPreTrigger[ID][ch], PHA::CH::PreTrigger, ch);
-    FillSpinBoxValueFromMemory(spbDCOffset[ID][ch], PHA::CH::DC_Offset, ch);
-    FillSpinBoxValueFromMemory(spbThreshold[ID][ch], PHA::CH::TriggerThreshold, ch);
-
-    FillComboBoxValueFromMemory(cbbParity[ID][ch], PHA::CH::Polarity, ch);
-    FillComboBoxValueFromMemory(cbbWaveSource[ID][ch], PHA::CH::WaveDataSource, ch);
-    FillComboBoxValueFromMemory(cbbWaveRes[ID][ch], PHA::CH::WaveResolution, ch);
-    FillComboBoxValueFromMemory(cbbWaveSave[ID][ch], PHA::CH::WaveSaving, ch);
-
-    FillComboBoxValueFromMemory(cbbEvtTrigger[ID][ch], PHA::CH::EventTriggerSource, ch);
-    FillComboBoxValueFromMemory(cbbWaveTrigger[ID][ch], PHA::CH::WaveTriggerSource, ch);
-    FillComboBoxValueFromMemory(cbbCoinMask[ID][ch], PHA::CH::CoincidenceMask, ch);
-    FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, ch);
-    FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, ch);
-
-    FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], PHA::CH::ChannelVetoSource, ch);
-    FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, ch);
-
-    FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], PHA::CH::EventSelector, ch);
-    FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], PHA::CH::WaveSelector, ch);
-    FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][ch], PHA::CH::EnergySkimLowDiscriminator, ch);
-    FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][ch], PHA::CH::EnergySkimHighDiscriminator, ch);
-
-    FillComboBoxValueFromMemory(cbbAnaProbe0[ID][ch], PHA::CH::WaveAnalogProbe0, ch);
-    FillComboBoxValueFromMemory(cbbAnaProbe1[ID][ch], PHA::CH::WaveAnalogProbe1, ch);
-    FillComboBoxValueFromMemory(cbbDigProbe0[ID][ch], PHA::CH::WaveDigitalProbe0, ch);
-    FillComboBoxValueFromMemory(cbbDigProbe1[ID][ch], PHA::CH::WaveDigitalProbe1, ch);
-    FillComboBoxValueFromMemory(cbbDigProbe2[ID][ch], PHA::CH::WaveDigitalProbe2, ch);
-    FillComboBoxValueFromMemory(cbbDigProbe3[ID][ch], PHA::CH::WaveDigitalProbe3, ch);
+    /// Each channel's own row, showing its own value.
+    FillCommonChannelWidgets(ch, ch);
 
     std::string itlConnect = digi[ID]->GetSettingValueFromMemory(PHA::CH::ITLConnect, ch);
     if( itlConnect == "Disabled" ) {
@@ -2766,53 +2657,8 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
       chITLConnect[ID][ch][1]->setStyleSheet("background-color : green;");
     }
 
-    if( digi[ID]->GetFPGAType() == DPPType::PHA ) {
-
-      FillSpinBoxValueFromMemory(spbInputRiseTime[ID][ch], PHA::CH::TimeFilterRiseTime, ch);
-      FillSpinBoxValueFromMemory(spbTriggerGuard[ID][ch], PHA::CH::TimeFilterRetriggerGuard, ch);
-      FillComboBoxValueFromMemory(cbbLowFilter[ID][ch], PHA::CH::EnergyFilterLowFreqFilter, ch);
-
-      FillSpinBoxValueFromMemory(spbTrapRiseTime[ID][ch], PHA::CH::EnergyFilterRiseTime, ch);
-      FillSpinBoxValueFromMemory(spbTrapFlatTop[ID][ch], PHA::CH::EnergyFilterFlatTop, ch);
-      FillSpinBoxValueFromMemory(spbTrapPoleZero[ID][ch], PHA::CH::EnergyFilterPoleZero, ch);
-      
-      FillSpinBoxValueFromMemory(spbPeaking[ID][ch], PHA::CH::EnergyFilterPeakingPosition, ch);
-      FillSpinBoxValueFromMemory(spbBaselineGuard[ID][ch], PHA::CH::EnergyFilterBaselineGuard, ch);
-      FillSpinBoxValueFromMemory(spbPileupGuard[ID][ch], PHA::CH::EnergyFilterPileUpGuard, ch);
-      
-      FillComboBoxValueFromMemory(cbbBaselineAvg[ID][ch], PHA::CH::EnergyFilterBaselineAvg, ch);
-      FillSpinBoxValueFromMemory(spbFineGain[ID][ch], PHA::CH::EnergyFilterFineGain, ch);
-      FillComboBoxValueFromMemory(cbbPeakingAvg[ID][ch], PHA::CH::EnergyFilterPeakingAvg, ch);
-
-    }
-
-    if( digi[ID]->GetFPGAType() == DPPType::PSD){
-
-      FillComboBoxValueFromMemory(cbbADCInputBaselineAvg[ID][ch], PSD::CH::ADCInputBaselineAvg, ch);
-      FillSpinBoxValueFromMemory(spbAbsBaseline[ID][ch], PSD::CH::AbsoluteBaseline, ch);
-      FillSpinBoxValueFromMemory(spbADCInputBaselineGuard[ID][ch], PSD::CH::ADCInputBaselineGuard, ch);
-
-      FillComboBoxValueFromMemory(cbbTriggerFilter[ID][ch], PSD::CH::TriggerFilterSelection, ch);
-      FillComboBoxValueFromMemory(cbbTriggerHysteresis[ID][ch], PSD::CH::TriggerHysteresis, ch);
-      FillSpinBoxValueFromMemory(spbCFDDelay[ID][ch], PSD::CH::CFDDelay, ch);
-      FillSpinBoxValueFromMemory(spbCFDFraction[ID][ch], PSD::CH::CFDFraction, ch);
-      FillComboBoxValueFromMemory(cbbSmoothingFactor[ID][ch], PSD::CH::SmoothingFactor, ch);
-      FillComboBoxValueFromMemory(cbbChargeSmooting[ID][ch], PSD::CH::ChargeSmoothing, ch);
-      FillComboBoxValueFromMemory(cbbTimeFilterSmoothing[ID][ch], PSD::CH::TimeFilterSmoothing, ch);
-      FillSpinBoxValueFromMemory(spbTimeFilterReTriggerGuard[ID][ch], PSD::CH::TimeFilterRetriggerGuard, ch);
-      FillSpinBoxValueFromMemory(spbPileupGap[ID][ch], PSD::CH::PileupGap, ch);
-
-      FillSpinBoxValueFromMemory(spbGateLong[ID][ch], PSD::CH::GateLongLength, ch);
-      FillSpinBoxValueFromMemory(spbGateShort[ID][ch], PSD::CH::GateShortLength, ch);
-      FillSpinBoxValueFromMemory(spbGateOffset[ID][ch], PSD::CH::GateOffset, ch);
-      FillSpinBoxValueFromMemory(spbLongChargeIntergratorPedestal[ID][ch], PSD::CH::LongChargeIntegratorPedestal, ch);
-      FillSpinBoxValueFromMemory(spbShortChargeIntergratorPedestal[ID][ch], PSD::CH::ShortChargeIntegratorPedestal, ch);
-      FillComboBoxValueFromMemory(cbbEnergyGain[ID][ch], PSD::CH::EnergyGain, ch);
-
-      FillSpinBoxValueFromMemory(spbNeutronThreshold[ID][ch], PSD::CH::NeutronThreshold, ch);
-      FillComboBoxValueFromMemory(cbbEventNeutronReject[ID][ch], PSD::CH::EventNeutronReject, ch);
-      FillComboBoxValueFromMemory(cbbWaveNeutronReject[ID][ch], PSD::CH::WaveNeutronReject, ch);
-    }
+    if( digi[ID]->GetFPGAType() == DPPType::PHA ) FillPHAChannelWidgets(ch, ch);
+    if( digi[ID]->GetFPGAType() == DPPType::PSD ) FillPSDChannelWidgets(ch, ch);
   }
 
   //------ Trigger Mask
@@ -2996,14 +2842,14 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
 
 
 //^###########################################################################
-void DigiSettingsPanel::SetupShortComboBox(RComboBox *&cbb, Reg para){
+void DigiSettingsPanel::SetupShortComboBox(RComboBox *&cbb, const Reg & para){
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
                 QString::fromStdString((para.GetAnswers())[i].first));
   }
 }
 
-void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
+void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -3035,7 +2881,7 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg para, int ch_in
   });
 }
 
-void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
+void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
   QLabel * lb = new QLabel(labelTxt, this); 
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
@@ -3177,7 +3023,7 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
   }
 }
 
-void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel){
+void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg & para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
@@ -3189,7 +3035,7 @@ void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1]
   }
 }
 
-void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], const Reg para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel, int nCol){
+void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], const Reg & para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel, int nCol){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
@@ -3201,7 +3047,7 @@ void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel 
   }
 }
 
-void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg para, int ch_index){
+void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg & para, int ch_index){
   QString result = QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, cbb);
   int index = cbb->findData(result);
@@ -3213,7 +3059,7 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg p
   if( cbb->styleSheet() == "color:red;" ) cbb->setStyleSheet("");
 }
 
-void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg para, int ch_index){
+void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg & para, int ch_index){
   QString result = QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, spb);
 
@@ -3225,6 +3071,197 @@ void DigiSettingsPanel::FillSpinBoxValueFromMemory(RSpinBox *&spb, const Reg par
   spb->setStyleSheet("");
 }
 
+/// See the note in the header. Order within each run is free: both Fill* helpers above are pure
+/// cache reads followed by a setValue/setCurrentIndex, with no range reconfiguration and no
+/// dependency on a neighbour, and every caller has enableSignalSlot false. The three copies this
+/// replaces each used a different order for the same set, which is how I know.
+void DigiSettingsPanel::FillCommonChannelWidgets(int row, int ch){
+
+  FillComboBoxValueFromMemory(cbbOnOff[ID][row], PHA::CH::ChannelEnable, ch);
+  FillSpinBoxValueFromMemory(spbRecordLength[ID][row], PHA::CH::RecordLength, ch);
+  FillSpinBoxValueFromMemory(spbPreTrigger[ID][row], PHA::CH::PreTrigger, ch);
+  FillSpinBoxValueFromMemory(spbDCOffset[ID][row], PHA::CH::DC_Offset, ch);
+  FillSpinBoxValueFromMemory(spbThreshold[ID][row], PHA::CH::TriggerThreshold, ch);
+
+  FillComboBoxValueFromMemory(cbbParity[ID][row], PHA::CH::Polarity, ch);
+  FillComboBoxValueFromMemory(cbbWaveSource[ID][row], PHA::CH::WaveDataSource, ch);
+  FillComboBoxValueFromMemory(cbbWaveRes[ID][row], PHA::CH::WaveResolution, ch);
+  FillComboBoxValueFromMemory(cbbWaveSave[ID][row], PHA::CH::WaveSaving, ch);
+
+  FillComboBoxValueFromMemory(cbbEvtTrigger[ID][row], PHA::CH::EventTriggerSource, ch);
+  FillComboBoxValueFromMemory(cbbWaveTrigger[ID][row], PHA::CH::WaveTriggerSource, ch);
+  FillComboBoxValueFromMemory(cbbCoinMask[ID][row], PHA::CH::CoincidenceMask, ch);
+  FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][row], PHA::CH::AntiCoincidenceMask, ch);
+  FillSpinBoxValueFromMemory(spbCoinLength[ID][row], PHA::CH::CoincidenceLength, ch);
+
+  FillComboBoxValueFromMemory(cbbChVetoSrc[ID][row], PHA::CH::ChannelVetoSource, ch);
+  FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][row], PHA::CH::ADCVetoWidth, ch);
+
+  FillComboBoxValueFromMemory(cbbEventSelector[ID][row], PHA::CH::EventSelector, ch);
+  FillComboBoxValueFromMemory(cbbWaveSelector[ID][row], PHA::CH::WaveSelector, ch);
+  FillSpinBoxValueFromMemory(spbEnergySkimLow[ID][row], PHA::CH::EnergySkimLowDiscriminator, ch);
+  FillSpinBoxValueFromMemory(spbEnergySkimHigh[ID][row], PHA::CH::EnergySkimHighDiscriminator, ch);
+
+  FillComboBoxValueFromMemory(cbbAnaProbe0[ID][row], PHA::CH::WaveAnalogProbe0, ch);
+  FillComboBoxValueFromMemory(cbbAnaProbe1[ID][row], PHA::CH::WaveAnalogProbe1, ch);
+  FillComboBoxValueFromMemory(cbbDigProbe0[ID][row], PHA::CH::WaveDigitalProbe0, ch);
+  FillComboBoxValueFromMemory(cbbDigProbe1[ID][row], PHA::CH::WaveDigitalProbe1, ch);
+  FillComboBoxValueFromMemory(cbbDigProbe2[ID][row], PHA::CH::WaveDigitalProbe2, ch);
+  FillComboBoxValueFromMemory(cbbDigProbe3[ID][row], PHA::CH::WaveDigitalProbe3, ch);
+}
+
+void DigiSettingsPanel::FillPHAChannelWidgets(int row, int ch){
+
+  FillSpinBoxValueFromMemory(spbInputRiseTime[ID][row], PHA::CH::TimeFilterRiseTime, ch);
+  FillSpinBoxValueFromMemory(spbTriggerGuard[ID][row], PHA::CH::TimeFilterRetriggerGuard, ch);
+  FillComboBoxValueFromMemory(cbbLowFilter[ID][row], PHA::CH::EnergyFilterLowFreqFilter, ch);
+
+  FillSpinBoxValueFromMemory(spbTrapRiseTime[ID][row], PHA::CH::EnergyFilterRiseTime, ch);
+  FillSpinBoxValueFromMemory(spbTrapFlatTop[ID][row], PHA::CH::EnergyFilterFlatTop, ch);
+  FillSpinBoxValueFromMemory(spbTrapPoleZero[ID][row], PHA::CH::EnergyFilterPoleZero, ch);
+
+  FillSpinBoxValueFromMemory(spbPeaking[ID][row], PHA::CH::EnergyFilterPeakingPosition, ch);
+  FillSpinBoxValueFromMemory(spbBaselineGuard[ID][row], PHA::CH::EnergyFilterBaselineGuard, ch);
+  FillSpinBoxValueFromMemory(spbPileupGuard[ID][row], PHA::CH::EnergyFilterPileUpGuard, ch);
+
+  FillComboBoxValueFromMemory(cbbBaselineAvg[ID][row], PHA::CH::EnergyFilterBaselineAvg, ch);
+  FillComboBoxValueFromMemory(cbbPeakingAvg[ID][row], PHA::CH::EnergyFilterPeakingAvg, ch);
+  FillSpinBoxValueFromMemory(spbFineGain[ID][row], PHA::CH::EnergyFilterFineGain, ch);
+}
+
+void DigiSettingsPanel::FillPSDChannelWidgets(int row, int ch){
+
+  FillComboBoxValueFromMemory(cbbADCInputBaselineAvg[ID][row], PSD::CH::ADCInputBaselineAvg, ch);
+  FillSpinBoxValueFromMemory(spbAbsBaseline[ID][row], PSD::CH::AbsoluteBaseline, ch);
+  FillSpinBoxValueFromMemory(spbADCInputBaselineGuard[ID][row], PSD::CH::ADCInputBaselineGuard, ch);
+
+  FillComboBoxValueFromMemory(cbbTriggerFilter[ID][row], PSD::CH::TriggerFilterSelection, ch);
+  FillComboBoxValueFromMemory(cbbTriggerHysteresis[ID][row], PSD::CH::TriggerHysteresis, ch);
+  FillSpinBoxValueFromMemory(spbCFDDelay[ID][row], PSD::CH::CFDDelay, ch);
+  FillSpinBoxValueFromMemory(spbCFDFraction[ID][row], PSD::CH::CFDFraction, ch);
+  FillComboBoxValueFromMemory(cbbSmoothingFactor[ID][row], PSD::CH::SmoothingFactor, ch);
+  FillComboBoxValueFromMemory(cbbChargeSmooting[ID][row], PSD::CH::ChargeSmoothing, ch);
+  FillComboBoxValueFromMemory(cbbTimeFilterSmoothing[ID][row], PSD::CH::TimeFilterSmoothing, ch);
+  FillSpinBoxValueFromMemory(spbTimeFilterReTriggerGuard[ID][row], PSD::CH::TimeFilterRetriggerGuard, ch);
+  FillSpinBoxValueFromMemory(spbPileupGap[ID][row], PSD::CH::PileupGap, ch);
+
+  FillSpinBoxValueFromMemory(spbGateLong[ID][row], PSD::CH::GateLongLength, ch);
+  FillSpinBoxValueFromMemory(spbGateShort[ID][row], PSD::CH::GateShortLength, ch);
+  FillSpinBoxValueFromMemory(spbGateOffset[ID][row], PSD::CH::GateOffset, ch);
+  FillSpinBoxValueFromMemory(spbLongChargeIntergratorPedestal[ID][row], PSD::CH::LongChargeIntegratorPedestal, ch);
+  FillSpinBoxValueFromMemory(spbShortChargeIntergratorPedestal[ID][row], PSD::CH::ShortChargeIntegratorPedestal, ch);
+  FillComboBoxValueFromMemory(cbbEnergyGain[ID][row], PSD::CH::EnergyGain, ch);
+
+  FillSpinBoxValueFromMemory(spbNeutronThreshold[ID][row], PSD::CH::NeutronThreshold, ch);
+  FillComboBoxValueFromMemory(cbbEventNeutronReject[ID][row], PSD::CH::EventNeutronReject, ch);
+  FillComboBoxValueFromMemory(cbbWaveNeutronReject[ID][row], PSD::CH::WaveNeutronReject, ch);
+}
+
+/// One body for the Board and Channel halves of the Inquiry tab. They were two ~100-line copies
+/// that differed only in which table they consult, whether the read carries a channel, and which
+/// six widgets they drive -- and they had drifted apart in three places, two of them bugs. See
+/// the notes at each divergence below.
+///
+/// ch < 0 reads a board parameter; ReadValue already uses -1 for that.
+void DigiSettingsPanel::ReadSetting(const std::vector<Reg> & table, int cbIndex, int ch, const InquiryWidgets & w){
+
+  const int ID = cbIQDigi->currentIndex();
+
+  /// Neither copy checked this. currentIndexChanged delivers -1 when a combo box is cleared, and
+  /// the subscripts below are unguarded.
+  if( cbIndex < 0 || cbIndex >= (int) table.size() ) return;
+  const Reg & para = table[cbIndex];
+
+  QString type;
+  switch (para.ReadWrite()) {
+    case RW::ReadOnly : type ="Read Only"; break;
+    case RW::WriteOnly : type ="Write Only"; break;
+    case RW::ReadWrite : type ="Read/Write"; break;
+  }
+  w.type->setText(type);
+
+  QString ans = QString::fromStdString(digi[ID]->ReadValue(para, ch));
+  ANSTYPE haha = para.GetAnswerType();
+
+  if( haha == ANSTYPE::BYTE){
+    w.read->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
+  }else if( haha == ANSTYPE::BINARY ){
+    w.read->setText( "0b" + QString::number(ans.toUInt(), 2).rightJustified(18, '0'));
+  }else{
+    w.read->setText(ans);
+  }
+  w.unit->setText(QString::fromStdString(para.GetUnit()));
+
+  if( para.ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
+
+    //===== spin box
+    if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
+      w.combo->clear();
+      w.combo->setEnabled(false);
+      w.write->setEnabled(false);
+      w.write->clear();
+      w.spin->setEnabled(true);
+      /// Decimals BEFORE the range, not after as both copies had it: QDoubleSpinBox rounds
+      /// setMinimum/setMaximum/setSingleStep to the decimals in force at the time, so a 0.001 step
+      /// arriving while the box still carried 0 decimals from the previous parameter was flattened
+      /// to 0 and never recovered.
+      w.spin->setDecimals( haha == ANSTYPE::FLOAT ? 3 : 0);
+      w.spin->setMinimum(atof(para.GetAnswers()[0].first.c_str()));
+      w.spin->setMaximum(atof(para.GetAnswers()[1].first.c_str()));
+      w.spin->setSingleStep(atof(para.GetAnswers()[2].first.c_str()));
+      /// The channel copy showed the value just read; the board copy showed a bare 0. Showing the
+      /// current value is the useful one, and it is what the spin box's returnPressed handler
+      /// would otherwise write back unchanged.
+      w.spin->setValue(ans.toFloat());
+    }
+    //===== combo Box
+    if( haha == ANSTYPE::COMBOX){
+      w.combo->setEnabled(true);
+      w.combo->clear();
+      int ansIndex = -1;
+      QString ans2 = "";
+      for( int i = 0; i < (int) para.GetAnswers().size(); i++){
+        w.combo->addItem(QString::fromStdString(para.GetAnswers()[i].second),
+                         QString::fromStdString(para.GetAnswers()[i].first));
+
+        if( ans == QString::fromStdString(para.GetAnswers()[i].first)) {
+          ansIndex = i;
+          ans2 = QString::fromStdString(para.GetAnswers()[i].second);
+        }
+      }
+      w.combo->setCurrentIndex(ansIndex);
+      w.read->setText( ans  + " [ " + ans2 + " ]");
+      w.spin->setEnabled(false);
+      w.spin->setStyleSheet("");
+      w.spin->setValue(0);
+      w.write->setEnabled(false);
+      /// The raw value, not the human label. The channel copy put ans2 here, which disagreed with
+      /// its own combo box: the currentIndexChanged handler fills this same field from
+      /// currentData(), i.e. the raw .first. For StartSource and GlobalTriggerSource -- the only
+      /// parameters that leave this field editable -- the raw form is also what gets written.
+      w.write->setText(ans);
+    }
+    //===== lineEdit
+    if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
+      w.combo->clear();
+      w.combo->setEnabled(false);
+      w.write->setEnabled(true);
+      w.write->clear();
+      w.spin->setEnabled(false);
+      w.spin->setStyleSheet("");
+      w.spin->setValue(0);
+    }
+  }else{
+    w.combo->clear();
+    w.combo->setEnabled(false);
+    w.spin->setEnabled(false);
+    w.spin->setStyleSheet("");
+    w.spin->cleanText();
+    w.write->setEnabled(false);
+    w.write->clear();
+  }
+}
+
 void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
 
   if( enableSignalSlot == false ) return;
@@ -3233,98 +3270,29 @@ void DigiSettingsPanel::ReadBoardSetting(int cbIndex){
 
   // PHA and PSD has same board setting, but for furture extension
   int ID = cbIQDigi->currentIndex();
-  std::vector<Reg> bdSettings ;
+  /// Bind, do not copy. This runs on every combo-box index change -- an arrow-key press deep-copied
+  /// the whole ~91-entry table, each entry four std::strings plus its list of allowed answers,
+  /// only to read one row out of it.
+  const std::vector<Reg> * bdSettingsPtr = nullptr;
 
   if( digi[ID]->GetFPGAType() == DPPType::PHA ) {
-    bdSettings = PHA::DIG::AllSettings;
+    bdSettingsPtr = &PHA::DIG::AllSettings;
   }else if( digi[ID]->GetFPGAType() == DPPType::PSD ) {
-    bdSettings = PSD::DIG::AllSettings;
+    bdSettingsPtr = &PSD::DIG::AllSettings;
   }else{
     enableSignalSlot = true;
     return;
   }
+  const std::vector<Reg> & bdSettings = *bdSettingsPtr;
 
-  QString type;
-  switch (bdSettings[cbIndex].ReadWrite()) {
-    case RW::ReadOnly : type ="Read Only"; break;
-    case RW::WriteOnly : type ="Write Only"; break;
-    case RW::ReadWrite : type ="Read/Write"; break;
-  }
-  leBdSettingsType->setText(type);
+  ReadSetting(bdSettings, cbIndex, -1,
+              {leBdSettingsType, leBdSettingsRead, leBdSettingsUnit, leBdSettingsWrite, cbBdAns, sbBdSettingsWrite});
 
-  QString ans = QString::fromStdString(digi[ID]->ReadValue(bdSettings[cbIndex]));
-  ANSTYPE haha = bdSettings[cbIndex].GetAnswerType();
-
-  if( haha == ANSTYPE::BYTE){
-    leBdSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
-  }else if( haha == ANSTYPE::BINARY ){
-    leBdSettingsRead->setText( "0b" + QString::number(ans.toUInt(), 2).rightJustified(18, '0'));
-  }else{
-    leBdSettingsRead->setText(ans);
-  }
-  leBdSettingsUnit->setText(QString::fromStdString(bdSettings[cbIndex].GetUnit()));
-
-  if( bdSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
-
-    //===== spin box
-    if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
-      cbBdAns->clear();
-      cbBdAns->setEnabled(false);
-      leBdSettingsWrite->setEnabled(false);
-      leBdSettingsWrite->clear();
-      sbBdSettingsWrite->setEnabled(true);
-      sbBdSettingsWrite->setMinimum(atof(bdSettings[cbIndex].GetAnswers()[0].first.c_str()));
-      sbBdSettingsWrite->setMaximum(atof(bdSettings[cbIndex].GetAnswers()[1].first.c_str()));
-      sbBdSettingsWrite->setSingleStep(atof(bdSettings[cbIndex].GetAnswers()[2].first.c_str()));
-      sbBdSettingsWrite->setValue(00);
-      sbBdSettingsWrite->setDecimals(0);
-    }
-    if( haha == ANSTYPE::FLOAT) sbBdSettingsWrite->setDecimals(3);
-    //===== combo Box
-    if( haha == ANSTYPE::COMBOX){
-      cbBdAns->setEnabled(true);
-      cbBdAns->clear();
-      int ansIndex = -1;
-      QString ans2 = "";
-      for( int i = 0; i < (int) bdSettings[cbIndex].GetAnswers().size(); i++){
-        cbBdAns->addItem(QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].second),
-                        QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].first));
-
-        if( ans == QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].first)) {
-          ansIndex = i;
-          ans2 = QString::fromStdString(bdSettings[cbIndex].GetAnswers()[i].second);
-        }
-      }
-      cbBdAns->setCurrentIndex(ansIndex);
-      leBdSettingsRead->setText( ans  + " [ " + ans2 + " ]");
-      sbBdSettingsWrite->setEnabled(false);
-      sbBdSettingsWrite->setStyleSheet("");
-      sbBdSettingsWrite->setValue(0);
-      leBdSettingsWrite->setEnabled(false);
-      leBdSettingsWrite->setText(ans);
-    }
-    //===== lineEdit
-    if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
-      cbBdAns->clear();
-      cbBdAns->setEnabled(false);
-      leBdSettingsWrite->setEnabled(true);
-      leBdSettingsWrite->clear();
-      sbBdSettingsWrite->setEnabled(false);
-      sbBdSettingsWrite->setStyleSheet("");
-      sbBdSettingsWrite->setValue(0);
-    }
-  }else{
-    cbBdAns->clear();
-    cbBdAns->setEnabled(false);
-    sbBdSettingsWrite->setEnabled(false);
-  sbBdSettingsWrite->setStyleSheet("");
-    sbBdSettingsWrite->cleanText();
-    leBdSettingsWrite->setEnabled(false);
-    leBdSettingsWrite->clear();
-  }
-
-  if(   bdSettings[cbIndex].GetPara() == PHA::DIG::StartSource.GetPara()
-     || bdSettings[cbIndex].GetPara() == PHA::DIG::GlobalTriggerSource.GetPara() ){
+  /// Board-only. These two take a comma-separated source list that no answer table can enumerate,
+  /// so the line edit stays open for free text whatever the branch above decided.
+  if( cbIndex >= 0 && cbIndex < (int) bdSettings.size() &&
+      (   bdSettings[cbIndex].GetPara() == PHA::DIG::StartSource.GetPara()
+       || bdSettings[cbIndex].GetPara() == PHA::DIG::GlobalTriggerSource.GetPara()) ){
 
     leBdSettingsWrite->setEnabled(true);
     leBdSettingsWrite->clear();
@@ -3339,94 +3307,26 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
   enableSignalSlot = false;
 
   int ID = cbIQDigi->currentIndex();
-  std::vector<Reg> chSettings ;
+  /// Bind, do not copy -- see ReadBoardSetting. The PSD table is 61 Regs deep and this ran on
+  /// every arrow-key press in the parameter combo box. Named chSettingTable, not chSettings, so it
+  /// does not read like Digitizer2Gen's per-channel member of that name.
+  const std::vector<Reg> * chSettingTablePtr = nullptr;
 
   if( digi[ID]->GetFPGAType() == DPPType::PHA ) {
-    chSettings = PHA::CH::AllSettings;
+    chSettingTablePtr = &PHA::CH::AllSettings;
   }else if( digi[ID]->GetFPGAType() == DPPType::PSD ) {
-    chSettings = PSD::CH::AllSettings;
+    chSettingTablePtr = &PSD::CH::AllSettings;
   }else{
     enableSignalSlot = true;
     return;
   }
-  
-  QString type;
-  switch (chSettings[cbIndex].ReadWrite()) {
-    case RW::ReadOnly : type ="Read Only"; break;
-    case RW::WriteOnly : type ="Write Only"; break;
-    case RW::ReadWrite : type ="Read/Write"; break;
-  }
-  leChSettingsType->setText(type);
 
-  QString ans = QString::fromStdString(digi[ID]->ReadValue(chSettings[cbIndex], cbIQCh->currentData().toInt()));
-  ANSTYPE haha = chSettings[cbIndex].GetAnswerType();
-
-  if( haha == ANSTYPE::BYTE){
-    leChSettingsRead->setText( "0x" + QString::number(ans.toULong(), 16).rightJustified(16, '0'));
-  }else if( haha == ANSTYPE::BINARY ){
-    leChSettingsRead->setText( "0b" + QString::number(ans.toUInt(), 2).rightJustified(18, '0'));
-  }else{
-    leChSettingsRead->setText(ans);
-  }
-
-  leChSettingsUnit->setText(QString::fromStdString(chSettings[cbIndex].GetUnit()));
-
-
-  if( chSettings[cbIndex].ReadWrite() != RW::ReadOnly && haha != ANSTYPE::NONE ){
-
-    if( haha == ANSTYPE::FLOAT || haha == ANSTYPE::INTEGER ){
-      cbChSettingsWrite->clear();
-      cbChSettingsWrite->setEnabled(false);
-      leChSettingsWrite->setEnabled(false);
-      leChSettingsWrite->clear();
-      sbChSettingsWrite->setEnabled(true);
-      sbChSettingsWrite->setMinimum(atof(chSettings[cbIndex].GetAnswers()[0].first.c_str()));
-      sbChSettingsWrite->setMaximum(atof(chSettings[cbIndex].GetAnswers()[1].first.c_str()));
-      sbChSettingsWrite->setSingleStep(atof(chSettings[cbIndex].GetAnswers()[2].first.c_str()));
-      sbChSettingsWrite->setValue(ans.toFloat());
-      sbChSettingsWrite->setDecimals(3);
-    }
-    if( haha == ANSTYPE::INTEGER) sbBdSettingsWrite->setDecimals(0);
-    if( haha == ANSTYPE::COMBOX){
-      cbChSettingsWrite->setEnabled(true);
-      cbChSettingsWrite->clear();
-      int ansIndex = -1;
-      QString ans2 = "";
-      for( int i = 0; i < (int) chSettings[cbIndex].GetAnswers().size(); i++){
-        cbChSettingsWrite->addItem(QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].second),
-                        QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].first));
-        
-        if( ans == QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].first)) {
-          ansIndex = i;
-          ans2 = QString::fromStdString(chSettings[cbIndex].GetAnswers()[i].second);
-        }      
-      }
-      cbChSettingsWrite->setCurrentIndex(ansIndex);
-      leChSettingsRead->setText( ans  + " [ " + ans2 + " ]");
-      sbChSettingsWrite->setEnabled(false);
-      sbChSettingsWrite->setStyleSheet("");
-      sbChSettingsWrite->setValue(0);
-      leChSettingsWrite->setEnabled(false);
-      leChSettingsWrite->setText(ans2);
-    }
-    if( haha == ANSTYPE::STR || haha == ANSTYPE::BYTE || haha == ANSTYPE::BINARY){
-      cbChSettingsWrite->clear();
-      cbChSettingsWrite->setEnabled(false);
-      leChSettingsWrite->setEnabled(true);
-      leChSettingsWrite->clear();
-      sbChSettingsWrite->setEnabled(false);
-      sbChSettingsWrite->setStyleSheet("");
-      sbChSettingsWrite->setValue(0);
-    }
-  }else{
-    cbChSettingsWrite->clear();
-    cbChSettingsWrite->setEnabled(false);
-    sbChSettingsWrite->setEnabled(false);
-    sbChSettingsWrite->setStyleSheet("");
-    sbChSettingsWrite->cleanText();
-    leChSettingsWrite->setEnabled(false);
-    leChSettingsWrite->clear();
-  }
+  /// The drift this merge removes: the channel copy's INTEGER case said
+  /// sbBdSettingsWrite->setDecimals(0) -- the BOARD spin box, inside ReadChannelSetting. So an
+  /// integer channel parameter was displayed with 3 decimals while silently reconfiguring the
+  /// board row above it.
+  ReadSetting(*chSettingTablePtr, cbIndex, cbIQCh->currentData().toInt(),
+              {leChSettingsType, leChSettingsRead, leChSettingsUnit, leChSettingsWrite, cbChSettingsWrite, sbChSettingsWrite});
 
   enableSignalSlot = true;
 }
