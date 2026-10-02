@@ -94,3 +94,8 @@ Aux/check*
 Aux/testOnlineBuilder
 Aux/testRawDecoder
 *.raw
+
+#---- for the broker branch, prevent accidental commit
+broker
+solaris-broker
+solaris-cli

@@ -10,6 +10,7 @@
 
 //^=======================================
 class RComboBox : public QComboBox{
+  Q_OBJECT
   public : 
     RComboBox(QWidget * parent = nullptr): QComboBox(parent){
       setFocusPolicy(Qt::StrongFocus);

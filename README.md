@@ -467,7 +467,7 @@ Only your file. Measured on this project:
 | add an analysis | 1 file (+ qmake) | ~0.9 s |
 | change `Analysis.h` | 7 files | ~20 s |
 
-`qcustomplot.o` and the rest of the GUI are never touched; the 34 MB binary relinks in under a
+`qcustomplot.o` and the rest of the GUI are never touched; the 37 MB binary relinks in under a
 second. You do still have to restart the DAQ to pick up the new binary — removing that is what the
 eventual out-of-process `.so` analyzer is for, and why `Analysis.h` is kept free of Qt.
 
@@ -499,12 +499,19 @@ The window shows `totalHitsDropped`, `totalHitsLate`, `monotonicityViolations` a
 
 ### Prerequisites
 
-- Ubuntu 22.04+
-- Qt6: `sudo apt install qt6-base-dev libqt6charts6-dev`
+- **Ubuntu 24.04 LTS and 26.04 LTS — one source tree builds on both.**
+  See [Ubuntu 24.04 and 26.04](#ubuntu-2404-and-2604) for the tested matrix.
+- Qt6: `sudo apt install qt6-base-dev qt6-charts-dev`
 - libcurl: `sudo apt install libcurl4-openssl-dev`
+- X11: `sudo apt install libx11-dev` — the `.pro` links `-lX11`
 - CAEN FELib: CAEN_FELib v1.2.2+ (install first)
 - CAEN Dig2: CAEN_DIG2 v1.5.3+
-- ROOT (for EventBuilder only)
+- ROOT — **only** for `Aux/EventBuilder`; the DAQ itself does not use it
+
+> The Charts package is **`qt6-charts-dev`**. This file previously said
+> `libqt6charts6-dev`, which does not exist on 26.04 (`Candidate: (none)`) and
+> will fail the install with no hint that the name is simply wrong. Without it
+> `qmake6` stops at `Project ERROR: Unknown module(s) in QT: charts`.
 
 ### Compile the DAQ
 
@@ -512,6 +519,59 @@ The window shows `totalHitsDropped`, `totalHitsLate`, `monotonicityViolations` a
 qmake6 SOLARIS_DAQ.pro
 make
 ```
+
+### Ubuntu 24.04 and 26.04
+
+**The same source tree compiles on both releases, unmodified.** Verified
+2026-10-02 by building this tree on each:
+
+| | Ubuntu 24.04.5 | Ubuntu 26.04.1 |
+|---|---|---|
+| GCC | 13.3 | 15.2 |
+| Qt | 6.4.2 | 6.10.2 |
+| glibc | 2.39 | 2.43 |
+| result | builds, 0 warnings | builds, 15 warnings |
+| binary | 35.1 MB | 37.6 MB |
+
+The 24.04 column was built in a clean `ubuntu:24.04` container against the
+same CAEN libraries; the 26.04 column natively. The DAQ, `analyzers/`, and all
+of `Aux/` (against ROOT 6.40) build on 26.04.
+
+Reaching that point took **two one-line fixes**, both already applied below.
+They are noted here because each looks removable and is not — both are real
+defects that GCC 13 and Qt 6.4 happened to tolerate, and neither costs
+anything on 24.04 (that column is still zero warnings with them in place).
+
+**1. `ClassInfluxDB.cpp` needs `#include <sstream>`.**
+
+```
+error: variable 'std::istringstream iss' has initializer but incomplete type
+```
+
+GCC ≤13 pulled `<sstream>` in indirectly through another libstdc++ header.
+GCC 15 tightened its internal includes, so it must be included explicitly.
+
+**2. `RComboBox` in `CustomWidgets.h` needs `Q_OBJECT`.**
+
+```
+error: static assertion failed: No Q_OBJECT in the class passed to QObject::findChildren
+```
+
+Qt 6.10 asserts on this; earlier versions compiled it silently. **This was a
+latent bug, not just a compiler complaint** — without `Q_OBJECT` the class has
+no metaobject of its own, so every `findChildren<RComboBox*>()` in `scope.cpp`
+and `digiSettingsPanel.cpp` was matching against `QComboBox`'s metaobject
+rather than `RComboBox`'s. It now sits as the first line of the class body,
+exactly as `RSpinBox` right below it already does.
+
+Other things 26.04 changes, none of them blocking:
+
+- `QCheckBox::stateChanged(int)` is deprecated → use `checkStateChanged()`.
+  Several call sites in `digiSettingsPanel.cpp`.
+- A locally **compiled** ROOT will not survive the 26.04 upgrade — resolute
+  drops PCRE1 (`libpcre3`) entirely, and ROOT ≤6.32 dies with
+  `libpcre.so.3: cannot open shared object file`. Use a 26.04 build such as
+  ROOT 6.40. This affects `Aux/EventBuilder` only.
 
 ### Compile auxiliary tools
 
