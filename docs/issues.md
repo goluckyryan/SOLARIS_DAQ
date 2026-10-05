@@ -231,3 +231,49 @@ not work out that way: the work was done as one sweep and the stages are interle
 — `SOLARISpanel.cpp` alone carries 1.2, 1.8, 4.7 and 5.6. Splitting after the fact would have
 meant intermediate commits that do not build, which is worse for a bisect than one honest commit.
 If something turns up on the beam line, the unit of revert is the whole sweep.
+
+---
+
+## CAEN_FELib thread-safety (potential)
+
+**Status:** Open — verify against the CAEN_FELib docs / vendor.
+
+### Summary
+
+`Digitizer2Gen` is driven from two threads at the same time:
+
+- **DAQ thread** (`ReadDataThread::run()`) → `ReadData()` → `CAEN_FELib_ReadData(ep_handle, ...)`
+- **GUI timer thread** → `ReadStat()` → `CAEN_FELib_ReadData(stat_handle, ...)` and
+  `ReadValue(PHA::CH::SelfTrgRate, ch)` → `CAEN_FELib_GetValue(handle, ...)`; plus settings
+  `ReadValue`/`WriteValue` → `CAEN_FELib_GetValue`/`CAEN_FELib_SetValue(handle, ...)`
+
+If `CAEN_FELib` is not thread-safe for concurrent calls on the same device connection (even on
+different handles), these can race on shared library/device state.
+
+### Why it is a risk
+
+- The code already assumes per-call status must not live in per-object storage because the two
+  threads call into the same object concurrently (see the `ErrorMsg` comment).
+- Different handles (`handle`, `ep_handle`, `stat_handle`) are used, but they all refer to the
+  same underlying connection opened by `CAEN_FELib_Open`. If the library keeps per-connection
+  state (socket, sequence numbers, buffers) without internal locking, concurrent calls are UB.
+- `ReadStat()` reads `SelfTrgRate` via `handle` on the GUI thread while the DAQ thread is in
+  `CAEN_FELib_ReadData` on `ep_handle`.
+
+### Current mitigations
+
+- Data reads use `ep_handle`, stats use `stat_handle`, parameters use `handle` — no single handle
+  is shared across the two threads for the same call type.
+- `ReadStat()` early-outs under `DataFormat::Raw` so the GUI does not read the stats endpoint while
+  the DAQ thread owns the time counters.
+- `ReadData()` uses a local `ret`, not a member, so the GUI cannot clobber the DAQ status.
+
+### Recommended actions
+
+1. Confirm with the CAEN_FELib docs/vendor whether concurrent calls on different handles of one
+   connection are safe.
+2. If not guaranteed safe, serialize all `CAEN_FELib_*` calls with one `std::mutex` per
+   `Digitizer2Gen` (lock in `ReadValue`, `WriteValue`, `SendCommand`, `ReadData`, `ReadStat`,
+   `SetDataFormat`, `OpenDigitizer`, `CloseDigitizer`).
+3. Keep the DAQ critical section short; do not hold the lock across `SaveDataToFile()` / file I/O.
+4. Re-test open/close/reopen and a Raw + DPP run with the GUI timer active after any change.

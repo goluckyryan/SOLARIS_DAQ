@@ -50,8 +50,8 @@ with a 2-byte identifier and the identifier alone tells you how to parse the res
 built at `ClassDigitizer2Gen.cpp:510`:
 
 ```cpp
-dataStartIndetifier = 0xAA00 + dataFormat;
-if( FPGAType == DPPType::PSD ) dataStartIndetifier += 0x0010;
+dataStartIdentifier = 0xAA00 + dataFormat;
+if( FPGAType == DPPType::PSD ) dataStartIdentifier += 0x0010;
 ```
 
 So the low nibble is the `DataFormat` enum from `Hit.h`, and bit 4 is the PSD flag. A reader

@@ -75,7 +75,7 @@ class Digitizer2Gen {
     uint32_t savedEventCount[MaxNumberOfChannel];
     
     unsigned short outFileIndex;
-    unsigned short dataStartIndetifier;
+    unsigned short dataStartIdentifier;
     std::string outFileNameBase;
     char outFileName[100];
     FILE * outFile;

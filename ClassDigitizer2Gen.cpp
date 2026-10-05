@@ -26,6 +26,9 @@ void Digitizer2Gen::Initialization(){
   //printf("======== %s \n",__func__);
 
   handle = 0;
+  ep_handle = 0;
+  ep_folder_handle = 0;
+  stat_handle = 0;
   isConnected = false;
   isDummy = false;
 
@@ -37,7 +40,7 @@ void Digitizer2Gen::Initialization(){
 
   outFileIndex = 0;
   FinishedOutFilesSize = 0;
-  dataStartIndetifier = 0xAAA0;
+  dataStartIdentifier = 0xAAA0;
   outFile = NULL;
   outFileSize = 0;
 
@@ -336,7 +339,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   //========== PHA and PSD are the same
   serialNumber = atoi(ReadValue(PHA::DIG::SerialNumber).c_str());
   FPGAType = ReadValue(PHA::DIG::FirmwareType);
-  FPGAVer = atoi(ReadValue(PHA::DIG::CupVer).c_str());
+  FPGAVer = atoi(ReadValue(PHA::DIG::FPGA_firmwareVersion).c_str());
   nChannels = atoi(ReadValue(PHA::DIG::NumberOfChannel).c_str());
   ModelName = ReadValue(PHA::DIG::ModelName);
   ResolveModelSensors();
@@ -545,8 +548,8 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   if( hit ) delete hit;
   hit = new Hit();
   hit->SetDataType(dataFormat, FPGAType);
-  dataStartIndetifier = 0xAA00 + dataFormat;
-  if(FPGAType == DPPType::PSD ) dataStartIndetifier += 0x0010;
+  dataStartIdentifier = 0xAA00 + dataFormat;
+  if(FPGAType == DPPType::PSD ) dataStartIdentifier += 0x0010;
 
   //^===================================================== PSD
   if( FPGAType == DPPType::PHA) {
@@ -785,6 +788,12 @@ int Digitizer2Gen::ReadStat(){
   /// endpoint here, from the GUI timer thread, would write the same five arrays concurrently --
   /// and the decoder's numbers are the authoritative ones on that path anyway.
   if( hit && hit->dataType == DataFormat::Raw ) return CAEN_FELib_Success;
+
+  /// stat_handle is only created by SetDataFormat() at start-run (scope start too). The scalar
+  /// timer runs whenever the panel is visible, so before the first run -- or after the digitizers
+  /// are closed and the CAEN_FELib handles are gone -- it would ReadData on an uninitialized or
+  /// stale handle and spam "-9: not a valid handle ... closed connection" every tick.
+  if( !isConnected || stat_handle == 0 ) return CAEN_FELib_Success;
 
   int ret = CAEN_FELib_ReadData(stat_handle, 100,
         realTime,
@@ -1154,7 +1163,7 @@ void Digitizer2Gen::SaveDataToFile(){
   }
 
   if( hit->dataType == DataFormat::ALL){
-    fwrite(&dataStartIndetifier,      2, 1, outFile);
+    fwrite(&dataStartIdentifier,      2, 1, outFile);
     fwrite(&hit->channel,             1, 1, outFile);
     fwrite(&hit->energy,              2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
@@ -1179,7 +1188,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(hit->digital_probes[3], hit->traceLenght, 1, outFile);
 
   }else if( hit->dataType == DataFormat::OneTrace){
-    fwrite(&dataStartIndetifier,        2, 1, outFile);
+    fwrite(&dataStartIdentifier,        2, 1, outFile);
     fwrite(&hit->channel,               1, 1, outFile);
     fwrite(&hit->energy,                2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
@@ -1192,7 +1201,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(hit->analog_probes[0], hit->traceLenght*4, 1, outFile);
 
   }else if( hit->dataType == DataFormat::NoTrace ){
-    fwrite(&dataStartIndetifier,      2, 1, outFile);
+    fwrite(&dataStartIdentifier,      2, 1, outFile);
     fwrite(&hit->channel,             1, 1, outFile);
     fwrite(&hit->energy,              2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
@@ -1202,7 +1211,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->flags_low_priority,  2, 1, outFile);
 
   }else if( hit->dataType == DataFormat::MiniWithFineTime ){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
+    fwrite(&dataStartIdentifier, 2, 1, outFile);
     fwrite(&hit->channel,        1, 1, outFile);
     fwrite(&hit->energy,         2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
@@ -1210,18 +1219,26 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&hit->fine_timestamp, 2, 1, outFile);
 
   }else if( hit->dataType == DataFormat::Minimum ){
-    fwrite(&dataStartIndetifier, 2, 1, outFile);
+    fwrite(&dataStartIdentifier, 2, 1, outFile);
     fwrite(&hit->channel,        1, 1, outFile);
     fwrite(&hit->energy,         2, 1, outFile);
     if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,      6, 1, outFile);
 
   }else if( hit->dataType == DataFormat::Raw){
-    fwrite(&dataStartIndetifier,  2, 1, outFile);
+    fwrite(&dataStartIdentifier,  2, 1, outFile);
     fwrite(&hit->dataSize,        8, 1, outFile);
     fwrite(hit->data, hit->dataSize, 1, outFile);
   }
-  
+
+  /// A short write corrupts the file from here on. ferror() catches it in any format
+  /// branch without counting the expected bytes; stop rather than keep appending.
+  if( ferror(outFile) ){
+    printf("SaveDataToFile: write error on '%s'\n", outFileName);
+    CloseOutFile();
+    return;
+  }
+
   outFileSize = ftell(outFile);  // unsigned int =  Max ~4GB
 
 }
@@ -1436,7 +1453,9 @@ void Digitizer2Gen::PrintBoardSettings(){
     }
   }
 
-  if( CupVer >= 2023091800 ){
+  /// Match ReadAllSettings()/SaveSettingsToFile(): InputDelay exists only when
+  /// CupVer >= 2023091800 AND the model is not VX2730.
+  if( CupVer >= 2023091800 && ModelName != "VX2730" ){
     for(int idx = 0; idx < 16 ; idx ++ ){
       printf("%-45s  %d  %s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
                                 InputDelay[idx].ReadWrite(), 
@@ -1642,7 +1661,19 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
         count ++;
       }
     }
-    fclose(saveFile);
+
+    /// A failed fprintf leaves a truncated settings file that LoadSettingsFromFile()
+    /// would read back as valid. Report it and do not treat the file as complete.
+    if( ferror(saveFile) ){
+      printf("SaveSettingsToFile: write error on '%s'\n", settingFileName.c_str());
+      fclose(saveFile);
+      return -1;
+    }
+
+    if( fclose(saveFile) != 0 ){
+      printf("SaveSettingsToFile: close error on '%s'\n", settingFileName.c_str());
+      return -1;
+    }
 
     if( count != totCount ) {
       printf("!!!!! some setting is empty. !!!!!! ");
