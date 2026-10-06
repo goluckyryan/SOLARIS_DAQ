@@ -1,6 +1,7 @@
 #include "ClassInfluxDB.h"
 
 #include <regex>
+#include <sstream>
 
 InfluxDB::InfluxDB(){
   curl = curl_easy_init();  
