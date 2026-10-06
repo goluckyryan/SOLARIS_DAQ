@@ -74,7 +74,14 @@ signals:
 public slots:
   void FillHistograms();
   void startTimer(){
-    // printf("timer start\n");
+    /// Sync the fill cursor before the timer runs, same reasoning as the chkIsFillHistogram
+    /// connection: everything the ring collected since the last sync (previous-run tail, or the
+    /// whole backlog of a run during which filling was off) would otherwise be replayed into
+    /// the plots as one sudden burst on the first pass.
+    suspendFilling = true;
+    WaitForFillToDrain();
+    ClearInternalDataCount();
+    suspendFilling = false;
     timer->start(maxFillTimeinMilliSec);
     // emit startWorkerTimer(maxFillTimeinMilliSec);
   }

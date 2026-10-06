@@ -88,7 +88,21 @@ SingleSpectra::SingleSpectra(DigiManager * digiManager, unsigned int nDigi, QStr
     /// The worker cannot read checkState() itself -- QWidget accessors are GUI-thread only -- so
     /// mirror it. There was no connection here at all before; the worker just read the widget.
     fillEnabled = false;
-    connect(chkIsFillHistogram, &QCheckBox::toggled, this, [=](bool on){ fillEnabled = on; });
+    connect(chkIsFillHistogram, &QCheckBox::toggled, this, [=](bool on){
+      /// Resuming must not replay the backlog. While the box was off the ADC thread kept pushing
+      /// into the ring, so lastFilledIndex sat wherever the last sync left it -- potentially a
+      /// whole run behind the live end. The first pass after enabling then drained up to a full
+      /// RingBufferSize per channel in one burst: "check the box and the histogram suddenly
+      /// fills a lot of data". Jump the cursor to the live end first, under the same fence the
+      /// pane/rebin paths use. Counts are NOT cleared -- the plot keeps what it had.
+      if( on ){
+        suspendFilling = true;
+        WaitForFillToDrain();
+        ClearInternalDataCount();
+        suspendFilling = false;
+      }
+      fillEnabled = on;
+    });
 
     //^---- replot throttle : the fill timer stays at maxFillTimeinMilliSec,
     //^     only the number of replots per fill is reduced.
