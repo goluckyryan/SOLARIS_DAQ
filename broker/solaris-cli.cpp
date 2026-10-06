@@ -5,6 +5,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 #include <thread>
 #include <chrono>
 #include <iostream>
@@ -40,6 +41,7 @@ static void PrintHelp() {
   printf("  file-status <digi>                     Show file sizes\n");
   printf("  save-settings <digi> [file]            Save settings to file\n");
   printf("  load-settings <digi> [file]            Load settings from file\n");
+  printf("  hist <digi> <ch|all> [sec] [nbin] [xmax] [long|short]  Energy histogram over N s from the hit stream (ACQ must be ON; defaults 5 s, 200 bins, 5000, long gate)\n");
   printf("  trace <digi> <ch> [samples]             Capture and display a waveform trace (default 100 samples)\n");
   printf("  subscribe [seconds]                    Monitor live rates and file sizes for N seconds (default 10)\n");
   printf("  load <script>                          Execute commands from a script file\n");
@@ -721,6 +723,95 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
       printf("\nSubscription ended.\n");
     }
   }
+  else if (cmd == "hist") {
+    /// Energy histogram from the hit-summary stream the subscription thread already pushes into
+    /// the client ring (PUB_HIT_SUMMARY). The server only publishes hits while ACQ is ON.
+    /// Drain semantics and the fresh-start cursor mirror SingleSpectra::FillHistograms(): the
+    /// cursor starts at the live ring end, so this measures the NEXT N seconds, not a backlog.
+    if (tok.size() < 3) { printf("Usage: hist <digi> <ch|all> [seconds] [nbin] [xmax] [long|short]\n"); return 0; }
+    if (!client.IsConnected()) { printf("Not connected to broker.\n"); return 0; }
+
+    int digiIdx = atoi(tok[1].c_str());
+    bool allCh  = (tok[2] == "all");
+    int ch0     = allCh ? -1 : atoi(tok[2].c_str());
+    double seconds = (tok.size() > 3) ? atof(tok[3].c_str()) : 5.0;
+    int nbin       = (tok.size() > 4) ? atoi(tok[4].c_str()) : 200;
+    double xmax    = (tok.size() > 5) ? atof(tok[5].c_str()) : 5000.0;
+    bool useShort  = (tok.size() > 6) && (tok[6] == "short" || tok[6] == "s");
+    if (seconds <= 0 || nbin < 1 || nbin > 16384 || xmax <= 0) {
+      printf("Bad arguments (need seconds>0, 1<=nbin<=16384, xmax>0).\n"); return 0;
+    }
+    BrokerClient::DigiInfo dinfo = client.GetDigiInfo(digiIdx);
+    if (!dinfo.isConnected) { printf("Digi %d not connected on broker.\n", digiIdx); return 0; }
+    int nCh = dinfo.nChannels;
+    if (!allCh && (ch0 < 0 || ch0 >= nCh)) { printf("ch must be 0..%d or 'all'.\n", nCh-1); return 0; }
+
+    struct ChHist {
+      std::vector<uint32_t> bins;
+      unsigned long under = 0, over = 0, total = 0;
+      double eSum = 0;                 // for the mean
+      unsigned long cursor = 0;
+    };
+    std::vector<ChHist> hists(nCh);
+    for (auto& h : hists) h.bins.assign(nbin, 0);
+
+    int hi = allCh ? nCh : ch0 + 1;
+    int lo = allCh ? 0 : ch0;
+
+    // Fresh-start: sync every cursor to the live end BEFORE collecting (same reasoning as the
+    // GUI checkbox fix -- anything already sitting in the ring is history, not this measurement).
+    for (int ch = lo; ch < hi; ch++) hists[ch].cursor = client.GetRingBuffer(digiIdx, ch).index();
+
+    printf("Collecting %s-gate hits, digi %d, ch %s, %.1f s, %d bins / %.0f ...\n",
+           useShort ? "short" : "long", digiIdx, allCh ? "all" : std::to_string(ch0).c_str(),
+           seconds, nbin, xmax);
+
+    gInterrupted = 0;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds((int)(seconds*1000));
+    while (std::chrono::steady_clock::now() < deadline && !gInterrupted) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      for (int ch = lo; ch < hi; ch++) {
+        auto& rb = client.GetRingBuffer(digiIdx, ch);
+        auto& h  = hists[ch];
+        unsigned long now = rb.index();
+        if (now - h.cursor > RingBufferSize) h.cursor = now - RingBufferSize;  // fell behind: skip oldest
+        while (h.cursor < now) {
+          HitSummary hs = rb.at(h.cursor++);
+          uint16_t e = useShort ? hs.energy_short : hs.energy;
+          h.total++; h.eSum += e;
+          int b = (int)((double)e * nbin / xmax);
+          if (b < 0) h.under++;
+          else if (b >= nbin) h.over++;
+          else h.bins[b]++;
+        }
+      }
+    }
+    if (gInterrupted) { printf("\nInterrupted.\n"); gInterrupted = 0; }
+
+    const char* gate = useShort ? "short" : "long";
+    if (allCh) {
+      // One summary line per channel that saw anything -- compact for scripts and agents.
+      printf("# hist digi=%d ch=all gate=%s bins=%d xmax=%.0f\n", digiIdx, gate, nbin, xmax);
+      printf("%-4s %10s %10s %10s %10s %10s\n", "Ch", "Counts", "Mean", "Over", "Under", "PeakBin");
+      for (int ch = lo; ch < hi; ch++) {
+        auto& h = hists[ch];
+        if (!h.total) continue;
+        int peak = (int)(std::max_element(h.bins.begin(), h.bins.end()) - h.bins.begin());
+        printf("%-4d %10lu %10.1f %10lu %10lu %10d\n", ch, h.total, h.eSum/h.total, h.over, h.under, peak);
+      }
+    } else {
+      auto& h = hists[ch0];
+      uint32_t peakCnt = *std::max_element(h.bins.begin(), h.bins.end());
+      printf("# hist digi=%d ch=%d gate=%s bins=%d xmax=%.0f total=%lu mean=%.1f under=%lu over=%lu\n",
+             digiIdx, ch0, gate, nbin, xmax, h.total, h.total ? h.eSum/h.total : 0.0, h.under, h.over);
+      printf("%6s %9s %9s %10s  %s\n", "Bin", "Lo", "Hi", "Count", "Bar");
+      double dx = xmax / nbin;
+      for (int b = 0; b < nbin; b++) {
+        int bar = peakCnt ? (int)((unsigned long long)h.bins[b] * 40 / peakCnt) : 0;
+        printf("%6d %9.1f %9.1f %10u  %.*s\n", b, b*dx, (b+1)*dx, h.bins[b], bar, bar ? "#" : "");
+      }
+    }
+  }
   else if (cmd == "trace") {
     if (tok.size() < 3) { printf("Usage: trace <digi> <ch> [samples]\n"); return 0; }
     int digiIdx = atoi(tok[1].c_str());
@@ -806,7 +897,7 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
 static const char* commands[] = {
   "connect", "disconnect", "ping", "list", "info", "open", "close",
   "read", "write", "cmd", "format", "start", "stop", "status",
-  "file-status", "save-settings", "load-settings", "trace", "subscribe",
+  "file-status", "save-settings", "load-settings", "hist", "trace", "subscribe",
   "load", "sleep", "shutdown", "help", "quit", "exit", nullptr
 };
 

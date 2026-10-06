@@ -189,6 +189,7 @@ stop all
 | Command | Description |
 |---------|-------------|
 | `subscribe [seconds]` | Monitor live rates and file sizes for N seconds (default 10). Prints trigger rates, accept rates, and file sizes every scalar interval. Also acts as a timed wait -- useful in scripts to let an acquisition run for a fixed duration while watching progress. |
+| `hist <digi> <ch\|all> [sec] [nbin] [xmax] [long\|short]` | Collect an energy histogram for N seconds (default 5 s, 200 bins, xmax 5000, long gate) from the hit-summary stream. ACQ must be ON. `ch` = 0-based channel, or `all` for a one-line-per-channel summary (Counts/Mean/Over/Under/PeakBin). A single channel prints every bin as an ASCII bar plus a machine-readable header line `# hist digi=.. ch=.. gate=.. bins=.. xmax=.. total=.. mean=.. under=.. over=..`. Collection starts from the live ring end -- it measures the next N seconds, never a backlog. PSD boards: `short` selects the short-gate energy. |
 
 #### Scripting and Shell
 
