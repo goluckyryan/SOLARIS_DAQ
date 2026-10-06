@@ -95,6 +95,7 @@ EventBuilderRaw
 testOnlineBuilder
 Aux/debug_raw
 Aux/check*
+Aux/testRawDecoder
 *.sol_raw
 *.sol
 
