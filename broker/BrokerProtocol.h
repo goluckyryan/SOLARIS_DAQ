@@ -60,6 +60,7 @@ enum RspType : uint8_t {
   RSP_DIGI_INFO        = 0x84,
   RSP_ACQ_STATUS       = 0x85,
   RSP_FILE_STATUS      = 0x86,
+  RSP_SETTINGS         = 0x87,   // bulk cache dump: u32 count, then count x (string path, string value)
   RSP_PONG             = 0xF0,
 };
 
@@ -70,6 +71,7 @@ enum PubType : uint8_t {
   PUB_TRACE            = 0xC2,
   PUB_STATUS_CHANGE    = 0xC3,
   PUB_LOG_MESSAGE      = 0xC4,
+  PUB_PARAM_CHANGED    = 0xC5,   // u8 digi, string path, string value -- server-side write by ANY client
 };
 
 //=== Status change events (payload of PUB_STATUS_CHANGE)
@@ -80,6 +82,7 @@ enum StatusEvent : uint8_t {
   EVT_FILE_CLOSED      = 0x04,
   EVT_DIGI_OPENED      = 0x05,
   EVT_DIGI_CLOSED      = 0x06,
+  EVT_SETTINGS_DIRTY   = 0x07,   // many parameters changed at once (Reset / LoadSettings); clients should bulk-refetch
 };
 
 //=== Special index meaning "all digitizers"

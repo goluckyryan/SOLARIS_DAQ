@@ -360,6 +360,15 @@ void BrokerServer::HandleWriteValue(const uint8_t* data, size_t len) {
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
   bool ok = digi[idx]->WriteValue(param.c_str(), value);
   if (ok) {
+    // Read back so the broadcast carries what the hardware actually took (FELib can adjust,
+    // e.g. the VX2730 tick scaling). ReadValue reports failure in-band ("not connected"/error
+    // text), so use the status out-param: a wildcard write path (/ch/0..63/par/X) is not
+    // readable, and broadcasting that error string would poison every client's cache. On any
+    // read failure fall back to the value the caller wrote.
+    int rbStatus = -1;
+    std::string readback = digi[idx]->ReadValue(param.c_str(), false, &rbStatus);
+    bool rbOk = (rbStatus == CAEN_FELib_Success) && !readback.empty() && readback != "not connected";
+    PublishParamChanged(idx, param, rbOk ? readback : value);
     SendOK();
   } else {
     SendError("WriteValue failed for " + param + " = " + value);
@@ -376,6 +385,9 @@ void BrokerServer::HandleSendCommand(const uint8_t* data, size_t len) {
 
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
   digi[idx]->SendCommand(cmd.c_str());
+  // A Reset rewrites every parameter without going through WriteValue; no per-parameter
+  // broadcast is possible, so flag the whole board dirty and let clients re-fetch.
+  if (cmd == "/cmd/Reset") PublishStatusChange(EVT_SETTINGS_DIRTY, idx);
   SendOK();
 }
 
@@ -564,7 +576,21 @@ void BrokerServer::HandleReadAllSettings(const uint8_t* data, size_t len) {
 
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
   digi[idx]->ReadAllSettings();
-  SendOK();
+
+  // The point of the request is to refill the CALLER's cache, so send the values back.
+  // ReadAllSettings() just pulled every parameter from hardware into the server's Reg
+  // vectors; DumpSettingsCache() exports them as (path, value) pairs.
+  std::vector<std::pair<std::string, std::string>> dump;
+  digi[idx]->DumpSettingsCache(dump);
+
+  std::vector<uint8_t> buf;
+  PackHeader(buf, RSP_SETTINGS);
+  PackU32(buf, static_cast<uint32_t>(dump.size()));
+  for (const auto& kv : dump) {
+    PackString(buf, kv.first);
+    PackString(buf, kv.second);
+  }
+  SendReply(buf);
 }
 
 void BrokerServer::HandleSaveSettingsFile(const uint8_t* data, size_t len) {
@@ -595,6 +621,7 @@ void BrokerServer::HandleLoadSettingsFile(const uint8_t* data, size_t len) {
   std::lock_guard<std::mutex> lock(digiMutex[idx]);
   bool ok = digi[idx]->LoadSettingsFromFile(fileName.empty() ? nullptr : fileName.c_str());
   if (ok) {
+    PublishStatusChange(EVT_SETTINGS_DIRTY, idx);   // bulk change -> clients re-fetch
     SendOK();
   } else {
     SendError("LoadSettingsFromFile failed");
@@ -764,7 +791,10 @@ void BrokerServer::PublishScalar(int digiIndex) {
     }
   }
 
-  zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  {
+    std::lock_guard<std::mutex> lock(pubSendMutex);
+    zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  }
 }
 
 void BrokerServer::PublishHitSummaries(int digiIndex) {
@@ -813,7 +843,10 @@ void BrokerServer::PublishHitSummaries(int digiIndex) {
   buf[nHitsPos]     = static_cast<uint8_t>(nHits & 0xFF);
   buf[nHitsPos + 1] = static_cast<uint8_t>((nHits >> 8) & 0xFF);
 
-  zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  {
+    std::lock_guard<std::mutex> lock(pubSendMutex);
+    zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  }
 }
 
 void BrokerServer::PublishTraceSnapshot(int digiIndex) {
@@ -843,7 +876,10 @@ void BrokerServer::PublishTraceSnapshot(int digiIndex) {
   }
 
   lastPublishedTraceIndex[digiIndex] = currentIdx;
-  zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  {
+    std::lock_guard<std::mutex> lock(pubSendMutex);
+    zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  }
 }
 
 void BrokerServer::PublishStatusChange(StatusEvent event, uint8_t digiIndex) {
@@ -852,7 +888,10 @@ void BrokerServer::PublishStatusChange(StatusEvent event, uint8_t digiIndex) {
   PackHeader(buf, PUB_STATUS_CHANGE);
   PackU8(buf, static_cast<uint8_t>(event));
   PackU8(buf, digiIndex);
-  zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  {
+    std::lock_guard<std::mutex> lock(pubSendMutex);
+    zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  }
 }
 
 void BrokerServer::PublishLog(const std::string& msg) {
@@ -860,5 +899,22 @@ void BrokerServer::PublishLog(const std::string& msg) {
   std::vector<uint8_t> buf;
   PackHeader(buf, PUB_LOG_MESSAGE);
   PackString(buf, msg);
+  {
+    std::lock_guard<std::mutex> lock(pubSendMutex);
+    zmq_send(zmqPub, buf.data(), buf.size(), 0);
+  }
+}
+
+/// One parameter changed on the hardware -- broadcast so every client's local cache follows.
+/// Emitted from the REQ thread (any client's write, including the CLI's), which is exactly the
+/// case where the OTHER clients' caches would otherwise go stale under their settings panels.
+void BrokerServer::PublishParamChanged(uint8_t digiIndex, const std::string& path, const std::string& value) {
+  if (!zmqPub) return;
+  std::vector<uint8_t> buf;
+  PackHeader(buf, PUB_PARAM_CHANGED);
+  PackU8(buf, digiIndex);
+  PackString(buf, path);
+  PackString(buf, value);
+  std::lock_guard<std::mutex> lock(pubSendMutex);
   zmq_send(zmqPub, buf.data(), buf.size(), 0);
 }

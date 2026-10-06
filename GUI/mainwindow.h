@@ -12,6 +12,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QTimer>
+#include <atomic>
 #include <QThread>
 
 #include <QChart>
@@ -171,6 +172,9 @@ private:
   bool needManualComment;
   bool isACQRunning;
   QTimer * runTimer;
+  /// Bit per digitizer: a settings-refetch for that board is queued (coalesces bursts of
+  /// EVT_SETTINGS_DIRTY). Cleared by the queued handler on the GUI thread.
+  std::atomic<unsigned int> settingsDirty{0};
   QElapsedTimer elapsedTimer;
   unsigned int autoRunStartRunID;
 

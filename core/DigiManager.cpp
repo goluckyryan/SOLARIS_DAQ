@@ -35,6 +35,10 @@ int DigiManager::Connect(const std::string& cmdEndpoint, const std::string& pubE
   client->onHitSummary    = [this](int i, int n) { if (onHitSummary) onHitSummary(i, n); };
   client->onTraceSnapshot = [this](int i) { if (onTraceSnapshot) onTraceSnapshot(i); };
   client->onLogMessage    = [this](const std::string& m) { if (onLogMessage) onLogMessage(m); };
+  client->onStatusChange  = [this](StatusEvent e, int i) { if (onStatusChange) onStatusChange(e, i); };
+  client->onParamChanged  = [this](int i, const std::string& path, const std::string& value) {
+    if (onParamChanged) onParamChanged(i, path, value);
+  };
 
   // Sync existing digitizers from broker
   auto list = client->ListDigitizers();
@@ -401,43 +405,58 @@ void DigiManager::SaveSettings(int d, const std::string& fileName) {
 }
 
 void DigiManager::ReadAllSettings(int d) {
-  if (d < 0 || d >= nDigi) return;
+  if (d < 0 || d >= nDigi) {
+    printf("DigiManager::%s | digi %d out of range (nDigi=%d)\n", __func__, d, nDigi);
+    return;
+  }
+
+  printf("DigiManager::%s | digi %d | %s\n", __func__, d,
+         mode == Mode::Standalone ? "STANDALONE (hardware -> own cache)" : "BROKER (hardware -> server cache -> dump -> local cache)");
+
   if (mode == Mode::Standalone) {
     if (digi[d]) digi[d]->ReadAllSettings();
+    else printf("DigiManager::%s | digi %d | no Digitizer2Gen, skipped\n", __func__, d);
   } else {
-    if (!client || !client->IsConnected()) return;
-    // Tell broker to read all settings from hardware
-    client->ReadAllSettings(d);
-    // Sync each value to the local dummy cache using correct FPGA type
-    if (digi[d]) {
-      int nCh = GetNChannels(d);
-      std::string fpga = GetFPGAType(d);
-
-      // Use correct settings list for the firmware type
-      const auto& bdSettings = (fpga == DPPType::PSD) ? PSD::DIG::AllSettings : PHA::DIG::AllSettings;
-      const auto& chSettings = (fpga == DPPType::PSD) ? PSD::CH::AllSettings  : PHA::CH::AllSettings;
-
-      std::string model = GetModelName(d);
-
-      for (const auto& reg : bdSettings) {
-        if (reg.ReadWrite() == RW::WriteOnly) continue;
-        // Skip model-specific unsupported parameters
-        std::string para = reg.GetPara();
-        if (model == "VX2740" && para != PHA::DIG::TempSensADC0.GetPara()) continue;
-        if (model != "VX2740" && (para == PHA::DIG::FreqSensCore.GetPara() ||
-                                   para == PHA::DIG::DutyCycleSensDCDC.GetPara())) continue;
-        std::string val = client->ReadValue(d, reg.GetFullPara());
-        if (!val.empty()) digi[d]->WriteValue(reg, val, -1);
-      }
-      for (int ch = 0; ch < nCh; ch++) {
-        for (const auto& reg : chSettings) {
-          if (reg.ReadWrite() == RW::WriteOnly) continue;
-          std::string val = client->ReadValue(d, reg.GetFullPara(ch, nCh));
-          if (!val.empty()) digi[d]->WriteValue(reg, val, ch);
-        }
-      }
+    if (!client || !client->IsConnected()) {
+      printf("DigiManager::%s | digi %d | NOT connected to broker, cache untouched\n", __func__, d);
+      return;
     }
+    // The server reads the hardware into ITS cache and sends the whole thing back;
+    // applying it here is what makes "Refresh Settings" actually refresh in broker mode.
+    auto dump = client->ReadAllSettings(d);
+    printf("DigiManager::%s | digi %d | dump: %zu path/value pairs\n", __func__, d, dump.size());
+    if (dump.empty()) {
+      // An empty dump means the server refused or the board is gone; the cache keeps its old
+      // values either way, so the panel would silently show stale settings.
+      printf("DigiManager::%s | digi %d | EMPTY dump (%s) -- cache left as-is\n",
+             __func__, d, client->GetLastError().empty() ? "no error string" : client->GetLastError().c_str());
+      return;
+    }
+    if (!digi[d]) {
+      printf("DigiManager::%s | digi %d | no local dummy to apply into\n", __func__, d);
+      return;
+    }
+
+    /// SetSettingValueFromPath returns false for a path it cannot parse. That was exactly the
+    /// "CLI write never shows in the GUI" failure -- a one-level-off path split rejected every
+    /// /ch/ /lvds/ /vga/ /group/ entry and the loop discarded the result, so the sync looked
+    /// like it worked (dump received, loop ran) while nothing landed. Count it and say so.
+    int applied = 0, rejected = 0;
+    std::string firstReject;
+    for (const auto& kv : dump) {
+      if (digi[d]->SetSettingValueFromPath(kv.first, kv.second)) applied++;
+      else { rejected++; if (firstReject.empty()) firstReject = kv.first; }
+    }
+    printf("DigiManager::%s | digi %d | applied %d, rejected %d%s%s\n",
+           __func__, d, applied, rejected,
+           rejected ? " | first rejected: " : "",
+           rejected ? firstReject.c_str() : "");
   }
+}
+
+void DigiManager::ApplyParamToCache(int d, const std::string& path, const std::string& value) {
+  if (d < 0 || d >= nDigi || !digi[d]) return;
+  digi[d]->SetSettingValueFromPath(path, value);
 }
 
 void DigiManager::LoadSettings(int d, const std::string& fileName) {

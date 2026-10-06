@@ -339,11 +339,26 @@ BrokerClient::FileStatus BrokerClient::GetFileStatus(int digiIndex) {
 
 //^============================================ Settings
 
-void BrokerClient::ReadAllSettings(int digiIndex) {
+std::vector<std::pair<std::string, std::string>> BrokerClient::ReadAllSettings(int digiIndex) {
+  std::vector<std::pair<std::string, std::string>> out;
   std::vector<uint8_t> req;
   PackHeader(req, REQ_READ_ALL_SETTINGS);
   PackU8(req, static_cast<uint8_t>(digiIndex));
-  CheckOK(SendRequest(req));
+  auto rsp = SendRequest(req);
+  if (rsp.size() < 6) { lastError = "ReadAllSettings: short response"; return out; }
+  size_t off = 0;
+  uint8_t type = UnpackHeader(rsp.data(), off);
+  if (type == RSP_ERROR) { lastError = UnpackString(rsp.data(), off); return out; }
+  if (type != RSP_SETTINGS) { lastError = "ReadAllSettings: unexpected response"; return out; }
+  uint32_t count = UnpackU32(rsp.data(), off);
+  out.reserve(count);
+  for (uint32_t i = 0; i < count && off + 2 < rsp.size(); i++) {
+    std::string path = UnpackString(rsp.data(), off);
+    if (off + 2 > rsp.size()) break;
+    std::string value = UnpackString(rsp.data(), off);
+    out.emplace_back(std::move(path), std::move(value));
+  }
+  return out;
 }
 
 void BrokerClient::SaveSettingsFile(int digiIndex, const std::string& fileName) {
@@ -483,6 +498,15 @@ void BrokerClient::SubscriptionLoop() {
         uint8_t event = UnpackU8(data, off);
         uint8_t digiIdx = UnpackU8(data, off);
         if (onStatusChange) onStatusChange(static_cast<StatusEvent>(event), digiIdx);
+        break;
+      }
+
+      case PUB_PARAM_CHANGED: {
+        uint8_t digiIdx = UnpackU8(data, off);
+        std::string path = UnpackString(data, off);
+        std::string value = UnpackString(data, off);
+        if (off <= (size_t)size && onParamChanged)
+          onParamChanged(digiIdx, path, value);
         break;
       }
 

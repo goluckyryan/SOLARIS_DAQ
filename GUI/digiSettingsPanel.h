@@ -44,6 +44,10 @@ public slots:
   void EnableControl();
   void UpdatePanelFromMemory(bool onlyStatus = false);
   void UpdateStatus();
+  /// A parameter was written on the broker by another client; the local cache is already
+  /// updated by the time this is called (GUI thread). Repaint the current tab from the cache
+  /// so the change is visible immediately. Cheap: UpdatePanelFromMemory(false) is cache-only.
+  void ParamChanged(int digi, const QString & path, const QString & value);
 
 signals:
 

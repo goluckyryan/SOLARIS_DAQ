@@ -757,6 +757,37 @@ void MainWindow::OpenDigitizers(){
     }, Qt::QueuedConnection);
   };
 
+  // A parameter was written on the server by ANY client (the other GUI, the CLI, an agent).
+  // Apply it to the local cache on the GUI thread -- the dummy's Reg strings are unlocked, so
+  // this MUST NOT run on the subscription thread -- then repaint the affected panel widgets.
+  digiManager->onParamChanged = [this](int iDigi, const std::string& path, const std::string& value){
+    QString p = QString::fromStdString(path), v = QString::fromStdString(value);
+    QMetaObject::invokeMethod(this, [this, iDigi, p, v](){
+      if( digiManager ) digiManager->ApplyParamToCache(iDigi, p.toStdString(), v.toStdString());
+      if( digiSetting ) digiSetting->ParamChanged(iDigi, p, v);
+    }, Qt::QueuedConnection);
+  };
+
+  // Bulk server-side changes (Reset, LoadSettings) cannot be listed parameter by parameter.
+  // Re-fetch the whole cache for that board. Queued, and coalesced through a per-board flag,
+  // because the refetch is a blocking REQ/REP round trip and the dump is ~100k values.
+  digiManager->onStatusChange = [this](StatusEvent event, int iDigi){
+    if( event != EVT_SETTINGS_DIRTY ) return;
+    if( iDigi < 0 || iDigi >= (int)MaxNumberOfDigitizer ) return;
+    if( settingsDirty.exchange(1u << iDigi, std::memory_order_relaxed) & (1u << iDigi) ) return;
+    QMetaObject::invokeMethod(this, [this, iDigi](){
+      settingsDirty.fetch_and(~(1u << iDigi), std::memory_order_relaxed);
+      if( !digiManager ) return;
+      LogMsg("<font style=\"color:magenta;\">Digitizer-" + QString::number(digiManager->GetSerialNumber(iDigi)) +
+             ": settings changed on the broker, re-fetching...</font>");
+      digiManager->ReadAllSettings(iDigi);
+      /// UpdatePanelFromMemory() repaints the board's tab from the cache we just refilled;
+      /// UpdateOtherPanels() (scope/SOLARIS panels) is a separate, still-wanted refresh.
+      if( digiSetting && digiSetting->isVisible() ) digiSetting->UpdatePanelFromMemory();
+      if( digiSetting ) emit digiSetting->UpdateOtherPanels();
+    }, Qt::QueuedConnection);
+  };
+
   nDigiConnected = 0;
 
   if( useBrokerMode ){

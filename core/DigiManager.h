@@ -70,6 +70,8 @@ public:
   std::string GetSettingFileName(int digi) const;
 
   void ReadAllSettings(int digi);
+  /// Store one broadcast parameter into this process's dummy cache (GUI thread only).
+  void ApplyParamToCache(int digi, const std::string& path, const std::string& value);
 
   //=== Data access (same ring buffer types in both modes) ===
   RingBuffer<HitSummary, RingBufferSize>&           GetRingBuffer(int digi, int ch);
@@ -94,6 +96,14 @@ public:
   std::function<void(int digiIndex, int nHits)> onHitSummary;
   std::function<void(int digiIndex)>            onTraceSnapshot;
   std::function<void(const std::string& msg)>   onLogMessage;
+  /// Server-side parameter write (from ANY client, incl. the CLI). NOT yet applied to the
+  /// local cache -- the dummy's Reg strings have no lock, so the receiver must call
+  /// ApplyParamToCache() from the GUI thread before refreshing widgets.
+  /// path is the full FELib parameter path.
+  std::function<void(int digiIndex, const std::string& path, const std::string& value)> onParamChanged;
+  /// Lifecycle events broadcast by the broker (ACQ start/stop from any client, digi open/close,
+  /// SETTINGS_DIRTY after a server-side Reset/LoadSettings). Subscription-thread context.
+  std::function<void(StatusEvent event, int digiIndex)> onStatusChange;
 
   //=== Direct access (standalone only, for compatibility during migration) ===
   Digitizer2Gen* GetDigitizer(int digi);

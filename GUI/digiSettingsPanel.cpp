@@ -2406,6 +2406,15 @@ void DigiSettingsPanel::RefreshSettings(){
   UpdatePanelFromMemory();
 }
 
+void DigiSettingsPanel::ParamChanged(int digi, const QString & path, const QString & value){
+  (void) path; (void) value;
+  /// Only the tab that matches the board is worth repainting, and only while the panel is up.
+  /// UpdatePanelFromMemory() itself bails when hidden. Whole-tab refresh (not per-widget
+  /// matching) because one FELib write often moves related fields (ranges, masks, units).
+  if( !isVisible() || digi != (int)ID ) return;
+  UpdatePanelFromMemory(false);
+}
+
 void DigiSettingsPanel::UpdateStatus(){
 
   if( tabWidget->currentIndex() >= nDigi) return;

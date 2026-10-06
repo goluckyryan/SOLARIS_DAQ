@@ -51,6 +51,9 @@ private:
   std::string digiUrl[MaxNumberOfDigitizer];
   int nDigi;
   std::mutex digiMutex[MaxNumberOfDigitizer];
+  /// zmq sockets are not thread-safe: the REQ thread (per-client writes) and the scalar
+  /// broadcast thread both send on zmqPub.
+  std::mutex pubSendMutex;
 
   // Acquisition threads (one per digitizer)
   std::thread readThread[MaxNumberOfDigitizer];
@@ -114,6 +117,7 @@ private:
   void PublishHitSummaries(int digiIndex);
   void PublishTraceSnapshot(int digiIndex);
   void PublishStatusChange(StatusEvent event, uint8_t digiIndex);
+  void PublishParamChanged(uint8_t digiIndex, const std::string& path, const std::string& value);
   void PublishLog(const std::string& msg);
 };
 

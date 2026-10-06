@@ -73,7 +73,9 @@ public:
   FileStatus GetFileStatus(int digiIndex);
 
   //=== Settings
-  void ReadAllSettings(int digiIndex);
+  /// Pull the server's full settings cache. Returns (path, value) pairs; the caller applies
+  /// them to its local dummy cache. Empty on error.
+  std::vector<std::pair<std::string, std::string>> ReadAllSettings(int digiIndex);
   void SaveSettingsFile(int digiIndex, const std::string& fileName = "");
   void LoadSettingsFile(int digiIndex, const std::string& fileName = "");
 
@@ -117,6 +119,9 @@ public:
   std::function<void(int digiIndex)>                   onTraceSnapshot;
   std::function<void(StatusEvent event, int digiIndex)> onStatusChange;
   std::function<void(const std::string& msg)>          onLogMessage;
+  /// A parameter changed on the server (any client wrote it). Apply to the local cache and
+  /// refresh the UI. Called on the subscription thread -- queue to the GUI thread yourself.
+  std::function<void(int digiIndex, const std::string& path, const std::string& value)> onParamChanged;
 
   std::string GetLastError() const { return lastError; }
 
