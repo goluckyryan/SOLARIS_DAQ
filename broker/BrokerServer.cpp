@@ -121,6 +121,16 @@ void BrokerServer::Stop() {
 //^============================================ Digitizer management
 
 int BrokerServer::OpenDigitizer(const std::string& url) {
+  // Already open? Return the existing slot. A duplicate CAEN_FELib_Open of the same board is what
+  // wedged the first handle (comm error -15 flood, then the scalar-thread crash). Exact-string
+  // match: dig2://host and dig2://host:port are treated as different URLs.
+  for (int i = 0; i < nDigi; i++) {
+    if (digi[i] && digiUrl[i] == url) {
+      printf("Digitizer %d already open at %s, reusing it\n", i, url.c_str());
+      return i;
+    }
+  }
+
   // Find a free slot (reuse closed slots first)
   int idx = -1;
   for (int i = 0; i < nDigi; i++) {
@@ -143,6 +153,7 @@ int BrokerServer::OpenDigitizer(const std::string& url) {
     return -1;
   }
 
+  digiUrl[idx] = url;
   nDigi++;
   printf("Opened digitizer %d: SN=%d, Model=%s, FPGA=%s, %d channels\n",
          idx, digi[idx]->GetSerialNumber(),
@@ -166,6 +177,7 @@ void BrokerServer::CloseDigitizer(int index) {
     digi[index]->CloseDigitizer();
     delete digi[index];
     digi[index] = nullptr;
+    digiUrl[index].clear();
   }
 
   PublishStatusChange(EVT_DIGI_CLOSED, index);
@@ -673,6 +685,20 @@ void BrokerServer::ScalarBroadcastLoop() {
 
 //^============================================ Publish helpers
 
+/// Digitizer2Gen::ReadValue() reports failure IN BAND: it returns "not connected" or ErrorMsg()
+/// text when the board drops off the network (see the comm-error flood in the 17:28 crash).
+/// std::stoul on that text throws; this runs on the ScalarBroadcastLoop std::thread, where an
+/// escaping exception is std::terminate() -- the whole broker dies, every client loses the board.
+/// Same reasoning as DigiManager.cpp's ParseCounter(): parse without throwing, garbage = 0.
+static uint64_t ParseOrZero(const std::string & s) {
+  if( s.empty() ) return 0;
+  errno = 0;
+  char * end = nullptr;
+  unsigned long long v = strtoull(s.c_str(), &end, 10);
+  if( end == s.c_str() || errno == ERANGE ) return 0;  // no digits consumed, or overflow
+  return v;
+}
+
 void BrokerServer::PublishScalar(int digiIndex) {
   int nCh = std::min((int)digi[digiIndex]->GetNChannels(), (int)MaxNumberOfChannel);
 
@@ -697,9 +723,9 @@ void BrokerServer::PublishScalar(int digiIndex) {
     uint64_t savedCount = 0;
     float acceptRate = 0.0f;
 
-    try { trgRate = std::stoul(rateStr); } catch (...) {}
-    try { realTime = std::stoull(timeStr); } catch (...) {}
-    try { savedCount = std::stoull(countStr); } catch (...) {}
+    trgRate    = (uint32_t)ParseOrZero(rateStr);
+    realTime   = ParseOrZero(timeStr);
+    savedCount = ParseOrZero(countStr);
 
     if (digi[digiIndex]->GetModelName() == "VX2730") { realTime /= 4; }
 
@@ -729,12 +755,12 @@ void BrokerServer::PublishScalar(int digiIndex) {
 
     std::string ledStr = digi[digiIndex]->ReadValue(PHA::DIG::LED_status);
     std::string acqStr = digi[digiIndex]->ReadValue(PHA::DIG::ACQ_status);
-    PackU32(buf, ledStr.empty() ? 0 : std::stoul(ledStr));
-    PackU32(buf, acqStr.empty() ? 0 : std::stoul(acqStr));
+    PackU32(buf, (uint32_t)ParseOrZero(ledStr));
+    PackU32(buf, (uint32_t)ParseOrZero(acqStr));
     for (int i = 0; i < 8; i++) {
       std::string tempStr = (i < (int)PHA::DIG::TempSensADC.size())
                           ? digi[digiIndex]->ReadValue(PHA::DIG::TempSensADC[i]) : "";
-      PackU32(buf, tempStr.empty() ? 0 : (uint32_t)std::stoi(tempStr));
+      PackU32(buf, (uint32_t)ParseOrZero(tempStr));
     }
   }
 

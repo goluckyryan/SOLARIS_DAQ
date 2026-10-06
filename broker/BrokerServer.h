@@ -43,6 +43,12 @@ private:
 
   // Digitizers
   Digitizer2Gen* digi[MaxNumberOfDigitizer];
+  /// The URL each slot was opened with. FELib lets a second CAEN_FELib_Open() of the same board
+  /// succeed, and the two handles then fight: the 17:28 crash started exactly that way (a second
+  /// `open dig2://192.168.0.100` while the board was already open -> the FIRST handle's reads all
+  /// returned comm error -15, and the scalar loop fed that text to std::stoul). OpenDigitizer()
+  /// now returns the existing index instead of double-opening.
+  std::string digiUrl[MaxNumberOfDigitizer];
   int nDigi;
   std::mutex digiMutex[MaxNumberOfDigitizer];
 
