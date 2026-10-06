@@ -123,6 +123,14 @@ class Digitizer2Gen {
     int FindIndex(const Reg para); // get index from DIGIPARA
     std::string GetSettingValueFromMemory(const Reg para, unsigned int ch_index = 0); // read from memory
 
+    /// Bulk cache dump for the broker: every cached parameter as (full FELib path, value),
+    /// using exactly the path form GetFullPara() produces so a client can feed the pairs
+    /// straight back into SetSettingValueFromPath(). Memory only -- no hardware reads.
+    void DumpSettingsCache(std::vector<std::pair<std::string, std::string>> & out) const;
+    /// Store a value into the memory cache by full FELib path (the inverse lookup of the dump).
+    /// This is how a broker client keeps its dummy's cache in step with server-side writes.
+    bool SetSettingValueFromPath(const std::string & path, const std::string & value);
+
     
     /// ret is passed in explicitly: a per-call status must not live in per-object storage,
     /// the DAQ and GUI threads call into this object concurrently.

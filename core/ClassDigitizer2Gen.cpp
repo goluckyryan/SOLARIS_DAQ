@@ -1802,6 +1802,94 @@ std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg para, unsigned in
   return "no such parameter";
 }
 
+//^============================================ Broker cache plumbing
+/// Path form matches Reg::GetFullPara() exactly, so a broker client can apply the dump with
+/// SetSettingValueFromPath() and every cache entry lands where ReadValue()/WriteValue() keep it.
+void Digitizer2Gen::DumpSettingsCache(std::vector<std::pair<std::string, std::string>> & out) const {
+  for( int i = 0; i < (int) boardSettings.size(); i++ )
+    out.push_back({ boardSettings[i].GetFullPara(), boardSettings[i].GetValue() });
+
+  for( int ch = 0; ch < nChannels && ch < MaxNumberOfChannel; ch++ )
+    for( int i = 0; i < (int) chSettings[ch].size(); i++ )
+      out.push_back({ chSettings[ch][i].GetFullPara(ch, nChannels), chSettings[ch][i].GetValue() });
+
+  for( int i = 0; i < 4; i++ ){
+    out.push_back({ VGASetting[i].GetFullPara(i), VGASetting[i].GetValue() });
+    for( int j = 0; j < (int) LVDSSettings[i].size(); j++ )
+      out.push_back({ LVDSSettings[i][j].GetFullPara(i), LVDSSettings[i][j].GetValue() });
+  }
+  for( int i = 0; i < MaxNumberOfGroup; i++ )
+    out.push_back({ InputDelay[i].GetFullPara(i), InputDelay[i].GetValue() });
+}
+
+/// Inverse of the dump. Also accepts the wildcard channel form the CLI writes with
+/// (/ch/0..63/par/X) and applies it to every channel in the range, so a broadcast of a
+/// bulk write updates the whole range in the client cache. Returns false only for an
+/// unparseable path or an unknown parameter name -- a stale name in a dump is not an error.
+bool Digitizer2Gen::SetSettingValueFromPath(const std::string & path, const std::string & value) {
+  // /par/Name
+  if( path.rfind("/par/", 0) == 0 ){
+    int index = LookUp(boardMap, path.substr(5));
+    if( index < 0 || index >= (int) boardSettings.size() ) return false;
+    boardSettings[index].SetValue(value);
+    return true;
+  }
+  if( path.rfind("/ch/", 0) != 0 && path.rfind("/lvds/", 0) != 0 &&
+      path.rfind("/vga/", 0) != 0 && path.rfind("/group/", 0) != 0 ) return false;
+
+  // split "<prefix>/<range-or-index>/<par|cmd>/Name", e.g. /ch/0/par/ChEnable
+  /// The four tokens are prefix, index, kind, name -- three slashes after the prefix.
+  /// (This split was once off by one level: idxStr captured the PREFIX, kind captured the
+  /// INDEX, so kind != "par" rejected EVERY /ch/ /lvds/ /vga/ /group/ path and only board
+  /// /par/ names ever applied -- which is why a CLI channel write never showed in the GUI.)
+  size_t slash1 = path.find('/', 1);                       // after the prefix word
+  if( slash1 == std::string::npos ) return false;
+  size_t slash2 = path.find('/', slash1 + 1);              // after the index token
+  if( slash2 == std::string::npos ) return false;
+  std::string idxStr = path.substr(slash1 + 1, slash2 - slash1 - 1); // "0" or "0..63"
+  size_t slash3 = path.find('/', slash2 + 1);              // after the kind token
+  if( slash3 == std::string::npos ) return false;
+  std::string kind = path.substr(slash2 + 1, slash3 - slash2 - 1);   // "par" or "cmd"
+  std::string name = path.substr(slash3 + 1);
+  if( kind != "par" ) return false;                        // /cmd/ paths are commands, not settings
+
+  // channel range: "0..63" (wildcard) or a single index
+  int lo = 0, hi = 1;
+  bool isCh = path.rfind("/ch/", 0) == 0;
+  size_t dots = idxStr.find("..");
+  if( isCh ){
+    if( dots == std::string::npos ){ lo = atoi(idxStr.c_str()); hi = lo + 1; }
+    else { lo = atoi(idxStr.c_str()); hi = atoi(idxStr.c_str() + dots + 2) + 1; }
+    if( lo < 0 || hi > nChannels || hi <= lo ) return false;
+  }
+
+  if( isCh ){
+    int index = LookUp(chMap, name);
+    if( index < 0 ) return false;
+    for( int ch = lo; ch < hi && ch < MaxNumberOfChannel; ch++ )
+      if( index < (int) chSettings[ch].size() ) chSettings[ch][index].SetValue(value);
+    return true;
+  }
+  if( path.rfind("/lvds/", 0) == 0 ){
+    int g = atoi(idxStr.c_str());
+    if( g < 0 || g >= 4 ) return false;
+    int index = LookUp(LVDSMap, name);
+    if( index < 0 || index >= (int) LVDSSettings[g].size() ) return false;
+    LVDSSettings[g][index].SetValue(value);
+    return true;
+  }
+  if( path.rfind("/vga/", 0) == 0 ){
+    int g = atoi(idxStr.c_str());
+    if( g < 0 || g >= 4 ) return false;
+    VGASetting[g].SetValue(value);                         // the vector holds only VGAGain
+    return true;
+  }
+  int g = atoi(idxStr.c_str());                            // /group/
+  if( g < 0 || g >= MaxNumberOfGroup ) return false;
+  InputDelay[g].SetValue(value);
+  return true;
+}
+
 std::string Digitizer2Gen::GetBoardSettingByName(const std::string & name, bool * found) const {
   const int index = LookUp(boardMap, name);
   if( index < 0 || index >= (int) boardSettings.size() ){
