@@ -73,6 +73,11 @@ class Digitizer2Gen {
     FILE * outFile;
     unsigned int outFileSize;
     uint64_t FinishedOutFilesSize;
+    /// True once SaveDataToFile() hit a write error (or the post-rollover fopen failed): the file
+    /// is closed and every hit after is dropped by SaveDataToFile()'s null-file guard. The printf()
+    /// there reaches no operator, so ReadDataThread watches this flag to warn in the DAQ log.
+    bool fileWriteError;
+    uint64_t droppedHitCount;
 
     bool acqON;
 
@@ -183,6 +188,8 @@ class Digitizer2Gen {
     void SaveDataToFile();
     unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
+    bool     GetFileWriteError() const {return fileWriteError;}
+    uint64_t GetDroppedHitCount()  const {return droppedHitCount;}
     unsigned short GetOutFileIndex() const {return outFileIndex;} // number of files = index + 1
     std::string GetOutFileName() const {return outFileName;}
 

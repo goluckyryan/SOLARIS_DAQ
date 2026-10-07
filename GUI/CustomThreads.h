@@ -6,6 +6,7 @@
 #include <QMutex>
 
 #include <atomic>
+#include <chrono>
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
@@ -23,12 +24,15 @@ extern QMutex digiMTX[MaxNumberOfDigitizer];
 class ReadDataThread : public QThread {
   Q_OBJECT
 public:
-  ReadDataThread(Digitizer2Gen * dig, int digiID, QObject * parent = 0) : QThread(parent){ 
+  ReadDataThread(Digitizer2Gen * dig, int digiID, QObject * parent = 0) : QThread(parent){
     this->digi = dig;
     this->ID = digiID;
     isSaveData = false;
     stop = false;
     // canSendMsg = true;
+    /// Epoch, so the first warning after a write error is immediate; time_point{} (not min())
+    /// because now - min() would overflow the signed duration.
+    lastFileWarn = std::chrono::steady_clock::time_point{};
   }
   // void SuppressFileSizeMsg() {canSendMsg = false;}
   void Stop(){ this->stop = true;}
@@ -52,6 +56,22 @@ public:
 
       if( isSaveData && ret == CAEN_FELib_Success ){
         digi->SaveDataToFile();
+
+        /// A write failure (disk full, failed post-rollover open) closed the file, so every hit
+        /// after it is dropped by SaveDataToFile()'s null-file guard while the board keeps
+        /// acquiring and the GUI still shows ACQ On. This is the only place an operator sees it:
+        /// throttled to one message per 10 s, with the running dropped count.
+        if( digi->GetFileWriteError() ){
+          auto now = std::chrono::steady_clock::now();
+          if( now - lastFileWarn >= std::chrono::seconds(10) ){
+            lastFileWarn = now;
+            emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) +
+                         " <font style=\"color: red;\">WARNING: file write failed on " +
+                         QString::fromStdString(digi->GetOutFileName()) +
+                         " -- " + QString::number(digi->GetDroppedHitCount()) +
+                         " hits dropped and not saved (disk full?).</font>");
+          }
+        }
       }
 
       if( ret == CAEN_FELib_Stop ){
@@ -86,6 +106,8 @@ private:
   /// `stop` out of the loop entirely.
   std::atomic<bool> isSaveData;
   std::atomic<bool> stop;
+  /// Throttle for the write-failure warning; touched by run() only.
+  std::chrono::steady_clock::time_point lastFileWarn;
 };
 
 //^#======================================================= Timing Thread, for some action need to be done periodically

@@ -40,6 +40,8 @@ void Digitizer2Gen::Initialization(){
 
   outFileIndex = 0;
   FinishedOutFilesSize = 0;
+  fileWriteError = false;
+  droppedHitCount = 0;
   dataStartIdentifier = 0xAAA0;
   outFile = NULL;
   outFileSize = 0;
@@ -488,7 +490,11 @@ void Digitizer2Gen::StartACQ(){
   
   SendCommand("/cmd/armacquisition"); // this will also clear data
   SendCommand("/cmd/swstartacquisition");
-  
+
+  /// Kept, but OpenOutFile() (which MainWindow calls BEFORE this) is the authoritative reset for a
+  /// saving run: it must open index 0 even when the previous run ended mid-rollover. These lines
+  /// still matter for no-save runs, which never open a file and would otherwise show the previous
+  /// run's total in the file-size label.
   outFileIndex = 0;
   outFileSize = 0;
   FinishedOutFilesSize = 0;
@@ -1110,6 +1116,15 @@ int Digitizer2Gen::ReadData(){
 //###########################################
 
 void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
+  /// A new file series always starts at index 0. This must happen HERE, not in StartACQ():
+  /// MainWindow calls OpenOutFile() before Digitizer2Gen::StartACQ(), so a reset that lives only
+  /// there keeps the previous run's rollover index -- run N's first file would be named after
+  /// run N-1's last file, and run N's own later rollover would then reopen that same name with
+  /// "wb" and silently truncate the run's first 2 GB.
+  outFileIndex = 0;
+  FinishedOutFilesSize = 0;
+  fileWriteError = false;
+  droppedHitCount = 0;
   outFileNameBase = fileName;
   const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "sol_raw" : "sol";
   snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
@@ -1139,7 +1154,12 @@ void Digitizer2Gen::CloseOutFile(){
 
 void Digitizer2Gen::SaveDataToFile(){
 
-  if( outFile == NULL ) return;
+  if( outFile == NULL ){
+    /// The error branch below (or the rollover open) closed the file; every hit from here on is
+    /// lost. Count them so ReadDataThread can report the damage in the DAQ log.
+    if( fileWriteError ) droppedHitCount ++;
+    return;
+  }
 
   if( (unsigned long) outFileSize > MaxOutFileSize ){
     FinishedOutFilesSize += ftell(outFile);
@@ -1149,6 +1169,8 @@ void Digitizer2Gen::SaveDataToFile(){
     snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", outFileNameBase.c_str(), outFileIndex, ext);
     outFile = fopen(outFileName, "wb"); //overwrite binary
     if( outFile == NULL ){
+      fileWriteError = true;  /// this hit is lost too
+      droppedHitCount ++;
       printf("Digitizer2Gen::%s | failed to open new file '%s'\n", __func__, outFileName);
       return;
     }
@@ -1225,7 +1247,11 @@ void Digitizer2Gen::SaveDataToFile(){
 
   /// A short write corrupts the file from here on. ferror() catches it in any format
   /// branch without counting the expected bytes; stop rather than keep appending.
+  /// Set the flag BEFORE closing: from now on every hit is dropped, and ReadDataThread
+  /// reports it in the DAQ log -- the printf alone goes to a terminal no operator watches.
   if( ferror(outFile) ){
+    fileWriteError = true;  /// this hit is lost too
+    droppedHitCount ++;
     printf("Digitizer2Gen::%s | write error on '%s'\n", __func__, outFileName);
     CloseOutFile();
     return;

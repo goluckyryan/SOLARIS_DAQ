@@ -84,6 +84,33 @@ no lap check at all.
 `run<ID>/` subfolder only when `isSaveSubFolder` is set. See `sol-file-format.md` for the file
 layout and `settings-system.md` for the `.dat`.
 
+## When a write fails mid-run
+
+A `fwrite` failure (classically, the raw-data partition filling up) must not go silent: before
+October 2026 it did — the `ferror()` branch closed the file and `printf`ed to the process stderr,
+and every hit after fell into `SaveDataToFile()`'s null-file guard and was dropped, while ACQ
+stayed On, the rates kept moving, and only the file-size label froze. The "file size stopped at
+8 GB during a 60-min AutoRun" incident was exactly that: ~20 min of hits lost with nothing in the
+GUI saying so.
+
+What happens now:
+
+- `SaveDataToFile()` sets a per-board `fileWriteError` and counts the dropped hits, for both a
+  failed write and a failed post-rollover `fopen` (the failing hit counts too).
+- `ReadDataThread` watches the flag and emits a red DAQ-log line — immediately, then at most one
+  per 10 s with the running count: `Digi-XXXXX WARNING: file write failed on <file> -- N hits
+  dropped and not saved (disk full?)`. Flag and count reset in `OpenOutFile()`, so a warning can
+  never leak into the next run.
+- `StartACQ()` logs the free space on the raw-data disk for every saving run, red below 10 GB.
+  The DAQ deliberately does **not** stop the run when the disk fills — that is a separate
+  behaviour decision.
+
+Rollover naming is pinned here too: a new file series always starts at index 0, because the reset
+lives in `OpenOutFile()` — the point `MainWindow` actually calls to begin a series — not only in
+`Digitizer2Gen::StartACQ()`, which runs after it. With the old placement, run N's first file was
+named after run N−1's last rollover, and run N's own later rollover would then reopen that same
+name with `"wb"` and truncate the run's first 2 GB.
+
 ## The other way to start acquisition
 
 **The Scope starts and stops the same `ReadDataThread`s independently** of everything above, forcing
