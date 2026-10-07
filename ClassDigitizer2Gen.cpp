@@ -1138,7 +1138,7 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
   outFile = fopen(outFileName, mode);
   if( outFile == NULL ){
-    printf("OpenOutFile: failed to open file '%s'\n", outFileName);
+    printf("Digitizer2Gen::%s | failed to open file '%s'\n", __func__, outFileName);
     outFileSize = 0;
     return;
   }
@@ -1179,7 +1179,7 @@ void Digitizer2Gen::SaveDataToFile(){
     if( outFile == NULL ){
       fileWriteError = true;  /// this hit is lost too
       droppedHitCount ++;
-      printf("SaveDataToFile: failed to open new file '%s'\n", outFileName);
+      printf("Digitizer2Gen::%s | failed to open new file '%s'\n", __func__, outFileName);
       return;
     }
   }
@@ -1260,7 +1260,7 @@ void Digitizer2Gen::SaveDataToFile(){
   if( ferror(outFile) ){
     fileWriteError = true;  /// this hit is lost too
     droppedHitCount ++;
-    printf("SaveDataToFile: write error on '%s'\n", outFileName);
+    printf("Digitizer2Gen::%s | write error on '%s'\n", __func__, outFileName);
     CloseOutFile();
     return;
   }
