@@ -277,3 +277,53 @@ different handles), these can race on shared library/device state.
    `SetDataFormat`, `OpenDigitizer`, `CloseDigitizer`).
 3. Keep the DAQ critical section short; do not hold the lock across `SaveDataToFile()` / file I/O.
 4. Re-test open/close/reopen and a Raw + DPP run with the GUI timer active after any change.
+
+---
+
+## Silent file-write failure — the 2026-10 AutoRun incident
+
+**Status:** Fixed in code; on-site confirmation of the incident itself still open.
+
+A run under "Single 60 mins" AutoRun froze at ~8 GB (four 2 GB rollovers) around the 40-minute
+mark and kept "running" until the 60-minute stop: board acquiring, rates moving, ACQ On, file
+size flat. The stop was **not** the timer — at that rate a full 60 min would be ~12 GB. A
+`fwrite` had failed (most likely the data partition at its limit), and from then on **every hit
+was dropped with nothing in the GUI saying so**: the `ferror()` branch `printf`s to the process
+stderr — a terminal no operator is watching — closes the file, and the rest of the run walks
+into `SaveDataToFile()`'s `if( outFile == NULL ) return;`. For a DAQ, "silently dropping data
+while showing ACQ On" is the worst failure mode, so it is no longer silent.
+
+### What changed
+
+1. **The failure is now visible in the DAQ log.** `SaveDataToFile()` sets a per-board
+   `fileWriteError` flag and counts the dropped hits on both failure paths (`ferror()` and a
+   failed post-rollover `fopen`; the hit that fails counts too). `ReadDataThread` watches the
+   flag and emits a red warning — immediately, then at most one per 10 s with the running count:
+   `Digi-XXXXX WARNING: file write failed on <file> -- N hits dropped and not saved
+   (disk full?)`. The flag and the count reset in `OpenOutFile()`, i.e. at the next run, so a
+   warning can never leak across runs. The `printf`s stay — they are the record in the process
+   log.
+2. **Free space is announced at run start.** `MainWindow::StartACQ()` logs the free space on the
+   raw-data partition for every saving run, red below 10 GB. The DAQ deliberately does **not**
+   stop the run when the disk fills — that is a behaviour change for another decision; at minimum
+   the operator now knows before, and the moment it happens.
+3. **The stale `outFileIndex` truncation is gone.** The file-series reset lived in
+   `Digitizer2Gen::StartACQ()`, which `MainWindow::StartACQ()` calls *after* `OpenOutFile()`.
+   So run N's first file was opened with run N−1's final rollover index *I*: named `..._00I.sol`,
+   and run N's own *I*-th rollover then reopened that same name with `"wb"` — silently
+   truncating the run's first 2 GB. Any AutoRun cycle whose runs exceed *I* × 2 GB destroyed
+   data. `OpenOutFile()` is now the authoritative reset (index 0, sizes zeroed, error state
+   cleared) — it is where a new file series actually begins. The reset in `StartACQ()` is kept
+   and commented: it still zeroes the label for no-save runs, which never open a file.
+
+### Verification
+
+- Compile-clean on the dev machine via `g++ -fsyntax-only` against a stubbed `CAEN_FELib.h`
+  (the real library lives on the test station); the real build must be repeated there.
+- **On-site confirmation of the incident is still open**: the elog of the affected run should
+  show `Duration ≈ 60 min` with `TotalFileSize ≈ 8 GB`; the frozen file's mode (444 mid-run =
+  the `ferror` branch fired) and `df -h` on the data partition close it out.
+- To exercise the new warning: run an experiment pointed at a small (e.g. tmpfs) data path and
+  fill it mid-run. Expect the red line within one hit, repeating every ~10 s with a growing
+  count, ACQ still On. The next run must start clean: no stale warning, and the first file
+  named `_000` again.

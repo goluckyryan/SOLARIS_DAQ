@@ -459,6 +459,21 @@ int MainWindow::StartACQ(){
     LogMsg("=========================== Start no-save Run");
   }
 
+  //=============== free space on the raw-data disk
+  if( chkSaveRun->isChecked() ){
+    QStorageInfo storage(rawDataPath);
+    if( storage.isValid() ){
+      const double availGB = storage.bytesAvailable() / 1024. / 1024. / 1024.;
+      if( availGB < 10. ){
+        LogMsg("<font style=\"color: red;\">WARNING: only " + QString::number(availGB, 'f', 1) +
+               " GB free on the raw-data disk -- a run that fills it up will stop saving "
+               "(hits dropped, file-size label frozen) with no other sign.</font>");
+      }else{
+        LogMsg("Free space on raw-data disk: " + QString::number(availGB, 'f', 1) + " GB.");
+      }
+    }
+  }
+
   //============================= start digitizer
   for( int i = nDigi-1 ; i >= 0; i --){
     if( digi[i]->IsDummy () ) continue;
