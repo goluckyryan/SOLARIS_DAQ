@@ -543,6 +543,21 @@ DigiManager::ScalarSnapshot DigiManager::GetScalarSnapshot(int d) {
     snap.totalFileSize = digi[d]->GetTotalFilesSize();
     snap.acqOn = digi[d]->IsAcqOn();
 
+    /// Board status: the LED / ACQ bit-fields and the ADC temperatures. The broker-mode path
+    /// below gets these from PUB_SCALAR, filled by BrokerServer::PublishScalar(). Standalone has
+    /// no such message, so read the same three node groups the same way -- otherwise
+    /// DigiSettingsPanel::UpdatePanelFromMemory() paints all 19 LEDs and all 7 ACQ bits off and
+    /// every temperature 0, which is what "board status not showing in standalone" was.
+    /// ParseOrZero-equivalent: ReadValue() reports failure in-band ("not connected", ErrorMsg
+    /// text), so anything unparseable must be 0 rather than a throw on the GUI thread.
+    snap.ledStatus = (uint32_t)ParseCounter(digi[d]->ReadValue(PHA::DIG::LED_status));
+    snap.acqStatus = (uint32_t)ParseCounter(digi[d]->ReadValue(PHA::DIG::ACQ_status));
+    for (int i = 0; i < 8; i++) {
+      std::string tempStr = (i < (int)PHA::DIG::TempSensADC.size())
+                          ? digi[d]->ReadValue(PHA::DIG::TempSensADC[i]) : "";
+      snap.tempADC[i] = (uint32_t)ParseCounter(tempStr);
+    }
+
   } else {
     if (!client) return snap;
     std::lock_guard<std::mutex> lock(client->scalarMutex);

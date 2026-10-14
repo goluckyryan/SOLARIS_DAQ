@@ -101,3 +101,21 @@ Aux/testRawDecoder
 
 broker/data
 *.log
+# ---------------------------------------------------------------------------
+# agent/ -- agent-authored material that is NOT part of the DAQ itself: the
+# findings log, the raw bench captures it cites, and the throwaway analysis
+# scripts. Kept in one folder so it is trivial to exclude, back up, or delete
+# wholesale.
+#   agent/AGENT.md          findings log (searchable, never auto-loaded)  IGNORED
+#   agent/data/             CLI trace captures, model backups, renderings IGNORED
+#   agent/plot_capture.py   capture -> one-axes timing diagram            tracked
+# A fresh clone cannot re-verify the trapezoid against hardware without
+# agent/data/ -- the captures are machine-local by deliberate choice.
+# NOTE: agent/trapezoid_gui.py was MOVED BACK to Aux/ on 2026-10-13: it is a
+# user-facing teaching tool about the trapezoid filter, not agent scratch, so it
+# belongs with the other Aux/ tools and is tracked there.
+# ---------------------------------------------------------------------------
+agent/data/
+agent/__pycache__/
+__pycache__/
+
