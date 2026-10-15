@@ -1,14 +1,58 @@
 # agent/AGENT.md — bench and code findings (SOLARIS DAQ)
 
-**This file is gitignored and is NOT loaded into any context window.** It is a searchable record of
+**This file is NOT loaded into any context window.** It is a searchable record of
 what has been *measured on this bench* and what has been *disproved*, so the next agent can `grep` it
-instead of re-deriving it. It is the counterpart to the session md, which is injected every turn and
-therefore has to stay small.
+instead of re-deriving it. It is the counterpart to the session md, which is injected every turn and therefore has to stay small.
 
-Write to it: a measurement with numbers, a hypothesis that died, a trap that cost time, a fix and its
-evidence. Do not write to it: rules of behaviour (those live in the session md, because they must be
-in context to be followed), or anything already in `DAQ:README.md` / `DAQ:docs/` — link instead of
-repeating.
+## Scope — what belongs here
+
+**AGENT.md records what was LEARNED, not what was DONE or EXPLORED.** The hardware, the physics, the
+code's behaviour -- not my work session. If a line only makes sense as a step I took on the way to
+something, it is a commit message, and `git log` answers it better than this file can.
+
+A reader five months from now, with a different tool and a different task, should find every line here
+still worth knowing.
+
+**"What I explored" is worth keeping exactly when it CLOSES a possibility.** "Model X fits this tail,
+and here is the residual that kills it" is a learned fact -- it stops someone re-deriving a dead end,
+which is why overturned claims stay here marked RETRACTED rather than being deleted. "I wrote a script,
+rewrote it, then deleted it" is a sequence of my actions and teaches nothing; the **durable residue** of
+that episode -- the parse recipe, the trap it exposed -- belongs here, stated on its own merits and
+without the names of the files involved. The test is not "did I do this?" but **"does a future reader
+know something false, or waste real time, if I leave this out?"**
+
+The operational form, applied to each candidate paragraph:
+
+1. **Would it still be true after the tool is rewritten?** If it describes a decision in
+   `plot_capture.py` / `trapezoid_gui.py`, it is a commit message, not a note. Code is the record —
+   `git log` answers it. (This is why "the vertical-line special case is gone" was wrong to put here.)
+2. **Would omitting it cause someone to re-derive something FALSE, or waste real time?** A dead
+   hypothesis, a trap, a measured number, a hardware quirk: yes. "I fixed a bug": no.
+3. **Is it about the instrument or about me?** `FlatTopT clamps to 3000 and returns OK` is a property of
+   the board — permanent. `my scratch script divided ns by seconds` is a property of my afternoon — gone.
+
+**Write here:** measurements with numbers and their error bars; hypotheses that died, with the evidence
+that killed them; traps that cost time; hardware behaviour that contradicts its own documentation; the
+recipe for a parse or a measurement that is easy to get wrong.
+
+**Do NOT write here:** rules of behaviour — those go in the session md, because they must be in context
+to be followed, and a file nobody reads cannot regulate anything. Also not: what I changed in our own
+tools, commit-by-commit; `BENCH STATE` snapshots (one live copy in the session md, not ten dated ones
+here); changelog noise about our own bugs once the fix is in; **the name of a deleted file.**
+
+**A deleted file's name is not a fact, and keeping it costs more than it pays.** "X.py was deleted,
+recipe preserved here" tells a future reader nothing they can act on — they cannot un-delete it — and it
+leaves an unresolvable reference that reads like a pointer to real code. Strip the name and keep the
+**fact** the file embodied: §13e is titled for what it *contains* (the capture-parse recipe, now the only
+copy anywhere), not for the script that once held it. Two failure modes this prevents, both of which this
+file actually had: a present-tense sentence ("X still reports corr 1.00000") reads as a runnable check
+when nothing can run it, and a function kept because "X imports it" silently loses its justification the
+moment X is gone — **justify a kept function by what it measures, never by a caller.**
+
+**The exception, and it is the only thing that justifies a section about a tool change:** the *transferable
+lesson* inside it. "Pixel-diffing cannot verify a sub-pixel artist; measure path geometry in data
+coordinates" outlives the bug entirely. **Distil the lesson into the relevant topic section and delete the
+narrative** — do not keep the narrative as a tombstone.
 
 ## Index
 
@@ -20,24 +64,27 @@ repeating.
 | 4 | digitizer input params (zin 100 ohm, DIFF, inputrange 4 V) |
 | 5 | CAEN_FELib: path format, device-tree dump, bulk channel paths NOT supported, read costs |
 | 6 | build state; broker + CLI end-to-end |
-| 7 | FIXED: board status blank in standalone mode; refresh wiring |
 | 8 | trace capture from the digitizer ch0; impedance model confirmed to 0.5 % |
 | 9 | trapezoid (EnergyFilter) capture; probe settings not restored by design |
 | 10 | the 4 digital probes, all 13 sources measured, which are worth a slot |
-| 11 | trapezoid filter: criteria for "good", the user's 2 rules, what passes and what FAILS |
+| 11 | trapezoid filter: criteria for "good", the user's pole-zero rule, what passes and what FAILS; **RETRACTED 2026-10-14: "filter rise >= signal rise" was never a rule -- RiseTimeT is unconstrained by the signal** |
 | 12 | trapezoid TUNING sweep: resolution 0.09 %, mean energy is the observable (not FWHM); the ~3 % rise effect is UNATTRIBUTED (not ballistic deficit) |
-| 13 | `Aux/trapezoid_gui.py` (still there -- user-facing): offline playground; **the correct filter (corr 1.00000) and what the pole-zero really is**; sampled+quantised pipeline with dt/bits controls; **pedestal/offset boundary fix + the DC leak the board also has**; **defaults now 1000/5000 ns + why a long flat top measures short**; **"exponential tail" was MY DEFAULT not the formula + the user's optimisation criteria tested + ~~`Aux/validate_trap.py`~~ DELETED, recipe in 13e**; **7xr holds as a default; "tune L to fill the energy bits" REFUTED -- DPP normalises by L** |
-| 13b | **PHA timing chain RC-CR^2: armed on threshold, TRIGGER on the zero crossing -- reproduces the board's markers to +-1 sample**; +608 ns lag = trigger latency (partly); trigger-level pile-up limit ~1700 ns vs the board's 1528 ns guard; ~~`landmarks()` is the user's code~~ **CORRECTED: it is MINE** (see below) |
-| 13c | **LIVE six-signal capture vs the model: the +608 ns lag was 612 ns of REAL PIPELINE LATENCY, not gating** -- all six signals match (armed err 0, trigger +1 sample, corners <=12 ns, resid 0.034 %); Peaking/PileupGuard are NOT trapezoid corners; ~~`Aux/compare_capture.py`~~ DELETED, see 13e |
+| 13 | `Aux/trapezoid_gui.py` (still there -- user-facing): offline playground; **the correct filter (corr 1.00000) and what the pole-zero really is**; sampled+quantised pipeline with dt/bits controls; **pedestal/offset boundary fix + the DC leak the board also has**; **defaults now 1000/5000 ns + why a long flat top measures short**; **"exponential tail" was MY DEFAULT not the formula + the user's optimisation criteria tested + **the capture-parse recipe that has no script left, §13e**; **7xr holds as a default; "tune L to fill the energy bits" REFUTED -- DPP normalises by L** |
+| 13b | **PHA timing chain RC-CR^2: armed on threshold, TRIGGER on the zero crossing -- reproduces the board's markers to +-1 sample**; +608 ns lag = trigger latency (partly); trigger-level pile-up limit ~1700 ns vs the board's 1528 ns guard; **trapezoid corners are line-fit intersections, not threshold crossings -- and they are referenced to the ARRIVAL, not the trigger**; **`argmax` over the rest of the record merged two pulses 8 us apart** |
+| 13c | **LIVE six-signal capture vs the model: the +608 ns lag was 612 ns of REAL PIPELINE LATENCY, not gating** -- all six signals match (armed err 0, trigger +1 sample, corners <=12 ns, resid 0.034 %); Peaking/PileupGuard are NOT trapezoid corners; **the marker table is §13e, which is now the only copy of the parse** |
 | 13d | **GUI REWRITTEN to the user's 5-step plan: the delay is DERIVED as (TRIGGER - ARMED) and applied to the INPUT, never fitted**; retires the 612 ns position and the t1=trigger+L rule; **`twinx()` must be created once, not per recompute**; **the 2nd derivative's pre-trigger was not flat -- IIR needs an ANALYTIC steady state, no finite warm block is exact**; x-range bounded to the sample data +-10 % |
-| 13e | **`validate_trap.py` + `compare_capture.py` DELETED on request -- the capture-parse regex, constants and probe map preserved here verbatim**; gitignoring the data means a fresh clone cannot re-verify corr 1.00000; **the GUI is a DEMONSTRATION tool, scores removed from it** |
+| 13e | **THE CAPTURE-PARSE RECIPE, verbatim: regex, constants, probe map, time-filter calibration** -- it exists nowhere else and **no script can run it**; gitignoring the data means a fresh clone cannot re-verify corr 1.00000; **the GUI is a DEMONSTRATION tool, scores removed from it** |
 | 13f | **TRAP: `FlatTopT` writes return OK but the board CLAMPS to 3000 ns**; `/max` nodes unreadable, so the limit is only discoverable by write+read-back; clamp confirmed in the waveform by the DC-leak formula AND the peaking marker, not just the register |
 | 13g | **Emulator rise 1.0 -> 0.5 -> 0.2 us: RETRACTS the "FAST + cable add fixed rise" model** (falsified on 3 points, best fixed pole 21 % off); **below ~0.5 us the single-pole pulse model BREAKS DOWN** -- r=238 ns with a +-0.4 ns error bar but a 23 mV structured residual; amplitude is rise-invariant (634.3 -> 631.6 mV) |
 | 13h | **Emulator CH2 -> digitizer ch52, proven by a CAUSAL control** (changed only ch2's rate, only ch52 followed); `selftrgrate` is live without ACQ, `chtriggercnt` is not; **ch52's probes are NOT the ch0 set**; `set_pulse`'s `polarity` string is INVERTED for ch=1 |
-| 13i | **ch52 filter set to 1000/3000 to match ch0, verified by the filter's own marker moving 5536 -> 2544 ns**; 3000 ns is AT the max so no clamp; `--dprobe=` added because D2/D3 are PeakReady/EventPileUp, not Peaking/PileupGuard |
-| 13j | **ch52 Analog1 TimeFilter -> EnergyFilter: the two channels' trapezoids are then indistinguishable** (output ratio 0.9829 == input ratio 0.9827, corr 1.00000, DC leak +1.7/+1.4 mV) |
-| 13k | **`DAQ:agent/` folder** -- log + captures gitignored, `plot_capture.py` tracked; **`trapezoid_gui.py` stays in `Aux/` because it is user-facing teaching, not agent scratch**; git-index `AD` hazard when moving a staged file |
+| 13i | **ch52's digital probes are NOT the ch0 set** (D2=EnergyFilterPeakReady, D3=EventPileUp) -- a wrong label looked completely plausible; **RULE: read the probe nodes before labelling any plot but ch0's**; plus verification independent of read-back (ch52 marker moved 5536 -> 2544 ns) |
+| 13j | **ch52 vs ch0 EnergyFilter: the FILTERS agree, only amplitude differs** (out ratio 0.9829 == in ratio 0.9827, corr 1.00000, DC leak +1.7/+1.4 mV => both L+M=4000 ns); the 16 ns D2 gap is two different signals, not a filter discrepancy |
+| 13k | **`DAQ:agent/` folder** -- log NOW TRACKED (was ignored), `agent/data/` ignored, `plot_capture.py` tracked; **`trapezoid_gui.py` stays in `Aux/` because it is user-facing teaching, not agent scratch**; git-index `AD` hazard when moving a staged file |
 | 14 | open items |
+| 15 | **WAVEFORM SOURCES, authoritative: 5 analog x 2 slots, 13 digital x 4 slots, identical per slot**; device-tree dump recipe + the lowercase-node-name trap; **INCIDENT: a 2nd FELib Open broke the broker's handle -- recover with `close 0` + `open`** |
+| 16 | **4 passes cover all 5 analog + 13 digital sources; ADCInput repeated = the stability measurement: spread 0.04-0.06 % = ~4 LSB**; a capture's columns are anonymous, so record probe names beside the data |
+| 17 | **`ChRecordLengthS` is NOT `setinrun` (needs ACQ stopped); trigger sample = `ChPreTriggers + 1`, not `ChPreTriggers`**; the pulse onset is BEFORE the trigger, so "N samples before the trigger" is not a clean baseline; `git ls-files` not `.gitignore` proves tracking |
+| 18 | **Verification and measurement discipline -- transferable, tool-independent**: a tight error bar on a wrong model is not precision; verify plots in DATA COORDINATES not pixels (colour collision and colour dilution both defeat pixel-diffing); size axes from drawn artists not requested spans; a label's position decides which thing it belongs to; a mark must not contradict the physics; assert on every patch then re-read the line |
 
 ## MANDATORY: every file reference carries a repo tag
 
@@ -49,7 +96,7 @@ Prefix every reference, in both this file and the session md:
 |---|---|
 | `DAQ:` | `~/SOLARIS_DAQ` — the DAQ (this file lives at its root) |
 | `EMU:` | `~/CAEN_DT5810B_LinuxController` — the DT5810B signal-emulator control repo |
-| `LAB:` | `~/caen_signal_emulator` — the lab machine's own tree: vendor DLL + decompiled C#, PDU script (holds credentials), the superseded old `dt5810.py`, manual PDF. **Absent on this machine.** NOT `scope/`/`experiments/`/`firmware/` — those are gitignored inside `EMU:` |
+| `LAB:` | `~/caen_signal_emulator` — the lab machine's own tree: vendor DLL + decompiled C#, the superseded old `dt5810.py`, manual PDF. **Absent on this machine.** NOT `scope/`/`experiments/`/`firmware/` — those are gitignored inside `EMU:` |
 | `/tmp/...`, `/etc/...` | absolute, unambiguous, no tag needed |
 
 Write `EMU:README.md:201`, not `README.md:201`. Write `DAQ:core/DigiManager.cpp:526`, not
@@ -73,7 +120,6 @@ comes back.
 | digitizer **VX2745** SN 32575, DPP-PHA | `192.168.0.100` (host `enp131s0f1` = 192.168.0.234) | 2026-10-09 |
 | scope **Rigol DHO4804** | `192.168.2.200:5555` SCPI (host `enp131s0f0` = 192.168.2.1) | 2026-10-07 |
 | emulator **DT5810B** | USB `21e1:000e`, Bus 003 (device index drifts — re-read `lsusb`) | 2026-10-09 |
-| PDU PADM20 | `192.168.203.29`, load 3 powers the emulator | control script absent on this machine |
 
 Digitizer facts (read live via CAEN_FELib, 2026-10-09): 16 bit, 125 Msps, tick2ns 8, 64 channels
 (device tree has `ch/0..64` but only 64 are addressable — `/ch/64/...` correctly fails), FPGA version 1,
@@ -171,6 +217,22 @@ channels 1 V/div / 1 MΩ / probe 1×, `WAV:SOUR` CHAN1, error queue clean.
 `:WAV:SOUR` and `:CHANn:IMP` are **outside** it and were written only with the user's explicit
 approval. If my read-back work is ever folded into `EMU:bench_scope.py`, keep the per-capture
 `:WAV:SOUR?` assertion — that is the guard against the silent wrong-channel failure.
+
+### The emulator can silently lose amplitude while config space reports no change
+The first sweep reported ADCInput peaks of ~34 mV, then (after the window fix below) **184.3 mV
+identical across all four passes**, against 631.6 mV captured at 12:17 the same day. Consistent across
+passes, so not noise. Pulse SHAPE was unchanged (r=239.1 vs 238.2 ns, d=50.06 vs 50.20 us) -- only the
+amplitude had collapsed to 29 %. Digitizer ruled out (FineGain 1.000, zin 100, dcoffset 50.001,
+triggerthr 50, all unchanged; ch52 fed by emulator CH2 still read **620.7 mV**, so it was CH1-specific).
+**Reprogramming ch0 with the IDENTICAL parameters restored it: `set_pulse(rate_hz=1000,
+amplitude_v=1.0, decay_us=50.0, rise_us=0.2, baseline_v=0.0, ch=0)` -> 630.9 mV.** energy_reg/gain/
+offset were the same values as before (27431/1184/-52451), so the register write did not change -- the
+emulator's analog output had drifted or lost calibration in some way not visible from config space,
+which is write-only (sec.5). **Mechanism UNRESOLVED.**
+**RULE: never trust the emulator's amplitude between sessions -- config space cannot be read, and
+`set_pulse` returning the same registers does not prove the output is unchanged. Check ADCInput pulse
+height against the last capture BEFORE interpreting any sweep.** This is exactly the failure that would
+have been reported as "the trapezoid attenuates 70 %".
 
 ## 3. Shaped-pulse measurements (HDR channel only — trustworthy)
 
@@ -397,47 +459,6 @@ printf 'connect\nping\nlist\ninfo 0\nread 0 /par/zin\nquit\n' | ./solaris-cli
 - Broker auto-detect: the GUI pings `tcp://localhost:5555` at startup (`DAQ:GUI/mainwindow.cpp:1955-1975`)
   and picks standalone mode when nothing answers. No broker running → standalone.
 
-## 7. FIXED — board status blank in standalone mode (2026-10-09, confirmed on the bench)
-
-**Not** the bulk-path issue. `/par/LedStatus`, `/par/AcquisitionStatus`, `/par/TempSensADC0..7` all
-read fine.
-
-**Cause.** `DigiManager::GetScalarSnapshot()` (`DAQ:core/DigiManager.cpp:526`) has two branches. The broker
-branch copies `ledStatus`, `acqStatus`, `tempADC[]` from the `PUB_SCALAR` payload the daemon fills
-(`DAQ:broker/BrokerServer.cpp:783-791` `PublishScalar`). The **standalone branch never set those three fields** —
-it filled only per-channel rates/counts. `ScalarSnapshot` is value-initialised (`= {}`), so they were
-silently **zero**, and `DigiSettingsPanel::UpdatePanelFromMemory()`
-(`DAQ:GUI/digiSettingsPanel.cpp:2573-2593`) painted all 19 LEDs off, all 7 ACQ bits off, all 8 temps 0.
-
-**This was a regression from the refactor.** `DAQ:master` read
-`GetSettingValueFromMemory(PHA::DIG::LED_status)` directly and did not have the bug. It appeared when
-the status path moved behind the snapshot (`DAQ` commit `21cbe10`).
-
-**Fix** (15 lines, standalone branch of `GetScalarSnapshot`, `DAQ:core/DigiManager.cpp`): read the same three node groups the
-broker does, parsed with the existing `ParseCounter()`. Non-throwing matters — `ReadValue()` reports
-failure *in-band* as text ("not connected", `ErrorMsg` output), and this runs on the GUI thread where
-an escaping exception is `std::terminate()`. Deliberately mirrors `PublishScalar` so both modes agree,
-**including that both truncate the float temps** (`32.6` → 32). That truncation is pre-existing in
-broker mode; matching it was preferred over diverging. If whole-degree display is ever wanted, change
-both paths together.
-
-**Evidence.** `LedStatus` 532499 → bits 0,1,4,13 lit; `AcquisitionStatus` 8 → bit 3; temps
-T0..T7 = 32.6 35.0 37.8 40.6 44.6 45.7 44.8 42.9 °C. Fix cost 10 extra reads ≈ 2 ms.
-
-**Verification honesty:** the node values and a clean GUI launch/shutdown were verified headlessly.
-The headless run logged **0** `UpdateScalar` cycles, because that path only runs with the scalar
-window visible and a thread started at run begin — so the confirmation that the *painting* works came
-from the user at the bench, not from the automated run.
-
-### Refresh wiring — read this before debugging "status not updating"
-
-`UpdateScalar()` (`DAQ:GUI/mainwindow.cpp:1483`) is driven by `scalarThread`, a `TimingThread` at 2 s
-(`DAQ:GUI/CustomThreads.h:114`), which is **started only at run start** (`DAQ:GUI/mainwindow.cpp:565`). `UpdateScalar()`
-**early-returns unless the scalar window `isVisible()`** (`DAQ:GUI/mainwindow.cpp:1486`), and it is the only
-caller of `digiSetting->UpdateStatus()` (`DAQ:GUI/mainwindow.cpp:1552`). The settings panel also refreshes on tab switches and via its
-**"Update Status" button** (`DAQ:GUI/digiSettingsPanel.cpp:173`), which work with no run. So with no ACQ and the scalar window
-hidden, the panel updates only on those events.
-
 ## 8. Trace capture from the digitizer — ch0, verified working (2026-10-09)
 
 **Patching corrected: FAST -> digitizer ch0, HDR -> scope CH1.** Scope CH2 is empty *because the FAST
@@ -542,8 +563,9 @@ That is not a low-noise win -- the EnergyFilter output is a heavily smoothed dig
 ADC noise is filtered away. Do not read it as "the trapezoid is cleaner than the input" for any purpose
 other than SNR of the pulse height.
 
-Plot: `/tmp/solaris_ch0_trapezoid.png` (also in `~/letsClaw/state/files/`). Data:
-`/tmp/trace_trap.txt`.
+Plot was `/tmp/solaris_ch0_trapezoid.png`, data `/tmp/trace_trap.txt` -- **both gone, wiped by the
+2026-10-12 reboot**. The surviving equivalent capture is `DAQ:agent/data/real_trap.txt`, verified to
+reproduce these numbers (pedestal 2081.4 mV, peak 2715.4 mV, height 634.1 mV).
 
 ## 10. Digital probes — the four signals, and what each is worth (2026-10-12)
 
@@ -567,10 +589,11 @@ list.**
 | `EnergyFilterPeaking` | 7.528 -> 7.536 us | 8 ns | marks flat-top start |
 | `EnergyFilterPeakReady` | 7.544 -> 7.552 us | 8 ns | 16 ns after Peaking -- **near-duplicate of it, not worth a probe slot** |
 | `EnergyFilterPileupGuard` | 7.544 -> 9.072 us | **1528 ns** | the pile-up rejection window; the only wide one, spans flat-top + fall start |
-| `EnergyFilterBaselineFreeze` | 1.992 -> **end of record** | >=30 us | never releases within 32 us at 1 kHz -- baseline runs open-loop, expected but not displayable |
+| `EnergyFilterBaselineFreeze` | 1.992 -> **end of record** | >=30 us | at L=5000/M=1000 it never releases within a 32 us record. **UPDATE 2026-10-14: it DOES release -- 6312 ns at RiseTimeT 1000 / FlatTopT 3000.** So the duration tracks the FILTER SETTINGS, it is not a fixed open-loop behaviour; the old reading was an artefact of those defaults plus a short record. |
 | `AcquisitionInhibit` | -- | idle | nothing to inhibit at 1 kHz |
 | `EventPileUp` (default D3) | -- | idle | no pile-up at 1 kHz |
-| `ADCSaturation`, `ADCSaturationProtection`, `PostSaturationEvent`, `EnergyFilterSaturation` | not tested | -- | would need the input driven into saturation |
+| `ADCSaturation`, `ADCSaturationProtection`, `PostSaturationEvent` | not tested | -- | would need the input driven into saturation |
+| `EnergyFilterSaturation` | **measured 2026-10-14: asserts with NO saturation present** | HIGH **44 % of a 2000-sample record, 56 % of a 4000-sample one**, runs both at the record edge and mid-record (e.g. -4008..-3624 and +6432..+11992 ns rel. trigger) | **INCONCLUSIVE -- do NOT report this as a real saturation event, and do NOT attribute it to the pulse.** ADCInput peaks at only 631 mV of 4 V (68 % of range), and the duty cycle is AMPLITUDE-INDEPENDENT: 44 % at a 185 mV pulse, 56 % at 632 mV. Not a short-record artefact either (both lengths show it). Uninvestigated since; the next test is whether it persists with the input disconnected. |
 
 **Settled on** (user asked for trigger, peak, and something trigger/trapezoid-related):
 `D0 Trigger`, `D1 TimeFilterArmed`, `D2 EnergyFilterPeaking`, `D3 EnergyFilterPileupGuard`.
@@ -591,8 +614,10 @@ User's standing instruction (2026-10-12): **do not bother restoring probe/trace 
 `WaveDigitalProbe1=TimeFilterArmed`, `WaveDigitalProbe2=EnergyFilterPeaking`,
 `WaveDigitalProbe3=EnergyFilterPileupGuard`.
 
-Plot: `/tmp/solaris_ch0_trapezoid_digital.png` (3 panels: full trace with probe bands shaded,
-zoom on trigger->flat-top, logic timing diagram). Data `/tmp/trace_final.txt`.
+Plot was `/tmp/solaris_ch0_trapezoid_digital.png` (3 panels), data `/tmp/trace_final.txt` -- **both
+gone, wiped by the 2026-10-12 reboot**. This table is reproduced exactly by the surviving
+`DAQ:agent/data/trace_six_1013_1308.txt` (widths 8 / 640 / 8 / 1528 ns), so the numbers are
+re-verifiable; the figure is not. Regenerate with `python3 DAQ:agent/plot_capture.py`.
 
 ## 11. Trapezoid filter -- design rules and whether ch0 satisfies them (2026-10-12)
 
@@ -632,17 +657,28 @@ time. Series noise wants long rise, parallel and 1/f noise want short; flat-top 
 it just long enough for trigger jitter. Standard DSP, not repeated at length here -- the bench-specific
 consequence is the noise floor at the end of this section.
 
-### User's two rules, both verified satisfied at factory defaults
-(rise 5000 ns, flat-top 1000 ns, pole-zero 50000 ns)
+### User's rule: pole-zero == signal decay
+(verified at the 2026-10-12 factory defaults: rise 5000 ns, flat-top 1000 ns, pole-zero 50000 ns)
 
-### Rule 1: filter rise >= signal rise
+### RETRACTED, user correction 2026-10-14: "Rule 1: filter rise >= signal rise"
 
-Signal 10-90 at the digitizer **1456 ns** (r parameter 1000 ns) vs filter RiseTime **5000 ns** ->
-**3.4x margin**. Trapezoid 10-90 is 4064 ns = 0.8 x 5000 as predicted (see the 0.8R rule in the
-capture section) -> ramp is linear and the signal rise is irrelevant here. (Do NOT call the consequence
-"no ballistic deficit" -- see the definition section; a linear filter does not collect charge.)
+**There is no such rule.** Filter RiseTimeT can be anything; it is not constrained by, and does not
+need to be compared against, the signal's rise time. **Rise time controls the trapezoid's own
+"energy" -- an amplitude/gain property of the filter -- and has nothing to do with the signal.**
+The 3.4x margin I computed and reported as "verified satisfied" was checking a constraint that does
+not exist, so it was never evidence of anything.
 
-### Rule 2: pole-zero == signal decay
+This is the same error as the withdrawn criterion 6 ("no ballistic deficit") one layer up: I kept
+looking for a signal-side justification for a filter parameter. Consistent with the definition section
+(output amplitude scales with L and M **by construction**, i.e. filter gain, not signal), and directly
+supported by the bench: §13g changed the SIGNAL rise 1.0 -> 0.5 -> 0.2 us and the ADCInput peak moved
+634.3 -> 634.1 -> 631.6 mV -- essentially nothing -- while the filter's own L is what sets output
+height.
+
+**What survives from the deleted paragraph** (all recorded elsewhere, nothing lost): the trapezoid
+10-90 of 4064 ns at L = 5000 ns and the 0.8R rule are in §9 / §13b; the signal's 1456 ns 10-90 is in
+§3. Only the *comparison* of the two, and the word "margin", are gone.
+**Do not reintroduce any lower or upper bound on RiseTimeT relative to the signal rise.**
 
 Signal decay **51.55 us** vs PoleZero **50.00 us** -> 3 % mismatch. Consequences:
 
@@ -771,12 +807,18 @@ energy-scale shift, not a resolution change.
 - These are ~7000-count histograms at 15-20 s. Any future claim under ~1 sigma (0.47 ch) needs more
   statistics, not a re-run.
 
-### The 2x rise rule -- my "conflict" rested on wrong physics
+### The 2x rise rule -- SUPERSEDED 2026-10-14; and my "conflict" rested on wrong physics
 
-User's rule (2026-10-12): **filter rise should not exceed ~2x the input rise time.** With the signal's
-measured 10-90 = 1456 ns that caps RiseTimeT at ~2912 ns. I wrote that obeying it "costs 4.7 % of the
-pulse height" through incomplete charge collection -- **that argument is void** (see the retraction
-above; the trapezoid does not collect charge).
+**There is no 2x cap either.** Recorded here as the user's rule on 2026-10-12, and superseded by the
+user's 2026-10-14 correction (§11): **RiseTimeT can be anything -- it controls the trapezoid's own
+"energy", a gain property of the filter, and is not related to the signal at all.** So the cap at
+~2912 ns derived below should not be applied. What follows is kept because the *noise* trade-off is
+still correct physics and the retraction history matters, but **any rise-time bound expressed relative
+to the signal rise is dead** -- see §11 for the full retraction.
+
+With the signal's measured 10-90 = 1456 ns that would have capped RiseTimeT at ~2912 ns. I wrote that
+obeying it "costs 4.7 % of the pulse height" through incomplete charge collection -- **that argument
+was voided on 2026-10-12** (see the retraction above; the trapezoid does not collect charge).
 
 **Correct framing:** for a square input the trapezoid plateau is independent of rise time, so the rule
 is about **noise and timing**, not amplitude. Rise time trades series noise (favours long) against
@@ -784,8 +826,9 @@ parallel and 1/f noise (favours short); capping it near the signal rise avoids a
 signal cannot use. **No conflict with anything measured here.** The residual 3 % mean-energy variation
 is a filter-gain effect, not a penalty for obeying the rule.
 
-**What this bench cannot answer:** the rule needs the **real detector's** rise time. If MUSIC signals
-rise slowly, 2x could be well beyond 2912 ns and the 5000 ns default may already be inside the rule.
+~~**What this bench cannot answer:** the rule needs the **real detector's** rise time.~~ **Moot as of
+2026-10-14** -- the rule it was asking about is superseded, so there is nothing left for the real
+detector's rise time to resolve.
 
 ### Verdict on tuning this bench
 **Criterion 1 (resolution) cannot be optimised here** -- the response across the usable parameter range
@@ -804,9 +847,15 @@ Plot `/tmp/solaris_trapezoid_tuning.png`; raw histograms `/tmp/sweep_*_*.txt`, `
 ## 13. Aux/trapezoid_gui.py — offline trapezoid playground (2026-10-12)
 
 `DAQ:Aux/trapezoid_gui.py`. **Offline -- drives no hardware.** PyQt6 + matplotlib.
-Run `python3 Aux/trapezoid_gui.py`. Controls: pulse A / r / d / offset, up to **3 piled pulses**
+Run `python3 DAQ:Aux/trapezoid_gui.py`. Controls: pulse A / r / d / offset, up to **3 piled pulses**
 (pulse 1 + two extras, own amplitude and delay, sharing r/d), trapezoid RiseTimeT (L) / FlatTopT (M) /
-PoleZeroT (tau_pz), 7 presets, 2 plots.
+PoleZeroT (tau_pz), 2 plots.
+**This section describes the GUI as of 2026-10-12 and is SUPERSEDED on layout and defaults by §13d**
+(rewrite to the user's 5-step plan): the **7 presets are DELETED**, the panel count went 3 -> 2, the
+"position trim" control and the pedestal-leak subtraction are DELETED, and the defaults are trap
+1000 / 5000 ns with A 800 / r 1000 / d 50 us / B 100 mV -- NOT the 5000/1000 and 2081.4 mV pedestal
+quoted throughout §13/§13c as the "validated opening state". The FILTER MATHEMATICS below is unchanged
+and still correct; only the GUI's shape and defaults moved.
 
 ### The filter, correct at last -- and what the pole-zero actually is
 
@@ -984,7 +1033,7 @@ constant of that exponential is the **SIGNAL's d, never tau_pz** -- swept over 6
 Which is what the algebra says: the pole-zero cancels the decay only when its tau matches; the
 residual left over is proportional to the original exponential, so it must fall with d.
 
-**Hardware agrees.** `Aux/validate_trap.py` on the real record: model tail **+2.07 mV**, board tail
+**Hardware agrees.** On the real record, parsed per §13e: model tail **+2.07 mV**, board tail
 **+2.87 mV**, both FLAT (ptp 13.5 / 27.3 mV of noise). corr 1.00000, resid 0.053 %, peak 654.3 vs
 board 654.8 mV. The board's own PoleZeroT is 50 us against d = 51.3 us, so the board has the same
 1.3 us mismatch -- and a small positive tail -- exactly as the model predicts.
@@ -995,7 +1044,7 @@ first -- otherwise the auto-match re-slaves tP and a deliberate-mismatch preset 
 filter (found and fixed; presets 5/6 now correctly show +33.6 / -20.0 mV). The "bench" preset keeps
 the board's real 50 us and therefore still honestly reports the 1.3 us mismatch.
 
-### Ad-hoc check scripts lied three times -- `DAQ:Aux/validate_trap.py` is now canonical
+### Ad-hoc check scripts lied three times -- so ONE canonical check was written
 
 While chasing the above, throwaway scripts produced **mutually contradictory** results: one reported
 a model tail of **-58 mV** (flat, contradicting the +2.07 mV from another), another printed
@@ -1007,8 +1056,8 @@ So the parse, the column identities, the lag search and the tail window were con
 saved script** with assertions (`assert a.shape[1] == 7`, `assert cc > 0`, NaN/inf checks, printed
 column names). It also documented the trap: `Analog0` = ADCInput, `Analog1` = EnergyFilter, and
 swapping them is the easiest way to "discover" a broken filter.
-**UPDATE 2026-10-13: that script (`Aux/validate_trap.py`) was deleted at the user's request. The parse
-regex and all constants are now in §13e, below -- read THAT instead of rewriting the parse by hand.**
+**The parse regex and every constant are in §13e below -- read THAT instead of rewriting the parse
+by hand.**
 
 **Meta-lesson for this file: a diagnostic script that cannot fail loudly is worse than no script.
 Any check whose failure mode is a plausible-looking number should assert, not print.**
@@ -1103,7 +1152,13 @@ nominal M, r = 818 ns:
 The line-fit corners are much more forgiving than the threshold window said (63 % -> 86 % at 7r,
 L=1000), because they measure the ramp's intersection rather than a slice of a rounded top. **L
 matters more than the multiplier**: at L = 5000 ns even 3r delivers its full nominal flat top, so 7r
-is a SAFE default rather than a requirement. GUI: a **"flat top = 7 x signal rise"** button (`_set_7r`).
+is a SAFE default rather than a requirement.
+**Not covered by the 2026-10-14 retraction, and do not confuse the two:** that retraction removes bounds
+on the FILTER RISE (L) relative to the signal. This heuristic sets the **FLAT TOP (M)** from the signal
+rise, which is a different parameter -- M is about trigger jitter and guard timing, not filter gain.
+**The GUI button is GONE:** `Aux/trapezoid_gui.py` had `_set_7r` / the "flat top = 7 x signal rise"
+button removed in the 2026-10-13 rewrite (user's 5-step plan), verified absent 2026-10-14 (`grep -c
+"_set_7r" -> 0`). Earlier text here cited it as live.
 
 **Heuristic 2, "trapezoid rise time L sets the peak size, so tune L to fill the energy word":
 REFUTED on this board -- the DPP normalises by L.** The user is right that the RAW filter gain scales
@@ -1306,8 +1361,8 @@ nothing. Now `DT` is named in seconds and every print carries an explicit `*1e9`
 **2. "Don't need flat top >= 97 %" -- you said this twice; it is now removed, not just demoted.**
 Previously I had kept it as a secondary figure. Removed everywhere it was still a *measure*:
 - `flat_top_mask()` **deleted** (dead code once its only caller went).
-- the green shaded band is now `t1..t2` from `landmarks()`, labelled `flat top t1..t2 (4187 ns vs M
-  5000)` -- so the deviation from programmed M is visible instead of a threshold slice.
+- the green shaded band became `t1..t2` from the line-fit corners, labelled `flat top t1..t2 (4187 ns
+  vs M 5000)` -- so the deviation from programmed M is visible instead of a threshold slice.
 - the rounded-top note no longer prints its "(N ns within 3% of peak)" parenthetical.
 - the 7x rule table above re-measured with line-fit corners (it had been computed with the 97 %
   window -- that table was superseded, and the new numbers are much more forgiving: 63 % -> 86 % at
@@ -1400,7 +1455,7 @@ the record start **halves the lag to +288 ns**, and the model's ramp onset then 
 board's and its peak 48 ns from the board's. **But shape fidelity gets 12x WORSE** (residual 0.642 %
 vs 0.053 %, corr 0.99983 vs 1.00000). So the board's energy filter is NOT gated at the trigger -- it
 runs continuously, and the lag is a time-REFERENCE offset, not an enable. Trigger-referencing aligns
-the landmarks; continuous running matches the shape. The GUI keeps the continuous filter (validated
+the corners; continuous running matches the shape. The GUI keeps the continuous filter (validated
 corr 1.00000) and uses the trigger purely as a marked time reference. **Why 288 ns remains is open.**
 
 ### Trigger-level pile-up limit -- a NEW diagnostic, and it agrees with the board's guard
@@ -1418,30 +1473,26 @@ So this bench cannot resolve two pulses closer than **~1700 ns at the trigger le
 close to the board's measured `EnergyFilterPileupGuard` window of **1528 ns** (§10). The GUI now
 prints the event count, so a pile-up that the trigger silently misses is visible.
 
-### `landmarks()` -- RETRACTED attribution: it is MINE, not the user's (corrected 2026-10-13)
-**This section's heading and first sentence were WRONG for two days.** I wrote that the user had added
-`landmarks()` while playing with the GUI; the user corrected me -- it is my own code, written in a
-window whose record I no longer have. The attribution error mattered because it made me treat the
-function as untouchable user code and build readouts on top of it instead of simplifying it. The
-technical content below (line-fit corners, threshold-free, the validation numbers, the `_lobe()` bug
-found alongside) all stands -- only the provenance was false. Original text follows, struck through.
+### Corner measurement: line fits, not thresholds
+`RiseTimeT`/`FlatTopT` are **ramp durations**, so the quantity wanted is where the ramp *would meet*
+the flat top if both were extended -- the intersection of two fitted lines. A `>= 97 % of peak` window
+instead reports a value that depends on how rounded the top is: it read **1072 ns on hardware
+programmed to 1000 ns**, and shrank as M grew. Fit straight lines to the rise and fall between
+**25 % and 80 %** of peak (clear of both the rounded corner and the baseline noise) and to the plateau
+above **95 %**, then intersect. Thresholds choose the fit windows only; they never touch the reported
+corner. Validated against the board's own corners: **rise 4833 vs 4832 ns, flat 1450 vs 1444, fall
+4902 vs 4901** -- within ~6 ns. A shape with no usable ramps must return "not measurable", never a
+number.
 
-~~`DAQ:Aux/trapezoid_gui.py` gained a `landmarks()` function (line 212) that I did not write and that
-is absent from the previous session's record: the user added it while playing with the GUI.~~ It finds
-the four trapezoid corners by **fitting straight lines to the ramps and flat top and intersecting
-them**, which is threshold-free at the corners -- strictly better than my `>=97% of peak` window for
-exactly the reason documented in §13 (the 97 % window shrinks as M grows because the top rounds).
-It validates against the capture: rise 4833 vs 4832 ns, flat 1450 vs 1444, fall 4902 vs 4901.
-**Action taken: built the trigger readouts ON TOP of lm['t1']/t2/t3 rather than duplicating them,
-and left its arrival-referenced convention alone.** One label WAS wrong and is fixed: its
-"FLAT-TOP DELAY trigger->t1" was actually **arrival->t1** -- the real trigger sits ~824 ns after
-arrival at defaults, so that number overstated the peaking time by 824 ns. Now labelled
-arrival->t1, with the true trigger->t1 (1239 ns) in the timing block.
+**A corner is referenced to the pulse ARRIVAL, not the trigger.** At defaults the true trigger sits
+~824 ns after arrival, so labelling a trigger->corner interval "peaking time" overstates it by 824 ns.
+State which of the two a corner-to-x number is measured from -- they are not interchangeable.
 
-**Also found and fixed in my own new code:** `find_trigger` searched for the lobe peak with
-`argmax` to the END OF THE RECORD, so a later, taller pulse's lobe was attributed to an earlier
-trigger -- two pulses 8 us apart silently merged into one event. Now `_lobe()` bounds the search to
-the current lobe (first downward zero crossing). Real-record result unchanged (172, 252).
+### `find_trigger` merged two pulses 8 us apart -- `argmax` over the rest of the record
+The lobe search ran to the END OF THE RECORD, so a later, taller pulse's lobe was attributed to an
+earlier trigger: **two pulses 8 us apart silently became one event.** Bound any lobe search to the
+current lobe (stop at the first downward zero crossing). The real-record result was unchanged (172,
+252) -- which is exactly why this survived: it only fires when a second pulse is TALLER.
 
 ### Boundary bug caught again, third time in this file
 `second_derivative()` initially had no warm history: with offset 500 mV the pedestal looked like a
@@ -1461,8 +1512,7 @@ Captured ch0 with all six signals in one trace: Analog0 ADCInput, Analog1
 EnergyFilter, D0 Trigger, D1 TimeFilterArmed, D2 EnergyFilterPeaking,
 D3 EnergyFilterPileupGuard. Data: `DAQ:agent/data/trace_all_1013_1230.txt`
 (4000 x 8 ns, board at RiseTimeT 5000 / FlatTopT 1000 / PoleZeroT 50000).
-Comparison script was **`DAQ:Aux/compare_capture.py`** -- DELETED 2026-10-13; the parse it used is
-§13e. Do not re-derive the parse.
+The parse used for this comparison is in §13e. Do not re-derive it.
 
 **User asserted: "the start of trap is at trigger, so the trap in the GUI should be delayed."**
 **Right about the delay. Half right about the mechanism -- and the half matters.**
@@ -1494,7 +1544,7 @@ A delay leaves the shape identical and moves all four corners together -- exactl
 does. So: **the trapezoid is delayed past the trigger, not started by it.**
 
 ### ALL SIX signals now match the model
-From `Aux/compare_capture.py`, times relative to each side's own trigger:
+Times relative to each side's own trigger:
 
 | quantity | board | model | err |
 |---|---|---|---|
@@ -1551,7 +1601,7 @@ do it deliberately, not only as an afterthought.
 New control **"energy path delay" (ns, default 612)**, applied as a sub-sample `np.interp` shift to
 the trapezoid AND to the pedestal-leak raw trace (plotting an unshifted raw beside a shifted one
 would show a 612 ns step that is not physically there). With it the GUI reproduces the board's
-corner timings to <=12 ns. `Aux/validate_trap.py` applies it too and now reports **lag +0 ns,
+corner timings to <=12 ns. The shape check (§13e) applied it too and reported **lag +0 ns,
 residual 0.033 %** instead of absorbing the latency into a fitted lag.
 
 **Consequence for the trigger->t1 decomposition in §13:** with the delay applied the trigger lands
@@ -1587,10 +1637,10 @@ describing an artefact of where MY model happened to put the curve. Under the ru
 are equal by definition. The underlying measurements in §13 are still valid data; the
 interpretation that they implied a mismatch was the wrong frame.
 
-**Unchanged and unaffected:** `Aux/validate_trap.py` still reports **corr 1.00000, lag 0 ns,
-residual 0.033 %** -- a shift cannot change shape, and that script does its own alignment,
-so the shape validation never depended on the GUI's positioning. It still uses its own
-`LATENCY_NS = 612` internally for shape alignment; that is a fit constant there, not the
+**Unchanged and unaffected:** the shape check (§13e) reported **corr 1.00000, lag 0 ns,
+residual 0.033 %** -- a shift cannot change shape, and that script did its own alignment,
+so the shape validation never depended on the GUI's positioning. It used its own
+`LATENCY_NS = 612` internally (in §13e); a fit constant there, not the
 GUI's position rule. **If the two are ever reconciled, do not assume they agree.**
 
 ### Two bugs found while implementing the rule
@@ -1601,13 +1651,21 @@ GUI's position rule. **If the two are ever reconciled, do not assume they agree.
    geometry. Fixed by measuring `pre_ptp` BEFORE the shift, which is what the check was ever
    for (catching pedestal/zero-padding mishandling). All 7 presets now pass.
 2. **Preset 4 reports "no usable trapezoid" and that is PRE-EXISTING, not from the shift.**
-   Verified by rebuilding preset 4's curve with no shift at all: `landmarks()` returns
-   `ok=False` because a second pulse at +9500 ns genuinely defeats a single-trapezoid line
-   fit. Correct behaviour -- it says so instead of inventing corners.
+   Verified by rebuilding preset 4's curve with no shift at all: the corner fit returns
+   "not measurable" because a second pulse at +9500 ns genuinely defeats a single-trapezoid
+   line fit. Correct behaviour -- it says so instead of inventing corners.
 
 **And a third time in this session: my own test script divided ns by seconds** (`L` came out
 625 million and numpy tried to allocate 10 TiB). `DT_NS` / `DT_S` named explicitly now. The
 GUI itself is safe; this is about scratch scripts, which keep failing the same way.
+
+### RECONCILIATION: 0.053 % and 0.033 % are the SAME fit at two different latencies
+Three places quote `resid 0.053 %` (twice in §13, once in §13b) and several quote `0.033 %`/`0.034 %`,
+which reads as a contradiction. It is not one: §13c's scan table gives residual as a function of the applied delay --
+**608 ns -> 0.054 %, 612 ns -> 0.034 %** (minimum). The 0.053 % quotes are the pre-612-ns fits and the
+0.033/0.034 % quotes are post-612-ns. Both are correct for their latency; the earlier sections simply
+predate the latency fit and do not state which value they used. **When quoting a residual here, always
+say which delay it was fitted at** -- the difference is a factor 1.6 and looks like drift otherwise.
 
 ### Removed from the trapezoid panel (user request, 2026-10-13)
 The **trapezoid-peak vertical line and its triangle marker**, and the **green t1..t2
@@ -1639,12 +1697,6 @@ EnergyFilterSaturation, AcquisitionInhibit (`DAQ:core/DigiParameters.h:514-565`)
 the closest thing to a holdoff and is a DIFFERENT signal from the pile-up guard; §10 measured it at
 8 ns starting exactly at the trigger.
 
-### Measurement-discipline note
-An early pass reported "board EF noise sigma = 0.000 mV" and then used that as a threshold, which
-made the "first departure" answer meaningless-by-luck. The number was correct (the pre-onset column
-really is one constant count) but the right framing is that the filter attenuates the 0.42 mV input
-noise below one output LSB. Check what a zero means before dividing by it.
-
 ## 13d. REWRITTEN to the user's 5-step plan -- the delay is DERIVED, not fitted
 ## and not fitted (2026-10-13)
 
@@ -1661,12 +1713,10 @@ fitted to a capture (612 ns) and no longer imposed as a rule (`t1 = trigger + L`
 *output*). It is derived from the time filter as `trigger - armed`, applied to the *input*.
 
 **The physics block is byte-identical to the validated one** (`diff` clean over lines 84-383).
-`validate_trap.py` still reports **corr 1.00000, lag 0 ns, resid 0.033 %** and `compare_capture.py`
-still reproduces the board markers (**armed err 0 samples, trigger +1, corners within 12 ns**) --
-both re-run after the rewrite, because `compare_capture.py` imports `trapezoid_fast`, `landmarks`,
-`second_derivative`, `find_trigger` from this file. Signatures were preserved deliberately.
-**(Both scripts were deleted later the same day -- §13e. The signature-preservation rule still applies
-if either is ever rebuilt, and `landmarks` is now called by nothing.)**
+The shape check (§13e) reported **corr 1.00000, lag 0 ns, resid 0.033 %** and the marker comparison
+reproduced the board (**armed err 0 samples, trigger +1, corners within 12 ns**). Both were re-run
+after the rewrite. **Those checks no longer exist as code -- §13e holds the recipe and is the only copy;
+rebuild from it rather than re-deriving the parse.**
 
 ### What the derived delay actually gives, at the spec defaults
 A 800 mV, r 1000 ns, d 50 us, B 100 mV, trap L 1000 / M 5000 ns, tau RC 140 / CR 220 ns, thr 35 mV:
@@ -1730,7 +1780,7 @@ Gotcha for future edits: `ax.set_title(..., loc="left")` populates `_left_title`
 ### The GUI is a DEMONSTRATION tool, not a comparison harness (user, 2026-10-13)
 "can delete corr. the trapezoid_gui.py is not for compare, it is for demonstration." Removed from the
 file: the corr 1.00000 / residual 0.033 % claims in the module and `trapezoid()` docstrings, the
-board-vs-model corner table in `landmarks()`, and the corr 0.11 / 0.96 dead-end scores (kept as a
+board-vs-model corner table from the corner-fitting helper, and the corr 0.11 / 0.96 dead-end scores (kept as a
 pointer to sec.11, which still lists the two wrong models and their numbers). Nothing was ever
 *displayed* -- all four were docstring prose -- but the framing mattered: a demo tool should not carry
 a validation score, and corr specifically is a misleading metric to quote alone (it is blind to scale
@@ -1764,8 +1814,8 @@ bit-identical to zero** -- not approximately flat. Same trick as `trapezoid(...,
 that one is merely finite.
 
 Verified no collateral damage: armed/trigger at the GUI defaults unchanged (276/358);
-`compare_capture.py` still **armed err 0, trigger +1, corners within 12 ns**; `validate_trap.py` still
-**corr 1.00000, resid 0.033 %**. Old-vs-new difference is 2.14 mV at sample 0 and falls below 1 uV past
+the marker comparison gave **armed err 0, trigger +1, corners within 12 ns** and the shape check
+**corr 1.00000, resid 0.033 %** (§13e). Old-vs-new difference was 2.14 mV at sample 0, falling below 1 uV past
 sample 400, i.e. ONLY the first ~1300 ns changed -- the pre-trigger window, which is what was wrong.
 Edge cases rc=cr=1 ns and rc=cr=1e6 (b underflow) stay finite and flat. `v0=None` still shows a large
 startup transient, correctly: that means the signal really stepped up from 0.
@@ -1806,9 +1856,17 @@ inflates the vertical scale.
 Tail-level measurement and the pole-zero diagnostic line; pedestal-leak correction (`ybase`
 subtraction); "position trim" control; preset `QComboBox`; trapezoid peak vline + triangle; green
 t1..t2 flat-top band; the >= 97 %-of-peak flat-top measure; `_dynrange`; the NOT-WRITABLE-on-board
-and ROUNDED-TOP warnings; `landmarks()` call in `_recompute` (the function itself is KEPT --
-`compare_capture.py` imports it). Panel count 3 -> 2: the time-filter curve is now overlaid on the
-input-pulse panel on a twin axis.
+and ROUNDED-TOP warnings; the corner-readout call in `_recompute` (the helper itself was kept -- it is
+the only implementation of the line-fit corner measurement that produced the §13 numbers, and §13e's
+recipe expects it if that check is ever rebuilt). Panel count 3 -> 2: the time-filter curve is now
+overlaid on the input-pulse panel on a twin axis.
+
+**A kept helper, and why it stays.** `Aux/trapezoid_gui.py` still defines a corner-fitting helper that
+nothing in the live GUI calls (grep finds only its own `def`). **That is deliberate and it is not dead
+code to clean up:** it is the last implementation of a measurement method whose numbers are cited in
+§13/§13b. But note how it got here -- it was kept because an external checker imported it, and that
+checker no longer exists, so the original reason is gone. **Justify keeping a helper by what it
+measures, never by who calls it; a caller can be deleted and the reason silently dies with it.**
 
 ### Still present and correct
 `v0 = B` warm history on BOTH filters is how "patch t < first sample = baseline" is honoured -- the
@@ -1816,16 +1874,16 @@ signal is assumed to exist from t = -infinity while the digitiser sees a finite 
 pedestal reads as a step and fires a false trigger (measured once: 1632 ns early). `second_derivative`
 sizes its own warm block from its taus, NOT from L/M -- it must not inherit the trapezoid's span.
 
-## 13e. validate_trap.py / compare_capture.py DELETED on request (2026-10-13) --
-## the parse recipe that only lived in them, kept here verbatim
+## 13e. THE CAPTURE-PARSE RECIPE -- the only copy. Do not re-derive the parse by hand.
 
-The user asked for `DAQ:Aux/validate_trap.py` and `DAQ:Aux/compare_capture.py` to be deleted (and the
-scratch `DAQ:Aux/_p1.py`), with `DAQ:agent/data/` gitignored. They are gone from disk. **Their measured
-results are NOT lost** -- every number in this file under §13/§13b/§13c was produced by them and stands.
-What WOULD have been lost is the transcript parse, which the session file flags as the single biggest
-failure mode of this project ("three mutually contradictory findings, one invented a -58 mV tail that
-does not exist"). agent/AGENT.md described its assertions but did not contain the regex, so it is recorded
-verbatim here. Do not re-derive it by hand.
+**This is a bench fact, not a history note:** the VX2745 trace transcript has no parser in the repo. The
+format is a six-command CLI transcript, not a table, and getting it wrong is the single biggest failure
+mode of this project -- three ad-hoc parses produced three mutually contradictory answers, one of them
+inventing a **-58 mV tail that does not exist**. So the regex, the constants and the probe map are
+recorded verbatim below. Rebuild from THIS if a check is ever needed; do not re-derive it from a sample.
+
+Every number in §13/§13b/§13c was produced by a script using this recipe. **Those scripts are gone and
+were never committed, so no number below can be re-verified without rebuilding from this recipe.**
 
 ```python
 # Data: agent/data/real_trap.txt -- `solaris-cli trace 0 0 4200`, VX2745 ch0,
@@ -1849,8 +1907,8 @@ pat = re.compile(r"^\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)
 ```
 
 Time-filter calibration used against that record: **tau_RC 140 ns, tau_CR 220 ns, threshold 35 mV**
-(now the GUI's own defaults, so nothing is orphaned). Last recorded output of the two scripts, for
-the record, since nothing can reproduce it now: `corr=1.00000 lag=+0 ns k=1.0012 residual 0.033 %`;
+(now the GUI's own defaults, so nothing is orphaned). Last recorded output of the check that used this
+recipe, and nothing can reproduce it now: `corr=1.00000 lag=+0 ns k=1.0012 residual 0.033 %`;
 board markers Trigger 251->252, Armed 172->252 (640 ns), Peaking 941, PileupGuard 943->1134; model
 armed err **+0 samples**, trigger err **+1**, corners within **12 ns**.
 
@@ -1859,7 +1917,7 @@ armed err **+0 samples**, trigger err **+1**, corners within **12 ns**.
 (a reboot does not wipe them; that is why they were moved out of /tmp), but a fresh clone cannot
 re-verify corr 1.00000. `agent/plot_capture.py` is kept and still reads `agent/data/` by default.
 
-## 13f. TRAP: FlatTopT writes return **OK** but the board CLAMPS to 3000 ns (2026-10-13)
+## 13f. TRAP: FlatTopT writes return **OK** but the board CLAMPS to 3000 ns (2026-10-14)
 User asked to set ch0 RiseTimeT 1000 ns / FlatTopT 5000 ns and capture. **RiseTimeT took; FlatTopT did
 not, and the CLI said OK anyway:**
 
@@ -1898,11 +1956,12 @@ PileupGuard width grew 1528 -> 2520 ns and now covers the whole flat top + fall,
 `/ch/0/par/PileUpGuardT` is NOT readable (note the capital U in the board's own name; §9 records it as
 `PileUpGuardT` 960 ns) -- it appears to have moved or renamed; do not assume 960 ns is still there.
 
-**BOARD LEFT AT RiseTimeT 1000 / FlatTopT 3000 / PoleZeroT 50000** (was 5000 / 1000 / 50000). Restore
-with `write 0 /ch/0/par/EnergyFilterRiseTimeT 5000` and `...FlatTopT 1000`, then READ BACK.
+**What the board is set to right now is the session file's live table, not repeated here (§Scope).**
+The durable point: the board is NOT at factory defaults and nothing has been restored, so never infer a
+setting from "it must be the default". And a restore is only done once you have READ BACK (§13f).
 
 ## 13g. Emulator rise 1.0 -> 0.5 us, recaptured: RETRACTS the "FAST + cable add fixed rise"
-## model in sec.2 (2026-10-13)
+## model in sec.2 (2026-10-14)
 
 Programmed `set_pulse(rate_hz=1000, amplitude_v=1.0, decay_us=50.0, rise_us=0.5, baseline_v=0.0, ch=0)`
 -- identical to the sec.6 reference EXCEPT rise_us. Config space is write-only (sec.5), so the previous
@@ -1949,7 +2008,7 @@ r~484 ns at the digitizer, rise_us=1.0 gives r~819 ns.
 ### Third point: emulator rise 0.2 us -- the single-pole pulse model BREAKS DOWN here, and the
 ### fixed-extra-pole question is closed (2026-10-13)
 `set_pulse(rate_hz=1000, amplitude_v=1.0, decay_us=50.0, rise_us=0.2, baseline_v=0.0, ch=0)`.
-Capture `DAQ:agent/data/trace_rise02_1014_1217.png` / `.txt`.
+Capture `DAQ:agent/data/trace_rise02_1014_1217.txt` (plot `plot_rise02_1014_1217.png`).
 
 | emulator rise_us | 1.0 | 0.5 | **0.2** |
 |---|---|---|---|
@@ -1994,11 +2053,7 @@ ends sooner. So `trigger - armed` (the GUI's derived shift, sec.13d) is NOT a co
 signal rise time. At rise 0.5 us the derived shift would be 600 ns, not the 632 ns the rise-1.0 capture
 gives. Worth remembering before treating the shift as board-invariant.
 
-**BENCH STATE after this round:** emulator ch0 programmed rise_us=**0.2**, rate 1 kHz, amp 1.0 V, decay
-50 us, baseline 0 (previous state rise_us=1.0). Digitizer ch0 still RiseTimeT 1000 / FlatTopT 3000
-(clamped, sec.13f) / PoleZeroT 50000. Neither restored.
-
-## 13h. Emulator ch2 -> digitizer ch52, established by a CAUSAL control (2026-10-13)
+## 13h. Emulator ch2 -> digitizer ch52, established by a CAUSAL control (2026-10-14)
 Programmed the emulator's second channel identically to the first (`set_pulse(rate_hz=1000,
 amplitude_v=1.0, decay_us=50.0, rise_us=0.2, baseline_v=0.0, ch=1)`; ch=1 IS the front-panel CH2) and
 asked which digitizer channel receives it. **Answer: ch52.**
@@ -2014,15 +2069,20 @@ to 1000 Hz after. That is the proof. (An amp=0 control was attempted first and c
 `auto_gain` -- the 0.30 V floor guard, §EMU known-limits -- which is the guard doing its job.)
 
 ### ch52 is NOT configured like ch0 -- do not assume the ch0 probe set
+Only the rows that are still true and still the point are tabulated; **mutable state (filter settings,
+record length, and ch52's Analog1 -- written TimeFilter -> EnergyFilter in §13j) is NOT here**, because
+a table that contradicts the session file's live table is worse than no table. What is durable is the
+**asymmetry of the probe names**:
 | | ch0 | ch52 |
 |---|---|---|
-| WaveAnalogProbe0 | ADCInput | ADCInput |
-| WaveAnalogProbe1 | **EnergyFilter** | **TimeFilter** |
 | WaveDigitalProbe2 (D2) | EnergyFilterPeaking | **EnergyFilterPeakReady** |
 | WaveDigitalProbe3 (D3) | EnergyFilterPileupGuard | **EventPileUp** |
-| EnergyFilterRiseTimeT / FlatTopT | 1000 / 3000 (set in §13f) | **5000 / 1000 = board default** |
 | dcoffset | 50.001 % | 50.001 % |
 | triggerthr | 50 counts = 3.05 mV | same |
+
+At §13h time ch52's WaveAnalogProbe1 was TimeFilter while ch0's was EnergyFilter; that row was removed
+on 2026-10-14 once §13j changed it. `WaveAnalogProbe0` is ADCInput on both -- and on every channel
+and slot (§15).
 
 `solaris-cli trace` sets only ChEnable / WaveSaving / WaveTriggerSource -- **never the probes**
 (`DAQ:broker/solaris-cli.cpp:815-832`), which are per channel. So a ch52 capture silently carries a
@@ -2059,70 +2119,53 @@ this tool -- the tool already skipped the absent marker correctly. And ch52's D3
 configured to nothing": it is `EventPileUp`, a different signal that simply produced 0 HIGH samples in
 that record. `--dprobe=` was added in 13i to name D0..D3 per channel.
 
-**BENCH STATE now (SUPERSEDED by 13i, which changed ch52's filter):** emulator ch1(CH2) ADDED,
-programmed rise_us=0.2 / 1000 Hz / 1.0 V / d 50 us (was unprogrammed; briefly detuned to 1700 Hz as the
-control, restored). Emulator ch0 unchanged from §13g. Digitizer ch0 still 1000/3000/50000; ch52 then
-still at its 5000/1000 defaults -- nothing had been written to ch52 at the time of writing.
+## 13i. ch52's digital probes are NOT the ch0 set -- and how to verify a write without trusting
+## read-back (2026-10-14)
+Read back from the board: `/ch/52/par/WaveDigitalProbe2` = **EnergyFilterPeakReady** (ch0 slot:
+EnergyFilterPeaking) and `WaveDigitalProbe3` = **EventPileUp** (ch0: EnergyFilterPileupGuard).
+Different signals, same column positions, similar firing times -- so a ch52 figure rendered with ch0's
+labels **looked plausible while being wrong**. `DAQ:agent/plot_capture.py` now takes
+`--dprobe=D0,D1,D2,D3` alongside `--probe=` and `--ch=`; colour is keyed to the COLUMN, so a renamed
+probe still lands in the same lane of the overlay band.
 
-## 13i. ch52 trapezoid set to 1000/3000 to match ch0; verified by the filter's own marker
-## (2026-10-13)
-`write 0 /ch/52/par/EnergyFilterRiseTimeT 1000` and `...FlatTopT 3000` -> both **OK and read back
-correctly** (1000 / 3000 = RiseTimeS 125 / FlatTopS 375). PoleZeroT was already 50000 on both channels,
-so nothing was written there. **3000 ns is AT the board max, not above it, so the 13f clamp did not
-fire** -- consistent with 13f: the clamp silently truncates values ABOVE max.
+**RULE -- same shape as §13e for the analog columns: the seven columns of a capture carry no identity.
+For ANY channel other than ch0, read `WaveAnalogProbe0/1` and `WaveDigitalProbe0..3` before labelling a
+plot.** Four-plus nodes, all per channel.
 
-**Verified independently of the read-back**, because 13f established that `OK` proves nothing: ch52's D2
-marker moved from **trigger+5536 ns to trigger+2544 ns**, against ch0's +2528 ns at the same settings.
-That is the filter's own timing responding, not a register echo. Armed width stayed 552 ns on both
-channels before and after -- correct, since the time filter does not depend on the trapezoid settings.
-Capture: `DAQ:agent/data/trace_ch52_L1000_F3000.txt` -> `plot_ch52_L1000_F3000.png`.
+**Verification independent of read-back.** §13f established that `OK` proves nothing, so setting ch52's
+trapezoid was confirmed by the filter's own timing responding rather than by a register echo: its D2
+marker moved **trigger+5536 ns -> +2544 ns**, against ch0's +2528 ns at the same settings. Armed width
+stayed 552 ns on both channels before and after -- correct, since the time filter does not depend on the
+trapezoid settings. FlatTopT 3000 is **AT** the board max, not above it, so the §13f clamp did not fire;
+that is consistent with §13f, which truncates values ABOVE max. Capture
+`DAQ:agent/data/trace_ch52_L1000_F3000.txt`. **The channels' current values are the session file's live
+table -- deliberately not repeated here (§Scope).**
 
-### ch52's digital probes are NOT the ch0 set -- plot_capture.py had been mislabelling them
-Read back: `/ch/52/par/WaveDigitalProbe2` = **EnergyFilterPeakReady** (ch0: EnergyFilterPeaking) and
-`WaveDigitalProbe3` = **EventPileUp** (ch0: EnergyFilterPileupGuard). Different signals, same columns,
-similar firing times -- so the figure looked plausible while labelled wrong. `DAQ:agent/plot_capture.py`
-now takes `--dprobe=D0,D1,D2,D3` alongside `--probe=` and `--ch=`; colour is keyed to the COLUMN so a
-renamed probe still lands in the same lane of the overlay band. Verified: ch52 renders
-"EnergyFilterPeakReady 8 ns [line: only 8 ns wide]" with no guard lane; ch0 with no flags is unchanged
-(Peaking +2528, PileupGuard +2544..+5064, 2520 ns wide).
-**General rule, same as 13e for the analog columns: the seven columns of a capture carry no identity.
-For ANY channel other than ch0, read WaveAnalogProbe0/1 and WaveDigitalProbe0..3 before labelling a
-plot.** Four+ nodes, all per channel.
+## 13j. ch52's EnergyFilter vs ch0's: the two channels' FILTERS agree, only amplitude differs
+## (2026-10-14)
+With ch52 Analog1 set to EnergyFilter (probes are `setinrun=true`, §9 -- no ACQ stop needed) the column
+really is a trapezoid, and it matches ch0's:
 
-**BENCH STATE now:** emulator ch0 and ch1(CH2) both rise_us=0.2 / 1000 Hz / 1.0 V / d 50 us. Digitizer
-**ch0 AND ch52 both at RiseTimeT 1000 / FlatTopT 3000 / PoleZeroT 50000.** Board defaults were
-5000/1000/50000; neither channel restored.
+- ch52 EF peak 645.5 mV vs ch0 656.7 mV, ratio **0.9829**; ADCInput peaks 620.7 vs 631.6 mV, ratio
+  **0.9827**. Output ratio equals input ratio to 4 s.f., so **the filters agree and only the pulse
+  amplitude differs** (per-channel offset / v_per_count, §13h). **corr between the two EF traces =
+  1.00000.**
+- Cross-checked by the DC leak, which knows L+M but nothing about markers: ch0 input pedestal
+  2081.4 mV -> EF baseline 168.2 mV, predicted `V0*(L+M)/PZ` = 166.5 (**+1.7 mV**); ch52 2030.7 ->
+  163.8, predicted 162.5 (**+1.4 mV**). Same 0.08 leak ratio => **both are L+M = 4000 ns**. Both show
+  width-at-50% = 4000 ns (2L+M would be 5000; the top rounds, §11).
+- Marker geometry identical: armed 552 ns, Trigger +0, D2 +2544 (ch52 PeakReady) vs +2528 (ch0
+  Peaking) -- **a 16 ns difference between two DIFFERENT signals (§13i); do not read it as a filter
+  discrepancy.**
 
-## 13j. ch52 Analog1 probe switched TimeFilter -> EnergyFilter: the two channels'
-## trapezoids are then indistinguishable (2026-10-13)
-`write 0 /ch/52/par/WaveAnalogProbe1 EnergyFilter` -> OK, **read back EnergyFilter**. Probes are
-`setinrun=true` (§9) so no ACQ stop was needed. Capture `DAQ:agent/data/trace_ch52_EF_1014_1256.txt`
--> `plot_ch52_EF_1014_1256.png`, plotted with `--probe=ADCInput,EnergyFilter --ch=52
---dprobe=Trigger,TimeFilterArmed,EnergyFilterPeakReady,EventPileUp`.
+Capture `DAQ:agent/data/trace_ch52_EF_1014_1256.txt`.
 
-**The column really is a trapezoid, and it matches ch0's.** ch52 EF peak 645.5 mV vs ch0 656.7 mV,
-ratio **0.9829**; the ADCInput peaks were 620.7 vs 631.6 mV, ratio **0.9827**. The output ratio equals
-the input ratio to 4 significant figures, so the two channels' FILTERS agree and only the pulse
-amplitude differs (per-channel offset/v_per_count, §13h). **corr between the two EF traces = 1.00000.**
-Independent confirmation from the DC leak, which knows L+M but nothing about markers:
-ch0 input pedestal 2081.4 mV -> EF baseline 168.2 mV, predicted `V0*(L+M)/PZ` = 166.5 (**+1.7 mV**);
-ch52 2030.7 -> 163.8, predicted 162.5 (**+1.4 mV**). Same 0.08 leak ratio, so both are L+M = 4000 ns.
-Both show width-at-50% = 4000 ns (2L+M would be 5000; the top rounds, §11).
-
-Marker geometry identical on both channels: armed 552 ns, Trigger +0, D2 +2544 (ch52 PeakReady) vs
-+2528 (ch0 Peaking) -- a 16 ns difference, and these are DIFFERENT signals (§13i), so do not read that
-16 ns as a filter discrepancy.
-
-**BENCH STATE now:** emulator ch0 + CH2 both rise 0.2 us / 1 kHz / 1.0 V / d 50 us. Digitizer ch0 and
-ch52 both RiseTimeT 1000 / FlatTopT 3000 / PoleZeroT 50000. **ch52 WaveAnalogProbe1 = EnergyFilter
-(was TimeFilter)**; ch52 D2/D3 still PeakReady/EventPileUp; ch0 probes unchanged (ADCInput,
-EnergyFilter, Trigger, TimeFilterArmed, EnergyFilterPeaking, EnergyFilterPileupGuard). Board defaults
-were RiseTimeT 5000 / FlatTopT 1000; nothing restored on either channel.
-
-## 13k. Repo layout: agent/ folder (2026-10-13)
+## 13k. Repo layout: agent/ folder (2026-10-14)
 The user asked for one folder holding everything an agent authored. Settled as:
 - **`DAQ:agent/`** -- `agent/AGENT.md` (this log) and `agent/data/` (all CLI trace captures, model
-  backups `trapezoid_gui.prev.py` / `trapezoid_gui.spec0.py`, renderings) -- both **gitignored**.
+  backups `trapezoid_gui.prev.py` / `trapezoid_gui.spec0.py`, renderings). Originally BOTH were
+  gitignored; **the log's ignore rule was removed on 2026-10-14 and it is now TRACKED** (commit
+  `28d428a`), so the findings travel with the tools that cite them. `agent/data/` is still ignored.
   Plus `DAQ:agent/plot_capture.py`, which IS tracked: it is analysis tooling, not scratch.
 - **`DAQ:Aux/trapezoid_gui.py` stays in `Aux/`** -- user's call: it is a **user-facing teaching tool**
   about what a trapezoid filter is, not agent scratch. Do not move it into `agent/` again.
@@ -2132,7 +2175,14 @@ filter against hardware. `~/real_trap.txt.bak` was folded into `agent/data/real_
 **git index note:** `Aux/trapezoid_gui.py` had been STAGED by someone outside this session (no reflog
 entry; I never ran `git add`). Moving it out left the index in `AD` state -- a commit would have
 resurrected the old path. Resolved by `git rm --cached` on the old path + `git add` at `Aux/`, so the
-index is back to `A Aux/trapezoid_gui.py` as the user had left it. Still NOT committed.
+index is back to `A Aux/trapezoid_gui.py` as the user had left it.
+**UPDATE 2026-10-14: the user then committed it themselves** (`28d428a "added agent and
+trapezoid_gui.py"`: .gitignore, Aux/trapezoid_gui.py, agent/AGENT.md, agent/plot_capture.py,
+core/DigiManager.cpp). I never ran `git commit`. That commit also DELETED the `agent/AGENT.md` line
+from `.gitignore`, which is how a tracked log became possible -- and it invalidated four statements in
+this file and the session file that said the log was ignored. All corrected here.
+**Lesson: a `.gitignore` rule does not un-track a file, and removing the rule is the only way to
+commit an ignored path. If the log's status matters, check `git ls-files`, not `.gitignore`.**
 
 ## 14. Open items
 
@@ -2140,8 +2190,19 @@ index is back to `A Aux/trapezoid_gui.py` as the user had left it. Still NOT com
 1. **Criterion 5 FAILS -- widen `EnergyFilterPileupGuardT`.** Guard holds 1528 ns vs a trapezoid
    10-10 % width of 18.3 us; a pulse on the flat top or fall is accepted with corrupted energy. Harmless
    at 1 kHz, **must be fixed before raising the rate**. Range 0..64000 ns in 64 ns steps. (See §11.)
-2. **~~Board left at non-default filter settings~~ RESOLVED** -- restored to 5000 / 50000 / 1000 and
-   verified by read-back (2026-10-12).
+   **UPDATE 2026-10-14: setting-dependent.** At RiseTimeT 1000 / FlatTopT 3000 the guard is **2520 ns**
+   and covers the whole flat top plus the fall (§13f) -- improved at the values the bench now runs, and
+   it still FAILS at the 5000/1000 default. Also `/ch/0/par/PileUpGuardT` did not read back on
+   2026-10-14 (`ReadValue failed`); §9 recorded 960 ns there, so the node may have moved or been
+   renamed -- do not assume 960 ns is still available.
+2. **RE-OPENED, not resolved** -- was marked RESOLVED on 2026-10-12 after restoring 5000 / 50000 /
+   1000, but the board has since been changed again and is **NOT restored**: ch0 and ch52 are both
+   RiseTimeT **1000** / FlatTopT **3000** / PoleZeroT 50000 (§13f/13i), ch0 record length **2000** /
+   pre-trigger **500** (defaults 4000/250, §17), and ch52's `WaveAnalogProbe1` is `EnergyFilter` where
+   the default is `TimeFilter` (§13j). Probe assignments need not be restored (standing instruction),
+   but the **filter and record-length** values are a real deviation. Restoring needs ACQ stopped for
+   ChRecordLengthS (not `setinrun`, §9) and **read-back after every write** -- FlatTopT above 3000
+   returns OK and silently clamps (§13f).
 3. **Re-run the rise sweep with `PoleZeroT` at the 50000 default.** The §12 sweep ran with P-Z left at
    62000 ns from the preceding sweep, so its absolute means are not comparable to the P-Z sweep or the
    tuned point.
@@ -2184,12 +2245,17 @@ index is back to `A Aux/trapezoid_gui.py` as the user had left it. Still NOT com
    it trades resolution for the diagnostic, so measure both.
 7. **Pole-zero must be set from the REAL detector decay, not the emulator's.** The emulator is currently
    *set* to 50 us, so matching it proves only that the filter tracks what it is fed. Get the MUSIC /
-   crystal constant before finalising. Same caveat for rule 1: the 3.4x rise margin may not survive a
-   slower real signal.
+   crystal constant before finalising. (The parallel caveat about "rule 1"'s 3.4x rise margin is VOID --
+   that rule was retracted 2026-10-14; there is no rise-time margin to lose.)
 
 **Older:**
-8. **Bulk `SetValue` false positive** — is `/ch/0..63/par/<name>` accepted-but-ignored? Test ready
-   (`/tmp/zprobe/wtest.c`), needs approval because it writes a real value to 64 channels.
+8. **Bulk `SetValue` false positive** — is `/ch/0..63/par/<name>` accepted-but-ignored? Needs approval
+   because it writes a real value to 64 channels. **The test program is GONE: `/tmp/zprobe/wtest.c`
+   was wiped by the 2026-10-12 reboot** -- the exact hazard this file warns about, so it must be
+   REWRITTEN, not just re-run. §5's evidence stands (every bulk READ fails, even on a provably uniform
+   parameter, while bulk `SetValue` returns success). **§13f strengthens the hypothesis**: an
+   out-of-range write to a REAL node also returns OK while doing something else (clamp), so "OK" is
+   demonstrably not a receipt anywhere on this board.
 9. **§5-vs-§3 calibration contradiction** (1 MΩ claim vs `analogsel=1`) — needs `LAB:`'s decompiled C#
    for `HS_LSB_V` / `HV_LSB_V`.
 10. **`EMU:pulser.py` has no load-impedance term** — should take the load and divide, like the vendor.
@@ -2203,8 +2269,184 @@ index is back to `A Aux/trapezoid_gui.py` as the user had left it. Still NOT com
 - ~~Why CH2 had a clean pulse on 2026-10-08 and nothing on 2026-10-09~~ — the FAST line moved to the
   **digitizer ch0**; scope CH2 is empty by design. The 2026-10-08 numbers were valid, confirmed to
   0.5 % by §8. (§2)
-- ~~Is standalone board status broken?~~ — fixed. (§7)
+- ~~Is standalone board status blank in standalone mode?~~ — fixed; the fix is committed in
+  `DAQ:core/DigiManager.cpp` (`GetScalarSnapshot`'s standalone branch now reads the LED / ACQ /
+  temp node groups with `ParseCounter`, mirroring broker mode). Confirmed on the bench. The
+  former §7 was deleted 2026-10-14 as redundant once the fix landed -- the code is the record.
+  If status ever goes blank again, `git log -- core/DigiManager.cpp` recovers the diff.
 - ~~Do the digital probes read zero?~~ — never did; see the `d.sum()` warning. (§10)
 - ~~Is resolution floored at ~1 % by digitizer noise, making tuning pointless?~~ — no, measured 0.09 %.
   The filter averages noise down 7.5x. Tuning is still flat, but for a different reason. (§12)
 - ~~What is the emulator-noise-vs-digitizer-floor question?~~ — moot for tuning; see item 5.
+
+## 15. Waveform probe sources -- AUTHORITATIVE COUNT: 5 analog, 13 digital, per
+## channel, identical for every channel and every slot (2026-10-14, from the device tree)
+Answered from the device tree, not by guessing names (§5's own rule). Dumped read-only with ctypes:
+
+```python
+import ctypes; L=ctypes.CDLL("/usr/local/lib/libCAEN_FELib.so")
+L.CAEN_FELib_Open.argtypes=[ctypes.c_char_p, ctypes.POINTER(ctypes.c_uint64)]
+# CAEN_FELib_OpenTCP does NOT exist -- only CAEN_FELib_Open(url). URL form: dig2://192.168.0.100
+# GetDeviceTree(handle, None, 0) returns the byte count (2,326,299 = 2.3 MB), then call again with
+# a buffer of size+4. Saved: DAQ:agent/data/devt_vx2745.json
+```
+**In the tree, node names are LOWERCASE** (`waveanalogprobe0`), while the CLI/`GetValue` names are
+case-insensitive -- so a `grep WaveAnalogProbe` on the JSON finds NOTHING and looks like the nodes
+don't exist. They do. `allowedvalues` is a dict of numeric-string keys -> {value}, plus a `value`
+key holding the COUNT.
+
+**ANALOG (`WaveAnalogProbe0/1`) -- 5 sources, same list in both slots:**
+`ADCInput` (default), `TimeFilter`, `EnergyFilter`, `EnergyFilterBaseline`, `EnergyFilterMinusBaseline`.
+So the DC-leak discussion in §13 has a purpose-built partner: `EnergyFilterMinusBaseline` is the board's
+own version of the `ybase` subtraction that was removed from the GUI.
+
+**DIGITAL (`WaveDigitalProbe0..3`) -- 13 sources, same list in all four slots:**
+`Trigger`, `TimeFilterArmed`, `ReTriggerGuard`, `EnergyFilterBaselineFreeze`, `EnergyFilterPeaking`,
+`EnergyFilterPeakReady`, `EnergyFilterPileupGuard`, `EventPileUp`, `ADCSaturation`,
+`ADCSaturationProtection`, `PostSaturationEvent`, `EnergyFilterSaturation`, `AcquisitionInhibit`.
+**Confirms §10's "13 sources each" was right**, and §10's table is missing nothing -- it measured 9 of
+the 13 and left the 4 saturation ones untested (they need the input driven into saturation).
+**Defaults are NOT uniform across channels**: ch0 was set to Trigger/TimeFilterArmed/Peaking/
+PileupGuard by us; ch52's factory defaults are Trigger/TimeFilterArmed/EnergyFilterPeakReady/
+EventPileUp -- which is exactly why ch52 mislabelled a plot (§13h/13i).
+Tree has 65 `ch` entries for a 64-channel board (0..63 plus one aggregate node).
+
+### INCIDENT, mine: opening a second FELib connection BROKE THE BROKER'S HANDLE
+To dump the tree I called `CAEN_FELib_Open("dig2://192.168.0.100")` from a Python process while the
+broker held the board. It returned rc=0, the dump succeeded, I called `Close`. **Afterwards every
+`read` through the broker failed** (`ReadValue failed` for selftrgrate, dcoffset, EnergyFilterRiseTimeT)
+while `ping` and `list` still worked -- the broker process was alive with its cached device list, only
+its board handle was stale. A fresh ctypes Open in the same Python process read all three values
+fine, proving **the board was healthy and the broker was the broken side**.
+**FIXED without restarting anything: `close 0` then `open dig2://192.168.0.100` through the CLI** --
+re-established as digitizer 0, reads verified working (selftrgrate 1000, RiseTimeT 1000). Board state
+untouched; no writes were involved.
+**RULE: the broker's CAEN_FELib connection is EXCLUSIVE for a reason. Do not open a second handle to
+the digitizer from another process -- it silently invalidates the broker's handle, and the failure
+looks like a bad parameter name rather than a lost connection. If a device-tree dump is needed again:
+stop the broker first, or use `close 0`/`open` afterwards to recover.** `list`/`ping` succeeding while
+`read` fails is the signature of exactly this.
+
+## 16. Multi-source capture: 4 passes cover all 5 analog + 13 digital sources (2026-10-14)
+
+The board exposes 2 analog + 4 digital probe SLOTS but 5 + 13 SOURCES (§15), so no single capture can
+show them all. Four passes suffice: hold `ADCInput` in analog slot 0 and `Trigger` in D0 every pass
+while the other slots walk the remainder (3 analog passes < 4 digital). Holding `Trigger` in D0 also
+gives every pass a common alignment reference.
+
+**Repeating `ADCInput` in every pass is the stability measurement, not redundancy** -- its spread across
+passes is the noise floor for everything overlaid after it. Measured at ch0, 2000 samples, 1 kHz,
+rise 0.2 us: peaks 631.1 / 631.5 / 631.1 / 631.4 mV, **spread 0.24-0.37 mV = 0.04-0.06 %**, i.e. ~4 LSB
+of a 16-bit 4 V range. That is the bench's real repeatability and it is what makes cross-pass overlay
+legitimate.
+
+**A capture's columns are anonymous, so record the probe names alongside the data.** `solaris-cli trace`
+restores `ChEnable`/`WaveSaving`/`WaveTriggerSource` but **never the probes** (§13h), and they are
+per-channel -- so any multi-pass capture must save and restore all six itself, and read them back before
+trusting the write (§13f). The implementation is `DAQ:agent/plot_capture.py` (`--sweep`, `--replot`,
+`.json` sidecars); `git log` covers its history, this section is only why the pass structure is what it is.
+## 17. Record length and pre-trigger: what is changeable, and what to check (2026-10-14)
+
+`ChRecordLengthS/T` is **NOT `setinrun`** (§9) -- changing it requires ACQ stopped. `acquisitionstatus=8`
+IS the stopped state, so no explicit stop is needed when nothing is acquiring. `ChPreTriggers` **is**
+`setinrun`. Both accept writes and read back honestly (unlike `FlatTopT`, which clamps silently -- §13f).
+Board defaults are 4000 / 250 samples; the values the bench currently runs are in the session md, not
+here, because they change.
+
+**The trigger sample is `ChPreTriggers + 1`, not `ChPreTriggers`** (500 -> trigger at sample 501). Any
+code that assumes the trigger sits exactly `pre` samples into the record is off by one sample.
+
+**A short record truncates the pulse, and the plot must know it.** With 500 pre-trigger the pulse onset
+lands ~89 samples before the trigger, so "N samples before the trigger" is NOT a clean baseline region
+at any pre-trigger setting -- the baseline must be taken from before the PULSE ONSET, which is a
+different sample. Taking it from the window head silently absorbed part of the rising edge.
+
+**`git ls-files`, not `.gitignore`, is the check for whether a file is tracked.** An ignore rule is
+inert for a path already in the index, so a `.gitignore` that lists a tracked file reads as "ignored"
+and is wrong. Verify with `git ls-files <path>` plus `git status --ignored`.
+## 18. Verification and measurement discipline (2026-10-14)
+
+**Transferable, tool-independent.** These outlive any specific bug, tool or capture. They were
+originally buried inside sections about the incidents that produced them, which is exactly why they
+got never re-found. New lessons of this kind belong HERE, not in the section about whatever tool was
+being edited at the time.
+
+### About numbers and models
+
+**Check what a zero means before dividing by it.** An early pass reported "board EF noise sigma =
+0.000 mV" and used it as a threshold, making the answer meaningless-by-luck. The number was right (the
+pre-onset column really is one constant count); the framing was wrong -- the filter attenuates the
+0.42 mV input noise below one output LSB.
+
+**A tight error bar on a wrong model is not precision.** The 4-parameter pulse fit
+`A(1-e^-t/r)e^-t/d` can return a rise constant with a sub-nanosecond error bar while its residual is a
+large STRUCTURED hump, not noise. The error bar only says which single parameter best matches a wrong
+SHAPE. Quote a model-free 10-90 instead, and report the residual's STRUCTURE, not just its size.
+Worked case: §13g.
+
+**An unverified belief about who wrote code silently decides what you are willing to change.** I
+assumed a helper was the user's, treated it as untouchable, and built readouts on top of it instead of
+simplifying it. The assumption was never checked and it was wrong. **Provenance is cheap to verify
+(git history, a prior capture, asking) and expensive to assume** -- and once acted on, the error is
+invisible because everything built on top of it looks deliberate.
+
+**A rate appearing on an instrument is not attribution.** Prove causation by changing ONE source and
+watching exactly one destination follow; a coincident value proves nothing. Worked case: §13h.
+
+**A number can be right and the conclusion still wrong.** "Board EF noise 0.000 mV" was accurate and
+its use was not. Before treating a measurement as evidence, state what else could produce it.
+
+### About plots and figures
+
+**Verify a plot in data coordinates, not pixels.** Pixel-diffing failed three different ways on the
+same question (does a 0.78 px fill rasterise): pure-colour match, alpha-blend prediction, and
+nearest-pixel-in-lane, which returned the panel's black reference line and grey grid as the closest
+match. Two failure modes, neither fixable by tuning a threshold: **colour COLLISION** (the filter also
+matches another artist in that colour) and **colour DILUTION** (antialiasing spreads a sub-pixel
+rectangle below any threshold). The reliable check is the artist itself:
+`collection.get_paths()[0].vertices`, mask to the top row, measure the span.
+
+**Count artists, not pixels, when asking "is every source drawn?"** Answer it with `ax.get_lines()` /
+`ax.collections` and their labels; posed in pixels it returns counts inflated by every artist sharing
+that colour.
+
+**Size every axis from the artists actually added, never from the requested window.** A requested span
+is silently truncated by the data extent and the remainder shows up as empty axis. Same class of error
+as anchoring a zoom on an assumed probe column: **any geometry rule that assumes what a column
+contains is unsafe**, because probe identity varies per channel and per capture.
+
+**Reusing a colour across panels defeats any colour-based verification.** If lane colours are projected
+as lines onto a panel that also draws traces in those colours, a pixel check measures the traces.
+Choose disjoint palettes per panel.
+
+**A plot mark asserts a claim about the signal, so the mark must not contradict the physics.** A
+one-clock-tick pulse drawn as a vertical line asserts *an instant*; the signal is a PULSE of measurable
+width. When a mark is too thin to see, fix the rendering (opacity, minimum width, a zoomed inset) --
+do not change what it asserts. Special-casing narrow runs into a different mark type is the same error
+as clipping an axis to make a curve look flat.
+
+**A label's position decides which thing it belongs to.** A marker label placed ABOVE its trace reads as
+belonging to the lane above, even when horizontally aligned with its own. Centre it on the lane it
+names; where a fill may already be HIGH beneath it, give it a translucent backing box.
+
+**Repeating a source across captures is a measurement feature; repeating it in the legend is a display
+bug.** Decouple them -- deduplicate the drawing while still collecting the value from every pass, which
+is what a spread/stability number needs. "Fixing" it by dropping the repetition destroys the measurement.
+
+### Matplotlib facts that cost hours
+
+**`set_yticks()` EXPANDS the axes view to include every tick it is handed.** So filtering a tick list
+and then calling `set_yticks()` can silently undo a `set_ylim()` placed before it -- the surviving
+out-of-range tick widens the axis. Order that survives: `set_ylim` -> `set_yticks` filtered on BOTH
+bounds -> re-assert `set_ylim` -> `set_autoscaley_on(False)`.
+
+**`annotate()` and `legend()` each fire `autoscale_view`**, so any `set_ylim` before them is replaced.
+Set limits after every artist exists.
+
+**`set_title(..., loc='left')` populates `_left_title`, so a bare `get_title()` returns `''`.** Read it
+back with `get_title(loc='left')` or a verification script reports "titles are missing" on a correct
+figure.
+
+**A 0.78 px fill is not a solid colour anywhere in the raster.** A sub-pixel rectangle straddles two
+columns at ~39 % coverage each, so no pixel approaches the nominal colour -- which is why pixel tests
+report a correctly-drawn feature as absent.
