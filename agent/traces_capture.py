@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
-"""Plot one ch0 capture as ONE timing diagram: both analog signals, with the
+"""Plot one capture as ONE timing diagram: both analog signals, with the
 4 digital markers overlaid as colour in the same axes.
 
-    python3 agent/plot_capture.py [agent/data/trace_six_1013_1308.txt] [out.png]
+    python3 agent/traces_capture.py [agent/data/trace_six_1013_1308.txt] [out.png]
+    python3 agent/traces_capture.py --replot                 # no board, from saved .txt
+    python3 agent/traces_capture.py --sweep --ch=52          # 4 passes, touches the board
+
+Three modes, only one of which writes to the board:
+  MODE 1  (default)  plot one saved capture file. Offline, no broker needed.
+  MODE 2  --replot   plot saved sweep captures. Offline. No probe writes, so a bad
+                     plot is fixable without going near the bench.
+  MODE 3  --sweep    set probes and capture 4 passes. THIS ONE TOUCHES HARDWARE --
+                     read TRACE_WARNING before using it.
+
+Parameter access goes through dig.Session (ZeroMQ to the broker). The single
+exception is `trace`, which only exists inside solaris-cli and is driven as a child
+process -- see cli().
 
 Needs a capture whose probes are the settled ch0 set (../AGENT.md sec.10 -- the findings log):
 Analog0=ADCInput, Analog1=EnergyFilter, D0=Trigger, D1=TimeFilterArmed,
@@ -15,8 +28,8 @@ ch52 was found with Analog1=TimeFilter while ch0 had EnergyFilter, so plotting
 it with the defaults labels a narrow 2nd-derivative lobe as "the trapezoid".
 That is the same column-identity trap as agent/AGENT.md sec.13e, one step worse,
 because the wrong label looks authoritative on the printed figure. Confirm
-with `solaris-cli read 0 /ch/N/par/WaveAnalogProbe1` before plotting a new
-channel.
+with `python3 agent/dig_status.py --param=WaveAnalogProbe1 --ch=N` before plotting a
+new channel.
 
 Layout history: this used to be six rows -- two analog lanes plus one lane per
 digital marker -- then two rows with the digital band repeated on each. Both
@@ -61,10 +74,15 @@ PAT = re.compile(r"^\s*(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)
 # tick run is under a pixel wide and a 30 %-alpha sliver of it washes out.
 NARROW_MAX = 12
 
-# Broker CLI. Reached only by subprocess -- never open a second CAEN_FELib
-# handle here, that breaks the broker (AGENT.md sec.15).
+# `trace` exists ONLY in solaris-cli -- it is not a broker opcode. It has to be driven as
+# a child process. Everything else goes through dig.Session (ZeroMQ to the broker).
+# Neither path ever opens a second CAEN_FELib handle, which is what would break the
+# broker (AGENT.md sec.15): the broker owns the one handle, and both routes are clients.
 CLI = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "solaris-cli")
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dig import Session, DigiError, canon, validate          # noqa: E402
 
 
 SWEEP_FLAG = '--sweep'
@@ -273,15 +291,53 @@ DIG_COLOR = {n: c for n, c in zip(
      "#ff7f0e", "#bcbd22", "#17becf", "#7f7f7f", "#aec7e8", "#98df8a"])}
 
 
-def cli(digi, *cmds, timeout=180):
-    """Run commands through the broker CLI. NEVER open a second CAEN_FELib
-    handle from this process -- that silently invalidates the broker's handle
-    (AGENT.md sec.15); ping/list keep working while every read fails."""
+def cli(digi, *cmds, timeout=300):
+    """Run commands through the broker CLI as a child process.
+
+    Only `trace` genuinely needs this: it is implemented in solaris-cli.cpp, not as a
+    broker opcode, and it streams a PUB snapshot into the CLI's own ring buffer. There
+    is no way to ask the broker for it over ZMQ without reimplementing that whole
+    sequence. Do NOT add other commands here -- use dig.Session.
+    """
     import subprocess
     inp = "connect\n" + "".join(c + "\n" for c in cmds) + "quit\n"
     p = subprocess.run([CLI], input=inp, capture_output=True, text=True,
                        timeout=timeout)
     return p.stdout + p.stderr
+
+
+PROBE_PARAMS = (["WaveAnalogProbe0", "WaveAnalogProbe1"]
+                + [f"WaveDigitalProbe{i}" for i in range(4)])
+
+
+def read_probes(s, ch):
+    """The six probe names on one channel, in D0..D3 / A0..A1 order.
+
+    Was: parse the CLI's echoed `> read` lines with startswith("> read") and take the
+    following line. That depended on readline echo being OFF, which depends on whether
+    stdin is a tty -- and a silent shift to the wrong column labels is exactly the
+    failure this script exists to avoid (sec.13h: a wrong probe label looks plausible on
+    the printed figure). dig.Session keys each read by the request, so position cannot
+    drift.
+    """
+    return [s.read(p, ch=ch) for p in PROBE_PARAMS]
+
+
+def write_probes(s, ch, names):
+    """Set the six probes, each validated against the device tree and read back.
+
+    validate() checks the allowed list, so a typo like "EnergyFilterPeak" is refused
+    here instead of being accepted by the board and silently leaving the old source in
+    place -- which would mislabel every column of the capture.
+    """
+    for p, want in zip(PROBE_PARAMS, names):
+        ok, note = validate(p, want)
+        if not ok:
+            raise DigiError(f"refusing probe {p}={want}: {note}")
+        old, got, rb = s.write(p, want, ch=ch)
+        if got != want:
+            raise DigiError(f"probe {p} did not take: asked {want}, board holds {got}"
+                            f"  [{rb}]")
 
 
 def write_meta(save_to, ana, dig, ch):
@@ -308,42 +364,38 @@ def meta_of(path):
         return None
 
 
-def sweep_capture(digi, ch, samples, ana, dig, save_to):
+def sweep_capture(s, digi, ch, samples, ana, dig, save_to):
     """One pass: set the six probes, capture, return the 7-column array.
 
-    Probes are `setinrun=true` (sec.9) so no ACQ restart is needed, and the CLI's
-    own `trace` command restores ChEnable/WaveSaving/WaveTriggerSource but NOT the
-    probes -- which is why sweep mode saves and restores them itself.
+    Probes are `setinrun=true` (sec.9) so no ACQ restart is needed. They are written
+    through dig.Session -- validated against the device tree and read back individually
+    (sec.13f: OK means accepted, not set).
+
+    The capture itself still goes through the CLI, and that is NOT laziness: `trace` is
+    implemented in solaris-cli.cpp, not as a broker opcode, so it cannot be requested
+    over ZMQ. See the warning in TRACE_WARNING about what that call does to the board.
     """
-    cmds = [f"write {digi} /ch/{ch}/par/WaveAnalogProbe0 {ana[0]}",
-            f"write {digi} /ch/{ch}/par/WaveAnalogProbe1 {ana[1]}"]
-    cmds += [f"write {digi} /ch/{ch}/par/WaveDigitalProbe{i} {d}"
-             for i, d in enumerate(dig)]
-    out = cli(digi, *cmds, timeout=120)
-    if "Error" in out:
-        raise RuntimeError(f"probe write failed: {out.strip().splitlines()[-1]}")
-    # Read back BEFORE trusting the write: the board returns OK for values it
-    # silently clamps or rejects (sec.13f), and a wrong probe means the columns
-    # are not what the labels say (sec.13h).
-    chk = cli(digi,
-              f"read {digi} /ch/{ch}/par/WaveAnalogProbe0",
-              f"read {digi} /ch/{ch}/par/WaveAnalogProbe1",
-              *[f"read {digi} /ch/{ch}/par/WaveDigitalProbe{i}" for i in range(4)],
-              timeout=120)
-    got = []
-    lines = chk.splitlines()
-    for i, l in enumerate(lines):
-        if l.startswith("> read"):
-            got.append(lines[i + 1].strip() if i + 1 < len(lines) else "")
-    want = list(ana) + list(dig)
-    if got[:6] != want:
-        raise RuntimeError("probe read-back mismatch (OK does not mean SET, sec.13f):\n"
-                           f"  wanted {want}\n  got    {got[:6]}")
-    out = cli(digi, f"trace {digi} {ch} {samples}", timeout=300)
+    write_probes(s, ch, list(ana) + list(dig))
+    out = cli(digi, f"trace {digi} {ch} {samples}")
+    if "No trace captured" in out:
+        raise DigiError(
+            f"trace on ch{ch} returned no data. Check ChEnable and that the channel is"
+            " actually triggering (dig_run.py --seconds 5).")
     open(save_to, "w").write(out)
     write_meta(save_to, ana, dig, ch)
     return load(save_to), out
 
+
+TRACE_WARNING = """
+  !! `trace` runs StartACQ(digi, DataFormat::ALL) -- format 0.
+     ALL is the format the broker has DIED TWICE on (AGENT.md sec.19): 2 analog +
+     4 digital probes on 64 channels. --sweep does it four times in a row.
+     It also writes ChEnable=False to /ch/0..63/ and WaveTriggerSource=ChSelfTrigger,
+     so it cannot capture an externally-triggered channel and it destroys any routing
+     config you are testing. NEVER use --sweep while a trigger test is in flight.
+     If the CLI hangs or dies, the broker is probably gone: check
+       pgrep -x solaris-broker && printf 'connect\\nlist\\nquit\\n' | ../solaris-cli
+"""
 
 def align_to_trigger(A):
     """Return (trigger_sample, runs_of_D0). All passes share the trigger instant
@@ -369,17 +421,34 @@ def sweep_main():
     stamp = re.sub(r"\D", "", time.strftime("%m%d_%H%M"))
     out = out or os.path.join(here, "data", f"plot_ch{ch}_sweep_{stamp}.png")
 
+    s = Session(digi=digi)
+    s.boot()
+
+    print(TRACE_WARNING, flush=True)
+
     # Save the channel's probe settings so a failed run cannot leave the board
     # mislabelled for the next person.
-    chk = cli(digi, *[f"read {digi} /ch/{ch}/par/WaveAnalogProbe{i}" for i in (0, 1)],
-              *[f"read {digi} /ch/{ch}/par/WaveDigitalProbe{i}" for i in range(4)],
-              timeout=120)
-    lines = chk.splitlines()
-    orig = [lines[i + 1].strip() for i, l in enumerate(lines) if l.startswith("> read")]
-    if len(orig) != 6 or any(not v or "Error" in v for v in orig):
-        sys.exit(f"could not read the current probes on ch{ch}: {orig}\n"
+    try:
+        orig = read_probes(s, ch)
+    except DigiError as e:
+        sys.exit(f"could not read the current probes on ch{ch}: {e}\n"
                  "Is the broker up?  pgrep -x solaris-broker")
+    if len(orig) != 6 or any(not v for v in orig):
+        sys.exit(f"probes on ch{ch} did not read cleanly: {orig}")
     print(f"ch{ch} probes as found: analog {orig[:2]}  digital {orig[2:]}")
+
+    # trace forces WaveTriggerSource=ChSelfTrigger and disables every other channel,
+    # so warn loudly if the board is mid-experiment rather than at defaults.
+    wts = s.read("WaveTriggerSource", ch=ch)
+    if wts != "ChSelfTrigger":
+        print(f"  !! ch{ch} WaveTriggerSource is {wts!r} -- `trace` will overwrite it"
+              " with ChSelfTrigger and the restore is known to fail.\n"
+              "     Aborting rather than destroy the config under test (sec.19).")
+        sys.exit(2)
+    others = [c for c in range(64) if c != ch and s.read("ChEnable", ch=c) != "True"]
+    if others:
+        print(f"  note: {len(others)} other channels are currently ChEnable=False;"
+              " trace re-enables all 64 as a side effect.")
 
     # 4 passes. Analog slot 0 is ADCInput every time; slot 1 walks the other four.
     # D0 is Trigger every time; D1..D3 walk the other twelve.
@@ -399,7 +468,7 @@ def sweep_main():
             f = os.path.join(here, "data", f"trace_ch{ch}_sweep{k}_{stamp}.txt")
             print(f"pass {k+1}/4  analog={ana[0]},{ana[1]}  digital={','.join(dig[1:])}",
                   flush=True)
-            A, _ = sweep_capture(digi, ch, samples, ana, dig, f)
+            A, _ = sweep_capture(s, digi, ch, samples, ana, dig, f)
             tr = align_to_trigger(A)
             if tr is None:
                 print(f"  !! no Trigger in this capture -- pass skipped from the "
@@ -407,13 +476,15 @@ def sweep_main():
             data.append((ana, dig, A, tr, f))
             print(f"  ok: {len(A)} samples, trigger at sample {tr}")
     finally:
-        # Restore whatever was there, even if a pass blew up halfway.
-        cli(digi,
-            f"write {digi} /ch/{ch}/par/WaveAnalogProbe0 {orig[0]}",
-            f"write {digi} /ch/{ch}/par/WaveAnalogProbe1 {orig[1]}",
-            *[f"write {digi} /ch/{ch}/par/WaveDigitalProbe{i} {orig[2+i]}" for i in range(4)],
-            timeout=120)
-        print(f"probes restored to {orig[:2]} / {orig[2:]}")
+        # Restore whatever was there, even if a pass blew up halfway. Read back so a
+        # failed restore is reported rather than assumed (sec.13f).
+        try:
+            write_probes(s, ch, orig)
+            print(f"probes restored to {orig[:2]} / {orig[2:]}")
+        except DigiError as e:
+            print(f"  !! PROBE RESTORE FAILED: {e}\n"
+                  f"     ch{ch} may be left mislabelled -- restore by hand or the"
+                  " columns in any later capture will not match their names.")
 
     return plot_sweep(ch, data, out, stamp)
 

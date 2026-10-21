@@ -24,7 +24,7 @@ know something false, or waste real time, if I leave this out?"**
 The operational form, applied to each candidate paragraph:
 
 1. **Would it still be true after the tool is rewritten?** If it describes a decision in
-   `plot_capture.py` / `trapezoid_gui.py`, it is a commit message, not a note. Code is the record —
+   `traces_capture.py` / `trapezoid_gui.py`, it is a commit message, not a note. Code is the record —
    `git log` answers it. (This is why "the vertical-line special case is gone" was wrong to put here.)
 2. **Would omitting it cause someone to re-derive something FALSE, or waste real time?** A dead
    hypothesis, a trap, a measured number, a hardware quirk: yes. "I fixed a bug": no.
@@ -79,17 +79,445 @@ narrative** — do not keep the narrative as a tombstone.
 | 13h | **Emulator CH2 -> digitizer ch52, proven by a CAUSAL control** (changed only ch2's rate, only ch52 followed); `selftrgrate` is live without ACQ, `chtriggercnt` is not; **ch52's probes are NOT the ch0 set**; `set_pulse`'s `polarity` string is INVERTED for ch=1 |
 | 13i | **ch52's digital probes are NOT the ch0 set** (D2=EnergyFilterPeakReady, D3=EventPileUp) -- a wrong label looked completely plausible; **RULE: read the probe nodes before labelling any plot but ch0's**; plus verification independent of read-back (ch52 marker moved 5536 -> 2544 ns) |
 | 13j | **ch52 vs ch0 EnergyFilter: the FILTERS agree, only amplitude differs** (out ratio 0.9829 == in ratio 0.9827, corr 1.00000, DC leak +1.7/+1.4 mV => both L+M=4000 ns); the 16 ns D2 gap is two different signals, not a filter discrepancy |
-| 13k | **`DAQ:agent/` folder** -- log NOW TRACKED (was ignored), `agent/data/` ignored, `plot_capture.py` tracked; **`trapezoid_gui.py` stays in `Aux/` because it is user-facing teaching, not agent scratch**; git-index `AD` hazard when moving a staged file |
+| 13k | **`DAQ:agent/` folder** -- log NOW TRACKED (was ignored), `agent/data/` ignored, `traces_capture.py` tracked; **`trapezoid_gui.py` stays in `Aux/` because it is user-facing teaching, not agent scratch**; git-index `AD` hazard when moving a staged file |
 | 14 | open items |
 | 15 | **WAVEFORM SOURCES, authoritative: 5 analog x 2 slots, 13 digital x 4 slots, identical per slot**; device-tree dump recipe + the lowercase-node-name trap; **INCIDENT: a 2nd FELib Open broke the broker's handle -- recover with `close 0` + `open`** |
 | 16 | **4 passes cover all 5 analog + 13 digital sources; ADCInput repeated = the stability measurement: spread 0.04-0.06 % = ~4 LSB**; a capture's columns are anonymous, so record probe names beside the data |
 | 17 | **`ChRecordLengthS` is NOT `setinrun` (needs ACQ stopped); trigger sample = `ChPreTriggers + 1`, not `ChPreTriggers`**; the pulse onset is BEFORE the trigger, so "N samples before the trigger" is not a clean baseline; `git ls-files` not `.gitignore` proves tracking |
 | 18 | **Verification and measurement discipline -- transferable, tool-independent**: a tight error bar on a wrong model is not precision; verify plots in DATA COORDINATES not pixels (colour collision and colour dilution both defeat pixel-diffing); size axes from drawn artists not requested spans; a label's position decides which thing it belongs to; a mark must not contradict the physics; assert on every patch then re-read the line |
+| 19 | **External TRGOUT -> TRGIN triggering WORKS; the internal ITLA path does NOT (2026-10-16)**: `ChTriggerCnt` is BLIND to `WaveTriggerSource` (counts the channel's own discriminator) so it CANNOT be the observable -- use `ChWaveCnt`; `trace` disables all 64 channels and its restore did not take; `selftrgrate` is READ_ONLY (a rate readout, not a setting); broker died twice on `start`; **coincidence window RULED OUT as the cause** (falsified in phase G), and `CoincidenceLengthS`/`T` are ONE register in two units (625 samples x 8 ns = 5000 ns)
+
+
+## 20. Hardware coincidence ACHIEVED via ITLA AND + widened SelfTriggerWidth; and the
+## coincidence mask is REAL but INVERTED (2026-10-20)
+
+Drove the whole test from the `DAQ:agent/dig_*.py` CLI (ZeroMQ to the broker) instead of
+hand-written CLI heredocs. Plan in `DAQ:agent/trigger_test_plan.md`. Emulator: ch0 5 Hz,
+ch1 50 Hz, ch2 10 Hz injected into both -> dig ch0 input 15 Hz, dig ch52 input 60 Hz.
+Those populations are separated 3x/4x/6x, so every attribution below is unambiguous.
+
+### Test A PASSES: `SelfTriggerWidth` IS the AND window. This RETRACTS R7.
+
+`ITLAMainLogic=AND`, both channels `ITLConnect=ITLA`, `TrgOutMode=ITLA`, cable to TRGIN,
+`ch0/WaveTriggerSource=TRGIN`. ch0 `ChWaveCnt`:
+
+| `SelfTriggerWidth` (both ch) | ch0 Wave/s | meaning |
+|---|---|---|
+| **8** (default) | **0.0** | reproduces R7's zero -- the control |
+| 496 (asked 500, quantized) | **10.1** | |
+| 1000 | **10.1** | |
+| 2000 | **10.1** | |
+
+**Causal A/B, digitizer untouched:** emulator ch2 OFF -> ch0 Wave/s **0.0** (Hz(own) 5,
+ch52 50). ch2 back ON at 10 Hz -> **9.9**. Over 60 s: **10.0 Hz**, 600 wave events.
+
+**R7 ("AND killed it entirely", `ITLAGateWidth` 200/1000 ns recovered nothing) was
+misdiagnosed, not a wrong measurement.** The AND was always fine; the *inputs* were 8 ns
+wide and the ch2 injection skew is ~47 ns, so two self-triggers could never overlap.
+`ITLAGateWidth` is an OUTPUT gate and cannot fix that. **The knob is `SelfTriggerWidth`,
+per channel, 0-6000 ns step 8.**
+
+**This is real hardware coincidence, not software filtering:** 201/201 ch0 records
+(100.0%) carry ch0's own pulse at 631.9 mV, +744 ns rel trigger. Compare the cable-only
+run, where ch0 was TRGIN-triggered by ch52 and only **16.7%** carried a pulse (the rest
+were ch52's own 50 Hz with nothing on ch0's input, §19). The board now rejects those; the
+AND does in hardware what `split.py` used to do in post-processing.
+
+ch52 in the same capture: 400/400, 620.7 mV, +872 ns.
+
+### `ITLAMask`/`ITLBMask` are the per-channel ENABLE bitmask and are the SAME STATE as `ITLConnect`
+
+Measured directly with ACQ stopped:
+
+| write | result |
+|---|---|
+| `ITLConnect=ITLB` on ch0 | `ITLBMask` 0 -> **1** (bit 0) |
+| `ITLConnect=Disabled` on ch0 | `ITLBMask` 1 -> **0** |
+| `ITLAMask=0` | ch0 **and** ch52 `ITLConnect` -> `Disabled` |
+| `ITLAMask=1` | ch0 `ITLConnect` -> `ITLA` |
+| `ITLAMask=0xFFFFFFFFFFFFFFFF` | **all 64 channels** -> `ITLA` |
+
+**Bidirectional.** Writing the mask rewrites `ITLConnect` on every channel; writing
+`ITLConnect` sets that channel's bit. Consequences:
+
+* The `ITLAMask=2^52` seen 2026-10-19 was **NOT residue** -- it is ch52's auto-set bit,
+  because `ch52/ITLConnect=ITLA`.
+* **"bit 52 masks ch52 out of ITLA" is RETRACTED: bit 52 ENABLES ch52.** So §19's
+  "ITLAMask 0 -> 1 didn't help" was probing an enable mask whose semantics are the
+  opposite of what was assumed -- and writing `ITLAMask=0` while `ch52/ITLConnect=ITLA`
+  silently **disconnects ch52 from ITLA**. Any preset that writes `ITL*Mask` is a
+  landmine; `dig_trigger.py` no longer writes them at all.
+* It is **not an inhibit mask**, so the §19 "maybe the mask inhibits the bus" reading dies.
+* The mask does **not** gate the working cable path: cable-52-to-0 ran at 60.1 Hz with
+  `ITLAMask=0` written and ch52 re-asserted via `ITLConnect`. Its only effect is which
+  channels feed the bus.
+
+### `CoincidenceMask` is REAL and width-dependent, but its POLARITY is INVERTED vs the name
+
+Test B's premise -- that every earlier coincidence test had the partner on the *same*
+bus, so the partner was never independent -- was correct, and R4/R5's "inert" verdict was
+an artifact of that. Separating the buses (ch0 triggered by TRGIN = partner-free; ch0's
+own discriminator returned on **ITLB**; `CoincidenceMask=ITLB`):
+
+| `CoincidenceMask` | `CoincidenceLengthT` | ch0 Wave/s |
+|---|---|---|
+| `ITLB` | 0 ns | **60.0** |
+| `ITLB` | 1000 ns | **50.0** |
+| `ITLB` | 8000 ns | 49.9 |
+| `ITLB` | 64000 ns | 50.1 |
+| `Disabled` | 1000 ns | **60.1** |
+
+**Width-dependent -- exactly the signature R4 never got** (R4: 1010 Hz at every width,
+i.e. genuinely inert). The direction is the opposite of what the name suggests: enabling
+the mask **removes** the 10 Hz coincident subset (60 -> 50). So `CoincidenceMask`
+**rejects coincident events**; it does not require them.
+
+**Control:** emulator ch2 OFF (partner population gone) -> stays **50.0 Hz**. A
+require-coincidence gate would have gone to ~0. **Reject model confirmed, require model
+falsified.**
+
+Do NOT read this as "the coincidence feature is broken" -- it is real, reproducible and
+width-sensitive. But it is **not usable as an accept-only-when-both gate**, and my Test B
+prediction (~10 Hz) was wrong in both sign and mechanism. §19's "the coincidence window
+is functional and *satisfied*" survives; §19's "the coincidence path is inert on the wave
+path" needs the narrower reading: **inert for REQUIRE-style gating, active for REJECT.**
+
+### `AntiCoincidenceMask=ITLB` SATURATES the board -- not a usable inverse
+
+ch0 Wave/s 13.4 (near the 10 Hz the inverted model predicts) **but** ch0 deadtime
+**74.2%**, ch52 `ChWaveCnt` collapses **60 -> 0.6 Hz**, elapsed inflated 12 -> 12.76 s.
+A gate that stops the other channel is not measuring what it appears to measure. The 10 Hz
+agreement is **not believed**; it is indistinguishable from a saturation artifact.
+Clearing the mask restores 60.0/60.0 at 0% deadtime, so the state is reversible.
+
+### `.sol` format 1 (OneTrace) parses -- 25-byte header, verified by BLOCK CHAINING
+
+`agent/data/tf/planA_abs_0_32575_000.sol`, 21 MB. **The existing `split.py` cannot read
+it**: it resyncs on `0xAA00` (ALL) only. OneTrace is **`0xAA01`** and carries **1 analog
+probe, no digital** (`DAQ:docs/sol-file-format.md`; writer at
+`DAQ:core/ClassDigitizer2Gen.cpp:1206-1217`).
+
+Header, little-endian, no padding:
+`id:2 ch:1 energy:2 ts:6 fine:2 flaghi:1 flaglo:2 tlen:8 analog_type:1` = **25**, then
+`tlen * 4` of `int32`.
+
+**`tlen` is at offset 16, NOT 21** -- the first attempt read the doc's *cumulative* sizes
+as offsets, yielding 0 records and 1712 resyncs. Established the layout by sweeping
+H=20..33 and requiring the next block to start with `0xAA01`: **only H=25 walked, 3/3
+blocks chain-verified.** A structural proof beats inferring from a table.
+
+Record counts independently confirm the rates: ch0 **201** ~ 10 Hz x 20 s, ch52 **1209**
+~ 60 Hz x 20 s. Cross-channel timestamp spacing is unusable (median 99999.5 us for ch0)
+because both channels interleave in one stream -- use per-channel counts, not deltas.
+
+### Traps found by the tooling, not by the physics
+
+* **`--save` with a relative path silently produces nothing.** The broker opens the file,
+  so a relative path resolves against the **BROKER's** cwd
+  (`/home/phy/adminrt/SOLARIS_DAQ`), and a missing directory makes `fopen` fail inside
+  `OpenOutFile` -- which prints to the broker's stdout and **returns nothing over ZMQ**.
+  `StartACQ` still answers OK. A 60 s run produced 10 Hz of counters and **zero bytes**.
+  `dig_run.py` now refuses relative paths.
+* **`trace` IS the format-0 path.** `DAQ:broker/solaris-cli.cpp:815` is CLI-side (not a
+  broker opcode, so not reimplementable over ZMQ) and calls
+  `StartACQ(digi, DataFormat::ALL)` at `:849`, `ALL = 0x00` (`DAQ:core/Hit.h:13`). The
+  command that has killed the broker twice is the one `traces_capture.py --sweep` runs
+  four times. No workaround for that plot: only ALL carries 2 analog + 4 digital.
+* **Presets that omit a parameter silently inherit the previous experiment's value.**
+  `SelfTriggerWidth=1000` from Test A survived into the first Test B run and changed the
+  AND overlap -- same class as §19's probe-restore gap. Presets now pin it.
+* **`ITL*Mask` writes belong in no preset** (see above).
+
+### RETRACTED, in this section's own words
+
+* "The coincidence logic is inert on the wave path" -- **too strong.** Width-sensitive,
+  and it does reject; it just does not *require*.
+* "`ITLAMask=2^52` is residue / masks ch52 out" -- **wrong direction.** Bit 52 *enables*
+  ch52; the value is auto-derived from `ch52/ITLConnect=ITLA`.
+* "AND needs simultaneity tighter than the 47 ns skew, unrecoverable" -- **the AND is
+  fine; the self-trigger width was the limit.** Widening it gives 10 Hz.
+
+### Not tested
+
+* `ITLAPairLogic=AND` + `ITLAMajorityLev=2` -- pairs ANDed before the main logic. Now that
+  AND is known to work, this is the finer instrument.
+* Whether the 47 ns ch2 skew tracks `--delay-ns` (would make the AND window tunable).
+* ch52's waveform under TRGIN-driven coincidence -- ch52 was self-triggered throughout.
+| 20 | **HARDWARE COINCIDENCE ACHIEVED: `ITLAMainLogic=AND` works once `SelfTriggerWidth` (per channel, default 8 ns) is widened past the ~47 ns ch2 skew -- ch0 WaveCnt 0 Hz at 8 ns, 10.1 Hz at 496/1000/2000 ns, causal A/B by toggling emulator ch2; RETRACTS R7. `ITLAMask`/`ITLBMask` are the per-channel ENABLE bitmask, the SAME STATE as `ITLConnect` (writing a mask rewrites all 64 channels) -- bit 52 ENABLES ch52, the 2^52 was never residue. `CoincidenceMask` is REAL and width-dependent (0 ns -> 60 Hz, >=1 us -> 50 Hz) but its POLARITY IS INVERTED: it REJECTS coincident events, does not require them -- RETRACTS "coincidence is inert". `AntiCoincidenceMask` saturates the board (74% DT, ch52 -> 0.6 Hz), result NOT believed. OneTrace `.sol` = id 0xAA01, 25-byte header, `tlen` at offset 16 NOT 21, proven by block chaining. `--save` with a relative path silently writes zero bytes (broker-side fopen, no ZMQ error). `trace` IS the format-0 path (`solaris-cli.cpp:849`)** (2026-10-20) |
+
+| 21 | **Coincidence WITHOUT the cable: `GlobalTriggerSource=ITLA` is the internal fan-out (2026-10-20) -- ch0 and ch52 both 10.0 Hz against own inputs 15/60 Hz. RETRACTS §19's blanket "internal path does not work": `WaveTriggerSource=ITLA` is confirmed dead even at width 1000, but ITLA feeds `GlobalTriggerSource`, which DOES reach it; §19 only tested GTS fed by SwTrg. Cable neutralization proven (ch0 60 -> 0.0 Hz, not 15). Controls: AND->OR gives 65.1 Hz = 15+60-10, the union; width 1000->8 gives 0.0; ch2 10->25 Hz moves both channels to 25.0; ch2 off gives 0.0. Three independent AND mechanisms agree (MainLogic=AND, ITLA_AND_ITLB, Majority lev 2). `SelfTriggerWidth` IS the acceptance window -- must exceed the ~47 ns skew or the AND is empty, which is why every earlier internal attempt read zero. 909 blocks/0 resyncs, 100% of records carry a pulse, all 454 paired timestamps delta exactly 0, pulse positions differ 48 ns = the ch2 skew. Self-corrected mid-test: `Ch64Trigger` gates NOTHING (event path 15/60 Hz ungated) -- R2 stands** |
+
+## 21. Coincidence WITHOUT the cable: `GlobalTriggerSource=ITLA` is the internal fan-out
+## (2026-10-20). RETRACTS §19's blanket "internal path does not work".
+
+Ryan asked whether dig:ch0 and dig:ch52 can be coincident-triggered with no TRGOUT->TRGIN
+wire. **Yes.** Test A (§20) computed the AND on ITLA but delivered it over the cable; the
+delivery step was the only thing that had never been tried internally. Report:
+`DAQ:agent/trigger_internal_report.md`. Preset: `dig_trigger.py --apply=internal-and`.
+
+### The configuration
+
+```
+ITLAMainLogic = AND ; GlobalTriggerSource = ITLA ; TrgOutMode = Disabled
+ch0/ITLConnect = ITLA ; ch52/ITLConnect = ITLA
+ch0/ WaveTriggerSource + EventTriggerSource = GlobalTriggerSource   (same on ch52)
+ch0/SelfTriggerWidth = ch52/SelfTriggerWidth = 1000 ns
+```
+
+**ch0 = 10.0 Hz, ch52 = 10.0 Hz** against own inputs of 15 Hz and 60 Hz. Deadtime 0 %.
+Reproduced from the preset after writing it: 10.1 / 10.0 Hz.
+
+### Why every earlier internal attempt read zero
+
+`WaveTriggerSource=ITLA` genuinely does not work -- **re-tested at `SelfTriggerWidth=1000`
+where §19 only ever tested 8, and it is still 0.0 Hz.** Same for `Ch64Trigger` (0.0/0.0).
+So §19's "the internal fan-back from the ITL bus to `WaveTriggerSource` does not work"
+**STANDS**. What was missing is the interposed consumer: ITLA feeds
+`GlobalTriggerSource`, and `GlobalTriggerSource` DOES reach `WaveTriggerSource`.
+§19's "mechanism unknown -- not diagnosed" is **RESOLVED**.
+
+§19 tested `GlobalTriggerSource` only fed by `SwTrg` (3 software triggers -> `ChWaveCnt` 0).
+Fed by **ITLA** it works. The candidate list in §19 was right; the feed was wrong.
+
+### Cable neutralization is proven, not assumed
+
+`TrgOutMode=Disabled` was verified by watching ch0 fall **60.0 -> 0.0 Hz**, not to its own
+15 Hz -- ch0's `WaveTriggerSource` was still `TRGIN` with TRGIN undriven. The external path
+was eliminated, not attenuated. Every number below has that control in place.
+
+### Four controls
+
+| control | result | meaning |
+|---|---|---|
+| `ITLAMainLogic` AND -> OR | ch0 **10.1 -> 65.1 Hz** | 65.1 = 15 + 60 - 10 = the **union** minus double-counted intersection. The board is computing the boolean, not passing a subset |
+| `SelfTriggerWidth` 1000 -> 8 | ch0 **10.1 -> 0.0 Hz** | the gate needs pulse overlap |
+| emulator ch2 10 -> 25 Hz | ch0 10.0 -> **25.0**, ch52 10.0 -> **25.0**, own inputs 30 / 75 | both channels follow **ch2 alone** |
+| emulator ch2 OFF | ch0 **0.0**, ch52 **0.0** (own 5 / 50) | remove the partner, accept nothing |
+
+The AND->OR number is the most informative: it is arithmetic, not a threshold judgement.
+
+### Three independent internal AND mechanisms agree
+
+| mechanism | ch0 | ch52 |
+|---|---|---|
+| `GTS=ITLA` + `MainLogic=AND` (both channels listen) | 10.0 | 10.1 |
+| `GTS=ITLA_AND_ITLB`, ch0->ITLA, ch52->ITLB, `MainLogic=OR` | 10.0 | 10.0 |
+| `MainLogic=Majority`, `ITLAMajorityLev=2`, single bus | 10.0 | 10.0 |
+
+All three give 10 Hz and all three collapse to 0.0 at width 8. The AND location does not
+matter; the self-trigger overlap does.
+
+### Waveform proof -- `data/tf/internal_and_0_32575_000.sol`, 909 blocks, 0 resyncs
+
+| | records | pulse > 200 mV | amp | position rel. own trigger |
+|---|---|---|---|---|
+| ch0 | 455 | **455 = 100.0%** | 631.4 mV | **+792 ns** |
+| ch52 | 454 | **454 = 100.0%** | 620.7 mV | **+744 ns** |
+
+ch0 intra-spacing median 99 999.57 ns = **10.0000 Hz**. **All 454 paired timestamps have
+delta exactly 0** -- one shared trigger stamp, which is what a global trigger produces (it
+proves same-stamp, NOT analog simultaneity; the analog evidence is the next line).
+**The pulse positions differ by 48 ns**, matching the independently measured ~47 ns ch2
+skew: same physical pulse, seen 47 ns apart, both accepted.
+
+**This is why `SelfTriggerWidth` is load-bearing and it is now explained mechanically:** the
+AND is formed on self-triggers, so the two self-trigger pulses must overlap. At 8 ns default
+they cannot -- 8 ns wide, 47 ns apart. `SelfTriggerWidth` IS the acceptance window. Set it to
+the timing tolerance you want; wider passes more real coincidences across jitter but also
+more accidentals (negligible here: 15x60x2us = 0.0018 Hz).
+
+### Self-correction during this test
+
+After re-testing R2 I saw waves 0 Hz but **events 10 Hz** and started reading `Ch64Trigger`
+as gating the event path but not the wave path. **Falsified immediately:** with
+`EventTriggerSource=Ch64Trigger` and waves self-triggered, events ran **15.0/60.0 Hz --
+ungated**. `Ch64Trigger` gates nothing on either path; the 10 Hz came from
+`EventTriggerSource` still being `GlobalTriggerSource` from the prior test, not reset.
+**R2 stands.** Same lesson as §19: a rate following a parameter you *think* you set is
+evidence about whatever is actually set.
+
+### RETRACTED
+
+* §19 "Internal path: does not work, on all three candidate sources" -- **wrong as a blanket
+  claim.** `GlobalTriggerSource` fed by ITLA works. It was only ever tested fed by SwTrg.
+* §19 "Where the break is... mechanism unknown" -- **resolved:** the break was using
+  `WaveTriggerSource=ITLA` instead of `GlobalTriggerSource=ITLA`.
+
+### Still open
+
+1. **True coincidence resolution is NOT measured.** 1000 ns is an acceptance window, not a
+   resolution; the real figure is between 47 ns and 1000 ns. Measure by sweeping
+   `set_sync --mode=timebase --delay-ns=N` with ch2 OFF until the rate halves.
+2. `ITLAPairLogic=AND` untested (`MainLogic=Majority` at lev 2 does work).
+3. Only ch0/ch52 are wired, so participation beyond those two is untested on a 64-channel board.
+4. Bus membership must be managed via `ITLConnect`, never by writing `ITL*Mask` (§20: same
+   state, bidirectional).
+
+| 22 | **"TRGIN from another digitizer" CANNOT gate WAVEFORMS -- Ryan's constraint (ch0 off ITL-A/B) is fatal and it predicted the result: the only waveform-gating mechanism (§21 ITLA AND -> GlobalTriggerSource) needs BOTH channels' self-triggers on the ITL bus, so ch0 off the bus removes the gate's only input. Corollary: the internal AND is one board ANDing itself -- the cable was the honest part of that setup. NEW: `CoincidenceMask=TRGIN` DOES gate the EVENT path (saved 75.3 -> 65.0 Hz, width-dependent, reproduced via GTS=TrgIn) while waves stay at 15.0 -- §19's R4 read "inert" because it polled ChWaveCnt. Direction REJECT, not REQUIRE. But T-E (EventTriggerSource->ChSelfTrigger) gives 15.3 ungated, so it is an interaction, not a clean gate: real, reproducible, not understood, not usable. `AntiCoincidenceMask` saturated the board a SECOND time (50% DT, ch52 -> 0.6 Hz) -- hazardous. Only remaining hardware route is SIN, not TRGIN (`BusyInSource`/`BoardVetoSource` list no TRGIN option) -- untested, blocked on a physical cable move. Software coincidence re-measured under the constraint: 401/2402 = 16.7% -> 10.0 Hz, 631 mV vs 0.73 mV med / 2.19 mV max = 288x** (2026-10-20) |
+
+## 22. "TRGIN from another digitizer" cannot gate WAVEFORMS -- Ryan's constraint is fatal,
+## and the board proves it. But `CoincidenceMask=TRGIN` does gate the EVENT path.
+## (2026-10-20)
+
+Question: ch52 -> TRGOUT -> cable -> TRGIN -> ch0, with ch0 **not** on ITL-A/B, because
+putting both channels on ITL breaks the "TRGIN is from another digitizer" model. Report:
+`DAQ:agent/trigger_coin_TrigIN.md`.
+
+**Answer: no, for waveforms.** ch0 accepted its full own population (15 Hz) in every
+configuration tried. **Ryan's instinct was right and it predicted the result**: the only
+mechanism on this board that gates waveform acceptance (§21's `ITLAMainLogic=AND` ->
+`GlobalTriggerSource`) needs **both** channels' self-triggers on the ITL bus. Requiring ch0
+off the bus removes the only input the working gate has. Mutually exclusive, not an
+untested setting.
+
+**Corollary that rewrites the previous report's framing:** the internal-AND result is *not*
+an external-digitizer coincidence. It is one board ANDing its own two channels. **The cable
+was the honest part of that setup, not the dishonest part.**
+
+### The new finding: the event path DOES gate, the wave path never does
+
+§19's R4 concluded the coincidence logic was inert. It was polling `ChWaveCnt`. Watching
+`ChSavedEventCnt` instead, with ch0 self-triggering (15 Hz own) and TRGIN (60 Hz) as partner:
+
+| `CoincidenceLengthT` | ch0 waves | ch0 saved events |
+|---|---|---|
+| **0 ns** | 15.0 | **75.3** |
+| **1000 ns** | 15.0 | **65.0** |
+
+Waves unmoved; events down **10.3 Hz** = the coincident population, and **width-dependent**
+(the signature inert logic never shows). Reproduced by a second delivery route
+(`CoincidenceMask=GlobalTriggerSource` with `GlobalTriggerSource=TrgIn`) -> same 65.0.
+Direction is **REJECT** (75 - 10 = coincident removed), consistent with §20's polarity.
+REQUIRE would give 10.0; 10.0 was never seen on any path here.
+
+**But it is not a clean gate, and one test killed that idea:** T-E changed
+`EventTriggerSource` from `TRGIN` to `ChSelfTrigger` (and removed ch52 waveforms) and saved
+went to **15.3 Hz -- fully ungated**. So the -10 Hz is an **interaction between
+`EventTriggerSource=TRGIN` and the mask**, not a coincidence gate acting on ch0's own events.
+**Status: real, reproducible, width-dependent, not understood, not usable.**
+
+### Everything else tried, all with ch0/ITLConnect=Disabled (verified: ITLA bit 0 clear)
+
+| config | ch0 waves | verdict |
+|---|---|---|
+| primary `ChSelfTrigger`, mask `TRGIN`, 1000 ns | 15.0 | waves inert |
+| primary `TRGIN`, mask `Ch64Trigger`, 1000 ns | **60.0** | inert (full following) |
+| primary `ChSelfTrigger`, mask `GlobalTriggerSource` (GTS=`TrgIn`) | 15.1 | waves inert |
+| primary `ChSelfTrigger`, `AntiCoincidenceMask=TRGIN` | 7.6 | **SATURATED, not believed** |
+
+Baseline for every delta: ch0 15.0 Hz own / 60.0 Hz TRGIN, `ChTriggerCnt` **74.6** = 60+15
+(both populations confirmed arriving), 0 % deadtime.
+
+### `AntiCoincidenceMask=TRGIN` asserts a BOARD-WIDE veto -- it stops ch52, not ch0
+
+My first explanation ("readout saturation") was **WRONG and is RETRACTED**: `ChRecordLengthT`
+= 32 000 ns, so 60 Hz x 32 us = **0.19 % duty** -- three orders of magnitude too small to make
+50 % DT. The veto was genuinely asserting.
+
+Causal A/B, toggling ONLY ch0's mask, same rates:
+
+| ch0 `AntiCoincidenceMask` | ch0 wave | ch0 DT | **ch52 wave** | **ch52 DT** |
+|---|---|---|---|---|
+| `TRGIN` | 15.1 | 0.0 | **0.6 /s** | **52 %** |
+| `Disabled` | 14.9 | 0.0 | **60.1 /s** | **0 %** |
+
+**ch0's per-channel mask stops ch52 producing waveforms** -> this veto/busy path is
+**board-wide**, not per-channel. Unexplained: ch0's own DT reads 0.0 while ch52's reads 52-82 %.
+
+**Why the 7.6 Hz must not be believed (better reason than "saturation"):** sweeping ch2 to
+separate the models -- a real REQUIRE gate makes ch0 track ch2 upward, an artifact does not:
+
+| ch2 | ch0 own input | ch0 wave | ch0 saved |
+|---|---|---|---|
+| 10 Hz | 15.0 | **15.0** | 15.4 |
+| 25 Hz | 30.0 | **15.9** | 15.2 |
+| 50 Hz | 55.0 | **14.5** | 14.0 |
+
+ch0's accepted rate is **flat at ~15 Hz while its own input triples**. Matches NO model:
+REQUIRE -> 10/25/50, REJECT -> 5/5/5, inert -> 15/30/55. A rate pinned near a constant while
+its input moves is a state that is not counting events. **7.6 Hz was noise around a flat ~15;
+its match to the predicted 10 Hz was coincidence.** Same parameter in §20 (74 % DT, ch52 ->
+0.6 Hz) is now read the same way. **Hazardous: it silently disables another channel's data.**
+
+### Untested, and it is the only remaining hardware route
+
+`BusyInSource` (`Disabled/SIN/GPIO/LVDS`, now `SIN`) and `BoardVetoSource`
+(`Disabled/SIN/GPIO/LVDS/P0/EncodedClkIn`, now `Disabled`) are the board's only **input** veto
+lines -- the one family that takes an external signal and acts *before* acceptance.
+**Neither lists TRGIN**, so on the device tree as read TRGIN cannot drive them.
+That is a **documentary negative, not a measurement**: untested.
+
+**If a hardware accept/reject on an external signal is needed without ITL, the route is SIN,
+not TRGIN** -- feed the "other digitizer" to SIN and test `BusyInSource`/`BoardVetoSource`
+against it. **Blocked on a physical cable move, not on knowledge.** `ChannelVetoSource`
+(`Disabled/BoardVeto/ADCOver/UnderSaturation`) has no external-input option either.
+
+### Software coincidence re-measured under this constraint (the usable answer)
+
+ch0 TRGIN-triggered, `ITLConnect=Disabled` verified before the run;
+`data/tf/ext_sw_0_32575_000.sol`, 57.8 MB, 40 s:
+
+| | with pulse > 200 mV | amp | position | without |
+|---|---|---|---|---|
+| ch0 | **401/2402 = 16.7 %** | 631.4 mV | +800 ns | 2001 recs, **0.73 mV med / 2.19 mV max** |
+| ch52 | 2403/2403 = 100 % | 620.7 mV | +872 ns | none |
+
+16.7 % x 60.0 Hz = **10.0 Hz**. Separation is 288x to the *worst* non-pulse record, so the
+200 mV threshold is not near a cliff. **Cost:** post-hoc rejection means readout/deadtime/
+storage run at 60 Hz not 10 Hz -- 6x waste, 0 % deadtime today, but it scales with the
+external rate. **No configuration gives both hardware acceptance and the external model.**
+
+### Tooling note
+
+A `grep -c OK` guard aborted a command chain because the ZMQ rewrite prints **lowercase `ok`**
+in the validation line and `old -> new` in the write line -- neither has the uppercase `OK` the
+subprocess CLI used to emit, so the case-sensitive grep returned 0 and the `&&` chain broke.
+The write had succeeded (`grep -c OK` -> 0, `grep -c ok` -> 1, same command). **"The tool said nothing" is not
+"the board did nothing"** -- check the state, not the transcript.
+
+
+## 23. `SelfTriggerWidth` -- verified hardware behaviour (2026-10-20)
+
+The parameter that decides whether ITLA/ITLB hardware coincidence fires at all (§20, §21),
+and the one the GUI did not expose. The device tree declares it **STRING with no min, no max,
+no increment**, and `DAQ:core/DigiParameters.h:460` carries `// not sure the max` -- so every
+number below was measured, not read from a header.
+
+Writes done with ACQ stopped, one at a time, each read back (`dig_set.py`):
+
+| wrote | read back | |
+|---|---|---|
+| 8 | **8** | default |
+| 1001 | **1000** | rounds to nearest multiple of 8 |
+| 12 | **16** | ditto -- rounds UP at the midpoint |
+| 4 | **8** | |
+| 7 | **8** | |
+| 6000 | **6000** | **the real maximum** |
+| 6001 | **6000** | |
+| 10000 / 50000 / 100000 / 524280 / 1000000 | **6000** | |
+
+* **Max is 6000 ns.** The header's guess was right; the 524280 that other `*_T` params allow
+  does NOT apply here.
+* **Out-of-range writes are silently clamped, never refused** -- the write returns success and
+  the board holds 6000. This is §13f ("OK means accepted, not set") again, and it is why every
+  write here is read back.
+* **Step 8, rounding to nearest** (1001 -> 1000, 12 -> 16). Direction at the exact midpoint
+  not characterised; 12 -> 16 shows it is not truncation.
+* **0 is accepted and behaves like 8.** Verified causally, not just read back: internal-AND
+  coincidence (ch2 = 10 Hz) gives **0.0 Hz at width 0, 0.0 Hz at width 8, 10.1 Hz at width
+  1000** -- 0 and 8 are indistinguishable, which is what the tree's "0 means linear mode
+  (same of 8 on DPP-PHA)" claims.
+
+**GUI:** not exposed in `DAQ:GUI/digiSettingsPanel.cpp` -- 0 occurrences before 2026-10-20,
+declared only in `DAQ:core/DigiParameters.h`. So the board sat at the 8 ns default (empty AND)
+unless something outside the GUI wrote it. It IS in `CH::AllSettings` for both PHA and PSD, so
+Save/Load-settings and Copy-channel already carried it -- reachable but invisible.
+
 
 ## MANDATORY: every file reference carries a repo tag
 
 **This session works in two repos and both contain a `README.md`, a `docs/`, and an agent file
-(`DAQ:agent/AGENT.md` vs `EMU:AGENTS.md`). A bare filename is therefore ambiguous and must not be written.**
+(`DAQ:agent/AGENT.md` vs `EMU:agent/AGENTS.md`). A bare filename is therefore ambiguous and must not be written.**
 Prefix every reference, in both this file and the session md:
 
 | tag | means |
@@ -202,7 +630,7 @@ Measurement discipline that has actually bitten here:
   `AMP`, `BASEline`, `PKtoPeak`, `RMS`, `TRATIO` all *time out*; `FREQuency`/`PERiod`/`PWIDth` return the
   `9.9e37` no-data sentinel (though `PWIDth,CHAN2` once returned a plausible 36 µs). Read the samples.
 - `:ALL:POIN?`, `ALL:NORM?`, `ALL:WAV?` and `:WAV:DATA? CHAN2` (arg form) all time out. To read another
-  channel you must write `:WAV:SOUR` — which is **not** on `EMU:bench_scope.py`'s six-command whitelist.
+  channel you must write `:WAV:SOUR` — which is **not** on `EMU:agent/bench_scope.py`'s six-command whitelist.
 - SCPI writes return **no reply** (they look like timeouts); verify by readback, never by response.
   Bad tokens land in the error queue as `-100,"Command err"` and can pile up — drain with `:SYST:ERR?`.
 - RIGOL impedance token is **`FIFTy`** (`:CHANn:IMP FIFT`), not `FIRSt`.
@@ -213,9 +641,9 @@ Measurement discipline that has actually bitten here:
 `:CHAN1:IMP` and `:CHAN2:IMP` → `FIFT` (both **restored to `OMEG`**). Final: `TD`, 5 µs/div, both
 channels 1 V/div / 1 MΩ / probe 1×, `WAV:SOUR` CHAN1, error queue clean.
 
-`EMU:bench_scope.py` whitelist is `:TRIG:EDGE:LEV`, `:CHANn:SCAL` (×4), `:TIM:MAIN:SCAL`.
+`EMU:agent/bench_scope.py` whitelist is `:TRIG:EDGE:LEV`, `:CHANn:SCAL` (×4), `:TIM:MAIN:SCAL`.
 `:WAV:SOUR` and `:CHANn:IMP` are **outside** it and were written only with the user's explicit
-approval. If my read-back work is ever folded into `EMU:bench_scope.py`, keep the per-capture
+approval. If my read-back work is ever folded into `EMU:agent/bench_scope.py`, keep the per-capture
 `:WAV:SOUR?` assertion — that is the guard against the silent wrong-channel failure.
 
 ### The emulator can silently lose amplitude while config space reports no change
@@ -617,7 +1045,7 @@ User's standing instruction (2026-10-12): **do not bother restoring probe/trace 
 Plot was `/tmp/solaris_ch0_trapezoid_digital.png` (3 panels), data `/tmp/trace_final.txt` -- **both
 gone, wiped by the 2026-10-12 reboot**. This table is reproduced exactly by the surviving
 `DAQ:agent/data/trace_six_1013_1308.txt` (widths 8 / 640 / 8 / 1528 ns), so the numbers are
-re-verifiable; the figure is not. Regenerate with `python3 DAQ:agent/plot_capture.py`.
+re-verifiable; the figure is not. Regenerate with `python3 DAQ:agent/traces_capture.py`.
 
 ## 11. Trapezoid filter -- design rules and whether ch0 satisfies them (2026-10-12)
 
@@ -1675,7 +2103,7 @@ anyway: with the flat top placed by the rule, the peak sits at trigger + L + M/2
 
 ### Re-captured and plotted 2026-10-13 (second capture) -- everything reproduces
 
-`agent/plot_capture.py` renders a capture as a 6-lane timing diagram (ADCInput, EnergyFilter, and the
+`agent/traces_capture.py` renders a capture as a 6-lane timing diagram (ADCInput, EnergyFilter, and the
 four digital markers as separate lanes, with the digital HIGH windows shaded behind the analog
 lanes). Image: `DAQ:agent/data/plot_six_1013_1308.png`. Data: `DAQ:agent/data/trace_six_1013_1308.txt`.
 
@@ -1741,7 +2169,7 @@ With 3 pulses (800 / 600 / 400 mV at 0 / 9000 / 16000 ns) the d2 lobe peaks are 
 reporting 1 event is correct, not a missed trigger. This is the real DPP behaviour (fixed threshold,
 so small pulses are timing-invisible); do not "fix" it by lowering the threshold in code.
 
-### `DAQ:agent/plot_capture.py` is now ONE axes -- both analogs + all four digital overlaid (2026-10-13)
+### `DAQ:agent/traces_capture.py` is now ONE axes -- both analogs + all four digital overlaid (2026-10-13)
 User: "can combine all plot into one." Done: single set of axes, single time base. Legitimate because
 both traces are baseline-subtracted so they share a zero line and mV scale, and their peaks are close
 (634 vs 654 mV) -- directly comparable, which is the useful case. Digital band occupies the top
@@ -1761,7 +2189,7 @@ annotate() and legend() each fire autoscale_view, so ylim must come after every 
 Gotcha from the previous step still stands: `set_title(..., loc='left')` leaves `get_title()` returning
 '' -- use `get_title(loc='left')`.
 
-### `DAQ:agent/plot_capture.py` restructured -- 6 rows -> 2, digital as colour overlay (2026-10-13)
+### `DAQ:agent/traces_capture.py` restructured -- 6 rows -> 2, digital as colour overlay (2026-10-13)
 User: remove the four digital lanes, overlay the waveforms on the two analog plots. Done: each analog
 panel now carries all four markers stacked in a band across its TOP (y-limits raised to peak*2.2, band
 occupies peak*1.32..peak*2.12, so the trapezoid plateau is never covered -- verified no overlap).
@@ -1915,7 +2343,7 @@ armed err **+0 samples**, trigger err **+1**, corners within **12 ns**.
 **Consequence of gitignoring `agent/data/`:** the captures that validate the filter -- `real_trap.txt`,
 `trace_all_1013_1230.txt`, `trace_six_1013_1308.txt` -- are now untracked. They survive on this disk
 (a reboot does not wipe them; that is why they were moved out of /tmp), but a fresh clone cannot
-re-verify corr 1.00000. `agent/plot_capture.py` is kept and still reads `agent/data/` by default.
+re-verify corr 1.00000. `agent/traces_capture.py` is kept and still reads `agent/data/` by default.
 
 ## 13f. TRAP: FlatTopT writes return **OK** but the board CLAMPS to 3000 ns (2026-10-14)
 User asked to set ch0 RiseTimeT 1000 ns / FlatTopT 5000 ns and capture. **RiseTimeT took; FlatTopT did
@@ -1947,7 +2375,7 @@ knows nothing about markers.
 
 ### Capture at RiseTimeT 1000 / FlatTopT 3000 (clamped), ch0, 4000 x 8 ns
 `DAQ:agent/data/trace_L1000_F3000_1014_1201.txt`, plotted by
-`python3 DAQ:agent/plot_capture.py` -> `plot_L1000_F3000_1014_1201.png`.
+`python3 DAQ:agent/traces_capture.py` -> `plot_L1000_F3000_1014_1201.png`.
 Markers rel. trigger: Armed -624..+8 (632 ns), Trigger +0..+8, Peaking +2528..+2536, PileupGuard
 +2544..+5064 (2520 ns). EF peak 674.3 mV, 10-90 rise ~1840 ns against L=1000 programmed (consistent
 with the 4064 ns measured at L=5000 -- the ramp is linear, so the 10-90 fraction scales).
@@ -2096,7 +2524,7 @@ rise is reproduced through the second output stage), single-pole fit r=238.9 ns,
 2.02 mV (the same structured-edge failure as §13g). Pulse height 620.7 mV vs ch0's 631.6 mV -- **1.7 %
 lower** at identical energy_reg 27431 and gain 1184, because the offset registers differ per channel
 (ch0 -52451, ch1 +58371) and each channel has its own v_per_count (3.234e-5 vs 3.401e-5). Per-channel
-amplitude calibration, not a fault. Both channels at the same rate are PHASE-LOCKED (`EMU:AGENTS.md:105`),
+amplitude calibration, not a fault. Both channels at the same rate are PHASE-LOCKED (`EMU:agent/AGENTS.md` §The verification loop),
 consistent with onsets 153 (ch0) and 158 (ch52).
 
 ### BUG in EMU:pulser.py `set_pulse` return value: the `polarity` label is INVERTED for ch=1
@@ -2108,7 +2536,7 @@ that channel. **The hardware behaved correctly; only the string lied.** Do not t
 for ch1; check the capture. Not fixed in the emulator repo (that repo forbids commits without approval,
 and it is not this session's file to change).
 
-### `DAQ:agent/plot_capture.py` hardened for non-ch0 captures
+### `DAQ:agent/traces_capture.py` hardened for non-ch0 captures
 It used to assume the ch0 probe set: `--probe=A0,A1` and `--ch=N` were added, absent markers are
 skipped (analog still plots fine), and the title no longer says "ch0" unconditionally -- it falls back
 to a filename `chNN` token, else `ch?`. Verified: ch52 titles "VX2745 ch52 capture" and labels its
@@ -2124,7 +2552,7 @@ that record. `--dprobe=` was added in 13i to name D0..D3 per channel.
 Read back from the board: `/ch/52/par/WaveDigitalProbe2` = **EnergyFilterPeakReady** (ch0 slot:
 EnergyFilterPeaking) and `WaveDigitalProbe3` = **EventPileUp** (ch0: EnergyFilterPileupGuard).
 Different signals, same column positions, similar firing times -- so a ch52 figure rendered with ch0's
-labels **looked plausible while being wrong**. `DAQ:agent/plot_capture.py` now takes
+labels **looked plausible while being wrong**. `DAQ:agent/traces_capture.py` now takes
 `--dprobe=D0,D1,D2,D3` alongside `--probe=` and `--ch=`; colour is keyed to the COLUMN, so a renamed
 probe still lands in the same lane of the overlay band.
 
@@ -2166,7 +2594,7 @@ The user asked for one folder holding everything an agent authored. Settled as:
   backups `trapezoid_gui.prev.py` / `trapezoid_gui.spec0.py`, renderings). Originally BOTH were
   gitignored; **the log's ignore rule was removed on 2026-10-14 and it is now TRACKED** (commit
   `28d428a`), so the findings travel with the tools that cite them. `agent/data/` is still ignored.
-  Plus `DAQ:agent/plot_capture.py`, which IS tracked: it is analysis tooling, not scratch.
+  Plus `DAQ:agent/traces_capture.py`, which IS tracked: it is analysis tooling, not scratch.
 - **`DAQ:Aux/trapezoid_gui.py` stays in `Aux/`** -- user's call: it is a **user-facing teaching tool**
   about what a trapezoid filter is, not agent scratch. Do not move it into `agent/` again.
 `Aux/data/` no longer exists; every `Aux/data/...` reference anywhere now means `agent/data/...`.
@@ -2177,7 +2605,7 @@ entry; I never ran `git add`). Moving it out left the index in `AD` state -- a c
 resurrected the old path. Resolved by `git rm --cached` on the old path + `git add` at `Aux/`, so the
 index is back to `A Aux/trapezoid_gui.py` as the user had left it.
 **UPDATE 2026-10-14: the user then committed it themselves** (`28d428a "added agent and
-trapezoid_gui.py"`: .gitignore, Aux/trapezoid_gui.py, agent/AGENT.md, agent/plot_capture.py,
+trapezoid_gui.py"`: .gitignore, Aux/trapezoid_gui.py, agent/AGENT.md, agent/traces_capture.py,
 core/DigiManager.cpp). I never ran `git commit`. That commit also DELETED the `agent/AGENT.md` line
 from `.gitignore`, which is how a tracked log became possible -- and it invalidated four statements in
 this file and the session file that said the log was ignored. All corrected here.
@@ -2343,7 +2771,7 @@ legitimate.
 **A capture's columns are anonymous, so record the probe names alongside the data.** `solaris-cli trace`
 restores `ChEnable`/`WaveSaving`/`WaveTriggerSource` but **never the probes** (§13h), and they are
 per-channel -- so any multi-pass capture must save and restore all six itself, and read them back before
-trusting the write (§13f). The implementation is `DAQ:agent/plot_capture.py` (`--sweep`, `--replot`,
+trusting the write (§13f). The implementation is `DAQ:agent/traces_capture.py` (`--sweep`, `--replot`,
 `.json` sidecars); `git log` covers its history, this section is only why the pass structure is what it is.
 ## 17. Record length and pre-trigger: what is changeable, and what to check (2026-10-14)
 
@@ -2450,3 +2878,305 @@ figure.
 **A 0.78 px fill is not a solid colour anywhere in the raster.** A sub-pixel rectangle straddles two
 columns at ~39 % coverage each, so no pixel approaches the nominal colour -- which is why pixel tests
 report a correctly-drawn feature as absent.
+
+
+## 19. Trigger routing: external TRGOUT->TRGIN works, internal ITLA does not (2026-10-16)
+
+Ryan wired digitizer TRGOUT -> TRGIN and asked whether ch52 can be triggered from ch0 by
+(a) the internal bus and (b) the external cable. **Answer: (b) yes, (a) no** -- and the route to
+that answer turned up a measurement trap that would have produced the opposite conclusion.
+
+### The trap: `ChTriggerCnt` does NOT count what triggers the waveform
+
+`ch52/par/ChTriggerCnt` kept reading ~1000 Hz while `WaveTriggerSource` was `ITLA` with an **empty**
+ITLA bus, and it stayed at the same rate even with `WaveTriggerSource = Disabled`. It is counting the
+channel's own discriminator, and is **blind to `WaveTriggerSource`**. Any test using it as the
+observable reports success for every configuration, including broken ones.
+
+**`ChWaveCnt` is the observable that respects `WaveTriggerSource`.** With `WaveTriggerSource=Disabled`
+ch52 read `ChTriggerCnt` 970 / `ChWaveCnt` **0** -- the two disagree exactly where the parameter
+bites. Under normal self-triggering they are equal (positive control: 136/136).
+
+This is the §8 rule biting again from the other side: a counter that reads high is not proof of
+triggering, just as one that reads 0 outside a run is not proof of absence.
+
+### What was measured
+
+Emulator detuned to break the phase-lock confound: emu ch0 (-> dig ch0) at **1000 Hz**, emu ch1
+(-> dig ch52) at **10 Hz**. So "ch52 triggered by ch0" predicts ~1000 Hz and "ch52 self-triggered"
+predicts 10 Hz -- 100x apart, unambiguous.
+
+| configuration | ch0 `ChTriggerCnt` | ch52 `ChTriggerCnt` | ch52 `ChWaveCnt` |
+|---|---|---|---|
+| baseline, both `ChSelfTrigger` | ~1000/s | ~1000/s (rates equal, uninformative) | ~1000/s |
+| ch52<=`ITLA`, ch0 `ITLConnect=ITLA` | ~1000/s | **10/s** | **0** |
+| ch52<=`ITLA`, ch0 `ITLConnect=Disabled` | ~1000/s | 10/s | 0 |
+| ch52<=`ITLA`, + `ITLAMask` 0->1 | ~1000/s | 10/s | 0 |
+| ch52<=`Ch64Trigger` | ~1000/s | **10/s** | 0 |
+| ch52<=`GlobalTriggerSource`, Global=`SwTrg`, 3 SW triggers sent | -- | 10/s | **0** |
+| **ch0->ITLA->TRGOUT->cable->TRGIN->ch52** | ~1000/s | **~1011/s** | **~716/s** |
+| same, then `TrgOutMode=Disabled` (A/B, cable cut) | ~1000/s | ~1000/s | **0** |
+
+**External path: works.** ch52's `ChTriggerCnt` jumped 10 -> 1011/s = ch0's rate, not its own 10 Hz.
+Timestamps in the saved run are spaced exactly **1,000,000 ns** = 1000 Hz = ch0's rate. The A/B toggle
+is the causal control: `TrgOutMode ITLA -> Disabled` alone drove ch52's `ChWaveCnt` to exactly 0.
+
+**Internal path: does not work**, on all three candidate sources (`ITLA`, `Ch64Trigger`, and
+`GlobalTriggerSource` fed by software triggers), and `ITLAMask` was not the cause.
+> **[RETRACTED 2026-10-20, see §21]** as a blanket claim. `WaveTriggerSource=ITLA` and
+> `Ch64Trigger` are confirmed dead (re-tested at `SelfTriggerWidth=1000`, still 0 Hz) -- but
+> `GlobalTriggerSource` **fed by ITLA** gives 10.0 Hz coincidence with no cable. Only the
+> `SwTrg` feed was ever tested here, so this table's third row was testing the wrong source.
+
+**The 716 vs 1011/s deficit is unexplained and NOT a pass-fail issue.** Candidates not separated:
+ch52's `ChRecordLengthS` 4000 samples = 4 us records at 1 GHz with a 4 us+ pulse and 1 kHz rate
+approaching the readout limit, deadtime, or the `ChWaveCnt` counter itself being approximate. The
+A/B control (100 % -> 0 %) is what carries the conclusion, not the absolute rate.
+
+### `WaveTriggerSource` allowed values (device tree, verified live)
+
+`Disabled, Ch64Trigger, ChSelfTrigger, SwTrg, ADCOverSaturation, ADCUnderSaturation,
+ExternalInhibit, TRGIN, GlobalTriggerSource, LVDS, ITLA, ITLB` -- `setinrun=true` (live).
+`ch/par/ITLConnect` in `{Disabled, ITLA, ITLB}`, **`setinrun=false`**. `par/TrgOutMode` has 23
+sources incl. `ITLA`, **`setinrun=false`**. `par/GlobalTriggerSource` default `TrgIn`, `setinrun=true`.
+
+Write order is forced by the mixed `setinrun`: **stop ACQ** for `ITLConnect` / `TrgOutMode`, then
+start and write `WaveTriggerSource` / `GlobalTriggerSource` live.
+
+**`GlobalTriggerSource=TrgIn` did NOT block acquisition** -- the whole baseline ran self-triggered
+with TRGIN undriven. Resolves a known-unknown from the planning phase.
+
+### `selftrgrate` is READ_ONLY -- it is a rate READOUT, not a setting
+
+`accessmode = READ_ONLY`, description "Number of triggers in the previous second. Reset every
+second." The 1000 Hz that appears there comes from the **emulator's** rate, not from a digitizer
+parameter. The live bench-state table in the session md listed it as if it were programmed;
+corrected. `ChTriggerCnt` / `ChSavedEventCnt` / `ChWaveCnt` / `ChRealtimeMonitor` are all READ_ONLY
+too, and the counter group only refreshes when `ChRealtimeMonitor` is read -- read that first, then
+the others, twice, and difference.
+
+### `trace` is dangerous in its current state
+
+`broker/solaris-cli.cpp:830` writes `ChEnable=False` to **`/ch/0..63/`** and re-enables only the
+traced channel; the restore at line 861 ran (the timeout path reaches it) but **did not take** --
+afterwards ch0/1/10/30/53/63 all read `False` with only ch52 `True`. That is also the real cause of
+the "ch0 counters read 0 while `SelfTrgRate` says 1000" anomaly seen mid-session: ch0 was disabled,
+not misbehaving. **Check `ChEnable` on every channel you care about after using `trace`.**
+`trace` also forces `WaveTriggerSource=ChSelfTrigger`, so it cannot capture a channel driven by an
+external trigger at all -- it destroys the configuration under test.
+
+### Broker died twice on `start 0 0`
+
+Both deaths followed `start` with format 0 (ALL, 2 analog + 4 digital probes on 64 channels).
+Symptom: port 5555 still accepts TCP but every request returns `empty response` and `list` shows no
+digitizers. Recovery verified twice: `nohup ./solaris-broker >log 2>&1 &`, wait ~6 s, then
+`open dig2://192.168.0.100`. **A fresh `open` resets per-channel `WaveTriggerSource`** (ch52 came
+back `ChSelfTrigger` after my `ITLA` write) but left `ITLConnect`/`TrgOutMode`/`GlobalTriggerSource`
+as written. Not diagnosed -- cause unknown.
+
+### Follow-up (2026-10-16): the coincidence window is NOT why internal ITLA failed
+
+Ryan asked whether `CoincidenceLength` being 0 explained the internal-ITLA failure. Good hypothesis --
+and it has real force, because **`TrgOutMode=ITLA` proves ITLA asserts**: that same bus drove a real
+signal onto the cable that ch52 caught at ~1011 Hz. So ITLA is live and the failure is specifically
+ITLA -> a channel's wave trigger, which is exactly where the coincidence logic sits. Tested and
+**rejected**: ch52 (own input 10 Hz, ch0 at 1000 Hz, emulator sync off to break the phase-lock):
+
+| phase | ch52 config | ch52 TrgCnt | ch52 WaveCnt |
+|---|---|---|---|
+| A | `WaveTriggerSource=ITLA`, mask `Disabled`, Length 0 | 10/s | **0** |
+| B | + `CoincidenceLengthT=5000` | 10/s | 0 |
+| C | + `CoincidenceMask=ITLA`, `LengthT=20000` | 10/s | 0 |
+| **D** | **`TRGIN`** path + `LengthT=5000`, mask Disabled | ~1011/s | **10073** |
+| **E** | **`TRGIN`** + `CoincidenceLengthS=625` | ~1011/s | 10504 |
+| **G** | **`TRGIN` + `CoincidenceMask=ITLA` + `LengthS=625`** | ~1011/s | **10544** |
+
+**G is the falsification**: the coincidence window is functional and *satisfied* (TRGIN and ITLA both
+carry the same ch0 event) on the working path. So the window is neither broken nor the blocker.
+`ITLAGateWidth` 0 -> 504 -> 2000 ns also changed nothing (ch52 stayed 0/0/0), and the failure is
+**symmetric**: ch52->ITLA with ch0<-ITLA gives ch0 `WaveCnt` 0 while ch0 keeps self-triggering at
+1000 Hz. Fails in both directions, at every window/mask/gate setting tried.
+
+**Where the break is, stated as a boundary not a mechanism:** ITLA's *output* side works (it drove
+TRGOUT) and the channels' *input* side works (TRGIN reached ch52's wave path). What does not work is
+the internal fan-back from the ITL bus to `WaveTriggerSource`. Mechanism unknown -- not diagnosed.
+> **[RESOLVED 2026-10-20, §21]** The boundary was correct and still stands: ITLA does not fan back
+> to a channel directly. The missing consumer is `GlobalTriggerSource` -- ITLA feeds it, and it
+> reaches `WaveTriggerSource`. Route the AND through GTS, not through ITL.
+
+**`CoincidenceLengthS` and `CoincidenceLengthT` are ONE register in two units.** Writing
+`LengthS=625` made `LengthT` read back **5000**: 625 samples x 8 ns = 5000 ns. Writing one updates
+the other. Do not treat them as two windows; the samples variant is the register, ns is derived.
+
+### `ChTriggerCnt` IS sensitive to `EventTriggerSource` -- refining the §19 claim above
+
+With `WaveTriggerSource=ITLA` and `EventTriggerSource=ChSelfTrigger`, ch52's `ChTriggerCnt` read
+10/s (its own rate) -- the blindness described above. Setting **`EventTriggerSource=ITLA` too** drove
+`ChTriggerCnt` to **0**. So the counter follows `EventTriggerSource` (the Time-Energy event path) and
+ignores `WaveTriggerSource` (the waveform path). The two sources are separate parameters and drive
+separate counters: `ChTriggerCnt`/`ChSavedEventCnt` <-> `EventTriggerSource`, `ChWaveCnt` <->
+`WaveTriggerSource`. Pick the counter matching the path under test.
+
+### "Output GateWidth" is the GUI's label for `ITL{A,B}GateWidth` -- also ruled out
+
+Ryan asked about an `OutputGateWidth`. **No parameter of that name exists** in the device tree
+(the only `gate` matches over all nodes are `ITLAGateWidth`, `ITLBGateWidth`, and `gateway` = IPv4).
+It is a **display label**: `DAQ:GUI/digiSettingsPanel.cpp:704,718` binds `"Output GateWidth [ns]"` to
+`PHA::DIG::ITLAGateWidth` / `ITLBGateWidth`. Same register, two names. **When a user quotes a
+parameter name the device tree lacks, grep the GUI sources for the label string** -- the GUI's labels
+are not the protocol names, and concluding "no such parameter" from the device tree alone would have
+sent me chasing the wrong thing.
+
+`DAQ:core/ClassDigitizer2Gen.cpp:1301,1307` writes **100** as the init default for both gates, a value
+the earlier sweep (504, 2000 ns) skipped. Tested it, and tested **ITLB**, which every prior
+internal-path test left untouched:
+
+| phase | configuration | ch0 TrgCnt | ch52 TrgCnt / SavedEventCnt / WaveCnt |
+|---|---|---|---|
+| H | ch0->ITLA, ch52<-ITLA (Wave+Event), **gate 104 ns** | 1000/s | **0 / 0 / 0** |
+| I | same, **gate 8 ns** (one sample) | -- | 0 / 0 / 0 |
+| J | ch0->**ITLB**, ch52<-ITLB, **ITLB gate 104 ns** | 1000/s | **0 / 0 / 0** |
+| K | working TRGIN path, ITLA gate 0 -> 2000 ns | 1000/s | WaveCnt 9286 -> 9305 (no change) |
+
+**Both buses fail identically and the gate does nothing on either side.** Not the blocker -- and K
+shows the gate has no measurable effect even where the path *works*. So the internal ITL fan-back is
+broken independently of every window/gate setting tried: ITLA and ITLB, both directions, with
+`EventTriggerSource` set (which does move `ChTriggerCnt`, so that parameter IS read), across gate
+widths 0/8/104/504/2000 ns and coincidence masks/lengths 0/5000/20000 ns.
+
+Gate values read back quantised (100 -> **104**, 8 -> 8): 104 = 13 x 8 ns, so the register is in
+8 ns samples. Accepted, not clamped.
+
+### ITL grouping: not the explanation
+
+`group/N/par/InputDelay` is documented "set at groups of 4 channels", so channels may reach the ITLs
+in groups of 4 (ch0/ch1/... vs ch52/ch53/...). Attempted with ch1 and ch53 as receivers and
+**aborted as invalid**: both read `SelfTrgRate` 0 -- the emulator feeds only dig ch0 and ch52, so
+those channels have no signal to trigger on and any zero is meaningless. **Largely mooted by phase J
+above**: ITLB fails exactly like ITLA, so a bus-split explanation does not account for the failure.
+Would still need a signal on ch1/ch53 to test grouping directly.
+
+### TRGIN IS NOT A PROBE SOURCE -- but the record's `Trigger` marker IS the TRGIN edge
+
+The 13 digital probe sources are `Trigger, TimeFilterArmed, ReTriggerGuard,
+EnergyFilterBaselineFreeze, EnergyFilterPeaking, EnergyFilterPeakReady,
+EnergyFilterPileupGuard, EventPileUp, ADCSaturation, ADCSaturationProtection,
+PostSaturationEvent, EnergyFilterSaturation, AcquisitionInhibit` -- there is no `TRGIN`
+among them, and the 5 analog are `ADCInput, TimeFilter, EnergyFilter, EnergyFilterBaseline,
+EnergyFilterMinusBaseline`. So TRGIN can never be probed directly.
+
+**The workaround, and it is exact:** if a channel's `WaveTriggerSource = TRGIN`, then that
+channel's D0 `Trigger` marker *is* the TRGIN edge -- the marker records whatever triggered the
+capture. So "TRGIN relative to a channel's own pulse" is measurable by triggering THAT channel
+from TRGIN and overlaying its own ADCInput against its D0 marker. Demonstrated 2026-10-16 with
+ch0 <- TRGIN <- ITLA <- ch52: 300 records, TRGIN -> ch0 pulse peak = **792 ns median**
+(range 720..920 ns, 8 ns = 1 sample).
+
+### `SelfTrgRate` counts the PULSE POPULATION, not the configured trigger
+
+With emulator ch2 injecting 50 Hz into both outputs (own rates ch0=1000, ch1=10 Hz):
+`SelfTrgRate` read **1050** on dig ch0 and **60** on dig ch52 -- exactly 1000+50 and 10+50.
+It is the channel's own discriminator seeing every pulse that arrives, **independent of
+`WaveTriggerSource`**. The *effective* wave-trigger rate was **60 Hz on both** (`ChWaveCnt`),
+because ch0 is TRGIN-driven and ch52 fires at 60 Hz. Do not read `SelfTrgRate` as "the trigger
+rate" -- it is the input population, and with ch2 injecting it is the SUM of two populations.
+
+**Independent confirmation of the ch2 injection model:** 250 of 300 ch0 records (83.3%) contain
+a real pulse. Predicted = 50/60 = 83.3%: ch52's 60 triggers are 50 ch2 events (which ch0 also
+sees) + 10 ch52-own events (which ch0 does not). Measured matches to the record. The 50 empty
+records are exactly the ch52-own triggers.
+
+### A .sol reader that works: resync-scan with per-block validation
+
+Yesterday's parser stopped at the first non-ALL block and reported nothing. Today's
+(`agent/data/trgin_view/show.py`, `plot_trgin.py`) scans for the next `0x00AA` and **accepts a
+block only if independently-known fields hold**: `trigger_threashold == programmed TriggerThr
+(50)` and `traceLenght in {programmed ChRecordLengthS}`. Result: 400 blocks, **0 resyncs**,
+both channels present. That validation is what makes a false sync unlikely -- a blind walk is not.
+`.sol` files are read-only (`-r--r--r--`) and land as `<path>_<digi>_<SN>_<idx>.sol`, i.e. the CLI
+appends its own suffix to whatever `save` path you give it.
+
+### [RETRACTED 2026-10-20, see §20] The DPP-PHA coincidence gate is INERT on this board -- 6 attempts, 2026-10-19
+
+> **OVERTURNED.** Accept-only-when-both IS achievable in hardware: `ITLAMainLogic=AND` with
+> `SelfTriggerWidth` widened past the ~47 ns ch2 skew gives ch0 = 10.1 Hz (was 0 Hz at the
+> 8 ns default). The six attempts above all left `SelfTriggerWidth` at 8, so none of them
+> could intersect. Separately, `CoincidenceMask` is **not** inert -- it is width-dependent
+> and REJECTS coincident events (60 -> 50 Hz); it just does not *require* them, which is
+> what these six were asking it to do. The measurements below stand; the conclusion does not.
+
+Goal: dig:ch0 accepts only when ch0 AND ch52 both fire, via TRGOUT->TRGIN. Expected 10 Hz on ch0
+(emu ch0 1000 Hz own + ch2 10 Hz; ch52 = emu ch1 50 Hz + ch2 10 Hz = 60 Hz). **Not achievable in
+hardware on this board** -- ch0 stayed at its full rate in every configuration:
+
+| attempt | ch0 config | ch0 wave rate |
+|---|---|---|
+| 1 | `WaveTriggerSource=TRGIN`, `CoincidenceMask=Ch64Trigger`, `LengthS=125` | 60 Hz (= TRGIN, ungated) |
+| 2 | `WaveTriggerSource=ChSelfTrigger`, `CoincidenceMask=TRGIN`, `LengthS=125` | **1010 Hz** (ungated) |
+| 3 | same as 2 but **`CoincidenceLengthS=0`** (zero-width window) | **1010 Hz** -- identical |
+| 3b | same as 2 with **`CoincidenceMask=Disabled`** | 1010 Hz -- identical to 3 |
+| 4 | `ChannelsTriggerMask = 0x0010000000000000` (bit 52) + mask TRGIN | 1010 Hz |
+
+**Attempt 3 is the discriminator:** a zero-width coincidence window and a fully `Disabled` mask
+give **exactly** the same counts. A live gate that never rejects is indistinguishable from no gate,
+but a live gate with a **0 ns** window should reject ~everything. It rejected nothing -> the
+coincidence logic does not participate in accept/reject at all. `CoincidenceMask`'s allowed values
+(`Disabled, Ch64Trigger, TRGIN, GlobalTriggerSource, ITLA, ITLB`) contain **no `ChSelfTrigger`**, so
+the primary can never be the channel's own trigger -- the "accept when both fire" arrangement is not
+expressible.
+
+**Window SWEEP (2026-10-19, stronger than the 0-vs-125 pair above):** with `CoincidenceMask=TRGIN`
+and `WaveTriggerSource=ChSelfTrigger`, ch0's wave count over 5 s was **5060 / 5078 / 5069 / 5067**
+for `CoincidenceLengthS` = **125 (1000 ns) / 1000 (8000 ns) / 8000 / 0** -- all ~1010 Hz, no
+dependence on window width at all. `CoincidenceLengthS=524280` was **REJECTED** (`WriteValue failed`,
+S variant max is 65535; the 524280 max belongs to the T/ns variant). Also tried the one route not
+yet attempted -- `GlobalTriggerSource=TrgIn` with `CoincidenceMask=GlobalTriggerSource`: ch0 stayed
+1010 Hz (5087 waves) at 1000 ns and 16000 ns. Six configurations, six inert results.
+
+**`ITLAMainLogic` IS live on the output side** (unlike the fan-back): setting it to `AND` with
+ch0+ch52 both on ITLA drove TRGOUT to **nothing** -- ch0's `ChWaveCnt` went 723 -> **0**. So the
+combinatorial logic does gate what reaches TRGOUT. But AND requires simultaneity tighter than the
+**fixed ~47 ns ch2 skew** (§9h), and widening `ITLAGateWidth` to 200 and 1000 ns did not recover a  -- *[this inference is RETRACTED in §20: the AND was never the problem. `ITLAGateWidth` is an
+        OUTPUT gate; the inputs were 8 ns `SelfTriggerWidth` pulses and could not overlap. Widen
+        `SelfTriggerWidth` and AND intersects, giving 10.1 Hz. The 723 -> 0 measurement is correct.]*
+single event (ch0 stayed 0). Restored to `OR`.
+
+### The 10 Hz IS recoverable -- in software, from the records
+
+ch0 TRGIN-triggered by ch52 (60 Hz), emu ch2 = 10 Hz injecting into both outputs. ch0's records
+split cleanly (`agent/data/tf/split.py`, 300 records, 0 resyncs):
+
+| | with a pulse | empty |
+|---|---|---|
+| **ch0** | **50 (16.7%)** -- 627.2 mV, at +800 ns | 250 (83.3%), residual 0.7 mV |
+| **ch52** | **300 (100%)** -- 620.7 mV, at +864 ns | 0 |
+
+16.7% x 60.2 Hz (723 wave events / 12.019 s) = **10.0 Hz** -- exactly the coincidence subset. The
+empty records are ch52's own 50 Hz triggers, which have nothing on ch0's input. Amplitude
+discrimination is trivially clean: 627 mV vs a 0.7 mV noise floor. **Filter on `ADCInput > 200 mV`
+and ch0's accepted rate is 10 Hz.** This is the same 83.3/16.7 split measured twice before (§19
+above, and the ch2-injection turn), now used as the mechanism rather than as a curiosity.
+
+### `ChPreTriggers` is the pre-trigger BUFFER, and it is what makes "late triggers" work
+
+From the A/B (emu ch1 delayed +1500 ns, 200 Hz): ch0 records with `ChPreTriggers=500` (4000 ns)
+contained ch0's own pulse at **−1936 ns** in **39/39** records; shrinking to 4 (32 ns) gave
+**0/39**. Description: *"Number of samples coming before the position of the trigger in the waveform
+(i.e. size of the pre-trigger window)"* -- a ring buffer, min 4 / max 4000 samples, `setinrun=true`.
+**A TRGIN edge arriving AFTER a pulse still captures that pulse** because the pulse is already
+buffered; there is no accept/reject window at all. The pulse-vs-trigger timing closed to 4 ns
+(predicted −1940, measured −1936) from ch52's −320 ns discriminator offset + 120 ns cable.
+**Caveat on the pre=4 half**: those records were flat across all 16 us (12.2 mV, 0/39 >300 mV)
+while ch52 in the same run was 40/40 -- an empty/invalid record is an alternative explanation, so
+the acceptance-rate argument (100% at 200 Hz) is the load-bearing evidence, not this A/B.
+
+ **Still owed, but the
+earlier reason given here was wrong and is RETRACTED**: the `.sol` layout in
+`DAQ:docs/sol-file-format.md` is NOT the problem -- the resync-scan above parses format-0 files
+cleanly (400 blocks, 0 resyncs). The 2026-10-16 "0 of 3.3 M offsets" result was **my parser's
+failure to resync** (it stopped at the first non-ALL block), not a wrong layout. Do not conclude
+from it that the documented layout is incorrect.
+
+Still owed because the parse above examined **ch0** (TRGIN-triggered, its own ADCInput), not ch52
+under TRGIN. The trigger evidence for ch52 is sound -- rate, timestamp spacing, A/B collapse --
+but its waveform integrity has not been inspected. `trace` cannot show it (forces self-trigger).
