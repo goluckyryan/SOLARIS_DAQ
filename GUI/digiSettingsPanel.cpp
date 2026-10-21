@@ -1563,6 +1563,7 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
         FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, index);
         FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
         FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
+        FillSpinBoxValueFromMemory(spbSelfTriggerWidth[ID][ch], PHA::CH::SelfTriggerWidth, index);
 
         unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
@@ -1681,7 +1682,7 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
 
     //------------------------------
     rowID ++;
-    SetupComboBox(cbbChVetoSrc[digiID][ch], PHA::CH::ChannelVetoSource, -1, true, "Veto Source", layout5, rowID, 0);
+    SetupSpinBox(spbSelfTriggerWidth[digiID][ch], PHA::CH::SelfTriggerWidth, -1, true, "Self Trg Width [ns]", layout5, rowID, 0);
 
     QLabel * lbTrgMsk = new QLabel("Trigger Mask");
     lbTrgMsk->setAlignment(Qt::AlignRight | Qt::AlignCenter);
@@ -1727,6 +1728,10 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
     rowID ++;
     SetupSpinBox(spbCoinLength[digiID][ch], PHA::CH::CoincidenceLength, -1, true, "Coin. Length [ns]", layout5, rowID, 0);
     SetupSpinBox(spbADCVetoWidth[digiID][ch], PHA::CH::ADCVetoWidth, -1, true, "ADC Veto Length [ns]", layout5, rowID, 2);
+
+    //------------------------------
+    rowID ++;
+    SetupComboBox(cbbChVetoSrc[digiID][ch], PHA::CH::ChannelVetoSource, -1, true, "Veto Source", layout5, rowID, 0);
 
     for( int i = 0; i < layout5->columnCount(); i++) layout5->setColumnStretch(i, 1);
 
@@ -1823,11 +1828,12 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
 
     SetupComboBoxTab(cbbEvtTrigger, PHA::CH::EventTriggerSource, "Event Trig. Source", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID), 2);
     SetupComboBoxTab(cbbWaveTrigger, PHA::CH::WaveTriggerSource, "Wave Trig. Source", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID), 2);
-    SetupComboBoxTab(cbbChVetoSrc, PHA::CH::ChannelVetoSource, "Veto Source", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID), 2);
+    SetupSpinBoxTab(spbSelfTriggerWidth, PHA::CH::SelfTriggerWidth, "Self Trg Width [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupComboBoxTab(cbbCoinMask, PHA::CH::CoincidenceMask, "Coin. Mask", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupComboBoxTab(cbbAntiCoinMask, PHA::CH::AntiCoincidenceMask, "Anti-Coin. Mask", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupSpinBoxTab(spbCoinLength, PHA::CH::CoincidenceLength, "Coin. Length [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupSpinBoxTab(spbADCVetoWidth, PHA::CH::ADCVetoWidth, "ADC Veto Length [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
+    SetupComboBoxTab(cbbChVetoSrc, PHA::CH::ChannelVetoSource, "Veto Source", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID), 2);
   }
 
   for( int ch = 0; ch < digiManager->GetNChannels(ID) + 1; ch++) {
@@ -1862,6 +1868,7 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
     connect(cbbAntiCoinMask[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
     connect(spbCoinLength[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
     connect(spbADCVetoWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
+    connect(spbSelfTriggerWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbSelfTriggerWidth, ch);});
 
     connect(spbInputRiseTime[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbInputRiseTime, ch);});
     connect(spbTriggerGuard[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTriggerGuard, ch);});
@@ -1951,6 +1958,7 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
         FillComboBoxValueFromMemory(cbbAntiCoinMask[ID][ch], PHA::CH::AntiCoincidenceMask, index);
         FillSpinBoxValueFromMemory(spbCoinLength[ID][ch], PHA::CH::CoincidenceLength, index);
         FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, index);
+        FillSpinBoxValueFromMemory(spbSelfTriggerWidth[ID][ch], PHA::CH::SelfTriggerWidth, index);
 
         unsigned long  mask = Utility::TenBase(digiManager->ReadValueFromCache(ID, PHA::CH::ChannelsTriggerMask, cbChPick[ID]->currentData().toInt()));
         leTriggerMask[ID][ch]->setText("0x" + QString::number(mask, 16).toUpper());
@@ -2120,6 +2128,9 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
     SetupSpinBox(spbCoinLength[digiID][ch], PHA::CH::CoincidenceLength, -1, true, "Coin. Length [ns]", layout5, rowID, 0);
     SetupSpinBox(spbADCVetoWidth[digiID][ch], PHA::CH::ADCVetoWidth, -1, true, "ADC Veto Length [ns]", layout5, rowID, 2);
 
+    rowID ++;
+    SetupSpinBox(spbSelfTriggerWidth[digiID][ch], PHA::CH::SelfTriggerWidth, -1, true, "Self Trg Width [ns]", layout5, rowID, 0);
+
     //------------------------------
     rowID ++;    
     SetupComboBox(cbbTriggerFilter[digiID][ch], PSD::CH::TriggerFilterSelection, -1, true, "Trig. Filter", layout5, rowID, 0);
@@ -2245,6 +2256,7 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
     SetupComboBoxTab(cbbAntiCoinMask, PHA::CH::AntiCoincidenceMask, "Anti-Coin. Mask", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupSpinBoxTab(spbCoinLength, PHA::CH::CoincidenceLength, "Coin. Length [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
     SetupSpinBoxTab(spbADCVetoWidth, PHA::CH::ADCVetoWidth, "ADC Veto Length [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
+    SetupSpinBoxTab(spbSelfTriggerWidth, PHA::CH::SelfTriggerWidth, "Self Trg Width [ns]", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
 
 
     SetupComboBoxTab(cbbTriggerFilter, PSD::CH::TriggerFilterSelection, "Trig. Filter", triggerTab[digiID], digiID, digiManager->GetNChannels(digiID));
@@ -2295,6 +2307,7 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
     connect(cbbAntiCoinMask[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
     connect(spbCoinLength[digiID][ch],   &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
     connect(spbADCVetoWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
+    connect(spbSelfTriggerWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbSelfTriggerWidth, ch);});
 
     
     connect(cbbADCInputBaselineAvg[digiID][ch],   &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbADCInputBaselineAvg, ch);});
@@ -2734,6 +2747,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
 
     FillComboBoxValueFromMemory(cbbChVetoSrc[ID][ch], PHA::CH::ChannelVetoSource, ch);
     FillSpinBoxValueFromMemory(spbADCVetoWidth[ID][ch], PHA::CH::ADCVetoWidth, ch);
+    FillSpinBoxValueFromMemory(spbSelfTriggerWidth[ID][ch], PHA::CH::SelfTriggerWidth, ch);
 
     FillComboBoxValueFromMemory(cbbEventSelector[ID][ch], PHA::CH::EventSelector, ch);
     FillComboBoxValueFromMemory(cbbWaveSelector[ID][ch], PHA::CH::WaveSelector, ch);
@@ -2875,6 +2889,7 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   SyncComboBox(cbbAntiCoinMask , chIndex);
   SyncSpinBox(spbCoinLength    , chIndex);
   SyncSpinBox(spbADCVetoWidth  , chIndex);
+  SyncSpinBox(spbSelfTriggerWidth, chIndex);
 
   if( digiManager->GetFPGAType(ID) == DPPType::PHA){  
     SyncSpinBox(spbInputRiseTime , chIndex);

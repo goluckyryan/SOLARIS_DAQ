@@ -247,6 +247,7 @@ private:
 
   RComboBox * cbbChVetoSrc[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RSpinBox  * spbADCVetoWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
+  RSpinBox  * spbSelfTriggerWidth[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
 
   RComboBox * cbbEventSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
   RComboBox * cbbWaveSelector[MaxNumberOfDigitizer][MaxNumberOfChannel + 1];
