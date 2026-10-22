@@ -2,6 +2,8 @@
 
 #include <cstdio>
 #include <cstring>
+#include <strings.h>   // strcasecmp
+#include <cctype>     // isdigit
 #include <string>
 #include <sstream>
 #include <vector>
@@ -32,6 +34,7 @@ static void PrintHelp() {
   printf("  open <url>                             Open digitizer (e.g. dig2://192.168.0.254)\n");
   printf("  close <digi>                           Close digitizer\n");
   printf("  read <digi> <param>                    Read parameter\n");
+  printf("  param <digi> <name|substr>             Describe / search parameters (range, values, setinrun)\n");
   printf("  write <digi> <param> <value>           Write parameter\n");
   printf("  cmd <digi> <command>                   Send command\n");
   printf("  format <digi> <fmt>                    Set data format (0=ALL,1=OneTrace,2=NoTrace,...)\n");
@@ -473,6 +476,322 @@ static int LoadScript(const std::string& filename, BrokerClient& client) {
   return ret;
 }
 
+struct ParamInfo {
+  std::string name;      // "SelfTriggerWidth"
+  std::string scope;     // "ch" | "dig" | "cmd" | "lvds" | "vga" | "group"
+  std::string unit;
+  RW          rw;
+  ANSTYPE     ansType;
+  std::vector<std::pair<std::string,std::string>> answers;
+};
+
+// Completion needs to ASK THE BOARD for a parameter's allowed values, and it must do so
+// without a broker restart. The existing REQ_READ_VALUE path already reaches device-tree
+// subnodes (verified live: read 0 /ch/0/par/SelfTriggerWidth/setinrun -> "false"), so no new
+// opcode is needed. The Reg tables in DAQ:core/DigiParameters.h are NOT trustworthy for enum
+// values -- measured 2026-10-21, 14 of the board's 48 enumerated parameters disagree with them:
+//   WaveTriggerSource  header "TrgIn"    vs board canonical "TRGIN"      (case differs; board
+//                                                                              is case-insensitive)
+//   StartSource        header lacks "P0"
+//   GlobalTriggerSource header lacks "P0", "EncodedClkIn"
+//   DACoutMode         header lacks "MemOccupancy"
+//   GPIOMode           header lacks "UserGPO"
+//   SyncOutMode        header lacks "User"
+//   EnergyFilterPeakingAvg header lacks "HighAVG"
+//   WaveDigitalProbe0..3 header "EnergyFilterPileUpGuard" vs board "...PileupGuard"
+// So the local answers are a FALLBACK and the board is authoritative; the union is offered.
+static BrokerClient* g_client = nullptr;
+static std::map<std::string, std::vector<std::string>> g_valCache;
+
+// One device-tree subnode, cached. Returns "" when not connected or the node is absent.
+static std::map<std::string, std::string> g_nodeCache;
+static std::string SubNode(const std::string& path, const std::string& node, int digi) {
+  std::string key = std::to_string(digi) + " " + path + "/" + node;
+  auto it = g_nodeCache.find(key);
+  if (it != g_nodeCache.end()) return it->second;
+  std::string v = (g_client && g_client->IsConnected()) ? g_client->ReadValue(digi, path + "/" + node) : "";
+  g_nodeCache[key] = v;
+  return v;
+}
+
+static std::vector<std::string> BoardValues(const std::string& path, int digi) {
+  std::string ckey = std::to_string(digi) + " " + path;
+  auto it = g_valCache.find(ckey);
+  if (it != g_valCache.end()) return it->second;
+  std::vector<std::string> out;
+  if (!g_client || !g_client->IsConnected()) { g_valCache[ckey] = out; return out; }
+  // "<path>/allowedvalues" returns the COUNT; each value is "<path>/allowedvalues/<i>".
+  std::string cntS = g_client->ReadValue(digi, path + "/allowedvalues");
+  int n = cntS.empty() ? 0 : atoi(cntS.c_str());
+  if (n <= 0 || n > 64) { g_valCache[path] = out; return out; }
+  for (int i = 0; i < n; i++) {
+    std::string v = g_client->ReadValue(digi, path + "/allowedvalues/" + std::to_string(i));
+    if (!v.empty()) out.push_back(v);
+  }
+  g_valCache[ckey] = out;
+  return out;
+}
+static std::vector<ParamInfo> g_params;   // one entry per distinct parameter NAME
+static bool g_paramsBuilt = false;
+
+static void AddReg(const Reg& r, const char* scope) {
+  ParamInfo p;
+  p.name = r.GetPara();
+  p.scope = scope;
+  p.unit = r.GetUnit();
+  p.rw = r.ReadWrite();
+  p.ansType = r.GetAnswerType();
+  p.answers = r.GetAnswers();
+  g_params.push_back(p);
+}
+
+template <typename V>
+static void AddTable(const V& v, const char* scope) {
+  for (const Reg& r : v) AddReg(r, scope);
+}
+
+// The AllSettings vectors omit these 7 real parameters; they are completed from this list,
+// name-only -- type/range/description are read from the board on demand, so nothing here can
+// go stale the way the enum answer-vectors did (AGENT.md §27).
+//
+// NOT included: the 10 *_S (sample-unit) twins that AllSettings also omits -- ChPreTriggerS,
+// ChRecordLengthS, CoincidenceLengthS, TimeFilter{RiseTime,RetriggerGuard}S,
+// EnergyFilter{RiseTime,FlatTop,PoleZero,BaselineGuard,PileUpGuard}S. Each is ONE REGISTER with
+// its *_T twin, which IS in AllSettings: measured 2026-10-21 by writing each *_T and reading
+// both names, T/(8*S) = 1.000 for all ten. Same range, same setinrun, so the *_T form reaches
+// the identical value and completing both would just double every entry in the list. Trade-off
+// accepted: 'param 0 ChRecordLengthS' no longer resolves -- use the T form.
+//
+// These 7 are NOT added to AllSettings either: that vector drives ReadAllSettings() and
+// DumpSettingsCache(), so touching it changes GUI and settings-file behaviour -- a far bigger
+// blast radius than command completion deserves.
+struct ExtraName { const char* scope; const char* name; };
+static const ExtraName extraNames[] = {
+  { "ch",  "SignalOffset" },
+  { "ch",  "WaveDownSamplingFactor" },
+  { "dig", "LVDSIOReg" },
+  { "dig", "LVDSTrgMask" },   // Reg exists but is COMMENTED OUT in DigiParameters.h:300
+  { "dig", "SFPLinkActive" },
+  { "dig", "SFPLinkPresence" },
+  { "dig", "SFPLinkProtocol" },
+  { nullptr, nullptr }
+};
+
+static void BuildParamTable() {
+  if (g_paramsBuilt) return;
+  g_paramsBuilt = true;
+  AddTable(PHA::DIG::AllSettings, "dig");
+  AddTable(PHA::CH::AllSettings,  "ch");
+  AddTable(PHA::LVDS::AllSettings,"lvds");
+  // /cmd/ are not in any AllSettings vector; declared individually at DigiParameters.h:304
+  AddReg(PHA::DIG::Reset,                "cmd");
+  AddReg(PHA::DIG::ClearData,            "cmd");
+  AddReg(PHA::DIG::ArmACQ,               "cmd");
+  AddReg(PHA::DIG::DisarmACQ,            "cmd");
+  AddReg(PHA::DIG::SoftwareStartACQ,     "cmd");
+  AddReg(PHA::DIG::SoftwareStopACQ,      "cmd");
+  AddReg(PHA::DIG::SendSoftwareTrigger,  "cmd");
+  AddReg(PHA::DIG::ReloadCalibration,    "cmd");
+  AddReg(PHA::DIG::Reboot,               "cmd");
+  AddReg(PHA::GROUP::InputDelay,         "group");
+  AddReg(PHA::VGA::VGAGain,              "vga");
+  for (int i = 0; extraNames[i].scope; i++) {
+    ParamInfo p; p.name = extraNames[i].name; p.scope = extraNames[i].scope;
+    p.rw = RW::ReadWrite; p.ansType = ANSTYPE::NONE;
+    g_params.push_back(p);
+  }
+}
+
+static const ParamInfo* FindParam(const std::string& name) {
+  for (const ParamInfo& p : g_params)
+    if (strcasecmp(p.name.c_str(), name.c_str()) == 0) return &p;
+  return nullptr;
+}
+
+// Is this parameter's answer vector a value list (vs min/max/step)?
+static bool IsEnum(const ParamInfo& p) {
+  if (p.answers.empty()) return false;
+  return !(p.ansType == ANSTYPE::INTEGER || p.ansType == ANSTYPE::FLOAT);
+}
+
+//^---------------- shared: canonical path + write-time warnings
+
+// Canonical full path for a parameter name, in the form the board accepts.
+static std::string CanonPath(const ParamInfo& p) {
+  return (p.scope=="ch")   ? "/ch/0/par/"  + p.name :
+         (p.scope=="dig")  ? "/par/"       + p.name :
+         (p.scope=="cmd")  ? "/cmd/"       + p.name :
+         (p.scope=="lvds") ? "/lvds/0/par/"+ p.name :
+         (p.scope=="vga")  ? "/vga/0/par/" + p.name : "/group/0/par/" + p.name;
+}
+
+// Split a typed path into (dir-through-par, leaf name). "/ch/52/par/TriggerThr" ->
+// ("/ch/52/par/", "TriggerThr").
+static void SplitPath(const std::string& path, std::string& dir, std::string& leaf) {
+  size_t s = path.rfind('/');
+  dir  = (s == std::string::npos) ? std::string() : path.substr(0, s + 1);
+  leaf = (s == std::string::npos) ? path : path.substr(s + 1);
+}
+
+// Warn before a write that cannot take effect, for the two parameter classes that invite it.
+// Both are REFUSED by FELib with an explicit "WriteValue failed" -- measured on this board
+// 2026-10-21 with ACQ running: SelfTriggerWidth, ITLConnect, TrgOutMode and ChRecordLengthS
+// (all setinrun=false) and SelfTrgRate / ChWaveCnt (READ_ONLY) each failed the write.
+// So neither case is silent, and the earlier belief recorded in DAQ:agent/README.md that a
+// setinrun=false write is "accepted and silently ignored" is WRONG for this firmware -- the
+// VALUE is unchanged either way, which is what that note was reaching for.
+// The warning still earns its place: it names the CAUSE before the generic failure line,
+// which is the thing that actually costs time here.
+// setinrun is NOT in the Reg tables at all -- it exists only in the board's device tree,
+// hence the read below rather than a table lookup.
+static void WarnBeforeWrite(BrokerClient& client, const std::string& path, int digi) {
+  BuildParamTable();          // NOT lazily built elsewhere in piped/script mode: CliCompletion
+                              // is the only other caller and it never runs without a tty.
+  if (!client.IsConnected()) return;
+  std::string dir, leaf;
+  SplitPath(path, dir, leaf);
+  const ParamInfo* p = FindParam(leaf);
+
+  if (p && p->rw == RW::ReadOnly) {
+    // FELib refuses these outright, so the failure is visible; flagged because
+    // SelfTrgRate / ChTriggerCnt / ChWaveCnt are named like settings and invite the attempt
+    // (AGENT.md §19: they are readouts, and they read 0 outside a run).
+    printf("WARNING: %s is READ_ONLY -- this is a readout, not a setting.\n", leaf.c_str());
+  }
+
+  std::string sir = SubNode(path, "setinrun", digi);
+  if (sir == "false") {
+    // Only worth saying something if acquisition is actually running. GetACQStatus() is the
+    // real per-digitizer flag; /par/AcquisitionStatus is NOT usable (reads 8 while OFF).
+    auto st = client.GetACQStatus();
+    bool running = (digi >= 0 && digi < st.nDigi) ? st.acqOn[digi] : false;
+    if (running)
+      printf("WARNING: %s has setinrun=false and ACQUISITION IS RUNNING -- stop ACQ first.\n",
+             leaf.c_str());
+    else
+      printf("note: %s has setinrun=false (needs ACQ stopped to take effect)\n", leaf.c_str());
+  }
+}
+
+//^---------------- 'param' : search + describe parameters
+
+static void PrintParam(const ParamInfo& p, BrokerClient& client, int digi, bool detail) {
+  std::string path = CanonPath(p);
+  const char* rw = (p.rw == RW::ReadOnly)  ? "RO" :
+                   (p.rw == RW::WriteOnly) ? "WO" : "RW";
+  if (!detail) {
+    printf("  %-32s %-6s %s\n", p.name.c_str(), path.c_str(), rw);
+    return;
+  }
+  printf("%s\n", path.c_str());
+  printf("  scope      : %s\n", p.scope.c_str());
+  printf("  access     : %s", rw);
+  std::string acc = SubNode(path, "accessmode", digi);
+  if (!acc.empty()) printf("  (board: %s)", acc.c_str());
+  printf("\n");
+
+  std::string sir = SubNode(path, "setinrun", digi);
+  if (!sir.empty())
+    printf("  setinrun   : %s%s\n", sir.c_str(),
+           sir == "false" ? "   <-- needs ACQ STOPPED to take effect" : "");
+
+  std::string desc = SubNode(path, "description", digi);
+  if (!desc.empty()) printf("  description: %s\n", desc.c_str());
+
+  std::string mn = SubNode(path, "minvalue", digi);
+  std::string mx = SubNode(path, "maxvalue", digi);
+  std::string st = SubNode(path, "increment", digi);
+  std::string un = SubNode(path, "uom", digi);
+  if (!mn.empty() || !mx.empty())
+    printf("  range      : %s .. %s  step %s  %s\n",
+           mn.empty() ? "-" : mn.c_str(), mx.empty() ? "-" : mx.c_str(),
+           st.empty() ? "-" : st.c_str(), un.c_str());
+  else if (!p.answers.empty() && (p.ansType == ANSTYPE::INTEGER || p.ansType == ANSTYPE::FLOAT))
+    printf("  range      : %s .. %s  step %s  %s  (from firmware table; not confirmed by board)\n",
+           p.answers[0].first.c_str(),
+           p.answers.size() > 1 ? p.answers[1].first.c_str() : "?",
+           p.answers.size() > 2 ? p.answers[2].first.c_str() : "?",
+           p.unit.c_str());
+
+  std::vector<std::string> vals = BoardValues(path, digi);
+  if (!vals.empty()) {
+    printf("  values     :");
+    for (size_t i = 0; i < vals.size(); i++) printf(" %s%s", vals[i].c_str(),
+        (i + 1) % 5 == 0 && i + 1 < vals.size() ? "\n               :" : "");
+    printf("\n");
+  } else if (!p.answers.empty() && !IsEnum(p)) {
+    printf("  values     : (none -- numeric)\n");
+  }
+  // Flag a firmware table that is INCOMPLETE relative to the board. Measured 2026-10-21: the
+  // Reg answer vectors are a strict subset of the board's allowedvalues modulo case -- they
+  // never offer a value the board rejects, but they omit 6 real ones (StartSource/
+  // GlobalTriggerSource lack "P0", GlobalTriggerSource lacks "EncodedClkIn", DACoutMode lacks
+  // "MemOccupancy", GPIOMode lacks "UserGPO", SyncOutMode lacks "User", EnergyFilterPeakingAvg
+  // lacks "HighAVG"). Matters beyond this CLI: DAQ:GUI/digiSettingsPanel.cpp SetupComboBox()
+  // builds its dropdown from these same answers, so those 6 values cannot be selected in the
+  // GUI at all. Completion unions both lists, so it is not affected while connected.
+  if (!vals.empty() && !p.answers.empty() && IsEnum(p)) {
+    std::string missing;
+    for (const std::string& v : vals) {
+      bool found = false;
+      for (const auto& a : p.answers) if (!strcasecmp(v.c_str(), a.first.c_str())) found = true;
+      if (!found) { if (!missing.empty()) missing += " "; missing += v; }
+    }
+    if (!missing.empty())
+      printf("  NOTE       : firmware table omits: %s -- TRUST THE BOARD'S LIST ABOVE\n",
+             missing.c_str());
+  }
+  std::string def = SubNode(path, "defaultvalue", digi);
+  std::string cur = client.IsConnected() ? client.ReadValue(digi, path) : "";
+  if (!def.empty()) printf("  default    : %s\n", def.c_str());
+  if (!cur.empty()) printf("  current    : %s\n", cur.c_str());
+}
+
+static int CmdParam(const std::vector<std::string>& tok, BrokerClient& client) {
+  BuildParamTable();
+  int digi = 0;
+  size_t ai = 1;
+  if (tok.size() > 2 && tok[1].size() && isdigit((unsigned char)tok[1][0])) {
+    digi = atoi(tok[1].c_str()); ai = 2;
+  }
+  if (tok.size() <= ai) {
+    printf("Usage: param [digi] <substring>        search parameter names\n");
+    printf("       param [digi] <Name|/full/path>  describe one parameter\n");
+    printf("Range/description/values are read from the board's device tree through the\n");
+    printf("existing read path -- no broker restart is needed to use this.\n");
+    return 0;
+  }
+  std::string q = tok[ai];
+  std::string dir, leaf;
+  SplitPath(q, dir, leaf);
+
+  // exact hit?
+  for (const ParamInfo& p : g_params) {
+    if (!strcasecmp(p.name.c_str(), leaf.c_str()) &&
+        (dir.empty() || CanonPath(p).rfind(dir, 0) == 0)) {
+      PrintParam(p, client, digi, true);
+      return 0;
+    }
+  }
+  // substring search over name AND description
+  std::string lq = q; std::transform(lq.begin(), lq.end(), lq.begin(), ::tolower);
+  int n = 0;
+  printf("matching '%s':\n", q.c_str());
+  for (const ParamInfo& p : g_params) {
+    std::string ln = p.name; std::transform(ln.begin(), ln.end(), ln.begin(), ::tolower);
+    bool hit = ln.find(lq) != std::string::npos;
+    if (!hit) {
+      std::string d = SubNode(CanonPath(p), "description", digi);
+      std::transform(d.begin(), d.end(), d.begin(), ::tolower);
+      hit = !d.empty() && d.find(lq) != std::string::npos;
+    }
+    if (hit) { PrintParam(p, client, digi, false); n++; }
+  }
+  if (!n) printf("  (none)\n");
+  else printf("  %d match(es). 'param %s <Name>' for full detail.\n", n, tok[1].c_str());
+  return 0;
+}
+
 //^============================================ Single command executor
 
 static int ExecuteCommand(const std::string& line, BrokerClient& client, bool echo) {
@@ -615,8 +934,12 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
       printf("Error: %s\n", client.GetLastError().c_str());
     }
   }
+  else if (cmd == "param") {
+    return CmdParam(tok, client);
+  }
   else if (cmd == "write") {
     if (tok.size() < 4) { printf("Usage: write <digi> <param> <value>\n"); return 0; }
+    WarnBeforeWrite(client, tok[2], atoi(tok[1].c_str()));
     if (client.WriteValue(atoi(tok[1].c_str()), tok[2], tok[3])) {
       printf("OK\n");
     } else {
@@ -896,100 +1219,216 @@ static int ExecuteCommand(const std::string& line, BrokerClient& client, bool ec
 
 static const char* commands[] = {
   "connect", "disconnect", "ping", "list", "info", "open", "close",
-  "read", "write", "cmd", "format", "start", "stop", "status",
+  "read", "write", "param", "cmd", "format", "start", "stop", "status",
   "file-status", "save-settings", "load-settings", "hist", "trace", "subscribe",
   "load", "sleep", "shutdown", "help", "quit", "exit", nullptr
 };
 
-// Common CAEN parameter paths for read/write completion
-static const char* paramPaths[] = {
-  "/par/SerialNum", "/par/ModelName", "/par/FwType", "/par/NumCh",
-  "/par/ADC_SamplRate", "/par/ClockSource", "/par/StartSource",
-  "/par/GlobalTriggerSource", "/par/TrgOutMode", "/par/GPIOMode",
-  "/par/BusyInSource", "/par/SyncOutMode", "/par/BoardVetoSource",
-  "/par/RunDelay", "/par/IOlevel", "/par/EnAutoDisarmAcq",
-  "/par/EnStatEvents", "/par/BoardVetoWidth",
-  "/par/DACoutMode", "/par/DACoutChSelect",
-  "/par/TestPulsePeriod", "/par/TestPulseWidth",
-  "/par/TestPulseLowLevel", "/par/TestPulseHighLevel",
-  "/par/EnClockOutFP", "/par/VolatileClockOutDelay",
-  "/par/PermanentClockOutDelay",
-  "/par/ITLAMainLogic", "/par/ITLAMajorityLev", "/par/ITLAPairLogic",
-  "/par/ITLAPolarity", "/par/ITLAGateWidth",
-  "/par/ITLBMainLogic", "/par/ITLBMajorityLev", "/par/ITLBPairLogic",
-  "/par/ITLBPolarity", "/par/ITLBGateWidth",
-  "/ch/0/par/ChEnable", "/ch/0/par/DCOffset", "/ch/0/par/TriggerThr",
-  "/ch/0/par/SelfTrgRate", "/ch/0/par/ChannelRealtime",
-  "/ch/0/par/ChannelSavedCount", "/ch/0/par/PulsePolarity",
-  "/ch/0/par/WaveDataSource", "/ch/0/par/ChRecordLengthT",
-  "/ch/0/par/ChPreTriggerT", "/ch/0/par/WaveSaving",
-  "/ch/0/par/WaveResolution", "/ch/0/par/EventTriggerSource",
-  "/ch/0/par/WaveTriggerSource",
-  "/ch/0/par/TimeFilterRiseTimeT", "/ch/0/par/TimeFilterRetriggerGuardT",
-  "/ch/0/par/EnergyFilterRiseTimeT", "/ch/0/par/EnergyFilterFlatTopT",
-  "/ch/0/par/EnergyFilterPoleZeroT", "/ch/0/par/EnergyFilterPeakingPosition",
-  "/ch/0/par/EnergyFilterBaselineAvg", "/ch/0/par/EnergyFilterFineGain",
-  "/ch/0/par/GateLongLengthT", "/ch/0/par/GateShortLengthT",
-  "/ch/0/par/GateOffsetT", "/ch/0/par/CFDDelayT", "/ch/0/par/CFDFraction",
-  "/ch/0/par/TriggerFilterSelection", "/ch/0/par/ADCInputBaselineAvg",
-  "/cmd/Reset", "/cmd/armacquisition", "/cmd/swstartacquisition",
-  "/cmd/SwStopAcquisition", "/cmd/disarmacquisition",
+//^---------------- Parameter metadata
+//
+// Built at startup from the Reg tables in DAQ:core/DigiParameters.h, which are ALREADY
+// linked into this binary (broker/Makefile:33 pulls ClassDigitizer2Gen.o into solaris-cli).
+// The previous implementation hand-maintained a list of 71 path literals; 10 of them do not
+// exist on this board (CFDDelayT, CFDFraction, Gate*LengthT, GateOffsetT, WaveResolution,
+// ChannelRealtime, ChannelSavedCount, TriggerFilterSelection, ADCInputBaselineAvg -- PSD-only
+// names), so tab-completing them produced a write that could only fail, and only 61 of the
+// board's 165 parameters were reachable at all. Deriving the list removes both failure modes
+// and keeps it in step with the firmware tables by construction.
+//
+// Deliberately CLI-only: no broker opcode, so no broker restart. A restart costs a fresh
+// open, which resets WaveTriggerSource on all 64 channels -- see AGENT.md §19/§21.
+// Which scope directory a typed path prefix belongs to ("" if not a parameter path)
+static std::string ScopeOfDir(const std::string& dir) {
+  if (dir == "/par/")  return "dig";
+  if (dir == "/cmd/")  return "cmd";
+  if (dir == "/ch/0/par/" || dir == "/ch/0..63/par/") return "ch";
+  if (dir.rfind("/ch/",0) == 0 && dir.size() > 4 && dir.compare(dir.size()-5,5,"/par/")==0) {
+    // /ch/<digits>/par/  or /ch/<d>..<d>/par/
+    std::string mid = dir.substr(4, dir.size()-9);
+    bool ok = !mid.empty();
+    for (char c : mid) if (!isdigit((unsigned char)c) && c != '.' && c != '-') ok = false;
+    return ok ? "ch" : "";
+  }
+  if (dir.rfind("/lvds/",0)==0 && dir.compare(dir.size()-5,5,"/par/")==0) return "lvds";
+  if (dir.rfind("/vga/",0)  ==0 && dir.compare(dir.size()-5,5,"/par/")==0) return "vga";
+  if (dir.rfind("/group/",0)==0 && dir.compare(dir.size()-5,5,"/par/")==0) return "group";
+  return "";
+}
+
+static std::string DirOf(const std::string& text) {
+  size_t s = text.rfind('/');
+  return (s == std::string::npos) ? std::string() : text.substr(0, s+1);
+}
+
+static bool NameMatches(const std::string& name, const std::string& leaf) {
+  if (leaf.empty()) return true;
+  if (name.size() < leaf.size()) return false;
+  return strncasecmp(name.c_str(), leaf.c_str(), leaf.size()) == 0;
+}
+
+// stateful cursor for rl_completion_matches
+static size_t g_iter = 0;
+static std::vector<std::string>* g_list = nullptr;
+
+static char* ListGenerator(const char* /*text*/, int state) {
+  if (state == 0) g_iter = 0;
+  if (!g_list) return nullptr;
+  while (g_iter < g_list->size()) {
+    // skip empties, hand out each match exactly once
+    return strdup((*g_list)[g_iter++].c_str());
+  }
+  return nullptr;
+}
+
+static char** MatchList(std::vector<std::string>& list) {
+  if (list.empty()) return nullptr;
+  g_list = &list;
+  char** r = rl_completion_matches("", ListGenerator);
+  g_list = nullptr;
+  return r;
+}
+
+// The board's own subnode names, readable through the SAME read path the completion offers --
+// verified live: read 0 /ch/0/par/SelfTriggerWidth/setinrun -> "false".
+static const char* subNodes[] = {
+  "value","defaultvalue","datatype","accessmode","description","setinrun",
+  "minvalue","maxvalue","increment","uom","expuom","allowedvalues","multiplevalue",
   nullptr
 };
 
-static char* CommandGenerator(const char* text, int state) {
-  static int index;
-  if (state == 0) index = 0;
-  while (commands[index]) {
-    const char* cmd = commands[index++];
-    if (strncmp(cmd, text, strlen(text)) == 0) {
-      return strdup(cmd);
-    }
-  }
-  return nullptr;
-}
+//^---------------- value completion
 
-static char* ParamGenerator(const char* text, int state) {
-  static int index;
-  if (state == 0) index = 0;
-  while (paramPaths[index]) {
-    const char* p = paramPaths[index++];
-    if (strncmp(p, text, strlen(text)) == 0) {
-      return strdup(p);
-    }
-  }
-  return nullptr;
-}
+//^---------------- completion entry point
 
 static char** CliCompletion(const char* text, int start, int /*end*/) {
-  // Figure out which word we're completing
+  BuildParamTable();
   std::string lineSoFar(rl_line_buffer, start);
   auto tok = Tokenize(lineSoFar);
+  bool freshWord = (start == 0) || (rl_line_buffer[start-1] == ' ');
+  std::string w = text ? text : "";
 
+  rl_attempted_completion_over = 1;   // never fall through to filename completion
+
+  // ---- word 0: command names ----
   if (tok.empty()) {
-    // First word: complete command names
-    return rl_completion_matches(text, CommandGenerator);
+    std::vector<std::string> out;
+    for (int i = 0; commands[i]; i++)
+      if (w.empty() || strncasecmp(commands[i], w.c_str(), w.size()) == 0) out.push_back(commands[i]);
+    return MatchList(out);
   }
 
-  // Second or third word after read/write/cmd: complete parameter paths
-  if (tok[0] == "read" || tok[0] == "write" || tok[0] == "cmd") {
-    if (text[0] == '/' || tok.size() >= 2) {
-      return rl_completion_matches(text, ParamGenerator);
+  const std::string c0 = tok[0];
+  bool isRW = (c0 == "read" || c0 == "write" || c0 == "cmd" || c0 == "param");
+
+  // ---- word 1: digitizer index ----
+  if (isRW && tok.size() == 1 && freshWord) {
+    std::vector<std::string> out;
+    char buf[8];
+    for (int i = 0; i < 4; i++) { snprintf(buf,sizeof buf,"%d",i); out.push_back(buf); }
+    return MatchList(out);
+  }
+
+  // ---- value position: write <digi> <path> <value> ----
+  if (c0 == "write" && tok.size() >= 3 && freshWord) {
+    std::string dir  = DirOf(tok[2]);
+    std::string leaf = tok[2].substr(dir.size());
+    const ParamInfo* p = FindParam(leaf);
+    std::vector<std::string> out;
+    int digi = atoi(tok[1].c_str());
+    // Authoritative source first: the board's own allowedvalues. Falls out empty when not
+    // connected or when the parameter has no enum (the read fails), which is the point.
+    for (const std::string& v : BoardValues(tok[2], digi))
+      if (w.empty() || strncasecmp(v.c_str(), w.c_str(), w.size()) == 0) out.push_back(v);
+    // Local answers as a fallback/offline hint, de-duplicated against the board's list.
+    if (p && IsEnum(*p)) {
+      for (const auto& a : p->answers) {
+        if (w.size() && strncasecmp(a.first.c_str(), w.c_str(), w.size()) != 0) continue;
+        bool seen = false;
+        for (const std::string& v : out) if (!strcasecmp(v.c_str(), a.first.c_str())) seen = true;
+        if (!seen) out.push_back(a.first);
+      }
     }
+    std::sort(out.begin(), out.end());
+    return MatchList(out);   // empty -> nothing offered (numeric params)
   }
 
-  // After "load": fall through to default filename completion
-  if (tok[0] == "load") {
-    return nullptr; // use readline's default filename completion
+  // ---- parameter path position ----
+  if (isRW) {
+    // Split the typed text into (scope, dir-through-/par/, remainder-after-dir).
+    // The remainder is "Name" when completing a name, or "Name/sub" when completing a
+    // device-tree subnode. DirOf() alone cannot tell these apart -- "/ch/0/par/Name/" ends
+    // in "Name/" and looks like an unknown scope, which is why the first cut of this
+    // function silently offered nothing for subnode completion.
+    std::string scope, dir, rest;
+    static const char* flatDirs[] = { "/par/", "/cmd/", nullptr };
+    for (int i = 0; flatDirs[i]; i++) {
+      if (w.rfind(flatDirs[i], 0) == 0) { scope = ScopeOfDir(flatDirs[i]); dir = flatDirs[i]; rest = w.substr(dir.size()); break; }
+    }
+    if (scope.empty() && w.rfind("/", 0) == 0) {
+      // /<scope>/<index>/par/<rest>   (index may be the 0..63 wildcard form)
+      size_t p1 = w.find('/', 1);
+      size_t p2 = (p1 == std::string::npos) ? std::string::npos : w.find('/', p1 + 1);
+      size_t p3 = (p2 == std::string::npos) ? std::string::npos : w.find('/', p2 + 1);
+      if (p1 != std::string::npos && p2 != std::string::npos && p3 != std::string::npos &&
+          w.compare(p2 + 1, p3 - p2 - 1, "par") == 0) {
+        std::string sc = w.substr(1, p1 - 1);
+        std::string idx = w.substr(p1 + 1, p2 - p1 - 1);
+        bool idxOk = !idx.empty();
+        for (char c : idx) if (!isdigit((unsigned char)c) && c != '.' && c != '-') idxOk = false;
+        if (idxOk) {
+          scope = (sc == "ch" ? "ch" : sc == "lvds" ? "lvds" : sc == "vga" ? "vga" :
+                  sc == "group" ? "group" : "");
+          if (!scope.empty()) { dir = w.substr(0, p3 + 1); rest = w.substr(p3 + 1); }
+        }
+      }
+    }
+    if (!w.empty() && w[0] != '/') { scope = "*"; dir = ""; rest = w; }   // bare word
+    if (w.empty())                { scope = "*"; dir = ""; rest = ""; }
+    if (w[0] == '/' && scope.empty()) return nullptr;                     // unknown path shape
+
+    // subnode position: rest already contains a complete name, then "/", then a prefix
+    size_t slash = rest.find('/');
+    if (slash != std::string::npos) {
+      const ParamInfo* p = FindParam(rest.substr(0, slash));
+      if (!p) return nullptr;
+      std::string pre = rest.substr(slash + 1);
+      std::vector<std::string> out;
+      for (int i = 0; subNodes[i]; i++)
+        if (strncasecmp(subNodes[i], pre.c_str(), pre.size()) == 0)
+          out.push_back(dir + rest.substr(0, slash) + "/" + subNodes[i]);
+      return MatchList(out);
+    }
+
+    std::vector<std::string> out;
+    for (const ParamInfo& p : g_params) {
+      if (scope != "*" && p.scope != scope) continue;
+      if (!NameMatches(p.name, rest)) continue;
+      std::string pre = dir;
+      if (pre.empty())
+        pre = (p.scope=="ch")   ? "/ch/0/par/"  :
+              (p.scope=="dig")  ? "/par/"       :
+              (p.scope=="cmd")  ? "/cmd/"       :
+              (p.scope=="lvds") ? "/lvds/0/par/":
+              (p.scope=="vga")  ? "/vga/0/par/" : "/group/0/par/";
+      out.push_back(pre + p.name);
+    }
+    if (dir.empty() && rest.empty()) {
+      for (const char* d : {"/par/","/ch/0/par/","/ch/0..63/par/","/cmd/","/lvds/0/par/","/vga/0/par/","/group/0/par/"})
+        out.push_back(d);
+    } else if (!dir.empty() && rest.empty()) {
+      out.insert(out.begin(), dir);
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return MatchList(out);
   }
 
-  // After "!": fall through to default filename completion for shell commands
-  if (tok[0] == "!") {
+  // ---- "load" / "!" / settings files: filenames ----
+  if (c0 == "load" || c0 == "!" || c0 == "save-settings" || c0 == "load-settings") {
+    rl_attempted_completion_over = 0;
     return nullptr;
   }
 
-  // No matches -- suppress default filename completion for other commands
-  rl_attempted_completion_over = 1;
   return nullptr;
 }
 
@@ -1024,6 +1463,7 @@ int main(int argc, char** argv) {
   signal(SIGINT, SigIntHandler);
 
   // Setup readline tab completion
+  g_client = &client;
   rl_attempted_completion_function = CliCompletion;
 
   // Load command history from file
