@@ -22,8 +22,12 @@
 #include "CustomWidgets.h"
 #include "Histogram1D.h"
 #include "Histogram2D.h"
+#include "RateStore.h"
 
-class HistWorker; // Forward declaration
+#include <QElapsedTimer>
+
+class HistWorker;  // Forward declaration
+class RateMonitor; // Forward declaration
 
 #define MaxNumberOfPane 16 // the biggest split is 4x4
 
@@ -66,6 +70,16 @@ public:
 
   void ReplotHistograms();
 
+  //^---- RateMonitor support. SetMonitorSelected is GUI-thread only (it snaps lastFilledIndex,
+  //^     fenced like every other GUI-thread write of that array); GetTotal1D is a plain atomic
+  //^     load of the in-range total the fill worker maintains, so the monitor can call it anywhere.
+  void SetMonitorSelected(int d, int ch, bool on);
+  unsigned long GetTotal1D(int d, int ch) const;
+
+  /// Sliding-window dN/dt ledger for totals and 1D gates, sampled by the publish path on the
+  /// GUI thread. GUI thread only. Future sinks (RateMonitor windows, InfluxDB) read from here.
+  RateStore rateStore;
+
 signals:
   // void startWorkerTimer(int interval);
   // void stopWorkerTimer();
@@ -75,11 +89,13 @@ public slots:
   void startTimer(){
     // printf("timer start\n");
     timer->start(maxFillTimeinMilliSec);
+    replotTimer->start(replotIntervalMs);
     // emit startWorkerTimer(maxFillTimeinMilliSec);
   }
   void stopTimer(){
     // printf("timer stop\n");
     timer->stop();
+    replotTimer->stop();
     // emit stopWorkerTimer();
     isFillingHistograms = false; // this will also break the FillHistogram do-loop
     ClearInternalDataCount();
@@ -96,6 +112,11 @@ private:
   /// read by the fill worker, hence atomic. They gate the fill: only what is on screen is drained.
   std::atomic<bool> histVisibility[MaxNumberOfDigitizer][MaxNumberOfChannel];
   std::atomic<bool> hist2DVisibility[MaxNumberOfDigitizer];
+
+  /// A channel the RateMonitor window is tracking. ORed into the fill gate (see FillHistograms)
+  /// so a monitored channel drains even when its pane -- and its board's 2D overview -- are not on
+  /// screen. Written by SetMonitorSelected() on the GUI thread, read by the fill worker.
+  std::atomic<bool> monitorSelected[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   std::atomic<bool> isFillingHistograms;
   std::atomic<bool> suspendFilling;  // set while the GUI thread re-parents plot widgets
@@ -157,6 +178,9 @@ private:
   void UpdateRefreshRate();
   void WaitForFillToDrain();
 
+  /// The frozen line-parser for the pre-JSON HistogramSettings.txt; used once, to migrate.
+  void ApplyLegacyTxtSettings(QFile & file);
+
   /// Connected to Histogram1D/Histogram2D AboutToRebin/ReBinned. The right-click Rebin frees and
   /// reallocates the very buffers the fill worker writes into, so the worker has to be drained
   /// across the whole operation -- the same suspendFilling fence SetPaneSource() uses.
@@ -169,10 +193,20 @@ private:
   QCheckBox * chkAutoRefresh;
   RSpinBox  * sbRefresh;
   QLabel    * lbEffRefresh;
-  int replotDivider;
-  int replotCounter;
 
-  QString settingPath;
+  /// The GUI-thread replot clock. Counting (worker) and drawing are decoupled: the worker no
+  /// longer drives repaints through workDone(); PublishHist1D/2D only relaxed-loads the atomic
+  /// count arrays, so plotting at a steady GUI cadence is safe at any fill phase. Rebin/pane
+  /// changes run on this same thread and fence the worker, so they cannot interleave with a
+  /// repaint. Interval from UpdateRefreshRate(); started/stopped with the fill timer.
+  QTimer    * replotTimer = nullptr;
+  int replotIntervalMs;
+
+  /// monotonic ms clock for RateStore sampling (GUI thread, started in the ctor)
+  QElapsedTimer sampleClock;
+
+  QString settingPath;       // HistogramSettings.json
+  QString legacySettingPath; // HistogramSettings.txt, migrated once on first json-less load
 
   unsigned short maxFillTimeinMilliSec;
 
@@ -181,6 +215,11 @@ private:
   QThread * workerThread;
   HistWorker * histWorker;
   QTimer * timer;
+
+  /// The RateMonitor window, opened from a control-box button. It is NOT a QObject child: this
+  /// object owns the pointer and deletes it in ~SingleSpectra (after the worker is stopped), so it
+  /// cannot be auto-freed a second time by the QObject destructor.
+  RateMonitor * rateMonitor = nullptr;
 
 protected:
   /// Keep windowVisible in step without the worker having to call isVisible() itself.
@@ -198,11 +237,7 @@ public:
 public slots:
   void FillHistograms(){
     SS->FillHistograms();
-    emit workDone();
   }
-
-signals:
-  void workDone();
 
 private:
   SingleSpectra * SS;

@@ -3,6 +3,9 @@
 
 #include "qcustomplot.h"
 #include "macro.h"
+#include <QInputDialog>
+#include <QHBoxLayout>
+#include <QLabel>
 
 #define MaxNHist 10
 
@@ -63,10 +66,13 @@ public:
       txt[i]->setFont(QFont("Helvetica", 9));
     }
     txt[0]->setText("Under Flow : 0");
-    txt[1]->setText("Total Entry : 0");
+    txt[1]->setText(TotalEntryLabel());
     txt[2]->setText("Over Flow : 0");
-
     usingMenu = false;
+
+    /// gate bands / edge lines / rate labels follow the axes on every redraw, incl. zoom+pan
+    connect(this, &QCustomPlot::beforeReplot, this, [this](){ UpdateGateGeometry(); });
+
 
     connect(this, &QCustomPlot::mouseMove, this, [=](QMouseEvent *event){
       double x = this->xAxis->pixelToCoord(event->pos().x());
@@ -96,6 +102,34 @@ public:
         QAction * a2 = menu.addAction("Clear hist.");
         QAction * a3 = menu.addAction("Toggle Stat.");
         QAction * a4 = menu.addAction("Rebin (clear histogram)");
+
+        //^---- gates : one band each, edges dragged with the left button
+        QAction * gAdd = ( gates.size() < MaxGates ) ? menu.addAction("Add Gate") : nullptr;
+        QAction * gRen = nullptr, * gClr = nullptr;
+        QList<QAction *> gDelActs;
+        if( !gates.isEmpty() ){
+          menu.addSeparator();
+          gRen = menu.addAction("Edit Gates...");
+          gClr = menu.addAction("Clear Gates");
+          for( int k = 0; k < gates.size(); k++ ){
+            QAction * da = menu.addAction("Delete " + gates[k].name + " [" + gateColorName(gates[k].id) + "]");
+            /// The index rides the action (same lesson as the 2D cut menu): recovering it by
+            /// parsing the label would break the moment a gate is renamed.
+            da->setData(k);
+            gDelActs.append(da);
+          }
+        }
+
+        //^---- instantaneous-rate integration window (total + every gate on this plot)
+        QMenu * winMenu = menu.addMenu("Rate Window");
+        QAction * winAct[7];
+        const int winMs[7] = { 1000, 2000, 5000, 10000, 30000, 60000, 300000 };
+        for( int i = 0; i < 7; i++ ){
+          winAct[i] = winMenu->addAction( QString("%1%2").arg(winMs[i]/1000).arg((winMs[i]%1000)? " ms":" s") );
+          winAct[i]->setData(winMs[i]);
+          if( winMs[i] == rateIntervalMs ) winAct[i]->setCheckable(true), winAct[i]->setChecked(true);
+        }
+        QAction * winCustom = winMenu->addAction("Custom...");
         //TODO fitGuass
 
         QAction *selectedAction = menu.exec(event->globalPosition().toPoint());
@@ -229,6 +263,40 @@ public:
           }
           this->replot();
         }
+        //*========================================== Gate add / remove
+        if( gAdd && selectedAction == gAdd ){
+          AddGate(event->pos());   // center the new band under the right-click
+          usingMenu = false;
+        }
+        if( gClr && selectedAction == gClr ){
+          ClearGates();
+          usingMenu = false;
+        }
+        if( gRen && selectedAction == gRen ){
+          EditGatesDialog();
+          usingMenu = false;
+        }
+        for( int k = 0; k < gDelActs.size(); k++ ){
+          if( selectedAction == gDelActs[k] ){
+            RemoveGate( gDelActs[k]->data().toInt() );
+            usingMenu = false;
+          }
+        }
+        //*========================================== Rate integration window
+        for( int i = 0; i < 7; i++ ){
+          if( selectedAction == winAct[i] ){
+            SetRateIntervalMs(winMs[i]);
+            replot();
+            usingMenu = false;
+          }
+        }
+        if( selectedAction == winCustom ){
+          int sec = QInputDialog::getInt(this, "Rate Window", "Integration time [s]",
+                                        qMax(1, rateIntervalMs/1000), 1, 3600, 1);
+          if( sec >= 1 ) SetRateIntervalMs(sec*1000);
+          replot();
+          usingMenu = false;
+        }
         usingMenu = false;
       }
     });
@@ -238,6 +306,262 @@ public:
   int    GetNBin() const {return xBin;}
   double GetXMin() const {return xMin;}
   double GetXMax() const {return xMax;}
+  unsigned long GetTotalEntry() const {return totalEntry;}
+
+  /// "Total Entry" stat line. The bracketed rate is INSTANTANEOUS (sliding window), not the
+  /// lifetime average: SingleSpectra's publish path samples the worker's total into its RateStore
+  /// and pushes the windowed dN/dt back in via SetDisplayRate() -- the widget never times on its
+  /// own, so the counting clock lives in exactly one place. Until the window has two samples the
+  /// rate is omitted entirely. It rides in txt[1], showing/hiding with "Toggle Stat.".
+  QString TotalEntryLabel(){
+    const QString cnt = "Total Entry : " + QString::number(totalEntry);
+    if( !haveRate ) return cnt;
+    const QString r = (dispRate < 1000.0) ? QString::number(dispRate,'f',1) : QString::number(dispRate,'f',0);
+    return cnt + " [" + r + "/s / " + RateIntervalText() + "]";
+  }
+
+  /// Called by the publish path every repaint; r < 0 means "window not filled yet".
+  void SetDisplayRate(double r){
+    haveRate = (r >= 0.0);
+    dispRate = qMax(0.0, r);
+    if( txt[1] ) txt[1]->setText(TotalEntryLabel());
+  }
+
+  int  RateIntervalMs() const { return rateIntervalMs; }
+  QString RateIntervalText() const {
+    return ( rateIntervalMs % 1000 == 0 ) ? QString("%1 s").arg(rateIntervalMs/1000)
+                                          : QString("%1 ms").arg(rateIntervalMs);
+  }
+  /// Right-click "Rate Window": the trailing integration time of both the total rate and the
+  /// gate rates on this plot. Pruning adapts on the next sample; widening degrades to the
+  /// lifetime average until the window regrows.
+  void SetRateIntervalMs(int ms){
+    rateIntervalMs = qBound(100, ms, 3600000);
+    if( txt[1] ) txt[1]->setText(TotalEntryLabel());
+  }
+
+  //^==================== 1D gates
+  //^ A gate is a shaded [x0,x1] band with two draggable edge lines. Its instantaneous rate is
+  //^ derived GUI-side from the PUBLISHED bins (GateSum = sum of series-0 bins inside the band),
+  //^ sampled into SingleSpectra::RateStore under key "<rateKey>/g<n>" by the publish path --
+  //^ the fill worker never knows gates exist. The cost is exact at bin resolution and bounded
+  //^ by the publish period; it follows the pane, so an unmounted histogram has no gate counts
+  //^ (by design, for now).
+
+  int GateCount() const { return gates.size(); }
+  double GateLow(int k)  const { return (k>=0 && k<gates.size()) ? qMin(gates[k].x0, gates[k].x1) : 0.; }
+  double GateHigh(int k) const { return (k>=0 && k<gates.size()) ? qMax(gates[k].x0, gates[k].x1) : 0.; }
+  int  GateId(int k)     const { return (k>=0 && k<gates.size()) ? gates[k].id : -1; }
+  QString GateName(int k)const { return (k>=0 && k<gates.size()) ? gates[k].name : QString(); }
+  /// RateStore key. Carries the gate's NEVER-REUSED id, not its position: a middle delete must
+  /// not graft the victim's rate history onto a survivor.
+  QString GateKey(int k) const{
+    return (k>=0 && k<gates.size()) ? rateKey + QString("/g%1").arg(gates[k].id) : QString();
+  }
+
+  int FindGate(const QString & name) const{
+    for( int k = 0; k < gates.size(); k++ ) if( gates[k].name == name ) return k;
+    return -1;
+  }
+
+  bool RenameGate(int k, const QString & name){
+    if( k < 0 || k >= gates.size() || name.isEmpty() ) return false;
+    gates[k].name = name;
+    UpdateGateLabel(k);
+    return true;
+  }
+
+  /// atPixel (widget coords) centers the band under the cursor; the default centers it on the
+  /// axis. Width is 10 % of the axis range. All item positions are ptPlotCoords -- QCP defaults
+  /// them to ptAbsolute, which would place energy values at equal pixel offsets, i.e. invisible.
+  int AddGate(const QPoint & atPixel = QPoint(INT_MIN, INT_MIN)){
+    if( gates.size() >= MaxGates ) return -1;
+    const double hw = 0.05*(xMax - xMin);                       // 10 % full width
+    double c = ( atPixel.x() == INT_MIN ) ? 0.5*(xMin + xMax)
+                                          : xAxis->pixelToCoord(atPixel.x());
+    c = qBound(xMin + hw, c, xMax - hw);
+
+    Gate g;
+    g.x0 = c - hw;
+    g.x1 = c + hw;
+    g.id   = gateSeq ++;                    // monotonic: colors and store keys follow the gate
+    g.name = QString("Gate-%1").arg(g.id);
+    g.rateLine = "(gathering...)";
+
+    const QColor col = gateColor(g.id);
+    QPen pen(col, 1.5);
+    g.l0 = new QCPItemStraightLine(this);
+    g.l1 = new QCPItemStraightLine(this);
+    g.band = new QCPItemRect(this);
+    g.band->setPen(Qt::NoPen);
+    g.l0->point1->setType(QCPItemPosition::ptPlotCoords); g.l0->point2->setType(QCPItemPosition::ptPlotCoords);
+    g.l1->point1->setType(QCPItemPosition::ptPlotCoords); g.l1->point2->setType(QCPItemPosition::ptPlotCoords);
+    g.band->topLeft->setType(QCPItemPosition::ptPlotCoords); g.band->bottomRight->setType(QCPItemPosition::ptPlotCoords);
+    g.rateTxt = new QCPItemText(this);
+    g.rateTxt->setFont(QFont("Helvetica", 9));
+    g.rateTxt->setPositionAlignment(Qt::AlignBottom | Qt::AlignHCenter);
+    /// x rides the gate center in plot coords; y is a RATIO of the axis rect so the labels
+    /// stack upward from the x axis (10% + 5%*k above it) and never collide with the legend
+    /// or each other, through zoom, pan and log-y.
+    g.rateTxt->position->setTypeX(QCPItemPosition::ptPlotCoords);
+    g.rateTxt->position->setTypeY(QCPItemPosition::ptAxisRectRatio);
+
+    gates.append(g);
+    ApplyGateColor(gates.size()-1);
+    UpdateGateLabel(gates.size()-1);
+    UpdateGateGeometry();
+    replot();
+    return gates.size() - 1;
+  }
+
+  /// Re-create a persisted gate: its saved id (which carries the COLOR and the RateStore key),
+  /// name and bounds. id < 0 keeps the auto-assigned one. gateSeq is pushed past the restored
+  /// id so fresh gates can never collide with it.
+  int RestoreGate(int id, const QString & name, double lo, double hi){
+    const int k = AddGate();
+    if( k < 0 ) return -1;
+    if( id >= 0 ){
+      gates[k].id   = id;
+      gateSeq       = qMax(gateSeq, id + 1);
+      ApplyGateColor(k);
+    }
+    if( !name.isEmpty() ) gates[k].name = name;
+    SetGateBounds(k, lo, hi);
+    UpdateGateLabel(k);
+    return k;
+  }
+
+  void ApplyGateColor(int k){
+    const QColor col = gateColor(gates[k].id);
+    QPen pen(col, 1.5);
+    gates[k].l0->setPen(pen);
+    gates[k].l1->setPen(pen);
+    QColor fill = col; fill.setAlpha(30);
+    gates[k].band->setBrush(fill);
+    gates[k].rateTxt->setColor(col.darker(140));
+  }
+
+  /// Delete live gate at position k. Index shifts are safe here (the 2D cut list needed
+  /// tombstones because its entries reference shared QCustomPlot list indices; gates hold
+  /// their item pointers directly), but the RATE key must not shift -- see GateKey().
+  /// Emits GateDeleted so SingleSpectra can drop the store history.
+  void RemoveGate(int k){
+    if( k < 0 || k >= gates.size() ) return;
+    emit GateDeleted(GateKey(k));
+    Gate & g = gates[k];
+    removeItem(g.l0); removeItem(g.l1); removeItem(g.band); removeItem(g.rateTxt); // removeItem deletes
+    gates.remove(k);
+    if( dragGate == k ) dragGate = -1;
+    else if( dragGate > k ) dragGate --;
+    replot();
+  }
+  void RemoveGate(const QString & name){ RemoveGate(FindGate(name)); }
+  void RemoveGate(){ RemoveGate(gates.size()-1); }   // legacy "remove the last one"
+
+  void ClearGates(){
+    while( !gates.isEmpty() ) RemoveGate(0);
+  }
+
+  /// One row per live gate: [color] Name | Low | High, boundary values in AXIS units.
+  /// OK applies everything: rename (empty keeps the old name), bounds swap if inverted and
+  /// clamp to the axis domain. Replaces the old names-only dialog.
+  void EditGatesDialog(){
+    if( gates.isEmpty() ) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle("Edit Gates");
+    QFormLayout layout(&dialog);
+
+    QList<QLineEdit *> nameLe, loLe, hiLe;
+    for( int k = 0; k < gates.size(); k++ ){
+      QHBoxLayout * row = new QHBoxLayout();
+      nameLe.append(new QLineEdit(&dialog)); nameLe.last()->setText( gates[k].name );
+      loLe .append(new QLineEdit(&dialog));  loLe .last()->setText( QString::number(qMin(gates[k].x0,gates[k].x1),'g',10) );
+      hiLe .append(new QLineEdit(&dialog));  hiLe .last()->setText( QString::number(qMax(gates[k].x0,gates[k].x1),'g',10) );
+      row->addWidget(nameLe.last());
+      row->addWidget(new QLabel("-", &dialog));
+      row->addWidget(loLe.last());
+      row->addWidget(new QLabel("to", &dialog));
+      row->addWidget(hiLe.last());
+      layout.addRow( gateColorName(gates[k].id) + " :", row );
+    }
+    layout.addRow(new QLabel("Boundaries in axis units; inverted pairs are swapped, out-of-range clamped.", &dialog));
+
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
+    layout.addRow(&buttonBox);
+    connect(&buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(&buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if( dialog.exec() != QDialog::Accepted ) return;
+
+    for( int k = 0; k < gates.size(); k++ ){
+      RenameGate(k, nameLe[k]->text());
+      bool okLo = false, okHi = false;
+      const double lo = loLe[k]->text().toDouble(&okLo);
+      const double hi = hiLe[k]->text().toDouble(&okHi);
+      if( okLo && okHi ) SetGateBounds(k, lo, hi);   // unparsable pair: leave the gate where it is
+    }
+    replot();
+  }
+
+  /// Cumulative in-range entries inside gate k, from the published series-0 bins.
+  unsigned long GateSum(int k) const{
+    if( k < 0 || k >= gates.size() || dX <= 0. ) return 0;
+    const double lo = qMin(gates[k].x0, gates[k].x1);
+    const double hi = qMax(gates[k].x0, gates[k].x1);
+    const int b0 = qBound(0, (int)qFloor((lo - xMin)/dX), yList[0].count()-1);
+    const int b1 = qBound(0, (int)qFloor((hi - xMin)/dX), yList[0].count()-1);
+    unsigned long s = 0;
+    for( int b = b0; b <= b1; b++ ) s += (unsigned long)yList[0][b];
+    return s;
+  }
+
+  void SetGateRate(int k, bool valid, double r){
+    if( k < 0 || k >= gates.size() ) return;
+    gates[k].rateLine = valid ? QString("%1 /s / %2").arg(r, 0, 'g', 4).arg(RateIntervalText())
+                              : QString("(gathering...)");
+    UpdateGateLabel(k);
+    // no replot here: every publish path that calls this replots the pane right after
+  }
+
+  /// Set the band edges in AXIS units. Inverted bounds are swapped, values are clamped to
+  /// [xMin,xMax]; feeds the "Edit Gates..." dialog and keeps the x0<x1 label invariant.
+  void SetGateBounds(int k, double lo, double hi){
+    if( k < 0 || k >= gates.size() || dX <= 0. ) return;
+    if( hi < lo ) qSwap(lo, hi);
+    gates[k].x0 = qBound(xMin, lo, xMax);
+    gates[k].x1 = qBound(xMin, hi, xMax);
+    UpdateGateGeometry();
+  }
+
+  void UpdateGateLabel(int k){
+    if( k < 0 || k >= gates.size() ) return;
+    gates[k].rateTxt->setText( gates[k].name + "\n" + gates[k].rateLine );
+  }
+
+  /// Vertical span of the band and the rate label follow the y range; the straight lines span
+  /// the plot on their own. Called from beforeReplot so zoom/pan keeps everything glued.
+  void UpdateGateGeometry(){
+    const QCPRange yr = yAxis->range();
+    for( int k = 0; k < gates.size(); k++ ){
+      Gate & g = gates[k];
+      g.l0->point1->setCoords(g.x0, 0.); g.l0->point2->setCoords(g.x0, 1.);
+      g.l1->point1->setCoords(g.x1, 0.); g.l1->point2->setCoords(g.x1, 1.);
+      g.band->topLeft    ->setCoords(qMin(g.x0,g.x1), yr.upper);
+      g.band->bottomRight->setCoords(qMax(g.x0,g.x1), yr.lower);
+      g.rateTxt->position->setCoords(0.5*(g.x0+g.x1), 1.0 - (0.10 + 0.05*k));
+    }
+  }
+
+  static QColor gateColor(int id){
+    static const QColor c[MaxGates] = { QColor(200, 0,   0),   QColor(170, 0, 170),
+                                        QColor(0, 120,   0),   QColor(230, 130, 0) };
+    return c[id % MaxGates];
+  }
+  static QString gateColorName(int id){
+    static const char * n[MaxGates] = { "red", "magenta", "green", "orange" };
+    return QString(n[id % MaxGates]);
+  }
 
   void SetColor(QColor color, unsigned short ID = 0) {
     // DebugPrint("%s", "Histogram1D");
@@ -279,12 +603,13 @@ public:
       for( int i = 0; i < xList.count(); i++) yList[ID][i] = 0;
     }
     yMax = 0;
-    txt[0]->setText("Under Flow : 0");
-    txt[1]->setText("Total Entry : 0");
-    txt[2]->setText("Over Flow : 0");
     totalEntry = 0;
     underFlow = 0;
     overFlow = 0;
+    haveRate = false;   // the store re-seeds after its decrease-detected reset; no stale rate
+    txt[0]->setText("Under Flow : 0");
+    txt[1]->setText(TotalEntryLabel());
+    txt[2]->setText("Over Flow : 0");
     UpdatePlot();
   }
   
@@ -326,9 +651,16 @@ public:
     totalEntry = 0;
     underFlow = 0;
     overFlow = 0;
+    haveRate = false;
+
+    /// Gates are plot-coordinate objects: keep them inside the new axis domain.
+    for( Gate & g : gates ){
+      g.x0 = qBound(xMin, g.x0, xMax);
+      g.x1 = qBound(xMin, g.x1, xMax);
+    }
 
     if( txt[0] ) txt[0]->setText("Under Flow : 0");
-    if( txt[1] ) txt[1]->setText("Total Entry : 0");
+    if( txt[1] ) txt[1]->setText(TotalEntryLabel());
     if( txt[2] ) txt[2]->setText("Over Flow : 0");
   }
 
@@ -337,9 +669,8 @@ public:
     /// SetBinContents has always checked this; Fill never did, and yList is a plain [MaxNHist].
     if( ID >= (unsigned int) nData ) return;
     if( ID == 0 ){
-      totalEntry ++;
-      txt[1]->setText("Total Entry : "+ QString::number(totalEntry));
-
+      /// totalEntry counts only in-range entries (the plotted "Total Entry"); under/over are the
+      /// out-of-range rejects, matching the worker paths (AddCount1D / Fill1).
       if( value < xMin ) {
         underFlow ++;
         txt[0]->setText("Under Flow : "+ QString::number(underFlow));
@@ -350,6 +681,8 @@ public:
         txt[2]->setText("Over Flow : "+ QString::number(overFlow));
         return;
       }
+      totalEntry ++;
+      txt[1]->setText(TotalEntryLabel());
     }else{
       if( value < xMin || value >= xMax ) return;
     }
@@ -394,7 +727,7 @@ public:
     underFlow  = under;
     overFlow   = over;
     txt[0]->setText("Under Flow : " + QString::number(underFlow));
-    txt[1]->setText("Total Entry : "+ QString::number(totalEntry));
+    txt[1]->setText(TotalEntryLabel());
     txt[2]->setText("Over Flow : " + QString::number(overFlow));
   }
 
@@ -402,6 +735,51 @@ public:
     for( int i = 0; i < xList.count(); i++){
       printf("%f  %f\n", xList[i], yList[ID][i]);
     }
+  }
+
+  void SetRateKey(const QString & k){ rateKey = k; }
+  QString RateKey() const { return rateKey; }
+
+protected:
+  /// Gate grabbing must happen BEFORE QCustomPlot's own press handling starts a zoom rect,
+  /// so it is an override, not a signal connect (signals fire after the internal logic).
+  void mousePressEvent(QMouseEvent * event) override{
+    if( event->button() == Qt::LeftButton && !usingMenu && TryGrabGate(event->pos()) ){
+      setSelectionRectMode(QCP::SelectionRectMode::srmNone);
+      return;  // swallowed: no zoom rect starts
+    }
+    QCustomPlot::mousePressEvent(event);
+  }
+  void mouseMoveEvent(QMouseEvent * event) override{
+    if( dragGate >= 0 ){
+      DragGateTo(event);
+      replot();
+      return;
+    }
+    QCustomPlot::mouseMoveEvent(event);   // emits the mouseMove signal -> bin/value tooltip
+
+    /// Hovering a gate edge reports that EDGE's bin (shown last so it wins over the generic
+    /// bin-under-cursor tooltip).
+    for( int k = 0; k < gates.size(); k++ ){
+      const double p0 = xAxis->coordToPixel(gates[k].x0);
+      const double p1 = xAxis->coordToPixel(gates[k].x1);
+      const bool e0 = qAbs(event->pos().x() - p0) <= 6;
+      const bool e1 = !e0 && qAbs(event->pos().x() - p1) <= 6;
+      if( e0 || e1 ){
+        QToolTip::showText( event->globalPosition().toPoint(), GateEdgeTip(gates[k], e1), this );
+        break;
+      }
+    }
+  }
+  void mouseReleaseEvent(QMouseEvent * event) override{
+    if( dragGate >= 0 ){
+      dragGate = -1;
+      QToolTip::hideText();
+      setSelectionRectMode(QCP::SelectionRectMode::srmNone);
+      replot();
+      return;  // swallow: a gate drag must not trigger a zoom of its sliver rect
+    }
+    QCustomPlot::mouseReleaseEvent(event);
   }
 
 signals:
@@ -414,15 +792,67 @@ signals:
   void AboutToRebin();
   void ReBinned();
 
+  /// A gate was deleted; SingleSpectra drops its RateStore history so the key does not linger.
+  void GateDeleted(const QString & storeKey);
+
 private:
   double xMin, xMax, dX;
   int xBin;
 
   double yMax;
 
-  unsigned long totalEntry;
+  unsigned long totalEntry;   ///< in-range entries only (the plotted "Total Entry"); under/over are the rejects
   unsigned long underFlow;
   unsigned long overFlow;
+
+  //^---- instantaneous rate (see RateStore in SingleSpectra: the window math lives there)
+  QString rateKey;            ///< my channel name in the store, set by SingleSpectra at creation
+  int  rateIntervalMs = 1000; ///< right-click adjustable integration window
+  bool haveRate = false;
+  double dispRate = 0.0;
+
+  //^---- 1D gates
+  struct Gate{
+    double x0 = 0, x1 = 0;
+    int  id = -1;                 ///< monotonic per plot, NEVER reused: colors and RateStore keys ride it
+    QString name;                 ///< default "Gate-<id>", renameable via the menu
+    QString rateLine;             ///< last rate text; the label is rebuilt as name + rateLine
+    QCPItemStraightLine * l0 = nullptr;
+    QCPItemStraightLine * l1 = nullptr;
+    QCPItemRect         * band = nullptr;
+    QCPItemText         * rateTxt = nullptr;
+  };
+  QVector<Gate> gates;
+  int gateSeq = 0;   ///< next gate id; ids survive deletes, so a middle delete renumbers nothing
+  static const int MaxGates = 4;
+  int dragGate = -1;   ///< -1 = none; edges: 0 = x0, 1 = x1
+  int dragEdge = 0;
+
+  /// Gate-edge grab / drag, driven from the mouse signal connects in the ctor.
+  bool TryGrabGate(const QPoint & pos){
+    for( int k = 0; k < gates.size(); k++ ){
+      const double p0 = xAxis->coordToPixel(gates[k].x0);
+      const double p1 = xAxis->coordToPixel(gates[k].x1);
+      if( qAbs(pos.x() - p0) <= 6 ){ dragGate = k; dragEdge = 0; return true; }
+      if( qAbs(pos.x() - p1) <= 6 ){ dragGate = k; dragEdge = 1; return true; }
+    }
+    return false;
+  }
+  /// Tooltip text for one edge: which bin it sits in and where, in axis units.
+  QString GateEdgeTip(const Gate & g, bool edge) const{
+    const double x = edge ? g.x1 : g.x0;
+    const int bin = qBound( 0, (int)qFloor((x - xMin)/dX), yList[0].count()-1 );
+    return QString("%1  edge %2\nbin %3 @ %4").arg(g.name).arg(edge?"B":"A")
+                                              .arg(bin).arg(x, 0, 'g', 6);
+  }
+
+  void DragGateTo(const QMouseEvent * event){
+    if( dragGate < 0 ) return;
+    double & x = (dragEdge == 0) ? gates[dragGate].x0 : gates[dragGate].x1;
+    x = qBound(xMin, xAxis->pixelToCoord(event->pos().x()), xMax);
+    QToolTip::showText( event->globalPosition().toPoint(), GateEdgeTip(gates[dragGate], dragEdge), this );
+    UpdateGateGeometry();
+  }
 
   bool isLogY;
 

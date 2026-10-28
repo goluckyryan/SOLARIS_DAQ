@@ -47,7 +47,9 @@ HEADERS += ClassDigitizer2Gen.h \
 					 qcustomplot.h \
 					 Histogram1D.h \
 					 Histogram2D.h \
-					 SingleSpectra.h
+					 SingleSpectra.h \
+					 RateMonitor.h \
+					 RateStore.h
 
 SOURCES += ClassDigitizer2Gen.cpp \
            OnlineEventBuilder.cpp \
@@ -62,7 +64,8 @@ SOURCES += ClassDigitizer2Gen.cpp \
 					 scope.cpp \
 					 SOLARISpanel.cpp \
 					 qcustomplot.cpp \
-					 SingleSpectra.cpp
+					 SingleSpectra.cpp \
+					 RateMonitor.cpp
 
 # Analyses are NOT compiled into this binary. They are shared objects built by analyzers/Makefile
 # and loaded at runtime, so they can be recompiled and swapped without restarting the DAQ.

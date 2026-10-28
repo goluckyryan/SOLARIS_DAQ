@@ -108,12 +108,13 @@ void QtHistRegistry::BoolParam(const char * label, bool * value){
 void QtHistRegistry::Fill1(int id, double x){
   if( id < 0 || id >= (int)h1.size() ) return;
   H1 & h = *h1[id];
-  h.total.fetch_add(1, std::memory_order_relaxed);
+  /// total counts only in-range entries (what "Total Entry" shows); under/over are the rejects.
   /// NaN fails both range tests below and would reach the (int) cast, which is undefined for a
   /// non-finite value. An analysis computing a ratio or a log makes NaN easily, so check first.
   if( !std::isfinite(x) ){ h.over.fetch_add(1, std::memory_order_relaxed); return; }
   if( x <  h.lo ){ h.under.fetch_add(1, std::memory_order_relaxed); return; }
   if( x >= h.hi ){ h.over .fetch_add(1, std::memory_order_relaxed); return; }
+  h.total.fetch_add(1, std::memory_order_relaxed);
   const int b = (int)((x - h.lo) / h.dx);
   if( b >= 0 && b < h.nBin ) h.c[b].fetch_add(1, std::memory_order_relaxed);
 }

@@ -1,5 +1,7 @@
 #include "SingleSpectra.h"
 
+#include "RateMonitor.h"
+
 #include <QValueAxis>
 #include <QElapsedTimer>
 #include <QGroupBox>
@@ -8,12 +10,16 @@
 #include <QHBoxLayout>
 #include <QRandomGenerator>
 #include <QScreen>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 
 SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent) : QMainWindow(parent){
   DebugPrint("%s", "SingleSpectra");
   this->digi = digi;
   this->nDigi = nDigi;
-  this->settingPath = rawDataPath + "/HistogramSettings.txt";
+  this->settingPath       = rawDataPath + "/HistogramSettings.json";
+  this->legacySettingPath = rawDataPath + "/HistogramSettings.txt";
 
   maxFillTimeinMilliSec = SingleHistogramFillingTime;
 
@@ -22,8 +28,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
   // ApplySplit() sets these; splitRows < 1 after LoadSetting() means "no saved layout"
   splitRows = 0;
   splitCols = 0;
-  replotDivider = 1;
-  replotCounter = 0;
+  replotIntervalMs = SingleHistogramFillingTime; // UpdateRefreshRate() recomputes it before it can run
   suspendFilling = false;
   windowVisible = false;   // showEvent() flips it; the window is not up yet
   fillEnabled   = false;
@@ -127,6 +132,17 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     ctrlLayout->addWidget(bnSaveButton, 1, 9, 1, 2);
     connect(bnSaveButton, &QPushButton::clicked, this, &SingleSpectra::SaveSetting);
 
+    // RateMonitor: a separate window that plots the total-entry (in-range) count rate over time
+    // for whatever channels the user adds there. Created lazily on first click, then raised.
+    QPushButton * bnRateMonitor = new QPushButton("Rate Monitor", this);
+    ctrlLayout->addWidget(bnRateMonitor, 2, 0, 1, 3);
+    connect(bnRateMonitor, &QPushButton::clicked, this, [=](){
+      if( rateMonitor == nullptr ) rateMonitor = new RateMonitor(digi, nDigi, this);
+      rateMonitor->show();
+      rateMonitor->raise();
+      rateMonitor->activateWindow();
+    });
+
   }
 
   {//^========================
@@ -138,6 +154,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
       for( int j = 0; j < MaxNumberOfChannel ; j++ ) {
         hist[i][j] = nullptr;
         histVisibility[i][j] = false;
+        monitorSelected[i][j] = false;
       }
     }
 
@@ -153,11 +170,13 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     for( unsigned int i = 0; i < nDigi; i++){
       for( int j = 0; j < digi[i]->GetNChannels(); j++){
         hist[i][j] = new Histogram1D("Digi-" + QString::number(digi[i]->GetSerialNumber()) +", Ch-" +  QString::number(j), "Raw Energy [ch]", nBin, eMin, eMax);
+        hist[i][j]->SetRateKey( QString("d%1_sn%2_ch%3").arg(i).arg(digi[i]->GetSerialNumber()).arg(j) );
         if( digi[i]->GetFPGAType() == DPPType::PSD ){
           hist[i][j]->AddDataList("Short Energy", Qt::green);
         }
         connect(hist[i][j], &Histogram1D::AboutToRebin, this, &SingleSpectra::BeginHistogramEdit);
         connect(hist[i][j], &Histogram1D::ReBinned,     this, &SingleSpectra::EndHistogramEdit);
+        connect(hist[i][j], &Histogram1D::GateDeleted,  this, [this](const QString & k){ rateStore.Drop(k); });
       }
       hist2D[i] = new Histogram2D("Digi-" + QString::number(digi[i]->GetSerialNumber()), "Channel", "Raw Energy [ch]", digi[i]->GetNChannels(), 0, digi[i]->GetNChannels(), nBin, eMin, eMax);
       hist2D[i]->SetChannelMap(true, digi[i]->GetNChannels() < 20  ? 1 : 4);
@@ -206,6 +225,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
   workerThread = new QThread(this);
   histWorker = new HistWorker(this);
   timer = new QTimer(this);
+  sampleClock.start();   // RateStore sampling clock (GUI thread, monotonic)
 
   histWorker->moveToThread(workerThread);
 
@@ -217,7 +237,13 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
 
   isFillingHistograms = false;
   connect(timer, &QTimer::timeout, histWorker, &HistWorker::FillHistograms);
-  connect( histWorker, &HistWorker::workDone, this, &SingleSpectra::ReplotHistograms);
+
+  /// Repaints ride their own GUI-thread clock instead of the worker's workDone: publish only
+  /// relaxed-loads the atomic count arrays, so a steady interval is safe at any fill progress,
+  /// and the repaint no longer jitters with the worker's pass time under load.
+  replotTimer = new QTimer(this);
+  replotTimer->setTimerType(Qt::CoarseTimer);
+  connect(replotTimer, &QTimer::timeout, this, &SingleSpectra::ReplotHistograms);
 
   workerThread->start();
 
@@ -231,6 +257,13 @@ SingleSpectra::~SingleSpectra(){
   if( workerThread->isRunning() ){
     workerThread->quit();
     workerThread->wait();
+  }
+
+  // The monitor samples our counters, so free it with the worker already stopped and before the
+  // count arrays below are released. It is not a QObject child, so nothing frees it a second time.
+  if( rateMonitor ){
+    delete rateMonitor;
+    rateMonitor = nullptr;
   }
 
   SaveSetting();
@@ -321,12 +354,13 @@ void SingleSpectra::AddCount1D(int d, int ch, int series, double v){
   H1Counts & h = c1[d][ch];
   if( series >= h.nSeries || !h.c[series] ) return;
 
-  /// Series 0 owns the total/under/over counters, exactly as Histogram1D::Fill() does for ID 0,
-  /// so the stat labels keep reading the same as before the port.
+  /// Series 0 owns the total/under/over counters. total counts only in-range entries (what the
+  /// "Total Entry" label and its count rate show); under/over are the out-of-range rejects, so
+  /// total + under + over is the full series-0 event count.
   if( series == 0 ){
-    h.total.fetch_add(1, std::memory_order_relaxed);
     if( v <  h.lo ){ h.under.fetch_add(1, std::memory_order_relaxed); return; }
     if( v >= h.hi ){ h.over .fetch_add(1, std::memory_order_relaxed); return; }
+    h.total.fetch_add(1, std::memory_order_relaxed);
   }else{
     if( v < h.lo || v >= h.hi ) return;
   }
@@ -347,6 +381,32 @@ void SingleSpectra::AddCount2D(int d, int ch, double e){
   h.c[(size_t)ix * h.g.ny + iy].fetch_add(1, std::memory_order_relaxed);
 }
 
+//^======================================================== RateMonitor accessors
+//^ SetMonitorSelected is GUI-thread only: turning a channel on snaps lastFilledIndex, and that
+//^ array is a plain long the fill worker increments concurrently, so the write is fenced with
+//^ suspendFilling exactly like SetPaneSource()/BeginHistogramEdit(). GetTotal1D is a bare atomic
+//^ load -- the same one the monitor needs and nothing more.
+
+void SingleSpectra::SetMonitorSelected(int d, int ch, bool on){
+  if( d < 0 || d >= (int)MaxNumberOfDigitizer || ch < 0 || ch >= MaxNumberOfChannel ) return;
+  if( d >= (int)nDigi || ch >= (int)digi[d]->GetNChannels() ) return; // not a real channel
+
+  if( on && !monitorSelected[d][ch].load(std::memory_order_relaxed) ){
+    // Snap the fill cursor to the ring head so a freshly monitored channel does not dump a whole
+    // ring of history into the counters as one giant first-sample rate spike.
+    suspendFilling = true;
+    WaitForFillToDrain();
+    lastFilledIndex[d][ch] = digi[d]->ringBuffer[ch].index();
+    suspendFilling = false;
+  }
+  monitorSelected[d][ch].store(on, std::memory_order_relaxed);
+}
+
+unsigned long SingleSpectra::GetTotal1D(int d, int ch) const{
+  if( d < 0 || d >= (int)MaxNumberOfDigitizer || ch < 0 || ch >= MaxNumberOfChannel ) return 0;
+  return (unsigned long)c1[d][ch].total.load(std::memory_order_relaxed);
+}
+
 void SingleSpectra::PublishHist1D(int d, int ch){
   if( hist[d][ch] == nullptr ) return;
   H1Counts & h = c1[d][ch];
@@ -363,6 +423,25 @@ void SingleSpectra::PublishHist1D(int d, int ch){
     if( !h.c[s] ) continue;
     for( int b = 0; b < h.nBin; b++ ) scratch[b] = h.c[s][b].load(std::memory_order_relaxed);
     hist[d][ch]->SetBinContents(scratch.data(), h.nBin, tot, un, ov, s);
+  }
+
+  //^---- instantaneous-rate sampling, one clock: the publish (replot) tick. The total rate feeds
+  //^ the stat label; gate rates come from the bins just pushed in above (GateSum). Decrease on a
+  //^ clear/reset is detected inside the store, which re-seeds the window.
+  Histogram1D * w = hist[d][ch];
+  const qint64 now = sampleClock.elapsed();
+  const int keepMs = w->RateIntervalMs() + 60000;
+  const QString key = w->RateKey();
+
+  double r;
+  rateStore.Sample(key, now, tot, keepMs);
+  w->SetDisplayRate( rateStore.Rate(key, w->RateIntervalMs(), r) ? r : -1.0 );
+
+  for( int k = 0; k < w->GateCount(); k++ ){
+    const QString gk = w->GateKey(k);
+    rateStore.Sample(gk, now, w->GateSum(k), keepMs);
+    const bool ok = rateStore.Rate(gk, w->RateIntervalMs(), r);
+    w->SetGateRate(k, ok, r);
   }
 }
 
@@ -731,8 +810,8 @@ void SingleSpectra::UpdateRefreshRate(){
   bool isAuto = chkAutoRefresh->isChecked();
   int targetMs = isAuto ? autoMs : (int)sbRefresh->value();
 
-  replotDivider = qMax(1, (int)qRound((double)targetMs / maxFillTimeinMilliSec));
-  replotCounter = 0;
+  replotIntervalMs = targetMs;
+  if( replotTimer && replotTimer->isActive() ) replotTimer->start(replotIntervalMs); // apply live
 
   bool oldFlag = isSignalSlotActive;
   isSignalSlotActive = false;
@@ -740,8 +819,7 @@ void SingleSpectra::UpdateRefreshRate(){
   if( isAuto ) sbRefresh->setValue(autoMs);
   isSignalSlotActive = oldFlag;
 
-  int effMs = replotDivider * maxFillTimeinMilliSec;
-  lbEffRefresh->setText( QString("Replot: %1 ms (%2 plot%3)").arg(effMs).arg(n1D + n2D).arg(n1D + n2D == 1 ? "" : "s") );
+  lbEffRefresh->setText( QString("Replot: %1 ms (%2 plot%3)").arg(replotIntervalMs).arg(n1D + n2D).arg(n1D + n2D == 1 ? "" : "s") );
 }
 
 void SingleSpectra::FillHistograms(){
@@ -789,7 +867,8 @@ void SingleSpectra::FillHistograms(){
       /// lap check below jump straight to recent data when the plot comes back, so a newly shown
       /// pane starts with up to a ring of history rather than empty.
       if( !histVisibility[ID][ch].load(std::memory_order_relaxed) &&
-          !hist2DVisibility[ID].load(std::memory_order_relaxed) ) continue;
+          !hist2DVisibility[ID].load(std::memory_order_relaxed) &&
+          !monitorSelected[ID][ch].load(std::memory_order_relaxed) ) continue;
 
       long absIndex = digi[ID]->ringBuffer[ch].index();
       long gap = absIndex - lastFilledIndex[ID][ch];
@@ -832,12 +911,7 @@ void SingleSpectra::ReplotHistograms(){
 
   // qDebug() << __func__ << "| thread:" << QThread::currentThreadId();
 
-  // The fill timer runs at maxFillTimeinMilliSec; redrawing every visible plot at that
-  // rate saturates the GUI thread once the grid gets big, so only replot every
-  // replotDivider-th fill. See UpdateRefreshRate().
-  replotCounter++;
-  if( replotDivider > 1 && (replotCounter % replotDivider) != 0 ) return;
-
+  /// Driven by replotTimer on this thread; the worker's fill pass is rate-decoupled.
   /// Counts -> widgets happens here and nowhere else. The fill worker only increments the atomic
   /// arrays; every QCustomPlot touch is on this thread. Only mounted panes are published, which
   /// is also the only set the worker bothered to fill.
@@ -872,69 +946,207 @@ void SingleSpectra::hideEvent(QHideEvent * event){
   windowVisible = false;
 }
 
-void SingleSpectra::SaveSetting(){
-  DebugPrint("%s", "SingleSpectra");
+ void SingleSpectra::SaveSetting(){
+   DebugPrint("%s", "SingleSpectra");
 
-  QFile file(settingPath );
+   QJsonObject root;
+   root["formatVersion"] = 1;
 
-  if (!file.exists()) {
-    // If the file does not exist, create it
-    if (!file.open(QIODevice::WriteOnly)) {
-      qWarning() << "Could not create file" << settingPath;
-    } else {
-      qDebug() << "File" << settingPath  << "created successfully";
-      file.close();
-    }
-  }
+   QJsonObject split;
+   split["rows"] = splitRows;
+   split["cols"] = splitCols;
+   root["split"] = split;
 
-  if( file.open(QIODevice::Text | QIODevice::WriteOnly) ){
+   QJsonObject refresh;
+   refresh["auto"] = chkAutoRefresh->isChecked();
+   refresh["ms"]   = (int)sbRefresh->value();
+   root["refresh"] = refresh;
 
-    for( unsigned int i = 0; i < nDigi; i++){
-      file.write(("======= " + QString::number(digi[i]->GetSerialNumber()) + "\n").toStdString().c_str());
-      for( int ch = 0; ch < digi[i]->GetNChannels() ; ch++){
-        QString a = QString::number(ch).rightJustified(2, ' ');
-        QString b = QString::number(hist[i][ch]->GetNBin()).rightJustified(6, ' ');
-        QString c = QString::number(hist[i][ch]->GetXMin()).rightJustified(6, ' ');
-        QString d = QString::number(hist[i][ch]->GetXMax()).rightJustified(6, ' ');
-        file.write( QString("%1 %2 %3 %4\n").arg(a).arg(b).arg(c).arg(d).toStdString().c_str() );
-      }
+   //^---- spectra & gates, keyed by serial number (not board index), so they survive a
+   //^     change of digitizer enumeration order -- same convention as the legacy txt.
+   //^     The 2D geometry keeps the legacy -2 convention: the two guard cells Rebin() adds
+   //^     are stripped here and re-added by Rebin() on load.
+   QJsonArray digitizers;
+   for( unsigned int i = 0; i < nDigi; i++){
+     QJsonObject digiObj;
+     digiObj["serial"] = (int)digi[i]->GetSerialNumber();
 
-      QString a = QString::number(digi[i]->GetNChannels()).rightJustified(2, ' ');
-      QString b = QString::number(hist2D[i]->GetXNBin()-2).rightJustified(6, ' ');
-      QString c = QString::number(hist2D[i]->GetXMin()).rightJustified(6, ' ');
-      QString d = QString::number(hist2D[i]->GetXMax()).rightJustified(6, ' ');
-      QString e = QString::number(hist2D[i]->GetYNBin()-2).rightJustified(6, ' ');
-      QString f = QString::number(hist2D[i]->GetYMin()).rightJustified(6, ' ');
-      QString g = QString::number(hist2D[i]->GetYMax()).rightJustified(6, ' ');
-      file.write( QString("%1 %2 %3 %4 %5 %6 %7\n").arg(a).arg(b).arg(c).arg(d).arg(e).arg(f).arg(g).toStdString().c_str() );
-    }
+     QJsonArray channels;
+     for( int ch = 0; ch < digi[i]->GetNChannels(); ch++){
+       Histogram1D * h = hist[i][ch];
+       if( !h ) continue;
+       QJsonObject co;
+       co["ch"]   = ch;
+       co["bins"] = h->GetNBin();
+       co["xMin"] = h->GetXMin();
+       co["xMax"] = h->GetXMax();
+       co["rateMs"] = h->RateIntervalMs();
 
-    //^---- the split-grid layout. Sources are keyed by serial number, like the
-    //^     sections above, so they survive a change of digitizer enumeration order.
-    file.write("####### PANEL\n");
-    file.write( QString("ROWS_COLS %1 %2\n").arg(splitRows, 4).arg(splitCols, 4).toStdString().c_str() );
-    file.write( QString("REFRESH   %1 %2\n").arg(chkAutoRefresh->isChecked() ? 1 : 0, 4)
-                                            .arg((int)sbRefresh->value(), 4).toStdString().c_str() );
+       QJsonArray gates;
+       for( int k = 0; k < h->GateCount(); k++ ){
+         QJsonObject go;
+         go["id"]   = h->GateId(k);      // carries the color + RateStore key across restarts
+         go["name"] = h->GateName(k);
+         go["low"]  = h->GateLow(k);
+         go["high"] = h->GateHigh(k);
+         gates.append(go);
+       }
+       co["gates"] = gates;
+       channels.append(co);
+     }
+     digiObj["channels"] = channels;
 
-    for( int p = 0; p < NumberOfPanes(); p++ ){
-      int sn = pane[p].digiID >= 0 ? digi[pane[p].digiID]->GetSerialNumber() : -1;
-      file.write( QString("PANE      %1 %2 %3\n").arg(p, 4).arg(sn, 8).arg(pane[p].chID, 4).toStdString().c_str() );
-    }
+     QJsonObject s2;
+     s2["nx"]   = hist2D[i]->GetXNBin() - 2;
+     s2["xMin"] = hist2D[i]->GetXMin();
+     s2["xMax"] = hist2D[i]->GetXMax();
+     s2["ny"]   = hist2D[i]->GetYNBin() - 2;
+     s2["yMin"] = hist2D[i]->GetYMin();
+     s2["yMax"] = hist2D[i]->GetYMax();
+     digiObj["spectrum2D"] = s2;
 
-    file.write("##========== End of file\n");
-    file.close();
+     digitizers.append(digiObj);
+   }
+   root["digitizers"] = digitizers;
 
-    printf("Saved Histogram Settings to %s\n", settingPath.toStdString().c_str());
-  }else{
-    printf("%s|cannot open HistogramSettings.txt\n", __func__);
-  }
+   //^---- the split-grid layout, sources keyed by SN like the sections above
+   QJsonArray panes;
+   for( int p = 0; p < NumberOfPanes(); p++ ){
+     QJsonObject po;
+     po["pane"]   = p;
+     po["serial"] = pane[p].digiID >= 0 ? (int)digi[pane[p].digiID]->GetSerialNumber() : -1;
+     po["ch"]     = pane[p].chID;
+     panes.append(po);
+   }
+   root["panes"] = panes;
 
-}
+   QFile file(settingPath);
+   if( !file.open(QIODevice::Text | QIODevice::WriteOnly) ){
+     printf("%s|cannot open %s\n", __func__, settingPath.toStdString().c_str());
+     return;
+   }
+   file.write( QJsonDocument(root).toJson(QJsonDocument::Indented) );
+   file.close();
+   printf("Saved Histogram Settings to %s\n", settingPath.toStdString().c_str());
+ }
 
-void SingleSpectra::LoadSetting(){
-  DebugPrint("%s", "SingleSpectra");
+ //^======================================================== LoadSetting (JSON)
+ //^ The settings live in HistogramSettings.json (see SaveSetting for the schema). A legacy
+ //^ HistogramSettings.txt is parsed by the frozen ApplyLegacyTxtSettings() below, migrated to
+ //^ json, and renamed .bak -- exactly once. Apply order matters: split FIRST (it creates the
+ //^ panes the PANE entries address), then refresh, then per-board geometry/gates, then pane
+ //^ sources (fenced against the fill worker like every other lastFilledIndex/Rebin touch).
+ //^ Each Rebin is wrapped in AboutToRebin/ReBinned, the same pair the right-click menu emits,
+ //^ so a LoadSetting mid-run (tests, future re-read) resizes the count arrays safely instead
+ //^ of relying on the old "runs before the worker starts" assumption.
+ void SingleSpectra::LoadSetting(){
+   DebugPrint("%s", "SingleSpectra");
 
-  QFile file(settingPath);
+   QFile file(settingPath);
+   if( !file.exists() ){
+     QFile legacy(legacySettingPath);
+     if( legacy.exists() ){
+       ApplyLegacyTxtSettings(legacy);   // opens/closes it itself (frozen code)
+       SaveSetting();
+       if( legacy.rename(legacySettingPath + ".bak") )
+         printf("HistogramSettings: migrated legacy txt to json, legacy renamed .bak\n");
+       else
+         printf("HistogramSettings: migrated legacy txt to json (legacy rename failed, json now wins)\n");
+     }
+     return;
+   }
+
+   if( !file.open(QIODevice::ReadOnly) ){
+     printf("%s|cannot open %s\n", __func__, settingPath.toStdString().c_str());
+     return;
+   }
+   const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+   file.close();
+   if( !doc.isObject() ){
+     printf("%s|%s is not a JSON object -- starting with defaults\n", __func__, settingPath.toStdString().c_str());
+     return;
+   }
+   const QJsonObject root = doc.object();
+
+   //^---- split, then refresh
+   const QJsonObject split = root["split"].toObject();
+   if( !split.isEmpty() ) ApplySplit( split["rows"].toInt(1), split["cols"].toInt(1), false );
+
+   const QJsonObject refresh = root["refresh"].toObject();
+   if( !refresh.isEmpty() ){
+     bool oldFlag = isSignalSlotActive;
+     isSignalSlotActive = false;
+     chkAutoRefresh->setChecked( refresh["auto"].toBool(true) );
+     sbRefresh->setValue( refresh["ms"].toInt(SingleHistogramFillingTime) );
+     isSignalSlotActive = oldFlag;
+   }
+
+   //^---- per-board geometry + gates
+   const QJsonArray digitizers = root["digitizers"].toArray();
+   for( const QJsonValue & dv : digitizers ){
+     const QJsonObject dObj = dv.toObject();
+     const int sn = dObj["serial"].toInt(-1);
+     int d = -1;
+     for( unsigned int i = 0; i < nDigi; i++ ) if( sn == (int)digi[i]->GetSerialNumber() ){ d = i; break; }
+     if( d < 0 ) continue;   // a board that is not present now: skip its whole section
+
+     const QJsonArray channels = dObj["channels"].toArray();
+     for( const QJsonValue & cv : channels ){
+       const QJsonObject co = cv.toObject();
+       const int ch = co["ch"].toInt(-1);
+       if( ch < 0 || ch >= digi[d]->GetNChannels() ) continue;
+       Histogram1D * h = hist[d][ch];
+       if( !h ) continue;
+
+       const int    bins = co["bins"].toInt(h->GetNBin());
+       const double lo   = co["xMin"].toDouble(h->GetXMin());
+       const double hi   = co["xMax"].toDouble(h->GetXMax());
+       if( bins > 0 && hi > lo ){
+         emit h->AboutToRebin();
+         h->Rebin(bins, lo, hi);
+         emit h->ReBinned();
+       }
+       h->SetRateIntervalMs( co["rateMs"].toInt(1000) );
+
+       for( const QJsonValue & gv : co["gates"].toArray() ){
+         const QJsonObject go = gv.toObject();
+         h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
+                         go["low"].toDouble(), go["high"].toDouble() );
+       }
+     }
+
+     const QJsonObject s2 = dObj["spectrum2D"].toObject();
+     if( !s2.isEmpty() && hist2D[d] ){
+       emit hist2D[d]->AboutToRebin();
+       hist2D[d]->Rebin( s2["nx"].toInt(1),  s2["xMin"].toDouble(0.),   s2["xMax"].toDouble(1.),
+                         s2["ny"].toInt(1),  s2["yMin"].toDouble(0.),   s2["yMax"].toDouble(1.) );
+       emit hist2D[d]->ReBinned();
+     }
+   }
+
+   //^---- pane sources, fenced like every other GUI-thread write of lastFilledIndex
+   const QJsonArray panes = root["panes"].toArray();
+   for( const QJsonValue & pv : panes ){
+     const QJsonObject po = pv.toObject();
+     const int p  = po["pane"].toInt(-1);
+     const int sn = po["serial"].toInt(-1);
+     const int ch = po["ch"].toInt(-1);
+     if( p < 0 || p >= NumberOfPanes() ) continue;
+
+     int d = -1;
+     for( unsigned int i = 0; i < nDigi; i++ ) if( sn == (int)digi[i]->GetSerialNumber() ){ d = i; break; }
+
+     suspendFilling = true;
+     WaitForFillToDrain();
+     SetPaneSource(p, d, ch);
+     suspendFilling = false;
+   }
+ }
+
+ //^======================================================== legacy txt reader (frozen)
+ //^ Kept verbatim from the pre-JSON LoadSetting for the one-time migration. Do not extend;
+ //^ new fields go into the JSON reader/writer above.
+ void SingleSpectra::ApplyLegacyTxtSettings(QFile & file){
 
   if( file.open(QIODevice::Text | QIODevice::ReadOnly) ){
 
