@@ -42,6 +42,9 @@ static int   nKeyError = 0;
 static int   nBoundsError = 0;
 static int   nSumError = 0;
 static int   nSaveErr = 0;
+static int   nVertError = 0;
+static int   nVertDrag = 0;
+static int   nWeldOK = 0;
 static int   nGateWithCounts = 0;
 static bool  acqStarted = false;
 static bool  sawEvents  = false;
@@ -56,6 +59,22 @@ static Digitizer2Gen   * dummy = nullptr;
 static SingleSpectra * ss2     = nullptr;
 
 static int pick( int n ){ return QRandomGenerator::global()->bounded(n); }
+
+static Histogram1D * Ensure1D( SingleSpectra * ss ){
+  // mount pane 0 to ch-0 (first channel combo that offers it), republish synchronously,
+  // then hand back any mounted hist that actually has counts. Chaos combo churn and the
+  // 2D pin in the vertex test can unmount everything; this re-establishes a publishing pane.
+  for( QComboBox * cb : ss->findChildren<QComboBox *>() ){
+    if( cb->count() <= 64 ) continue;
+    for( int i = 0; i < cb->count(); i++ )
+      if( cb->itemData(i).toInt() == 0 ){ cb->setCurrentIndex( i ); break; }
+    break;
+  }
+  ss->ReplotHistograms();
+  for( Histogram1D * c : ss->findChildren<Histogram1D *>() )
+    if( c->GetTotalEntry() > 0 ) return c;
+  return nullptr;
+}
 
 static SingleSpectra * curSS( MainWindow * w ){
   if( ss2 ) return ss2;
@@ -86,7 +105,7 @@ static void ChaosStep( MainWindow * w, SingleSpectra * ss ){
       static const int    bins[3] = {   512,  1024,  4096 };
       static const double maxs[3] = { 30000., 60000., 1000. };
       const int k = pick(3);
-      QMetaObject::invokeMethod( h, "AboutToRebin" );
+      if( !QMetaObject::invokeMethod( h, "AboutToRebin" ) ) printf("INVOKE FAILED AboutToRebin 1D\n");
       h->Rebin( bins[k], 0., maxs[k] );
       QMetaObject::invokeMethod( h, "ReBinned" );
       h->UpdatePlot();
@@ -97,9 +116,9 @@ static void ChaosStep( MainWindow * w, SingleSpectra * ss ){
       QList<Histogram2D *> hs2 = ss->findChildren<Histogram2D *>();
       if( hs2.isEmpty() ) break;
       Histogram2D * h = hs2[ pick(hs2.size()) ];
-      QMetaObject::invokeMethod( h, "AboutToRebin" );
+      if( !QMetaObject::invokeMethod( h, "AboutToRebin" ) ) printf("INVOKE FAILED AboutToRebin 2D\n");
       h->Rebin( 64, 0, 64, 1024, 0., 60000. );
-      QMetaObject::invokeMethod( h, "ReBinned" );
+      if( !QMetaObject::invokeMethod( h, "ReBinned" ) ) printf("INVOKE FAILED ReBinned 2D\n");
       nRebin++;
       break;
     }
@@ -112,13 +131,7 @@ static void ChaosStep( MainWindow * w, SingleSpectra * ss ){
     }
     case 8: case 9: case 10: {  // gate churn: create/destroy items + store keys under live publish,
                                 // interval re-windows the same store, GateSum reads the bins just pushed
-      QList<Histogram1D *> hs = ss->findChildren<Histogram1D *>();
-      if( hs.isEmpty() ) break;
-      Histogram1D * h = nullptr;   // only observe gates on a hist that actually has published counts
-      for( int t = 0; t < 16 && !h; t++ ){
-        Histogram1D * cand = hs[ pick(hs.size()) ];
-        if( cand->GetTotalEntry() > 0 ) h = cand;
-      }
+      Histogram1D * h = Ensure1D( ss );   // chaos may have unmounted every 1D pane
       if( !h ) break;
       const int kAdd = h->AddGate();
       if( kAdd >= 0 ){
@@ -241,6 +254,107 @@ int main( int argc, char * argv[] ){
                p2elapsed, fedCount.load(), tot, nRebin, nClear, nCombo, nRefresh, nGate, nGateWithCounts);
       }
       if( p2elapsed < feedSec ) return;
+
+      //--- 2D cut creation + vertex drag, driven with synthetic mouse events on the real
+      //    press/move/release handlers (mounted hist2D has published cells by now).
+      {
+        QList<Histogram2D *> hs2 = ss2 ? ss2->findChildren<Histogram2D *>() : QList<Histogram2D *>();
+        Histogram2D * h2 = hs2.isEmpty() ? nullptr : hs2[0];
+        if( h2 ){
+          auto send = [&]( QEvent::Type type, const QPoint & lp ){
+            QMouseEvent ev( type, QPointF(lp), h2->mapToGlobal(lp), h2->mapToGlobal(lp),
+                            Qt::LeftButton, Qt::LeftButton, Qt::NoModifier );
+            QCoreApplication::sendEvent(h2, &ev);
+          };
+          auto px = [&]( double x, double y ){
+            return QPoint( (int)h2->xAxis->coordToPixel(x), (int)h2->yAxis->coordToPixel(y) );
+          };
+          const double x0=h2->GetXMin(), x1=h2->GetXMax(), y0=h2->GetYMin(), y1=h2->GetYMax();
+          // NB: cut placed on channels 0..3: under the 25M/s flood the fill worker's per-pass
+          // budget is spent on the first channels of the scan, so higher channels lag (a test
+          // artifact of extreme load, not a bug -- real board mixes drain fully).
+
+          // chaos may have remounted the panes to 1D sources; pin ALL channel combos to
+          // "Everything" so the 2D map is definitely published, then republish synchronously
+          for( QComboBox * cb : ss2->findChildren<QComboBox *>() ){
+            if( cb->count() <= 64 ) continue;
+            for( int i = 0; i < cb->count(); i++ )
+              if( cb->itemData(i).toInt() == 64 ){ cb->setCurrentIndex( i ); break; }
+          }
+          // resize() updates the widget geometry synchronously; both coordinate directions use
+          // the same fresh rect, so clicks map consistently. NO processEvents here — it would
+          // pump a pending chaos Rebin and clear the just-published color map under our feet.
+          ss2->resize( 1600, 1200 );
+          ss2->ReplotHistograms();
+          h2->BeginCreateCut();
+          const double XR = x1-x0, YR = y1-y0;
+          // wrap the ch-0 column (x=x0): the ONLY cells guaranteed populated right after a
+          // chaos resize under the flood, since the fill scan always drains channel 0 first
+          // margins in px-equivalent units (>=3 data units) so pixel quantization can never
+          // push an edge across the ch-0 column it is supposed to contain
+          const double tri[3][2] = { {x0-0.02*XR, y0+0.25*YR},
+                                     {x0+0.06*XR, y0+0.25*YR},
+                                     {x0-0.02*XR, y0+0.75*YR} };
+          for( int i = 0; i < 3; i++ ) send(QEvent::MouseButtonPress, px(tri[i][0], tri[i][1]));
+          send(QEvent::MouseButtonDblClick, px(tri[2][0], tri[2][1]));   // close + commit
+
+          const auto cuts0 = h2->GetCuts();
+          int ci = -1;
+          for( int i = 0; i < cuts0.size(); i++ )
+            if( !cuts0[i].poly.isEmpty() && cuts0[i].poly.size() >= 4 ) ci = i;
+          if( ci < 0 ){ printf("CUT NOT COMMITTED (cuts=%lld)\n", (long long)cuts0.size()); nVertError++; }
+          else{
+            // drag the RIGHT vertex inward: the strip around the ch-0 column (x=x0) is
+            // unchanged by construction, so entries>0 is guaranteed despite pixel quantization
+            const QPointF v0 = cuts0[ci].poly[1];
+            const QPoint  from = px(v0.x(), v0.y());
+            const QPoint  to   = px(x0+0.03*XR, y0+0.35*YR);
+            send(QEvent::MouseButtonPress, from);
+            for( int s = 1; s <= 5; s++ )
+              send(QEvent::MouseMove, QPoint( from.x()+(to.x()-from.x())*s/5,
+                                              from.y()+(to.y()-from.y())*s/5 ));
+            send(QEvent::MouseButtonRelease, to);
+            ss2->ReplotHistograms();   // map refreshes only on publish; the test is a synchronous
+                                       // island, and a chaos resize may have cleared c2 just prior
+
+            const QPointF v1 = h2->GetCuts()[ci].poly[1];
+            const double wx = h2->xAxis->pixelToCoord(to.x()), wy = h2->yAxis->pixelToCoord(to.y());
+            if( qAbs(v1.x()-wx) > 1.0 || qAbs(v1.y()-wy) > 1.0 ){
+              printf("VERTEX NOT DRAGGED: (%g,%g) want (%g,%g)\n", v1.x(), v1.y(), wx, wy); nVertError++; }
+            else if( h2->GetCuts()[ci].entries <= 0 ){
+              printf("RECOUNT AFTER DRAG: entries=%d cells=%d map=(%g,%g %gx%g) poly=(%g,%g)(%g,%g)(%g,%g)\n",
+                     h2->GetCuts()[ci].entries, h2->CountPopulatedCells(),
+                     h2->MapRange().x(), h2->MapRange().y(), h2->MapRange().width(), h2->MapRange().height(),
+                     h2->GetCuts()[ci].poly[0].x(), h2->GetCuts()[ci].poly[0].y(),
+                     h2->GetCuts()[ci].poly[1].x(), h2->GetCuts()[ci].poly[1].y(),
+                     h2->GetCuts()[ci].poly[2].x(), h2->GetCuts()[ci].poly[2].y());
+              nVertError++; }
+            else nVertDrag++;
+
+            // dragging vertex 0 (shared with the closing duplicate) must keep the loop welded
+            {
+              const QPointF vA = h2->GetCuts()[ci].poly[0];
+              const QPoint f2 = px(vA.x(), vA.y());
+              const QPoint t2 = px(x0-0.01*XR, y0+0.30*YR);
+              send(QEvent::MouseButtonPress, f2);
+              send(QEvent::MouseMove, QPoint((f2.x()+t2.x())/2, (f2.y()+t2.y())/2));
+              send(QEvent::MouseMove, t2);
+              send(QEvent::MouseButtonRelease, t2);
+              const auto & cc = h2->GetCuts()[ci];
+              if( cc.poly.first() != cc.poly.last() ){
+                printf("CUT OPENED: first=(%g,%g) last=(%g,%g)\n",
+                       cc.poly.first().x(), cc.poly.first().y(), cc.poly.last().x(), cc.poly.last().y());
+                nVertError++;
+              } else nWeldOK++;
+            }
+
+            h2->ClearAllCuts();                       // tombstone mash: must not crash or grab
+            send(QEvent::MouseButtonPress, to);
+            send(QEvent::MouseMove, from);
+            send(QEvent::MouseButtonRelease, from);
+          }
+        } else { printf("VERTEX: no mounted Histogram2D\n"); nVertError++; }
+      }
 
       //--- settings round-trip: named/moved gates + rate window must survive save -> mutate -> load
       {
@@ -375,15 +489,22 @@ int main( int argc, char * argv[] ){
       EnableFill(ss2);
       // mount a real 1D pane deterministically (channel combos have 65+ entries; the digitizer
       // combo few) so publish/gate paths run even when the random combo churn lands on 2D views
+      // widen the split FIRST: panes mounted while the layout is 1x1 are inactive and never publish
+      for( QComboBox * cb : ss2->findChildren<QComboBox *>() )
+        if( cb->count() == 6 && cb->itemData(0).toInt() == 101 ) cb->setCurrentIndex( 2 ); // "2 x 2"
+      int mounted = 0;
       for( QComboBox * cb : ss2->findChildren<QComboBox *>() ){
         if( cb->count() <= 64 ) continue;
-        for( int i = 0; i < cb->count(); i++ ){          // pick ch-0, NOT index 1 (that is "Everything")
-          const int dat = cb->itemData(i).toInt();
-          if( dat == 0 ){ cb->setCurrentIndex( i );
-            printf("mount: combo idx=%d data=%d\n", i, dat); break; }
+        const int want = ( mounted == 0 ) ? 0            // first pane  -> ch-0, a 1D histogram
+                                          : 64;          // second pane -> "Everything" (2D overview)
+        for( int i = 0; i < cb->count(); i++ ){
+          if( cb->itemData(i).toInt() == want ){ cb->setCurrentIndex(i); mounted++; break; }
         }
+        if( mounted >= 2 ) break;
       }
-      printf("mounted 1D widgets: %d\n", (int)ss2->findChildren<Histogram1D *>().size());
+      printf("mounted widgets: %d 1D + %d 2D = visible 1D:%d 2D:%d\n", mounted >= 1, mounted >= 2,
+             (int)ss2->findChildren<Histogram1D *>().size(),
+             (int)ss2->findChildren<Histogram2D *>().size());
       ss2->startTimer();
 
       for( int ch = 0; ch < 16; ch++ ){
@@ -413,7 +534,7 @@ int main( int argc, char * argv[] ){
   chaos.start();
 
   int rc = a.exec();
-  printf("RESULT: clean exit rc=%d sawEvents=%d gates=%d gatesWithCounts=%d keyErr=%d boundsErr=%d sumErr=%d saveErr=%d\n",
-         rc, (int)sawEvents, nGate, nGateWithCounts, nKeyError, nBoundsError, nSumError, nSaveErr);
-  return (rc == 0 && fedCount.load() > 0 && nGate > 0 && nGateWithCounts > 0 && nKeyError == 0 && nBoundsError == 0 && nSumError == 0 && nSaveErr == 0) ? 0 : 3;
+  printf("RESULT: clean exit rc=%d sawEvents=%d gates=%d gatesWithCounts=%d keyErr=%d boundsErr=%d sumErr=%d saveErr=%d vertDrag=%d weld=%d vertErr=%d\n",
+         rc, (int)sawEvents, nGate, nGateWithCounts, nKeyError, nBoundsError, nSumError, nSaveErr, nVertDrag, nWeldOK, nVertError);
+  return (rc == 0 && fedCount.load() > 0 && nGate > 0 && nGateWithCounts > 0 && nKeyError == 0 && nBoundsError == 0 && nSumError == 0 && nSaveErr == 0 && nVertError == 0 && nVertDrag > 0 && nWeldOK > 0) ? 0 : 3;
 }

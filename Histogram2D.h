@@ -101,6 +101,24 @@ public:
   void SaveCuts(QString cutFileName);
   void LoadCuts(QString cutFileName);
 
+  /// Enter "create a cut" mode: click adds vertices, double-click closes and commits.
+  /// Carries the tempCutID/numCut bookkeeping the vertex color (and the delete menu's
+  /// colorCycle lookup) rely on -- a cut left at id -1 indexes colorCycle negatively.
+  /// Public so tests can drive the exact flow of the "Create a Cut" action, which calls this.
+  void BeginCreateCut(){ tempCut.clear(); tempCutID ++; isDrawCut = true; numCut ++; }
+
+  /// diagnostics: how many cells currently hold counts, and the map's live range
+  int CountPopulatedCells() const{
+    const int nx = colorMap->data()->keySize(), ny = colorMap->data()->valueSize();
+    int n = 0;
+    for( int ix = 0; ix < nx; ix++ ) for( int iy = 0; iy < ny; iy++ ){
+      const double v = colorMap->data()->cell(ix, iy);
+      if( !std::isnan(v) && v > 0. ) n++;
+    }
+    return n;
+  }
+  QRectF MapRange() const{ return QRectF(xMin, yMin, xMax-xMin, yMax-yMin); }
+
 signals:
   /// Same contract as the Histogram1D pair. Rebin() reaches QCPColorMapData::setSize(), which does
   /// delete[] mData, so an owner filling this plot from another thread must be stopped before it.
@@ -148,6 +166,128 @@ private:
   void rightMouseClickRebin();
 
   QString settingPath;
+
+  //^==================== vertex drag
+  //^ Committed cuts are closed polygons whose outline is one QCPCurve; the vertices are drawn
+  //^ as scatter dots (see DrawCut). Pressing on a dot grabs that VERTEX instead of starting a
+  //^ zoom rect -- handled in the mouse overrides below, which swallow the event so QCustomPlot
+  //^ never starts its rubber band (signals fire after the internal handling, so an override is
+  //^ the only interception point -- same lesson as the Histogram1D gates).
+  //^
+  //^ cut.poly stays the source of truth: the curve data is rebuilt from it on every move, and
+  //^ "Save Cut(s)" writes it, so a dragged cut persists and recounts with no extra bookkeeping.
+  int dragCut  = -1;
+  int dragVert = -1;
+  bool hoverVertex = false;
+
+  /// Number of GRABABLE vertices of a committed cut: a closed polygon repeats the first point,
+  /// and grabbing that duplicate would break the closing edge -- skip it.
+  int GrabbableVertices(const Cut & c) const{
+    int n = c.poly.size();
+    if( n > 1 && c.poly.first() == c.poly.last() ) n--;
+    return n;
+  }
+
+  bool NearestVertex(const QPoint & pos, int & ci, int & vi) const{
+    double best = 7.0;   // px radius
+    bool found = false;
+    for( int i = 0; i < cutList.size(); i++ ){
+      if( cutList[i].poly.isEmpty() ) continue;   // tombstone
+      const int nv = GrabbableVertices(cutList[i]);
+      for( int v = 0; v < nv; v++ ){
+        const QPointF px( xAxis->coordToPixel(cutList[i].poly[v].x()),
+                          yAxis->coordToPixel(cutList[i].poly[v].y()) );
+        const double d = QLineF(px, QPointF(pos)).length();
+        if( d < best ){ best = d; ci = i; vi = v; found = true; }
+      }
+    }
+    return found;
+  }
+
+  QString VertexTip(int ci, int vi) const{
+    const QPointF p = cutList[ci].poly[vi];
+    int ix, iy;
+    colorMap->data()->coordToCell(p.x(), p.y(), &ix, &iy);
+    return QString("%1 vertex %2\nX: %3  Y: %4\ncell (%5, %6)")
+           .arg(cutList[ci].name).arg(vi)
+           .arg(p.x(), 0, 'g', 6).arg(p.y(), 0, 'g', 6).arg(ix).arg(iy);
+  }
+
+  void RefreshCutCurve(int ci){
+    QCPCurve * c = qobject_cast<QCPCurve *>( plottable(cutList[ci].plottableID) );
+    if( !c ) return;   // index bookkeeping gone wrong: leave the cut visible, just unrefreshable
+    QVector<QCPCurveData> d;
+    for( const QPointF & pt : cutList[ci].poly ) d.append( QCPCurveData(d.size(), pt.x(), pt.y()) );
+    c->data()->set(d, false);
+  }
+
+  /// cells-inside-polygon sum from the widget's own color map -- the online path (SetCellContents)
+  /// never touched cut.entries (only the legacy offline Fill() looped it), so a dragged cut must
+  /// be recounted from the drawn cells or its number would freeze at creation time.
+  void RecountCut(int ci){
+    Cut & c = cutList[ci];
+    if( c.poly.isEmpty() ) return;
+    const int nx = colorMap->data()->keySize();
+    const int ny = colorMap->data()->valueSize();
+    double s = 0;
+    for( int ix = 0; ix < nx; ix++ ){
+      for( int iy = 0; iy < ny; iy++ ){
+        const double v = colorMap->data()->cell(ix, iy);
+        if( std::isnan(v) || v <= 0. ) continue;
+        double x, y; colorMap->data()->cellToCoord(ix, iy, &x, &y);
+        if( c.poly.containsPoint(QPointF(x, y), Qt::OddEvenFill) ) s += v;
+      }
+    }
+    c.entries = (int)s;
+  }
+
+protected:
+  void mousePressEvent(QMouseEvent * event) override{
+    if( event->button() == Qt::LeftButton && !usingMenu && !isDrawCut ){
+      int ci = -1, vi = -1;
+      if( NearestVertex(event->pos(), ci, vi) ){
+        dragCut = ci; dragVert = vi;
+        setSelectionRectMode(QCP::SelectionRectMode::srmNone);
+        return;   // swallowed: no zoom rect starts
+      }
+    }
+    QCustomPlot::mousePressEvent(event);
+  }
+  void mouseMoveEvent(QMouseEvent * event) override{
+    if( dragCut >= 0 ){
+      Cut & c = cutList[dragCut];
+      const QPointF np( xAxis->pixelToCoord(event->pos().x()),
+                        yAxis->pixelToCoord(event->pos().y()) );
+      /// A closed polygon carries its first vertex a second time at the end. Dragging
+      /// vertex 0 must move the duplicate too, or the closing edge tears off.
+      const bool welded = c.poly.size() > 1 && c.poly.first() == c.poly.last();
+      c.poly[dragVert] = np;
+      if( welded && dragVert == 0 ) c.poly.last() = np;
+      RefreshCutCurve(dragCut);
+      QToolTip::showText( event->globalPosition().toPoint(), VertexTip(dragCut, dragVert), this );
+      replot();
+      return;
+    }
+    QCustomPlot::mouseMoveEvent(event);   // existing X/Y/Z tooltip etc. fire as before
+
+    /// approaching a vertex: cross cursor + that vertex's tip, applied AFTER the base so it
+    /// wins over the generic cell tooltip
+    int ci = -1, vi = -1;
+    const bool on = NearestVertex(event->pos(), ci, vi);
+    if( on != hoverVertex ){ setCursor(on ? Qt::CrossCursor : Qt::ArrowCursor); hoverVertex = on; }
+    if( on ) QToolTip::showText( event->globalPosition().toPoint(), VertexTip(ci, vi), this );
+  }
+  void mouseReleaseEvent(QMouseEvent * event) override{
+    if( dragCut >= 0 ){
+      RecountCut(dragCut);
+      dragCut = -1; dragVert = -1;
+      QToolTip::hideText();
+      setSelectionRectMode(QCP::SelectionRectMode::srmNone);
+      replot();
+      return;   // swallow: no zoom from the drag's sliver rect
+    }
+    QCustomPlot::mouseReleaseEvent(event);
+  }
 
 };
 
@@ -303,6 +443,9 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
 
   });
 }
+
+inline QColor cycleColor(int id, int count){ return colorCycle[((id % count)+count)%count].first; }
+inline QString cycleColorName(int id, int count){ return colorCycle[((id % count)+count)%count].second; }
 
 inline bool Histogram2D::CoordToCell(const CellGeom & g, double x, double y, int * ix, int * iy){
 
@@ -471,7 +614,7 @@ inline void Histogram2D::CommitCut(const QString & name){
   QCPItemText * text = new QCPItemText(this);
   text->setText(name);
   text->position->setCoords(tempCut[0].rx(), tempCut[0].ry());
-  text->setColor(colorCycle[ (tempCutID < 0 ? 0 : tempCutID) % colorCycle.count() ].first);
+  text->setColor( cycleColor(tempCutID, colorCycle.count()) );
   cut.textID = itemCount() - 1;
 
   cutList.push_back(cut);
@@ -499,10 +642,13 @@ inline void Histogram2D::DrawCut(){
       QCPCurve *polygon = new QCPCurve(xAxis, yAxis);
       lastPlottableID = plottableCount() - 1;
 
-      int colorID = tempCutID% colorCycle.count();
-      QPen pen(colorCycle[colorID].first);
+      const QColor col = cycleColor(tempCutID, colorCycle.count());
+      QPen pen(col);
       pen.setWidth(1);
       polygon->setPen(pen);
+      /// vertices as filled dots: the grab handles for vertex dragging (see the drag methods),
+      /// drawn BY the curve itself so they track zoom/pan with no glue code.
+      polygon->setScatterStyle( QCPScatterStyle(QCPScatterStyle::ssCircle, col, 6.0) );
 
       QVector<QCPCurveData> dataPoints;
       for (const QPointF& point : tempCut) {
@@ -516,39 +662,44 @@ inline void Histogram2D::DrawCut(){
 }
 
 inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
-  DebugPrint("%s", "Histogram2D");
+  DebugPrint("%s", "SingleSpectra");
   usingMenu = true;
   setSelectionRectMode(QCP::SelectionRectMode::srmNone);
 
-  QMenu *menu = new QMenu(this);
-  menu->setAttribute(Qt::WA_DeleteOnClose);
+  /// On the stack, alive until THIS function returns. The old heap menu carried
+  /// WA_DeleteOnClose: exec() closed and destroyed it plus its actions, the nested
+  /// QFileDialog loop below then processed those deferred deletes, and the final
+  /// `selectedAction->text()` dereference read freed memory -- the Load-Cut-then-
+  /// Cancel crash. (Create/Save branches only compared the dangling pointer, which
+  /// is why only the cancel path reliably died.) Histogram1D's menu was always stack.
+  QMenu menu(this);
 
-  QAction * a1 = menu->addAction("UnZoom");
-  QAction * a6 = menu->addAction("Set/UnSet Log-Z");
-  QAction * a2 = menu->addAction("Clear hist.");
-  QAction * a3 = menu->addAction("Toggle Stat.");
-  QAction * a4 = menu->addAction("Rebin (clear histogram)");
-  QAction * a8 = menu->addAction("Load Cut(s)");
-  QAction * a5 = menu->addAction("Create a Cut");
+  QAction * a1 = menu.addAction("UnZoom");
+  QAction * a6 = menu.addAction("Set/UnSet Log-Z");
+  QAction * a2 = menu.addAction("Clear hist.");
+  QAction * a3 = menu.addAction("Toggle Stat.");
+  QAction * a4 = menu.addAction("Rebin (clear histogram)");
+  QAction * a8 = menu.addAction("Load Cut(s)");
+  QAction * a5 = menu.addAction("Create a Cut");
   
   QAction * b0 = nullptr;
   QAction * b1 = nullptr;
   QAction * b2 = nullptr;
   if( numCut > 0 ) {
-    menu->addSeparator();
-    b0 = menu->addAction("Save Cut(s)");
-    b2 = menu->addAction("Add/Edit names to Cuts");
-    b1 = menu->addAction("Clear all Cuts");
+    menu.addSeparator();
+    b0 = menu.addAction("Save Cut(s)");
+    b2 = menu.addAction("Add/Edit names to Cuts");
+    b1 = menu.addAction("Clear all Cuts");
   }
   for( int i = 0; i < cutList.size(); i++){
     if( cutList[i].poly.isEmpty()) continue;
-    QAction * delAction = menu->addAction("Delete " + cutList[i].name + " ["+ colorCycle[cutList[i].id%colorCycle.count()].second+"]");
+    QAction * delAction = menu.addAction("Delete " + cutList[i].name + " ["+ cycleColorName(cutList[i].id, colorCycle.count())+"]");
     /// Carry the index on the action. Recovering it by parsing the label back out only ever
     /// worked for the auto-generated "Cut-N" names, and a renamed cut deleted the wrong one.
     delAction->setData(i);
   }
 
-  QAction *selectedAction = menu->exec(event->globalPosition().toPoint());
+  QAction *selectedAction = menu.exec(event->globalPosition().toPoint());
 
   // qDebug() << "=======================";
   // qDebug() << selectedAction;
@@ -586,10 +737,7 @@ inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
   }
 
   if( selectedAction == a5 ){
-    tempCut.clear();
-    tempCutID ++;
-    isDrawCut= true;
-    numCut ++;
+    BeginCreateCut();
   }
 
   if( selectedAction == a6){

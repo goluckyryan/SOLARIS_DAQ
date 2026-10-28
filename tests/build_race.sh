@@ -12,4 +12,6 @@ OBJS=$(ls *.o | grep -v "^main.o$" | grep -v "^moc_main.o$")
 
 $CXX $INC -c tests/histRace.cpp -o tests/histRace.o
 $CXX -o tests/histRace tests/histRace.o $OBJS $LIBS
-echo "built tests/histRace"
+$CXX $INC -c tests/cutMenu.cpp -o tests/cutMenu.o
+$CXX -o tests/cutMenu tests/cutMenu.o $OBJS $LIBS
+echo "built tests/histRace tests/cutMenu"
