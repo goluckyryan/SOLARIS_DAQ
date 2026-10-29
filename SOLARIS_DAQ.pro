@@ -47,7 +47,7 @@ HEADERS += ClassDigitizer2Gen.h \
 					 qcustomplot.h \
 					 Histogram1D.h \
 					 Histogram2D.h \
-					 SingleSpectra.h \
+					 SingleHistograms.h \
 					 RateMonitor.h \
 					 RateStore.h
 
@@ -64,7 +64,7 @@ SOURCES += ClassDigitizer2Gen.cpp \
 					 scope.cpp \
 					 SOLARISpanel.cpp \
 					 qcustomplot.cpp \
-					 SingleSpectra.cpp \
+					 SingleHistograms.cpp \
 					 RateMonitor.cpp
 
 # Analyses are NOT compiled into this binary. They are shared objects built by analyzers/Makefile

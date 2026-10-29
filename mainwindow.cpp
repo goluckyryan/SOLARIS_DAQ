@@ -1933,7 +1933,10 @@ void MainWindow::SaveProgramSettings(){
 
   QFile file(programPath + "/programSettings.txt");
   
-  file.open(QIODevice::Text | QIODevice::WriteOnly);
+  if( !file.open(QIODevice::Text | QIODevice::WriteOnly) ){
+    LogMsg("<font style=\"color : red;\">Cannot write " + programPath + "/programSettings.txt</font>");
+    return;
+  }
 
   // file.write((programSettingsPath+"\n").toStdString().c_str());
   file.write((masterExpDataPath+"\n").toStdString().c_str());
@@ -2325,7 +2328,10 @@ void MainWindow::WriteExpNameSh(){
   //----- create the expName.sh
   QFile file2(rawDataPath + "/expName.sh");
   
-  file2.open(QIODevice::Text | QIODevice::WriteOnly);
+  if( !file2.open(QIODevice::Text | QIODevice::WriteOnly) ){
+    LogMsg("<font style=\"color : red;\">Cannot write " + rawDataPath + "/expName.sh</font>");
+    return;
+  }
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
   // file2.write(("ExpDataPath="+ masterExpDataPath + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());

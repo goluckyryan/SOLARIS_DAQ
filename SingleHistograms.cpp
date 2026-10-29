@@ -1,4 +1,4 @@
-#include "SingleSpectra.h"
+#include "SingleHistograms.h"
 
 #include "RateMonitor.h"
 
@@ -56,7 +56,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     QGridLayout * ctrlLayout = new QGridLayout(controlBox);
     controlBox->setLayout(ctrlLayout);
 
-    ctrlLayout->addWidget(new QLabel("Split :", this), 0, 0);
+    ctrlLayout->addWidget(new QLabel("Split :", this), 0, 0, Qt::AlignRight | Qt::AlignVCenter);
 
     cbSplit = new RComboBox(this);
     cbSplit->addItem("1 x 1",  1*100 +  1);
@@ -102,9 +102,10 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     chkAutoRefresh->setChecked(true);
     chkAutoRefresh->setToolTip("Pick the replot period from the number and type of displayed plots.");
     ctrlLayout->addWidget(chkAutoRefresh, 0, 6);
-    connect(chkAutoRefresh, &QCheckBox::stateChanged, this, [=](int){
+    connect(chkAutoRefresh, &QCheckBox::checkStateChanged, this, [=](Qt::CheckState){
       if( !isSignalSlotActive ) return;
       UpdateRefreshRate();
+      markSettingsDirty();
     });
 
     ctrlLayout->addWidget(new QLabel("Refresh [ms] :", this), 0, 7);
@@ -119,6 +120,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     connect(sbRefresh, &RSpinBox::valueChanged, this, [=](double){
       if( !isSignalSlotActive ) return;
       UpdateRefreshRate();
+      markSettingsDirty();
     });
 
     lbEffRefresh = new QLabel(this);
@@ -130,16 +132,62 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     ctrlLayout->addWidget(lbSettingPath, 1, 0, 1, 9);
 
     QPushButton * bnSaveButton = new QPushButton("Save Hist. Settings", this);
-    ctrlLayout->addWidget(bnSaveButton, 1, 9, 1, 2);
     connect(bnSaveButton, &QPushButton::clicked, this, &SingleSpectra::SaveSetting);
+    
+    //^---- Auto save: every change schedules one debounced write (quiet 1.5 s, cap 5 s).
+    //^     Off = the button (and the close flush) do everything, like before this existed.
+    chkAutoSave = new QCheckBox("Auto save", this);
+    chkAutoSave->setObjectName("chkAutoSave");
+    chkAutoSave->setChecked(true);
+    chkAutoSave->setToolTip("Write HistogramSettings.json 1.5 s after the last change "
+      "(at most 5 s after the first). The write happens on its own "
+      "thread -- the plots never wait for the disk. Uncheck to save "
+      "only with the button.");
+    connect(chkAutoSave, &QCheckBox::toggled, this, [=](bool on){
+      if( !isSignalSlotActive ) return;
+      sbAutoSaveQuietMs->setEnabled( on );
+      if( on ){ markSettingsDirty(); return; }        // re-enabling: persist what changed meanwhile
+      settingsDirty = false;                          // unchecking ABANDONS pending marks:
+      if( autoSaveTimer ) autoSaveTimer->stop();      // manual mode means the button decides
+    });
+    
+    //^ The quiet period itself: written AUTO_SAVE_MS after the LAST change; the starvation cap
+    //^ rides along at max(5 s, 2 x quiet) -- see autoSaveTick.
+    sbAutoSaveQuietMs = new RSpinBox(this);
+    sbAutoSaveQuietMs->setObjectName("sbAutoSaveQuietMs");
+    sbAutoSaveQuietMs->setRange(250, 60000);
+    sbAutoSaveQuietMs->setDecimals(0);
+    sbAutoSaveQuietMs->setSingleStep(250);
+    sbAutoSaveQuietMs->setValue(1500);
+    sbAutoSaveQuietMs->setSuffix(" ms");
+    sbAutoSaveQuietMs->setToolTip("Auto save waits this long after the LAST change before writing "
+      "(burst cap: max(5 s, 2x this). The write itself never blocks the plots.");
+    connect(sbAutoSaveQuietMs, &RSpinBox::valueChanged, this, [=](double){
+      if( !isSignalSlotActive ) return;
+      markSettingsDirty();   // the wait time is itself a persisted preference
+    });
+    
+    ctrlLayout->addWidget(bnSaveButton, 3, 0, 1, 2);
+    ctrlLayout->addWidget(chkAutoSave, 3, 2, 1, 2);
+    ctrlLayout->addWidget(new QLabel("Wait time before Auto save :", this), 3, 4, 1, 2, Qt::AlignRight | Qt::AlignVCenter);
+    ctrlLayout->addWidget(sbAutoSaveQuietMs, 3, 6);
+    
+    autoSaveTimer = new QTimer(this);
+    autoSaveTimer->setObjectName("autoSaveTimer");
+    connect(autoSaveTimer, &QTimer::timeout, this, &SingleSpectra::autoSaveTick);
 
     // RateMonitor: a separate window that plots the total-entry (in-range) count rate over time
     // for whatever channels the user adds there. Created lazily on first click, then raised.
     QPushButton * bnRateMonitor = new QPushButton("Rate Monitor", this);
     bnRateMonitor->setObjectName("bnRateMonitor");
-    ctrlLayout->addWidget(bnRateMonitor, 2, 0, 1, 3);
+    //^---- same 2-column footprint as Save Hist. Settings (row 3): identical widths.
+    ctrlLayout->addWidget(bnRateMonitor, 2, 0, 1, 2);
     connect(bnRateMonitor, &QPushButton::clicked, this, [=](){
-      if( rateMonitor == nullptr ) rateMonitor = new RateMonitor(digi, nDigi, this);
+      if( rateMonitor == nullptr ){
+        rateMonitor = new RateMonitor(digi, nDigi, this);
+        // Created after the run already started: join it now (sets the gate + zeroes the clock).
+        if( acqRunning ) rateMonitor->DAQStarted();
+      }
       rateMonitor->show();
       rateMonitor->raise();
 
@@ -201,12 +249,37 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
       for( int j = 0; j < digi[i]->GetNChannels(); j++){
         hist[i][j] = new Histogram1D("Digi-" + QString::number(digi[i]->GetSerialNumber()) +", Ch-" +  QString::number(j), "Raw Energy [ch]", nBin, eMin, eMax);
         hist[i][j]->SetRateKey( QString("d%1_sn%2_ch%3").arg(i).arg(digi[i]->GetSerialNumber()).arg(j) );
+        {
+          //^ The store mirrors EXISTENCE: the channel-total key is registered the moment the
+          //^ histogram is built, gate keys when gates are drawn or loaded (signals below) --
+          //^ never conditional on DAQ/filling. SampleRates() adds history; Rate() stays false
+          //^ until real samples exist. Registration promises nothing.
+          const QString tk = hist[i][j]->RateKey();
+          rateStore.Register(tk);
+          rateStore.SetMeta(tk, i, j, QString("Digi-%1 ch-%2").arg(digi[i]->GetSerialNumber()).arg(j));
+        }
         if( digi[i]->GetFPGAType() == DPPType::PSD ){
           hist[i][j]->AddDataList("Short Energy", Qt::green);
         }
         connect(hist[i][j], &Histogram1D::AboutToRebin, this, &SingleSpectra::BeginHistogramEdit);
         connect(hist[i][j], &Histogram1D::ReBinned,     this, &SingleSpectra::EndHistogramEdit);
-        connect(hist[i][j], &Histogram1D::GateDeleted,  this, [this](const QString & k){ rateStore.Drop(k); });
+        connect(hist[i][j], &Histogram1D::GateDeleted,  this, [this](const QString & k){
+          rateStore.Drop(k);
+          if( rateMonitor ) rateMonitor->RefreshStorePicker();
+          markSettingsDirty();
+        });
+        connect(hist[i][j], &Histogram1D::GateCreated,  this, [=](const QString & k, const QString & name){
+          rateStore.Register(k);
+          rateStore.SetMeta(k, i, j, QString("Digi-%1 ch-%2  ·  %3").arg(digi[i]->GetSerialNumber()).arg(j).arg(name));
+          if( rateMonitor ) rateMonitor->RefreshStorePicker();
+          markSettingsDirty();
+        });
+        connect(hist[i][j], &Histogram1D::GateRenamed,  this, [=](const QString & k, const QString & name){
+          rateStore.SetMeta(k, i, j, QString("Digi-%1 ch-%2  ·  %3").arg(digi[i]->GetSerialNumber()).arg(j).arg(name));
+          if( rateMonitor ) rateMonitor->RefreshStorePicker();
+          markSettingsDirty();
+        });
+        connect(hist[i][j], &Histogram1D::GateBoundsChanged, this, [this](const QString &){ markSettingsDirty(); });
       }
       hist2D[i] = new Histogram2D("Digi-" + QString::number(digi[i]->GetSerialNumber()), "Channel", "Raw Energy [ch]", digi[i]->GetNChannels(), 0, digi[i]->GetNChannels(), nBin, eMin, eMax);
       hist2D[i]->SetChannelMap(true, digi[i]->GetNChannels() < 20  ? 1 : 4);
@@ -248,6 +321,11 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
 
   layout->setStretch(0, 1);
   layout->setStretch(1, 6);
+
+  // The state on disk IS the state we just loaded: whatever marking the construction pass
+  // triggered (defaults, refresh widgets), the window must not dirty-save itself open.
+  settingsDirty = false;
+  if( autoSaveTimer ) autoSaveTimer->stop();
 
   ClearInternalDataCount();
 
@@ -296,7 +374,9 @@ SingleSpectra::~SingleSpectra(){
     rateMonitor = nullptr;
   }
 
-  SaveSetting();
+  // Final, synchronous flush: the last thing this window does with its settings. An auto-save
+  // or button write still in flight is waited for, then the current DOM is written for good.
+  flushSettingsBlocking();
 
   for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++ ){
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
@@ -306,6 +386,30 @@ SingleSpectra::~SingleSpectra(){
     delete hist2D[i];
     hist2D[i] = nullptr;
   }
+}
+
+//^ The two ACQ hooks. startTimer also zeroes the clock EVERY rate number is measured on:
+//^ the RateStore sampling clock restarts, its sample histories are wiped (the counters were
+//^ zeroed by the matching stopTimer), and the RateMonitor resets its absolute-time axis and
+//^ erases the previous run's traces. One DAQ run == one time zero.
+void SingleSpectra::startTimer(){
+  timer->start(maxFillTimeinMilliSec);
+  replotTimer->start(replotIntervalMs);
+
+  sampleClock.restart();
+  rateStore.ResetHistory();
+  acqRunning = true;
+  if( rateMonitor ) rateMonitor->DAQStarted();
+}
+
+void SingleSpectra::stopTimer(){
+  timer->stop();
+  replotTimer->stop();
+  isFillingHistograms = false; // this will also break the FillHistogram do-loop
+  ClearInternalDataCount();
+
+  acqRunning = false;
+  if( rateMonitor ) rateMonitor->DAQStopped();
 }
 
 void SingleSpectra::ClearInternalDataCount(){
@@ -527,6 +631,7 @@ void SingleSpectra::SetRateTimeBase(int ms){
       if( hist[i][j] ) hist[i][j]->SetRateIntervalMs( rateBaseMs );
 
   if( rateMonitor ) rateMonitor->SetTimeBase(rateBaseMs, false); // do not echo back
+  markSettingsDirty();
 }
 
 QString SingleSpectra::TotalRateKey(int d, int ch) const{
@@ -675,6 +780,7 @@ void SingleSpectra::EndHistogramEdit(){
   }
 
   suspendFilling = false;
+  markSettingsDirty();   // the geometry the save will write just changed
 }
 
 void SingleSpectra::SetPaneSource(int p, int d, int ch){
@@ -754,6 +860,7 @@ void SingleSpectra::SetPaneSource(int p, int d, int ch){
   /// callers that happen to do it today. These flags now gate the fill, so a caller that forgot
   /// would silently stop a channel accumulating -- a much worse failure than a redundant refresh.
   UpdateVisibilityFlags();
+  markSettingsDirty();   // pane sources are part of the saved layout
 }
 
 void SingleSpectra::PaneSelectionChanged(int p){
@@ -888,6 +995,9 @@ void SingleSpectra::UpdateVisibilityFlags(){
       histVisibility[d][ch] = true;
     }
   }
+
+  /// Liveness -- what the monitor's gate picker filters on -- just changed with the panes.
+  if( rateMonitor ) rateMonitor->RefreshStorePicker();
 }
 
 void SingleSpectra::UpdateRefreshRate(){
@@ -1055,11 +1165,11 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
   QMainWindow::closeEvent(event);
 }
 
- void SingleSpectra::SaveSetting(){
-   DebugPrint("%s", "SingleSpectra");
-
-   QJsonObject root;
-   root["formatVersion"] = 2;
+  QByteArray SingleSpectra::buildSettingsJson(){
+    DebugPrint("%s", "SingleSpectra");
+ 
+    QJsonObject root;
+    root["formatVersion"] = 2;
 
    QJsonObject split;
    split["rows"] = splitRows;
@@ -1073,6 +1183,10 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
 
    //^---- the rate time base is ONE global value (formatVersion 2), not per-channel (was v1).
    root["rateMs"] = rateBaseMs;
+
+   //^---- the auto-save preference travels with the settings it controls
+   root["autoSave"] = ( chkAutoSave && chkAutoSave->isChecked() );
+   root["autoSaveMs"] = ( sbAutoSaveQuietMs ? (int) sbAutoSaveQuietMs->value() : 1500 );
 
    //^---- spectra & gates, keyed by serial number (not board index), so they survive a
    //^     change of digitizer enumeration order -- same convention as the legacy txt.
@@ -1132,14 +1246,97 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
    }
    root["panes"] = panes;
 
-   QFile file(settingPath);
-   if( !file.open(QIODevice::Text | QIODevice::WriteOnly) ){
-     printf("%s|cannot open %s\n", __func__, settingPath.toStdString().c_str());
+    return QJsonDocument(root).toJson(QJsonDocument::Indented);
+  }
+
+ //^======================================================== auto save
+ //^ tmp file + rename(2): the reader either sees the old file or the new one, never a
+ //^ half-written document. Used by the writer thread AND the dtor's blocking flush.
+static bool writeSettingsFile(const QString & path, const QByteArray & data){
+  const QString tmp = path + ".tmp";
+  QFile f(tmp);
+  bool ok = f.open(QIODevice::WriteOnly) && f.write(data) == data.size();
+  f.flush();
+  f.close();
+  if( ok ) ok = ( 0 == ::rename( tmp.toLocal8Bit().constData(), path.toLocal8Bit().constData() ) );
+  if( !ok ) QFile::remove(tmp);
+  return ok;
+}
+
+ //^ Save = build here (reads widgets), write on a one-shot thread (may be NFS). The manual
+ //^ button lands here; markSettingsDirty()/the timer reach it through the same path.
+ void SingleSpectra::SaveSetting(){
+   if( settingsDirty ){ settingsDirty = false; if( autoSaveTimer ) autoSaveTimer->stop(); }
+   writeJsonAsync( buildSettingsJson() );
+ }
+
+ void SingleSpectra::writeJsonAsync(const QByteArray & data){
+   if( fileWriterBusy.exchange(true) ){        // a write is in flight: coalesce, newest wins
+     filePendingData = data;
+     filePending = true;
      return;
    }
-   file.write( QJsonDocument(root).toJson(QJsonDocument::Indented) );
-   file.close();
-   printf("Saved Histogram Settings to %s\n", settingPath.toStdString().c_str());
+   QThread * t = QThread::create([ this, path = settingPath, data ](){
+     const bool ok = writeSettingsFile( path, data );
+     QMetaObject::invokeMethod( this, [this, ok](){ onWriteDone(ok); }, Qt::QueuedConnection );
+   });
+   connect( t, &QThread::finished, t, &QObject::deleteLater );
+   t->start();
+ }
+
+ void SingleSpectra::onWriteDone(bool ok){
+   if( !ok ) printf("SaveSetting: FAILED to write %s\n", settingPath.toStdString().c_str());
+   else      printf("Saved Histogram Settings to %s\n",   settingPath.toStdString().c_str());
+   fileWriterBusy.store(false);
+   if( filePending ){
+     filePending = false;
+     const QByteArray d = filePendingData;
+     filePendingData.clear();
+     writeJsonAsync(d);
+   }
+ }
+
+ //^ Any settings-affecting change routes through here. Quiet-period debounce: flush 1.5 s
+ //^ after the LAST mark, with a 5 s cap from the FIRST so endless editing still lands on
+ //^ disk. When the checkbox is off the marks are simply dropped (button + dtor still save).
+ void SingleSpectra::markSettingsDirty(){
+   if( settingsLoading ) return;   // LoadSetting's own restores must not re-dirty
+   if( !chkAutoSave || !chkAutoSave->isChecked() ) return;
+   if( !settingsDirty ){
+     settingsDirty = true;
+     dirtyClock.restart();
+     dirtyFirstMs = 0;
+     dirtyMarkMs  = 0;
+     if( autoSaveTimer && !autoSaveTimer->isActive() ) autoSaveTimer->start(250);
+   }else{
+     dirtyMarkMs = dirtyClock.elapsed();
+   }
+ }
+
+ //^ the autoSaveTimer tick (250 ms poll while dirty). Quiet = "wait time before Auto save"
+ //^ spinbox; the cap, max(5 s, 2x quiet), bounds how long endless editing can postpone it.
+ void SingleSpectra::autoSaveTick(){
+   if( !settingsDirty ) return;
+   const qint64 quiet = sbAutoSaveQuietMs ? (qint64) sbAutoSaveQuietMs->value() : 1500;
+   const qint64 cap   = qMax( 5000, 2 * quiet );
+   const qint64 now = dirtyClock.elapsed();
+   if( now - dirtyMarkMs >= quiet || now - dirtyFirstMs >= cap ){
+     settingsDirty = false;
+     if( autoSaveTimer ) autoSaveTimer->stop();
+     writeJsonAsync( buildSettingsJson() );
+   }
+ }
+
+ //^ Final state, always written, always synchronously: the last thing the window ever does
+ //^ with its settings. Waits briefly for an in-flight async write, then owns the file.
+ void SingleSpectra::flushSettingsBlocking(){
+   settingsDirty = false;
+   if( autoSaveTimer ) autoSaveTimer->stop();
+   QElapsedTimer w; w.start();
+   while( fileWriterBusy.load() && w.elapsed() < 1000 ) QThread::msleep(2);
+   const QByteArray d = buildSettingsJson();
+   if( !writeSettingsFile(settingPath, d) )
+     printf("%s|cannot write %s\n", __func__, settingPath.toStdString().c_str());
  }
 
  //^======================================================== LoadSetting (JSON)
@@ -1154,12 +1351,19 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
  void SingleSpectra::LoadSetting(){
    DebugPrint("%s", "SingleSpectra");
 
+   //^ Everything this function applies (Rebin, Clear/RestoreGate, SetPaneSource,
+   //^ SetRateTimeBase, refresh) is a markSettingsDirty() source; suppress marking for the
+   //^ whole load so opening the app never rewrites the file it just read. RAII: early
+   //^ returns (missing/corrupt file, migration) still clear it.
+   struct LoadGuard { SingleSpectra * s; ~LoadGuard(){ s->settingsLoading = false; } } _lg{this};
+   settingsLoading = true;
+
    QFile file(settingPath);
    if( !file.exists() ){
      QFile legacy(legacySettingPath);
      if( legacy.exists() ){
        ApplyLegacyTxtSettings(legacy);   // opens/closes it itself (frozen code)
-       SaveSetting();
+       flushSettingsBlocking();          // SYNC: the json must exist before the txt is renamed
        if( legacy.rename(legacySettingPath + ".bak") )
          printf("HistogramSettings: migrated legacy txt to json, legacy renamed .bak\n");
        else
@@ -1203,6 +1407,19 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
       }
     }
     if( baseMs > 0 ) SetRateTimeBase( baseMs );
+
+    //^---- the auto-save preference travels with the file (absent = on). The signal guard
+    //^     keeps this write-back from marking the settings dirty the moment they were read.
+    if( chkAutoSave ){
+      bool oldFlag = isSignalSlotActive;
+      isSignalSlotActive = false;
+      chkAutoSave->setChecked( root["autoSave"].toBool(true) );
+      if( sbAutoSaveQuietMs ){
+        sbAutoSaveQuietMs->setValue( root["autoSaveMs"].toInt(1500) );
+        sbAutoSaveQuietMs->setEnabled( chkAutoSave->isChecked() );
+      }
+      isSignalSlotActive = oldFlag;
+    }
 
 
    //^---- per-board geometry + gates
@@ -1299,12 +1516,16 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
      int d = -1;
      for( unsigned int i = 0; i < nDigi; i++ ) if( sn == (int)digi[i]->GetSerialNumber() ){ d = i; break; }
 
-     suspendFilling = true;
-     WaitForFillToDrain();
-     SetPaneSource(p, d, ch);
-     suspendFilling = false;
-   }
- }
+      suspendFilling = true;
+      WaitForFillToDrain();
+      SetPaneSource(p, d, ch);
+      suspendFilling = false;
+    }
+
+    // Gates were (re)created/restored above and each announces its key; make sure the monitor
+    // picker reflects them even if it was already open when this file was reloaded.
+    if( rateMonitor ) rateMonitor->RefreshStorePicker();
+  }
 
  //^======================================================== legacy txt reader (frozen)
  //^ Kept verbatim from the pre-JSON LoadSetting for the one-time migration. Do not extend;

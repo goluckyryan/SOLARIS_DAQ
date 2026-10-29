@@ -13,11 +13,11 @@ class Coincidence : public Analysis {
 
   //^---- set by the host through ChannelParam; only touched on the analysis thread
   int digiA = 0, chA = 0;
-  int digiB = 0, chB = 1;
+  int digiB = 0, chB = 4;
 
   int hEE    = -1;
-  int hTDiff = -1;
-  int hMult  = -1;
+//  int hTDiff = -1;
+// int hMult  = -1;
 
 public:
 
@@ -26,20 +26,19 @@ public:
     reg.ChannelParam("Channel A", &digiA, &chA);
     reg.ChannelParam("Channel B", &digiB, &chB);
 
-    hEE = reg.Hist2D("E(A) vs E(B)", "E(A)", "E(B)",
-                     256, 0, 30000, 256, 0, 30000, 0, 0);
+    hEE = reg.Hist2D("E(A) vs E(B)", "E(A)", "E(B)", 256, 0, 30000, 256, 0, 30000, 0, 0);
 
     /// Span the coincidence window both ways, so a window that is too wide or too narrow shows up
     /// as a peak that is lost in a flat background or clipped at the edges.
     const double w = (double)(ctx.timeWindow > 0 ? ctx.timeWindow : 100);
-    hTDiff = reg.Hist1D("tB - tA", "ns", 200, -w, w, 0, 1);
 
-    hMult = reg.Hist1D("Multiplicity", "hits / event", 65, 0, 65, 1, 0);
+//    hTDiff = reg.Hist1D("tB - tA", "ns", 200, -w, w, 0, 1);
+//    hMult = reg.Hist1D("Multiplicity", "hits / event", 65, 0, 65, 1, 0);
   }
 
   void ProcessEvent(const BuiltHit * hits, int n, HistRegistry & reg) override {
 
-    reg.Fill1(hMult, n);
+    /// reg.Fill1(hMult, n);
 
     const BuiltHit * a = nullptr;
     const BuiltHit * b = nullptr;
@@ -53,7 +52,7 @@ public:
 
     reg.Fill2(hEE, a->energy, b->energy);
     /// Signed difference, so cast out of uint64 before subtracting.
-    reg.Fill1(hTDiff, (double)b->timestamp - (double)a->timestamp);
+    /// reg.Fill1(hTDiff, (double)b->timestamp - (double)a->timestamp);
   }
 };
 

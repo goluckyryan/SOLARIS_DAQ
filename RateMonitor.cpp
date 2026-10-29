@@ -1,6 +1,6 @@
 #include "RateMonitor.h"
 
-#include "SingleSpectra.h"
+#include "SingleHistograms.h"
 #include "CustomWidgets.h"
 
 #include <QVBoxLayout>
@@ -17,6 +17,7 @@
 #include <QShowEvent>
 #include <QHideEvent>
 #include <QAbstractItemView>
+#include <QMenu>
 
 RateMonitor::RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleSpectra * ss, QWidget * parent)
   : QWidget(parent, Qt::Window), digi(digi), nDigi(nDigi), ss(ss){
@@ -50,8 +51,33 @@ RateMonitor::~RateMonitor(){
   for( const Trace & tr : traces ) if( tr.d >= 0 ) ss->SetMonitorSelected(tr.d, tr.ch, false);
 }
 
+void RateMonitor::DAQStarted(){
+  acqOn = true;
+  // One DAQ run, one time zero: the x clock restarts and the previous run's points are erased.
+  // (SingleSpectra zeroes the STORE's clock and histories in the same hook, so store dt math
+  // never straddles the reset either.) Hidden windows wait for showEvent to arm the timer.
+  clock.restart();
+  for( Trace & tr : traces ) tr.graph->data()->clear();
+  if( isVisible() ){
+    ss->SampleRates();
+    RefreshStorePicker();
+    timer->start(timeBaseMs);
+  }
+  plot->replot();
+}
+
+void RateMonitor::DAQStopped(){
+  acqOn = false;
+  timer->stop();   // the last frame of the run stays up until the next start
+}
+
 void RateMonitor::showEvent(QShowEvent * e){
   QWidget::showEvent(e);
+  // The window does not sample outside an acquisition: opened before DAQ start (or after
+  // stop) it sits idle with an empty picker; StartACQ's DAQStarted() picks up the run.
+  if( !acqOn ) return;
+  ss->SampleRates();      // keys exist to list the moment the window appears,
+  RefreshStorePicker();   // not one time-base tick later
   timer->start(timeBaseMs);
 }
 
@@ -114,22 +140,16 @@ void RateMonitor::BuildUI(){
     if( ms > 0 ) SetTimeBase(ms, true);
   });
 
-  chkLogY = new QCheckBox("Log Y", this);
-  ctrl->addWidget(chkLogY, 0, 8);
-  connect(chkLogY, &QCheckBox::toggled, this, &RateMonitor::SetLogY);
-
-  chkFixedY = new QCheckBox("Fixed Y", this);
-  ctrl->addWidget(chkFixedY, 0, 9);
-  chkFixedY->setToolTip("Freeze the Y auto-rescale. Drag to pan, scroll wheel to zoom the Y range.");
-  connect(chkFixedY, &QCheckBox::toggled, this, &RateMonitor::SetFixedY);
-
-  //---- second row: subscribe to anything the RateStore already knows -- histogram totals and
-  //---- every live 1D gate, by display name. Refreshed whenever it could have changed.
-  ctrl->addWidget(new QLabel("Histogram / gate :", this), 1, 0);
+  //---- second row: subscribe to any GATE that exists -- by display name. Histogram totals are
+  //---- row 1's job (digitizer + channel + Add). Refreshed whenever a gate is born/renamed/dies
+  //---- or a pane remounts, whether or not the DAQ is running.
+  ctrl->addWidget(new QLabel("Gate :", this), 1, 0);
   cbStore = new RComboBox(this);
   cbStore->setObjectName("cbStore");
   cbStore->setMinimumWidth(260);
-  cbStore->setToolTip("Live rate channels: mounted/monitored histogram totals and their gates.");
+  cbStore->setToolTip("Every gate that exists, listed whether or not its histogram is mounted. "
+                      "Adding one here starts its counting (monitor alone drives the fill). "
+                      "Track a channel total with the row above.");
   ctrl->addWidget(cbStore, 1, 1, 1, 3);
 
   QPushButton * bnAddStore = new QPushButton("Add Selected", this);
@@ -173,7 +193,28 @@ void RateMonitor::BuildUI(){
   plot->legend->setFont(QFont("Helvetica", 9));
   plot->xAxis->setRange(0, windowSec);
   plot->yAxis->setRange(0, 10);
-  plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom); // used to pan/zoom in Fixed Y mode
+  plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
+  plot->setToolTip("Wheel / drag: Y axis only (X is the rolling window).\n"
+                   "A user zoom holds the Y range; right-click Unzoom releases it.\n"
+                   "Right-click also toggles Log Y.");
+  //^---- wheel and drag touch the Y axis ONLY: the X axis is the rolling window owned by the
+  //^     sample clock; panning/zooming it sideways would fight every tick's setRange anyway.
+  plot->axisRect()->setRangeZoom(Qt::Vertical);
+  plot->axisRect()->setRangeDrag(Qt::Vertical);
+  //^---- right-click: Unzoom (back to auto mode, padded default range)
+  plot->setContextMenuPolicy(Qt::CustomContextMenu);
+  connect( plot, &QWidget::customContextMenuRequested, this, [this](const QPoint & pos){
+    QMenu menu(plot);
+    QAction * aLogY   = menu.addAction("Log Y");
+    aLogY->setCheckable(true);
+    aLogY->setChecked( plot->yAxis->scaleType() == QCPAxis::stLogarithmic );
+    menu.addSeparator();
+    QAction * aUnzoom = menu.addAction("Unzoom");
+    QAction * sel = menu.exec( plot->mapToGlobal(pos) );
+    if( sel == aUnzoom )      UnzoomY();
+    else if( sel == aLogY )   SetLogY( aLogY->isChecked() );
+  });
+  connect( plot->yAxis, QOverload<const QCPRange &>::of(&QCPAxis::rangeChanged), this, &RateMonitor::onYRangeChanged );
   plot->replot();
   main->addWidget(plot, 1);
 
@@ -251,12 +292,41 @@ void RateMonitor::SetLogY(bool on){
   plot->replot();
 }
 
-void RateMonitor::SetFixedY(bool on){
-  if( !on )
-    plot->yAxis->rescale(true); // resume auto-rescale immediately
-  // on: keep the current (last auto-scaled) range as the starting fixed range;
-  // the user then adjusts it by dragging / scrolling
+//^ Auto mode's Y fit: hug the visible data, then add 10% headroom (max 5 -> 0..5.5).
+//^ A linear axis never shows negative rates (minimum clamped to 0); a log axis keeps a
+//^ positive floor instead. yAutoBusy keeps our own writes from looking like user action.
+void RateMonitor::FitY(){
+  yAutoBusy = true;
+  plot->yAxis->rescale(true);
+  const QCPRange yr = plot->yAxis->range();
+  if( yr.size() < 1e-6 )
+    plot->yAxis->setRange( 0, 10 );                              // nothing visible yet
+  else if( plot->yAxis->scaleType() == QCPAxis::stLogarithmic )
+    plot->yAxis->setRange( qMax( 1e-3, yr.lower ), yr.upper * 1.1 );
+  else
+    plot->yAxis->setRange( 0, yr.upper * 1.1 );
+  yAutoBusy = false;
+}
+
+//^ Right-click Unzoom: give the axis back to auto control and land on the padded default NOW.
+void RateMonitor::UnzoomY(){
+  yFixed = false;   // back under auto control...
+  FitY();           // ...and land on the padded default range NOW, not next tick
   plot->replot();
+}
+
+//^ Every Y range change that is NOT ours is the user zooming/panning:
+//^  - the linear minimum stays at 0 (a rate axis has no negative side; log excepted), and
+//^  - auto-rescale is switched OFF (Fixed Y), because the next Sample() tick would otherwise
+//^    overwrite exactly the zoom-out the user just performed.
+void RateMonitor::onYRangeChanged(const QCPRange & range){
+  if( yAutoBusy ) return;
+  yFixed = true;   // no checkbox: the zoom itself is the switch, Unzoom is the way back
+  if( plot->yAxis->scaleType() == QCPAxis::stLinear && range.lower < 0. ){
+    yAutoBusy = true;
+    plot->yAxis->setRange( 0., range.upper );
+    yAutoBusy = false;
+  }
 }
 
 void RateMonitor::SetTimeBase(int ms, bool fromUser){
@@ -340,14 +410,20 @@ void RateMonitor::RemoveTrace(const QString & key){
 }
 
 //^====================================================
+//^ The picker lists GATES THAT EXIST: keys are registered when a gate is drawn or loaded,
+//^ whether or not its histogram is on screen -- an unmounted channel's gates stay listed.
+//^ COMPUTATION follows OBSERVATION instead: counts are produced (fill worker + sampling)
+//^ only when someone watches -- a mounted pane (histogram labels) or a trace added here
+//^ (HoldChannel starts the drain; catch-up from the ring shows as one honest burst that
+//^ settles within a window). Histogram TOTALS are deliberately absent: row 1 is their face.
 void RateMonitor::RefreshStorePicker(){
   const QString sel = cbStore->currentData().toString();
   cbStore->blockSignals(true);
   cbStore->clear();
   const QStringList keys = ss->rateStore.Keys();
   for( const QString & k : keys ){
+    if( !k.contains(QLatin1String("/g")) ) continue;  // totals go via row 1 (GateKey == ".../gN")
     if( HasKey(k) )         continue; // already a trace on screen
-    if( !ss->RateChannelLive(k) ) continue; // stale: owner drained by nobody
     cbStore->addItem(DisplayFor(k), k);
   }
   const int idx = cbStore->findData(sel);
@@ -362,17 +438,23 @@ QString RateMonitor::DisplayFor(const QString & key) const{
 
 //^====================================================
 void RateMonitor::Sample(){
+  if( !acqOn ) return;   // DAQ stopped between arming and this queued tick: drop it
+  // Pump FIRST so the picker rebuild below -- and the trace reads -- see THIS tick's keys;
+  // refreshing before the pump cost a tick of latency on every newly appearing key.
+  // We are part of the sampling clock: the pump keeps the store's right edge as fresh as
+  // this tick, independent of the histogram replot period. It runs EVEN WITH ZERO TRACES:
+  // the picker lists live keys, and keys only exist once sampled -- without the pump the
+  // store stays empty until ACQ starts the replot clock, the picker shows nothing, and the
+  // first trace could never be added before Start.
+  ss->SampleRates();
+
   // The picker tracks the store's live contents, not just dialog-open / add / remove: gates
   // restored by a settings reload (the reopen path) or created after this dialog opened show
   // up within one tick. Skipped while the popup is open -- rebuilding it under the cursor
   // would close the list mid-read. RefreshStorePicker preserves the current selection.
   if( !cbStore->view()->isVisible() ) RefreshStorePicker();
 
-  if( traces.isEmpty() ) return; // nothing to plot; skip the pump and the replot churn
-
-  // We are part of the sampling clock: pump the store first so the window's right edge is as
-  // fresh as this tick, independent of the histogram replot period.
-  ss->SampleRates();
+  if( traces.isEmpty() ) return; // nothing to plot; skip the expire walk and the replot churn
 
   // Auto-expire traces whose key has LEFT the store (its gate was deleted -- Drop is the only
   // thing that removes keys, and it runs exactly when the histogram drops the gate). Two ticks
@@ -412,16 +494,9 @@ void RateMonitor::Sample(){
   if( xlo < 0 ){ xhi = windowSec; xlo = 0; }
   plot->xAxis->setRange(xlo, xhi);
 
-  if( !chkFixedY->isChecked() ){
-    // auto mode: rescale the Y axis to the visible data every sample
-    plot->yAxis->rescale(true);
-    QCPRange yr = plot->yAxis->range();
-    if( yr.size() < 1e-6 )
-      plot->yAxis->setRange(0, 10);
-    else if( chkLogY->isChecked() && yr.lower <= 0 )
-      plot->yAxis->setRange(1e-3, yr.upper); // a log axis cannot show 0
-  }
-  // fixed mode: leave the Y range untouched so the user's pan/zoom survives
+  if( !yFixed )
+    FitY();     // auto mode: hug the data with 10% headroom every sample
+  // user-owned Y range (zoomed): leave it untouched so the pan/zoom survives
 
   plot->replot();
 }

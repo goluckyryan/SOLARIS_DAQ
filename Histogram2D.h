@@ -221,9 +221,11 @@ private:
     c->data()->set(d, false);
   }
 
+public:
   /// cells-inside-polygon sum from the widget's own color map -- the online path (SetCellContents)
   /// never touched cut.entries (only the legacy offline Fill() looped it), so a dragged cut must
-  /// be recounted from the drawn cells or its number would freeze at creation time.
+  /// be recounted from the drawn cells or its number would freeze at creation time. Public: a
+  /// caller that republishes the map AFTER the release (the headless harness) may recount again.
   void RecountCut(int ci){
     Cut & c = cutList[ci];
     if( c.poly.isEmpty() ) return;

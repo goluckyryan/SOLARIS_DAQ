@@ -64,6 +64,23 @@ public:
   void Drop(const QString & key){ order.removeAll(key); chans.remove(key); }
   bool Exists(const QString & key) const { return chans.contains(key); }
 
+  /// Idempotent creation. Keys mirror EXISTENCE (a histogram channel, a drawn gate), not data:
+  /// the owner registers a key when it appears -- while the DAQ is idle -- and Sample() only
+  /// ever adds history. Registration alone promises nothing: Rate() says false until real
+  /// samples exist, and picker filters decide on LIVENESS separately (see the meta owner).
+  void Register(const QString & key){
+    if( chans.contains(key) ) return;
+    order.append(key);
+    chans.insert(key, Chan());
+  }
+
+  /// Wipe every sample history but keep keys and meta: called when a new DAQ run zeroes the
+  /// sampling clock, so no window ever straddles the time discontinuity. The next Sample()
+  /// per key re-seeds from there.
+  void ResetHistory(){
+    for( auto it = chans.begin(); it != chans.end(); ++it ) it.value().h.clear();
+  }
+
   /// Registration order, so a consumer's picker list does not reshuffle between opens.
   const QStringList & Keys() const { return order; }
 

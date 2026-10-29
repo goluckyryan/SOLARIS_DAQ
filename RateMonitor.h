@@ -30,6 +30,8 @@ class QCPGraph;
 //^ tile back-to-back like MCS bins; a longer average = more counts per point = less Poisson
 //^ scatter (1/sqrt N). The window is linked app-wide (SingleSpectra::SetRateTimeBase).
 //^ While hidden the timer is stopped -- closed means idle, never a silent plot loop.
+//^ While the DAQ is not running the window is likewise idle (acqOn gate); each DAQ start
+//^ resets the plot's absolute time to zero and erases the previous run's points.
 //^====================================================
 class RateMonitor : public QWidget{
   Q_OBJECT
@@ -44,6 +46,22 @@ public:
   //^     originated from the main window, so it updates here without echoing back.
   void SetTimeBase(int ms, bool fromUser = true);
 
+  /// Y auto-rescale currently paused (a user zoom owns the axis; Unzoom resumes). Public for
+  /// the headless harness; there is deliberately no checkbox anymore.
+  bool YFixed() const { return yFixed; }
+
+  //^---- the acquisition gate. The monitor only samples while DAQ runs: DAQStopped freezes the
+  //^     plot (last frame, no loop), DAQStarted resets ABSOLUTE TIME TO ZERO -- the x clock
+  //^     restarts and the previous run's trace points are erased. (SingleSpectra drives both
+  //^     from its startTimer/stopTimer ACQ hooks, and tells a freshly created monitor too.)
+  void DAQStarted();
+  void DAQStopped();
+
+  //^---- SingleSpectra calls this when the gate picture changes WHILE the DAQ is idle (gate
+  //^     drawn/loaded/renamed/deleted, a pane remounted): the picker lists what EXISTS, and
+  //^     existence is announced by signals, not by samples. Safe to call any time.
+  void RefreshStorePicker();          // relist live, untraced GATE keys (totals come via row 1)
+
 protected:
   void showEvent(QShowEvent * e) override;  // resume the sampling+plot loop
   void hideEvent(QHideEvent * e) override;  // stop it -- closing the window must not keep plotting
@@ -56,16 +74,21 @@ private slots:
   void RemoveChannel();     // drop the list row the user picked
   void ClearAll();          // drop every subscription
   void SetLogY(bool on);    // toggle the Y scale type
-  void SetFixedY(bool on);  // freeze/resume the Y auto-rescale
+  void UnzoomY();           // right-click: back to auto mode with the padded default range
+
+private slots:
+  /// Any USER-driven Y range change: hands the axis to Fixed-Y (an auto tick would undo it)
+  /// and enforces the linear minimum of 0.
+  void onYRangeChanged(const QCPRange & range);
 
 private:
   void BuildUI();
+  void FitY();                 // rescale + 10% headroom + minimum clamp (shared by all resets)
   bool HasKey(const QString & key) const;
   void AddTrace(const QString & key, int d, int ch, const QString & name);
   void RemoveTrace(const QString & key);
   void HoldChannel(int d, int ch);    // SetMonitorSelected(true), idempotent
   void ReleaseIfUnused(int d, int ch);// drop the drain only when no other trace needs it
-  void RefreshStorePicker();          // relist live rateStore keys that are not yet traced
   QString DisplayFor(const QString & key) const;
   QString TimeBaseText() const;       // "2 s" style label of the shared time base
   QString ChannelName(int d, int ch) const;
@@ -83,8 +106,6 @@ private:
   RComboBox   * cbStore;    // live rateStore keys: totals and 1D gates
   RComboBox   * cmbTimeBase; // integration time (time base), e.g. 1 s / 5 s / 30 s
   QListWidget * lstMonitored;
-  QCheckBox   * chkLogY;
-  QCheckBox   * chkFixedY; // freeze the Y auto-rescale (user pans/zooms instead)
 
   // One entry per subscribed store key. d/ch is the OWNING channel (drain refcount), not the key.
   struct Trace{
@@ -99,6 +120,9 @@ private:
   QVector<QColor> palette;
   int timeBaseMs = 1000;         // MIRROR of SingleSpectra::rateBaseMs; timer interval = window
   int windowSec = 300;           // keep the last five minutes
+  bool acqOn = false;            // DAQ gate: no sampling, no timer, no pump until DAQStarted()
+  bool yAutoBusy = false;        // we are setting the Y range ourselves; do not treat it as user action
+  bool yFixed    = false;        // Y auto-rescale paused by a USER zoom (Unzoom resumes)
 };
 
 #endif

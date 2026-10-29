@@ -32,7 +32,7 @@
 #include "digiSettingsPanel.h"
 #include "scope.h"
 #include "SOLARISpanel.h"
-#include "SingleSpectra.h"
+#include "SingleHistograms.h"
 #include "Analyzer.h"
 
 const int chromeWindowID = -1; // disable capture screenshot

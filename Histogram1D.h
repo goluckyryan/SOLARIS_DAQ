@@ -347,13 +347,14 @@ public:
     if( k < 0 || k >= gates.size() || name.isEmpty() ) return false;
     gates[k].name = name;
     UpdateGateLabel(k);
+    emit GateRenamed( GateKey(k), name );   // id (and so the key) is unchanged; only the label moves
     return true;
   }
 
   /// atPixel (widget coords) centers the band under the cursor; the default centers it on the
   /// axis. Width is 10 % of the axis range. All item positions are ptPlotCoords -- QCP defaults
   /// them to ptAbsolute, which would place energy values at equal pixel offsets, i.e. invisible.
-  int AddGate(const QPoint & atPixel = QPoint(INT_MIN, INT_MIN)){
+  int AddGate(const QPoint & atPixel = QPoint(INT_MIN, INT_MIN), bool announce = true){
     if( gates.size() >= MaxGates ) return -1;
     const double hw = 0.05*(xMax - xMin);                       // 10 % full width
     double c = ( atPixel.x() == INT_MIN ) ? 0.5*(xMin + xMax)
@@ -390,6 +391,9 @@ public:
     UpdateGateLabel(gates.size()-1);
     UpdateGateGeometry();
     replot();
+    /// announce=false during RestoreGate: the id/name are not final yet and the key rides
+    /// the id -- announcing here would register a TEMP key no one owns.
+    if( announce ) emit GateCreated( GateKey(gates.size()-1), gates.last().name );
     return gates.size() - 1;
   }
 
@@ -403,7 +407,7 @@ public:
     if( id >= 0 )
       for( int k = 0; k < gates.size(); k++ )
         if( gates[k].id == id ) return k;
-    const int k = AddGate();
+    const int k = AddGate( QPoint(INT_MIN,INT_MIN), /*announce*/false );
     if( k < 0 ) return -1;
     if( id >= 0 ){
       gates[k].id   = id;
@@ -417,6 +421,8 @@ public:
     /// so with the replot clock idle (ACQ stopped) that interim frame is what the user sees:
     /// a "ghost Gate-N" floating at the centre until any manual replot. Show the final one.
     replot();
+    /// Announce only NOW, under the FINAL key (the id renumber above moved it) and name.
+    emit GateCreated( GateKey(k), gates[k].name );
     return k;
   }
 
@@ -521,6 +527,7 @@ public:
     gates[k].x0 = qBound(xMin, lo, xMax);
     gates[k].x1 = qBound(xMin, hi, xMax);
     UpdateGateGeometry();
+    emit GateBoundsChanged( GateKey(k) );
   }
 
   void UpdateGateLabel(int k){
@@ -767,6 +774,7 @@ protected:
   }
   void mouseReleaseEvent(QMouseEvent * event) override{
     if( dragGate >= 0 ){
+      emit GateBoundsChanged( GateKey(dragGate) );   // the saved bounds just moved
       dragGate = -1;
       QToolTip::hideText();
       setSelectionRectMode(QCP::SelectionRectMode::srmNone);
@@ -788,6 +796,15 @@ signals:
 
   /// A gate was deleted; SingleSpectra drops its RateStore history so the key does not linger.
   void GateDeleted(const QString & storeKey);
+
+  /// A gate's birth / rename. Key follows the gate ID (stable across renames); the owner
+  /// registers the key in the RateStore and refreshes the monitor picker from these -- with
+  /// the DAQ idle, a drawn or loaded gate must be listable without ever having been sampled.
+  void GateCreated(const QString & key, const QString & name);
+  void GateRenamed(const QString & key, const QString & name);
+  /// Bounds moved: from the drag release and from the Edit dialog (via SetGateBounds). Emitted
+  /// by SetGateBounds itself, so every path that changes a stored value announces it.
+  void GateBoundsChanged(const QString & key);
 
 private:
   double xMin, xMax, dX;

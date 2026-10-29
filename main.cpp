@@ -54,11 +54,15 @@ int main(int argc, char *argv[]){
         }
     }
 
-    lockFile.open(QIODevice::Text | QIODevice::WriteOnly);
+    if( !lockFile.open(QIODevice::Text | QIODevice::WriteOnly) )
+      printf("######### could not open lock file %s -- stale-instance guard disabled\n",
+             qPrintable(lockFile.fileName()));
     lockFile.write( "1" );
     lockFile.close();
 
-    pidFile.open(QIODevice::Text | QIODevice::WriteOnly);
+    if( !pidFile.open(QIODevice::Text | QIODevice::WriteOnly) )
+      printf("######### could not open pid file %s -- stale-instance guard disabled\n",
+             qPrintable(pidFile.fileName()));
     pidFile.write(  QString::number(QCoreApplication::applicationPid() ).toStdString().c_str() );
     pidFile.close();
 

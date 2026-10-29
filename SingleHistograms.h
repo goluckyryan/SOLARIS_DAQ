@@ -63,6 +63,15 @@ public:
   void LoadSetting();
   void SaveSetting();
 
+  /// Auto-save plumbing: ANY settings-affecting change calls markSettingsDirty(); a 250 ms
+  /// poll flushes a full snapshot 1.5 s after the LAST mark (quiet) or 5 s after the FIRST
+  /// (cap -- endless editing cannot starve the write). The JSON is BUILT on the GUI thread
+  /// (it reads widgets), WRITTEN on a one-shot thread (tmp + atomic rename), so even an NFS
+  /// home with 10+ digitizers (~0.5 MB) never hitches the replot loop. "Auto save" checkbox
+  /// (persisted in the json root) gates the marking; the button and the dtor flush always work.
+  void markSettingsDirty();
+  void autoSaveTick();
+
   void SetMaxFillTime(unsigned short milliSec) { maxFillTimeinMilliSec = milliSec;}
   unsigned short GetMaxFillTime() const {return maxFillTimeinMilliSec;};
 
@@ -84,6 +93,18 @@ public:
   /// or held by a monitor trace) -- i.e. its window is fresh, not a stale leftover.
   bool RateChannelLive(const QString & key) const;
 
+  /// Redirects where settings are read/written. The headless harness MUST call this:
+  /// without it a test instance saves its chaos straight into the live experiment tree.
+  void SetSettingPath(const QString & p){ settingPath = p; }
+  QString SettingPath() const { return settingPath; }   // for the harness's self-check
+
+  /// The (d,ch) histogram widget, or nullptr. Unmounted widgets are parentless -- this is the
+  /// only handle to them (the test harness verifies gate/monitor behaviour on them).
+  Histogram1D * ChannelHist(int d, int ch) const {
+    if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= MaxNumberOfChannel ) return nullptr;
+    return hist[d][ch];
+  }
+
   /// Pump the RateStore from the worker atomics: totals and live 1D gate sums, for every channel
   /// that is mounted or monitored. GUI thread; called by the replot clock and by the monitor's
   /// own tick, so the sampling horizon never lags the slowest consumer.
@@ -103,22 +124,19 @@ signals:
   // void startWorkerTimer(int interval);
   // void stopWorkerTimer();
 
+  /// Emitted from the one-shot writer thread; received queued on the GUI thread.
+  void settingsWriteFinished(bool ok);
+
 public slots:
   void FillHistograms();
-  void startTimer(){
-    // printf("timer start\n");
-    timer->start(maxFillTimeinMilliSec);
-    replotTimer->start(replotIntervalMs);
-    // emit startWorkerTimer(maxFillTimeinMilliSec);
-  }
-  void stopTimer(){
-    // printf("timer stop\n");
-    timer->stop();
-    replotTimer->stop();
-    // emit stopWorkerTimer();
-    isFillingHistograms = false; // this will also break the FillHistogram do-loop
-    ClearInternalDataCount();
-  }
+  /// The two ACQ hooks (MainWindow::StartACQ and Scope::TellACQOnOff). Defined in the .cpp:
+  /// starting a run also zeroes the RateStore clock and the monitor's time axis.
+  void startTimer();
+  void stopTimer();
+
+  /// True between startTimer() and stopTimer(). The RateMonitor refuses to sample outside
+  /// this window: opening it before DAQ start shows an empty, idle window.
+  bool AcquisitionRunning() const { return acqRunning; }
 
 private:
 
@@ -139,6 +157,8 @@ private:
 
   std::atomic<bool> isFillingHistograms;
   std::atomic<bool> suspendFilling;  // set while the GUI thread re-parents plot widgets
+
+  bool acqRunning = false;           /// mirrors start/stopTimer; GUI thread only
 
   /// Mirrors of GUI state the worker used to read straight off the widgets. QWidget accessors are
   /// not safe to call from another thread, so the GUI writes these and the worker reads them.
@@ -243,6 +263,23 @@ private:
   /// object owns the pointer and deletes it in ~SingleSpectra (after the worker is stopped), so it
   /// cannot be auto-freed a second time by the QObject destructor.
   RateMonitor * rateMonitor = nullptr;
+
+  //---- auto save (see markSettingsDirty)
+  QCheckBox * chkAutoSave = nullptr;
+  RSpinBox  * sbAutoSaveQuietMs = nullptr;   // "wait time before Auto save" (debounce)
+  QTimer    * autoSaveTimer = nullptr;   // 250 ms poll, runs only while dirty
+  QElapsedTimer dirtyClock;              // restarted at the first mark of a burst
+  bool   settingsDirty = false;
+  bool   settingsLoading = false;        // LoadSetting() applied: its own signals must not re-dirty
+  qint64 dirtyFirstMs = 0;               // first mark of the burst (cap)
+  qint64 dirtyMarkMs  = 0;               // latest mark (quiet period)
+  std::atomic<bool> fileWriterBusy{false};
+  QByteArray filePendingData;            // coalesced snapshot waiting for the in-flight write
+  bool       filePending = false;
+  QByteArray buildSettingsJson();                       // GUI thread: DOM -> bytes
+  void writeJsonAsync(const QByteArray & data);          // one-shot writer thread
+  void onWriteDone(bool ok);                             // queued back onto the GUI thread
+  void flushSettingsBlocking();                          // dtor: final state on disk, always
 
 protected:
   /// Keep windowVisible in step without the worker having to call isVisible() itself.
