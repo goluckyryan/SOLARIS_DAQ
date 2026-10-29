@@ -3063,6 +3063,15 @@ void DigiSettingsPanel::FillComboBoxValueFromMemory(RComboBox *&cbb, const Reg &
   QString result = QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index));
   //printf("%s === %s, %d, %p\n", __func__, result.toStdString().c_str(), ID, cbb);
   int index = cbb->findData(result);
+  if( index < 0 ){
+    // The board reports enumeration values with the device tree's spelling, which does not
+    // always match our token lists (CUP 2025012205 answers TRGIN where Reg answers TrgIn).
+    // FELib accepts either on write, but the getter returns the tree's form -- match on the
+    // letters, not the case, or the combo silently keeps item 0 (e.g. showing "Disabled"
+    // for a channel really masked on TRGIN).
+    for( int i = 0; i < cbb->count(); i++ )
+      if( cbb->itemData(i).toString().compare(result, Qt::CaseInsensitive) == 0 ){ index = i; break; }
+  }
   if( index >= 0 && index < cbb->count()) {
     cbb->setCurrentIndex(index);
   }else{

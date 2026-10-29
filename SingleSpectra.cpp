@@ -4,6 +4,7 @@
 
 #include <QValueAxis>
 #include <QElapsedTimer>
+#include <cmath>
 #include <QGroupBox>
 #include <QStandardItemModel>
 #include <QLabel>
@@ -135,12 +136,41 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     // RateMonitor: a separate window that plots the total-entry (in-range) count rate over time
     // for whatever channels the user adds there. Created lazily on first click, then raised.
     QPushButton * bnRateMonitor = new QPushButton("Rate Monitor", this);
+    bnRateMonitor->setObjectName("bnRateMonitor");
     ctrlLayout->addWidget(bnRateMonitor, 2, 0, 1, 3);
     connect(bnRateMonitor, &QPushButton::clicked, this, [=](){
       if( rateMonitor == nullptr ) rateMonitor = new RateMonitor(digi, nDigi, this);
       rateMonitor->show();
       rateMonitor->raise();
+
       rateMonitor->activateWindow();
+    });
+
+    //^---- THE rate time average, owned here: one shared trailing window for every instantaneous
+    //^ number in the app (histogram total + gate labels, every RateMonitor trace). The monitor's
+    //^ own combo is a second face of this same control.
+    ctrlLayout->addWidget(new QLabel("Time average :", this), 2, 3);
+    cbRateBase = new RComboBox(this);
+    cbRateBase->setObjectName("cbRateBase");
+    cbRateBase->blockSignals(true); // seeded below; the slot must not fire during construction
+    cbRateBase->addItem("1 s",   1000);
+    cbRateBase->addItem("2 s",   2000);
+    cbRateBase->addItem("5 s",   5000);
+    cbRateBase->addItem("10 s",  10000);
+    cbRateBase->addItem("30 s",  30000);
+    cbRateBase->addItem("1 min", 60000);
+    cbRateBase->addItem("5 min", 300000);
+    cbRateBase->blockSignals(false);
+    cbRateBase->setToolTip("Trailing averaging window for ALL instantaneous rates, shown as Hz: "
+                           "histogram stat labels, gate labels and every RateMonitor trace. "
+                           "Longer = smoother (1/sqrt N).");
+    ctrlLayout->addWidget(cbRateBase, 2, 4);
+    QLabel * lbSlideHint = new QLabel("(the rate in the histogram is a sliding window)", this);
+    lbSlideHint->setStyleSheet("color:gray;");
+    ctrlLayout->addWidget(lbSlideHint, 2, 5, 1, 2);
+    connect(cbRateBase, &RComboBox::currentIndexChanged, this, [=](int){
+      if( !isSignalSlotActive ) return;
+      SetRateTimeBase( cbRateBase->currentData().toInt() );
     });
 
   }
@@ -424,25 +454,92 @@ void SingleSpectra::PublishHist1D(int d, int ch){
     for( int b = 0; b < h.nBin; b++ ) scratch[b] = h.c[s][b].load(std::memory_order_relaxed);
     hist[d][ch]->SetBinContents(scratch.data(), h.nBin, tot, un, ov, s);
   }
+  /// Rate sampling is NOT here: see SampleRates(), which samples mounted OR monitored channels
+  /// (the publish path only reaches mounted ones) on the same clock, from the same atomics.
+}
 
-  //^---- instantaneous-rate sampling, one clock: the publish (replot) tick. The total rate feeds
-  //^ the stat label; gate rates come from the bins just pushed in above (GateSum). Decrease on a
-  //^ clear/reset is detected inside the store, which re-seeds the window.
-  Histogram1D * w = hist[d][ch];
+//^======================================================== rate sampling
+//^ One clock for every instantaneous number in the app: the replot tick, plus the monitor's own
+//^ tick. The sampled set == the drained set (mounted OR monitored): an unmounted histogram whose
+//^ gates someone is watching still produces, because the monitor keeps its channel drained via
+//^ SetMonitorSelected; nothing else pays for sampling at all. Gate sums are taken straight from
+//^ the atomics (series 0, bin resolution) -- never from the widget's published bins -- so a
+//^ monitored-but-unmounted channel yields true counts. The decrease-on-clear re-seed lives in
+//^ the store. Meta labels registered here are what RateMonitor's picker shows.
+void SingleSpectra::SampleRates(){
+  if( !sampleClock.isValid() ) return;
   const qint64 now = sampleClock.elapsed();
-  const int keepMs = w->RateIntervalMs() + 60000;
-  const QString key = w->RateKey();
 
-  double r;
-  rateStore.Sample(key, now, tot, keepMs);
-  w->SetDisplayRate( rateStore.Rate(key, w->RateIntervalMs(), r) ? r : -1.0 );
+  for( int i = 0; i < (int)nDigi; i++ ){
+    if( !digi[i] ) continue;
+    for( int j = 0; j < digi[i]->GetNChannels(); j++ ){
+      Histogram1D * w = hist[i][j];
+      if( !w ) continue;
+      if( !histVisibility[i][j].load(std::memory_order_relaxed) &&
+          !monitorSelected[i][j].load(std::memory_order_relaxed) ) continue;
 
-  for( int k = 0; k < w->GateCount(); k++ ){
-    const QString gk = w->GateKey(k);
-    rateStore.Sample(gk, now, w->GateSum(k), keepMs);
-    const bool ok = rateStore.Rate(gk, w->RateIntervalMs(), r);
-    w->SetGateRate(k, ok, r);
+      H1Counts & h = c1[i][j];
+      if( h.nBin <= 0 || h.dx <= 0. ) continue;
+
+      const int keepMs = rateBaseMs + 60000;
+      const QString sn = QString::number(digi[i]->GetSerialNumber());
+      double r;
+
+      const QString key = w->RateKey();
+      const unsigned long tot = (unsigned long) h.total.load(std::memory_order_relaxed);
+      rateStore.Sample(key, now, tot, keepMs);
+      rateStore.SetMeta(key, i, j, QString("Digi-%1 ch-%2").arg(sn).arg(j));
+      w->SetDisplayRate( rateStore.Rate(key, rateBaseMs, r) ? r : -1.0 );
+
+      for( int k = 0; k < w->GateCount(); k++ ){
+        int b0 = int( std::floor((w->GateLow(k)  - h.lo) / h.dx) );
+        int b1 = int( std::ceil ((w->GateHigh(k) - h.lo) / h.dx) ) - 1;
+        b0 = qBound(0, b0, h.nBin - 1);
+        b1 = qBound(0, b1, h.nBin - 1);
+        unsigned long sum = 0;
+        if( h.c[0] ) for( int b = b0; b <= b1; b++ ) sum += h.c[0][b].load(std::memory_order_relaxed);
+
+        const QString gk = w->GateKey(k);
+        rateStore.Sample(gk, now, sum, keepMs);
+        rateStore.SetMeta(gk, i, j, QString("Digi-%1 ch-%2  ·  %3").arg(sn).arg(j).arg(w->GateName(k)));
+        const bool ok = rateStore.Rate(gk, rateBaseMs, r);
+        w->SetGateRate(k, ok, r);
+      }
+    }
   }
+}
+
+//^ Push the ONE shared rate time base to every consumer: all histogram total/gate labels (via the
+//^ per-widget mirror), the store retention horizon (via the next SampleRates/Rate call), and the
+//^ RateMonitor window if it is open. cbRateBase and the monitor's combo are two faces of this one
+//^ value; the isSignalSlotActive guard keeps the combo write-back from re-entering the slot.
+void SingleSpectra::SetRateTimeBase(int ms){
+  rateBaseMs = qBound(100, ms, 3600000);
+
+  bool oldFlag = isSignalSlotActive;
+  isSignalSlotActive = false;
+  int index = cbRateBase ? cbRateBase->findData(rateBaseMs) : -1;
+  if( index >= 0 ) cbRateBase->setCurrentIndex(index);
+  isSignalSlotActive = oldFlag;
+
+  for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++ )
+    for( int j = 0; j < MaxNumberOfChannel; j++ )
+      if( hist[i][j] ) hist[i][j]->SetRateIntervalMs( rateBaseMs );
+
+  if( rateMonitor ) rateMonitor->SetTimeBase(rateBaseMs, false); // do not echo back
+}
+
+QString SingleSpectra::TotalRateKey(int d, int ch) const{
+  if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= MaxNumberOfChannel ) return QString();
+  if( hist[d][ch] == nullptr ) return QString();
+  return hist[d][ch]->RateKey();
+}
+
+bool SingleSpectra::RateChannelLive(const QString & key) const{
+  const int d = rateStore.OwnerD(key), ch = rateStore.OwnerCh(key);
+  if( d < 0 || ch < 0 || d >= (int)nDigi || ch >= MaxNumberOfChannel ) return false;
+  return histVisibility[d][ch].load(std::memory_order_relaxed) ||
+         monitorSelected[d][ch].load(std::memory_order_relaxed);
 }
 
 void SingleSpectra::PublishHist2D(int d){
@@ -934,6 +1031,9 @@ void SingleSpectra::ReplotHistograms(){
     }
   }
 
+  /// The store rides this same clock even when no pane changed: mounted OR monitored channels.
+  SampleRates();
+
 }
 
 void SingleSpectra::showEvent(QShowEvent * event){
@@ -946,11 +1046,20 @@ void SingleSpectra::hideEvent(QHideEvent * event){
   windowVisible = false;
 }
 
+//^ The Rate Monitor is a companion top-level window: Qt parents it for ownership/stacking only
+//^ and does NOT auto-close top-levels when the parent window closes. Closing it here hides it
+//^ (hideEvent stops its timer -- no zombie sampling), its traces and drain-holds are preserved,
+//^ and ~SingleSpectra still deletes it. So "closed together" without losing the user's setup.
+void SingleSpectra::closeEvent(QCloseEvent * event){
+  if( rateMonitor ) rateMonitor->close();
+  QMainWindow::closeEvent(event);
+}
+
  void SingleSpectra::SaveSetting(){
    DebugPrint("%s", "SingleSpectra");
 
    QJsonObject root;
-   root["formatVersion"] = 1;
+   root["formatVersion"] = 2;
 
    QJsonObject split;
    split["rows"] = splitRows;
@@ -961,6 +1070,9 @@ void SingleSpectra::hideEvent(QHideEvent * event){
    refresh["auto"] = chkAutoRefresh->isChecked();
    refresh["ms"]   = (int)sbRefresh->value();
    root["refresh"] = refresh;
+
+   //^---- the rate time base is ONE global value (formatVersion 2), not per-channel (was v1).
+   root["rateMs"] = rateBaseMs;
 
    //^---- spectra & gates, keyed by serial number (not board index), so they survive a
    //^     change of digitizer enumeration order -- same convention as the legacy txt.
@@ -976,11 +1088,11 @@ void SingleSpectra::hideEvent(QHideEvent * event){
        Histogram1D * h = hist[i][ch];
        if( !h ) continue;
        QJsonObject co;
-       co["ch"]   = ch;
-       co["bins"] = h->GetNBin();
-       co["xMin"] = h->GetXMin();
-       co["xMax"] = h->GetXMax();
-       co["rateMs"] = h->RateIntervalMs();
+        co["ch"]   = ch;
+        co["bins"] = h->GetNBin();
+        co["xMin"] = h->GetXMin();
+        co["xMax"] = h->GetXMax();
+
 
        QJsonArray gates;
        for( int k = 0; k < h->GateCount(); k++ ){
@@ -1072,14 +1184,26 @@ void SingleSpectra::hideEvent(QHideEvent * event){
    const QJsonObject split = root["split"].toObject();
    if( !split.isEmpty() ) ApplySplit( split["rows"].toInt(1), split["cols"].toInt(1), false );
 
-   const QJsonObject refresh = root["refresh"].toObject();
-   if( !refresh.isEmpty() ){
-     bool oldFlag = isSignalSlotActive;
-     isSignalSlotActive = false;
-     chkAutoRefresh->setChecked( refresh["auto"].toBool(true) );
-     sbRefresh->setValue( refresh["ms"].toInt(SingleHistogramFillingTime) );
-     isSignalSlotActive = oldFlag;
-   }
+    const QJsonObject refresh = root["refresh"].toObject();
+    if( !refresh.isEmpty() ){
+      bool oldFlag = isSignalSlotActive;
+      isSignalSlotActive = false;
+      chkAutoRefresh->setChecked( refresh["auto"].toBool(true) );
+      sbRefresh->setValue( refresh["ms"].toInt(SingleHistogramFillingTime) );
+      isSignalSlotActive = oldFlag;
+    }
+
+    //^---- the rate time base: v2 stores ONE global value; a v1 file kept it per channel --
+    //^     there, the LONGEST window wins, so nothing that was integrated is under-retained.
+    int baseMs = root["rateMs"].toInt(-1);
+    if( baseMs <= 0 ){
+      for( const QJsonValue & dv : root["digitizers"].toArray() ){
+        for( const QJsonValue & cv : dv.toObject()["channels"].toArray() )
+          baseMs = qMax( baseMs, cv.toObject()["rateMs"].toInt(0) );
+      }
+    }
+    if( baseMs > 0 ) SetRateTimeBase( baseMs );
+
 
    //^---- per-board geometry + gates
    const QJsonArray digitizers = root["digitizers"].toArray();
@@ -1101,26 +1225,37 @@ void SingleSpectra::hideEvent(QHideEvent * event){
        const int    bins = co["bins"].toInt(h->GetNBin());
        const double lo   = co["xMin"].toDouble(h->GetXMin());
        const double hi   = co["xMax"].toDouble(h->GetXMax());
-       if( bins > 0 && hi > lo ){
-         emit h->AboutToRebin();
-         h->Rebin(bins, lo, hi);
-         emit h->ReBinned();
-       }
-       h->SetRateIntervalMs( co["rateMs"].toInt(1000) );
+        if( bins > 0 && hi > lo ){
+          emit h->AboutToRebin();
+          h->Rebin(bins, lo, hi);
+          emit h->ReBinned();
+        }
+        //^---- (v1 "rateMs" is gone: the time base is global, applied above.)
 
-       for( const QJsonValue & gv : co["gates"].toArray() ){
-         const QJsonObject go = gv.toObject();
-         h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
-                         go["low"].toDouble(), go["high"].toDouble() );
-       }
+        //^---- The gates are REPLACED, not appended. MainWindow::OpenSingleSpectra() runs this on
+        //^     an already-populated window whose gates came from a previous LoadSetting, and
+        //^     RestoreGate() always creates -- without this clear every reopen doubles the list
+        //^     (a real file once held Gate-6/Gate-8 twice). ClearGates() emits GateDeleted per
+        //^     gate, so the dropped RateStore histories go with them and the monitor picker
+        //^     loses them on its next refresh.
+        h->ClearGates();
+        for( const QJsonValue & gv : co["gates"].toArray() ){
+          const QJsonObject go = gv.toObject();
+          h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
+                          go["low"].toDouble(), go["high"].toDouble() );
+        }
+        // Rebin + Clear/Restore redraw themselves per step, but the PUBLISHED curve still
+        // shows the old geometry until the next tick -- which never comes with ACQ stopped.
+        h->replot();
      }
 
      const QJsonObject s2 = dObj["spectrum2D"].toObject();
      if( !s2.isEmpty() && hist2D[d] ){
        emit hist2D[d]->AboutToRebin();
-       hist2D[d]->Rebin( s2["nx"].toInt(1),  s2["xMin"].toDouble(0.),   s2["xMax"].toDouble(1.),
-                         s2["ny"].toInt(1),  s2["yMin"].toDouble(0.),   s2["yMax"].toDouble(1.) );
-       emit hist2D[d]->ReBinned();
+        hist2D[d]->Rebin( s2["nx"].toInt(1),  s2["xMin"].toDouble(0.),   s2["xMax"].toDouble(1.),
+                          s2["ny"].toInt(1),  s2["yMin"].toDouble(0.),   s2["yMax"].toDouble(1.) );
+        emit hist2D[d]->ReBinned();
+        hist2D[d]->replot();   // same idle-canvas argument as the 1D loop
      }
    }
 

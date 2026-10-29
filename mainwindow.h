@@ -152,8 +152,8 @@ private:
   /// The QWidgets they point at are still deleted explicitly; they outlive a rebuild otherwise,
   /// since their Qt parent is the scalar window, not this list.
   std::vector<QLabel *> lbFileSize;
-  std::vector<std::vector<QLineEdit *>> leTrigger;
-  std::vector<std::vector<QLineEdit *>> leAccept;
+  std::vector<std::vector<QLineEdit *>> leTriggers;
+  std::vector<std::vector<QLineEdit *>> leSaved;
   QLabel       * lbLastUpdateTime;
   QLabel       * lbScalarACQStatus;
   bool           scalarOutputInflux;
@@ -247,8 +247,8 @@ private:
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //@------ last rates seen by UpdateScalar(), for the elog template
-  double lastTrgRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
-  double lastAcceptRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  double lastSelfTrgRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  double lastSavedRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //@------ elog template
   ElogTemplate * elogTemplate;

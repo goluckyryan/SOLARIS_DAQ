@@ -120,16 +120,8 @@ public:
           }
         }
 
-        //^---- instantaneous-rate integration window (total + every gate on this plot)
-        QMenu * winMenu = menu.addMenu("Rate Window");
-        QAction * winAct[7];
-        const int winMs[7] = { 1000, 2000, 5000, 10000, 30000, 60000, 300000 };
-        for( int i = 0; i < 7; i++ ){
-          winAct[i] = winMenu->addAction( QString("%1%2").arg(winMs[i]/1000).arg((winMs[i]%1000)? " ms":" s") );
-          winAct[i]->setData(winMs[i]);
-          if( winMs[i] == rateIntervalMs ) winAct[i]->setCheckable(true), winAct[i]->setChecked(true);
-        }
-        QAction * winCustom = winMenu->addAction("Custom...");
+        //^---- (rates show [x.x Hz]; the trailing averaging window is GLOBAL -- the "Time average"
+        //^     control next to the Rate Monitor button. Deliberately not a menu here.)
         //TODO fitGuass
 
         QAction *selectedAction = menu.exec(event->globalPosition().toPoint());
@@ -282,21 +274,6 @@ public:
             usingMenu = false;
           }
         }
-        //*========================================== Rate integration window
-        for( int i = 0; i < 7; i++ ){
-          if( selectedAction == winAct[i] ){
-            SetRateIntervalMs(winMs[i]);
-            replot();
-            usingMenu = false;
-          }
-        }
-        if( selectedAction == winCustom ){
-          int sec = QInputDialog::getInt(this, "Rate Window", "Integration time [s]",
-                                        qMax(1, rateIntervalMs/1000), 1, 3600, 1);
-          if( sec >= 1 ) SetRateIntervalMs(sec*1000);
-          replot();
-          usingMenu = false;
-        }
         usingMenu = false;
       }
     });
@@ -308,16 +285,17 @@ public:
   double GetXMax() const {return xMax;}
   unsigned long GetTotalEntry() const {return totalEntry;}
 
-  /// "Total Entry" stat line. The bracketed rate is INSTANTANEOUS (sliding window), not the
-  /// lifetime average: SingleSpectra's publish path samples the worker's total into its RateStore
-  /// and pushes the windowed dN/dt back in via SetDisplayRate() -- the widget never times on its
-  /// own, so the counting clock lives in exactly one place. Until the window has two samples the
-  /// rate is omitted entirely. It rides in txt[1], showing/hiding with "Toggle Stat.".
+  /// "Total Entry" stat line. The bracketed rate is INSTANTANEOUS (trailing time-average window,
+  /// global "Time average" control), normalized to Hz: SingleSpectra's sample path feeds the
+  /// worker's exact counts through its RateStore and pushes the windowed dN/dt back in via
+  /// SetDisplayRate() -- the widget never times on its own, so the counting clock lives in
+  /// exactly one place. Until the window has two samples the rate is omitted entirely.
+  /// It rides in txt[1], showing/hiding with "Toggle Stat.".
   QString TotalEntryLabel(){
     const QString cnt = "Total Entry : " + QString::number(totalEntry);
     if( !haveRate ) return cnt;
-    const QString r = (dispRate < 1000.0) ? QString::number(dispRate,'f',1) : QString::number(dispRate,'f',0);
-    return cnt + " [" + r + "/s / " + RateIntervalText() + "]";
+    const QString r = QString::number(dispRate,'f',1);
+    return cnt + " [" + r + " Hz]";
   }
 
   /// Called by the publish path every repaint; r < 0 means "window not filled yet".
@@ -332,9 +310,10 @@ public:
     return ( rateIntervalMs % 1000 == 0 ) ? QString("%1 s").arg(rateIntervalMs/1000)
                                           : QString("%1 ms").arg(rateIntervalMs);
   }
-  /// Right-click "Rate Window": the trailing integration time of both the total rate and the
-  /// gate rates on this plot. Pruning adapts on the next sample; widening degrades to the
-  /// lifetime average until the window regrows.
+  /// MIRROR of the one GLOBAL time average (the "Time average" control next to "Rate Monitor"):
+  /// every plot and the monitor window use the same trailing window; a per-plot menu would only
+  /// invite numbers that look alike but do not agree. SingleSpectra::SetRateTimeBase() pushes
+  /// the value to all plots; this widget only counts on it being what the store windowed with.
   void SetRateIntervalMs(int ms){
     rateIntervalMs = qBound(100, ms, 3600000);
     if( txt[1] ) txt[1]->setText(TotalEntryLabel());
@@ -417,7 +396,13 @@ public:
   /// Re-create a persisted gate: its saved id (which carries the COLOR and the RateStore key),
   /// name and bounds. id < 0 keeps the auto-assigned one. gateSeq is pushed past the restored
   /// id so fresh gates can never collide with it.
+  /// A duplicated file (every gate twice, saved by a pre-clear LoadSetting) keeps its FIRST
+  /// copy of each id and ignores the twin: two live gates sharing an id would share one
+  /// RateStore key, and each SampleRates() pass would overwrite the other's sum.
   int RestoreGate(int id, const QString & name, double lo, double hi){
+    if( id >= 0 )
+      for( int k = 0; k < gates.size(); k++ )
+        if( gates[k].id == id ) return k;
     const int k = AddGate();
     if( k < 0 ) return -1;
     if( id >= 0 ){
@@ -428,6 +413,10 @@ public:
     if( !name.isEmpty() ) gates[k].name = name;
     SetGateBounds(k, lo, hi);
     UpdateGateLabel(k);
+    /// AddGate() replot()s the FRESH, centred, still-titled gate; nothing after it redraws,
+    /// so with the replot clock idle (ACQ stopped) that interim frame is what the user sees:
+    /// a "ghost Gate-N" floating at the centre until any manual replot. Show the final one.
+    replot();
     return k;
   }
 
@@ -518,7 +507,7 @@ public:
 
   void SetGateRate(int k, bool valid, double r){
     if( k < 0 || k >= gates.size() ) return;
-    gates[k].rateLine = valid ? QString("%1 /s / %2").arg(r, 0, 'g', 4).arg(RateIntervalText())
+    gates[k].rateLine = valid ? QString("%1 Hz").arg(r, 0, 'f', 1)
                               : QString("(gathering...)");
     UpdateGateLabel(k);
     // no replot here: every publish path that calls this replots the pane right after
@@ -658,6 +647,11 @@ public:
       g.x0 = qBound(xMin, g.x0, xMax);
       g.x1 = qBound(xMin, g.x1, xMax);
     }
+
+    /// Changing the geometry un-zooms: a view pinned to the old range shows a blank or
+    /// cropped plot under the new binning. Full range is also what UpdatePlot keeps, so the
+    /// view does not drift back.
+    xAxis->setRange(xMin, xMax);
 
     if( txt[0] ) txt[0]->setText("Under Flow : 0");
     if( txt[1] ) txt[1]->setText(TotalEntryLabel());

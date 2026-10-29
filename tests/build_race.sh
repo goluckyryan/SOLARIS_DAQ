@@ -14,4 +14,9 @@ $CXX $INC -c tests/histRace.cpp -o tests/histRace.o
 $CXX -o tests/histRace tests/histRace.o $OBJS $LIBS
 $CXX $INC -c tests/cutMenu.cpp -o tests/cutMenu.o
 $CXX -o tests/cutMenu tests/cutMenu.o $OBJS $LIBS
-echo "built tests/histRace tests/cutMenu"
+# live-board probes (READ-ONLY): built here so they cannot drift from the app's API unseen
+$CXX $INC -c tests/probeStat.cpp -o tests/probeStat.o
+$CXX -o tests/probeStat tests/probeStat.o $OBJS $LIBS
+$CXX $INC -c tests/coincCheck.cpp -o tests/coincCheck.o
+$CXX -o tests/coincCheck tests/coincCheck.o $OBJS $LIBS
+echo "built tests/histRace tests/cutMenu tests/probeStat tests/coincCheck"

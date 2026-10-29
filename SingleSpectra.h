@@ -76,6 +76,25 @@ public:
   void SetMonitorSelected(int d, int ch, bool on);
   unsigned long GetTotal1D(int d, int ch) const;
 
+  /// Stable RateStore key of a channel's total ("d<i>_sn<SN>_ch<j>"), or empty if the channel
+  /// has no 1D histogram object.
+  QString TotalRateKey(int d, int ch) const;
+
+  /// True while a key's owning channel is actually being drained and sampled (mounted in a pane
+  /// or held by a monitor trace) -- i.e. its window is fresh, not a stale leftover.
+  bool RateChannelLive(const QString & key) const;
+
+  /// Pump the RateStore from the worker atomics: totals and live 1D gate sums, for every channel
+  /// that is mounted or monitored. GUI thread; called by the replot clock and by the monitor's
+  /// own tick, so the sampling horizon never lags the slowest consumer.
+  void SampleRates();
+
+  //^---- THE rate time base: one shared integration window for every instantaneous number --
+  //^     all histogram total/gate labels and every RateMonitor trace. The control sits next to
+  //^     the "Rate Monitor" button; the monitor's own combo is a second face of the same value.
+  void SetRateTimeBase(int ms);          ///< push to all plots, the store horizon, and the monitor
+  int  RateTimeBase() const { return rateBaseMs; }
+
   /// Sliding-window dN/dt ledger for totals and 1D gates, sampled by the publish path on the
   /// GUI thread. GUI thread only. Future sinks (RateMonitor windows, InfluxDB) read from here.
   RateStore rateStore;
@@ -166,6 +185,7 @@ private:
   //^---- the split grid
   HistPane pane[MaxNumberOfPane];
   RComboBox * cbSplit;
+  RComboBox * cbRateBase;   ///< the shared rate time base, next to the "Rate Monitor" button
   int splitRows, splitCols;
 
   void BuildPanes();
@@ -205,6 +225,9 @@ private:
   /// monotonic ms clock for RateStore sampling (GUI thread, started in the ctor)
   QElapsedTimer sampleClock;
 
+  /// the ONE rate integration window [ms] shared by every histogram label and every monitor trace
+  int rateBaseMs = 1000;
+
   QString settingPath;       // HistogramSettings.json
   QString legacySettingPath; // HistogramSettings.txt, migrated once on first json-less load
 
@@ -225,6 +248,7 @@ protected:
   /// Keep windowVisible in step without the worker having to call isVisible() itself.
   void showEvent(QShowEvent * event) override;
   void hideEvent(QHideEvent * event) override;
+  void closeEvent(QCloseEvent * event) override;   // takes the Rate Monitor companion down too
 
 };
 

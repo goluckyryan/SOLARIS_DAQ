@@ -32,6 +32,11 @@
 #include "SingleSpectra.h"
 #include "Histogram1D.h"
 #include "Histogram2D.h"
+#include "RateMonitor.h"
+#include "CustomWidgets.h"
+#include <QListWidget>
+#include <QThread>
+#include <QGuiApplication>
 
 static int   nRebin   = 0;
 static int   nClear   = 0;
@@ -46,6 +51,8 @@ static int   nVertError = 0;
 static int   nVertDrag = 0;
 static int   nWeldOK = 0;
 static int   nGateWithCounts = 0;
+static int   nMonErr = 0;
+static bool  nMonOK = false;
 static bool  acqStarted = false;
 static bool  sawEvents  = false;
 
@@ -56,6 +63,7 @@ static bool  sawEvents  = false;
 static std::atomic<bool> feedStop{false};
 static std::atomic<unsigned long> fedCount{0};
 static Digitizer2Gen   * dummy = nullptr;
+static Digitizer2Gen   * darr[1];            // the ctor-arg array; must outlive every SingleSpectra
 static SingleSpectra * ss2     = nullptr;
 
 static int pick( int n ){ return QRandomGenerator::global()->bounded(n); }
@@ -74,6 +82,13 @@ static Histogram1D * Ensure1D( SingleSpectra * ss ){
   for( Histogram1D * c : ss->findChildren<Histogram1D *>() )
     if( c->GetTotalEntry() > 0 ) return c;
   return nullptr;
+}
+
+//^ Pump the REAL event loop for ms: unlike msleep this lets the GUI-thread fill/replot timers
+//^ fire (the fill timer lives on the GUI thread, so msleep starves the whole pipeline).
+static void PumpEvents( int ms ){
+  QElapsedTimer e; e.start();
+  while( e.elapsed() < ms ){ qApp->processEvents(); QThread::msleep( 10 ); }
 }
 
 static SingleSpectra * curSS( MainWindow * w ){
@@ -153,7 +168,7 @@ static void ChaosStep( MainWindow * w, SingleSpectra * ss ){
       if( h->GateCount() == 0 ) h->AddGate();        // always leave one alive for the sums below
 
       static const int win[6] = { 1000, 1000, 2000, 5000, 10000, 30000 };
-      h->SetRateIntervalMs( win[pick(6)] );
+      ss->SetRateTimeBase( win[pick(6)] );   // GLOBAL time base: touches every plot at once
 
       // SetGateBounds: INVERTED pair, pushed far out of range, must come back full-range ordered
       // and clamped -- and a full-range gate must then count exactly the in-range total.
@@ -281,10 +296,13 @@ int main( int argc, char * argv[] ){
             for( int i = 0; i < cb->count(); i++ )
               if( cb->itemData(i).toInt() == 64 ){ cb->setCurrentIndex( i ); break; }
           }
-          // resize() updates the widget geometry synchronously; both coordinate directions use
-          // the same fresh rect, so clicks map consistently. NO processEvents here — it would
-          // pump a pending chaos Rebin and clear the just-published color map under our feet.
+          // The island below cannot pump events, and nothing fills or publishes while it cannot:
+          // if the LAST chaos step was a 2D rebin, c2 is zeroed and stays zero here -- the drag
+          // recounts an empty map (a rare vertErr=1 flake). Stop the shuffler, let one real
+          // event loop drain ch-0 and publish a fresh map, then run the island in peace.
+          chaos.stop();
           ss2->resize( 1600, 1200 );
+          PumpEvents( 250 );
           ss2->ReplotHistograms();
           h2->BeginCreateCut();
           const double XR = x1-x0, YR = y1-y0;
@@ -354,24 +372,26 @@ int main( int argc, char * argv[] ){
             send(QEvent::MouseButtonRelease, from);
           }
         } else { printf("VERTEX: no mounted Histogram2D\n"); nVertError++; }
+        chaos.start();   // MON stops it again later; round-trip/restart below are islands too
       }
 
       //--- settings round-trip: named/moved gates + rate window must survive save -> mutate -> load
       {
+        //--- pin ch-0 first: the restart block below must know which channel it is checking
         QList<Histogram1D *> hs;
         if( ss2 ) hs = ss2->findChildren<Histogram1D *>();
-        Histogram1D * h = nullptr;
-        for( Histogram1D * c : hs ) if( c->GetTotalEntry() > 0 ){ h = c; break; }
+        Histogram1D * h = ss2 ? Ensure1D( ss2 ) : nullptr;
+        if( !h ) for( Histogram1D * c : hs ) if( c->GetTotalEntry() > 0 ){ h = c; break; }
         if( h ){
           const double x0 = h->GetXMin(), w = h->GetXMax() - h->GetXMin();
           h->ClearGates();
-          h->SetRateIntervalMs(5000);
+          ss2->SetRateTimeBase(5000);
           const int a = h->AddGate(); h->RenameGate(a, "physA"); h->SetGateBounds(a, x0+0.20*w, x0+0.30*w);
           const int b = h->AddGate(); h->RenameGate(b, "physB"); h->SetGateBounds(b, x0+0.60*w, x0+0.62*w);
           const int idB = h->GateId(b);
           h->RemoveGate(a);                       // middle delete: B keeps its id/color
           ss2->SaveSetting();
-          h->ClearGates(); h->SetRateIntervalMs(1000);   // destroy local state
+          h->ClearGates(); ss2->SetRateTimeBase(1000);   // destroy local state
           ss2->LoadSetting();
           const int kb = h->FindGate("physB");
           if( kb < 0 ){ printf("ROUNDTRIP: physB missing\n"); nSaveErr++; }
@@ -380,8 +400,61 @@ int main( int argc, char * argv[] ){
             if( qAbs(h->GateLow(kb) - (x0+0.60*w)) > 1e-6*w || qAbs(h->GateHigh(kb) - (x0+0.62*w)) > 1e-6*w ){
               printf("ROUNDTRIP: bounds lost (%g..%g)\n", h->GateLow(kb), h->GateHigh(kb)); nSaveErr++; }
           }
-          if( h->RateIntervalMs() != 5000 ){ printf("ROUNDTRIP: rateMs=%d\n", h->RateIntervalMs()); nSaveErr++; }
+          if( h->RateIntervalMs() != 5000 || ss2->RateTimeBase() != 5000 ){
+            printf("ROUNDTRIP: rateMs=%d base=%d\n", h->RateIntervalMs(), ss2->RateTimeBase()); nSaveErr++; }
         } else printf("ROUNDTRIP: no published hist found\n");
+
+        //--- restart: destroy the window and rebuild it on the same path -- the constructor's
+        //     LoadSetting must bring geometry, gates (ids/names) and the global time base back,
+        //     and a reopen LoadSetting (MainWindow::OpenSingleSpectra) must not duplicate gates.
+        if( h ){
+          chaos.stop();   // PumpEvents below would let a random chaos Rebin overwrite the
+                          // geometry we are about to verify (json is fine; the widget moves)
+          const int    savedBins = 512;      // non-default geometry so "still 0..5000" fails
+          const double savedMax  = 12345.;
+          QMetaObject::invokeMethod( h, "AboutToRebin" );   // the fenced, menu-grade rebin
+          h->Rebin( savedBins, 0., savedMax );
+          QMetaObject::invokeMethod( h, "ReBinned" );
+          ss2->SaveSetting();
+          delete ss2;
+          ss2 = new SingleSpectra(darr, 1, "/home/ryan/ExpData/solaris_test/testing");
+          ss2->show();
+          EnableFill(ss2);
+          ss2->startTimer();
+
+          // hist widgets are parentless until a pane mounts them, so findChildren only sees
+          // what the split grid actually holds: mount ch-0, and let the fresh instance drain
+          // a little before asking it anything.
+          PumpEvents(200);
+          Ensure1D(ss2);
+          Histogram1D * r = nullptr;
+          for( Histogram1D * c : ss2->findChildren<Histogram1D *>() )
+            if( c->FindGate("physB") >= 0 && c->GetNBin() == savedBins
+                && qAbs(c->GetXMax() - savedMax) < 1e-9 ){ r = c; break; }
+          // compare r against ITSELF across the reopen (never h: chaos may have mounted a
+          // different channel than the one this instance restored)
+          const auto snap = []( Histogram1D * x ){
+            QStringList s;
+            if( x ) for( int k = 0; k < x->GateCount(); k++ )
+              s << QString("%1:%2:%3-%4").arg( x->GateId(k) ).arg( x->GateName(k) )
+                                                  .arg( x->GateLow(k) ).arg( x->GateHigh(k) );
+            return s;
+          };
+          bool ok = r && r->GetNBin() == savedBins && qAbs(r->GetXMax() - savedMax) < 1e-9
+                    && ss2->RateTimeBase() == 5000;
+          const QStringList pre = snap( r );
+          ss2->LoadSetting();                              // the reopen path, on live state
+          const QStringList post = snap( r );
+          if( ok ) ok = !post.isEmpty() && post == pre;    // replaced, not appended, deduped
+          if( !ok ){
+            printf("RESTART: ok=%d bins=%d xMax=%g base=%d gates %d->%d\n",
+                   ok, r ? r->GetNBin() : -1, r ? r->GetXMax() : -1., ss2->RateTimeBase(),
+                   pre.size(), post.size());
+            qInfo().noquote() << "   pre =" << pre.join(" | ") << "\n   post=" << post.join(" | ");
+            nSaveErr++;
+          }
+          h = r;                                           // keep later blocks off the corpse
+        }
 
         //--- migration: seed a legacy txt, remove the json, LoadSetting must apply + migrate
         {
@@ -424,6 +497,110 @@ int main( int argc, char * argv[] ){
           }
           QFile::remove(txtP + ".bak");   // leave a clean slate for the teardown save
         }
+      }
+
+      //--- RateMonitor as a RateStore subscriber: a ch-0 total AND a live 1D gate must both
+      //    arrive through the picker, produce windowed rates while the feed runs, and the whole
+      //    loop must STOP when the window hides (no zombie sampling/replot).
+      {
+        // chaos would rebind/unmount under us; the fill timer needs a spinning GUI loop (msleep
+        // starves it). Freeze the shuffler, pump real events, restore.
+        chaos.stop();
+        ss2->SetRateTimeBase(1000);   // determinism: the readout window below assumes 1 s
+        // The store is the liveness oracle: a candidate's gate key appears only if that
+        // channel is really mounted/monitored and got sampled -- leftover totalEntry from a
+        // formerly-mounted pane would fool any widget-local check.
+        Histogram1D * mh = nullptr; QString gk;
+        for( int i = 0; i < 20 && !mh; i++ ){
+          PumpEvents(150); Ensure1D( ss2 );
+          ss2->SampleRates();
+          for( Histogram1D * cand : ss2->findChildren<Histogram1D *>() ){
+            if( cand->GateCount() >= 4 ) continue;
+            const int k = cand->AddGate();
+            if( k < 0 ) continue;
+            cand->SetGateBounds(k, cand->GetXMin(), cand->GetXMax());   // full range: gate ~ total
+            cand->RenameGate(k, "monProbe");
+            ss2->SampleRates();
+            const QString key = cand->GateKey(k);
+            if( ss2->rateStore.Exists(key) ){ mh = cand; gk = key; break; }
+            cand->RemoveGate(k);
+          }
+        }
+        if( !mh ){
+          int nz = 0;
+          for( Histogram1D * c : ss2->findChildren<Histogram1D *>() ) if( c->GetTotalEntry() > 0 ) nz++;
+          printf("MON: no live gate | c1tot(0,0)=%lu childHists=%d nzTEntry=%d keys=%d [%s]\n",
+                 ss2->GetTotal1D(0,0), (int)ss2->findChildren<Histogram1D *>().size(), nz,
+                 (int)ss2->rateStore.Keys().size(), qPrintable( ss2->rateStore.Keys().join(" ") ));
+          nMonErr++;
+        }
+        else{
+          // Open the window exactly like the user does -- the button registers it as
+          // ss2->rateMonitor, which is what the linked time base propagates through.
+          QPushButton * bnMon = ss2->findChild<QPushButton*>("bnRateMonitor");
+          if( !bnMon ) printf("MON: button missing\n");
+          else if( !bnMon->isEnabled() ) printf("MON: button disabled\n");
+          else bnMon->click();
+          PumpEvents(60);
+          // The window is deliberately NOT a QObject child (SingleSpectra owns the raw pointer
+          // and deletes it in its dtor) -- so find it as a top-level, like the window manager does.
+          RateMonitor * mon = nullptr;
+          for( QWidget * tl : QApplication::topLevelWidgets() )
+            if( tl->windowTitle() == "Rate Monitor" ) mon = qobject_cast<RateMonitor *>(tl);
+          if( !mon ){ printf("MON: window not created\n"); nMonErr++; }
+          else{
+            //--- the time base is ONE linked value: main->monitor and monitor->main
+            RComboBox * baseMain = ss2->findChild<RComboBox*>("cbRateBase");
+            RComboBox * baseMon  = mon->findChild<RComboBox*>("cmbTimeBase");
+            bool linkedDown = false, linkedUp = false;
+            if( baseMain && baseMon ){
+              int i5 = baseMain->findData(5000); if( i5 >= 0 ) baseMain->setCurrentIndex(i5);
+              PumpEvents(60);
+              linkedDown = ss2->RateTimeBase() == 5000 && mh->RateIntervalMs() == 5000
+                        && baseMon->currentData().toInt() == 5000;
+              int i2 = baseMon->findData(2000); if( i2 >= 0 ) baseMon->setCurrentIndex(i2);
+              PumpEvents(60);
+              linkedUp = ss2->RateTimeBase() == 2000 && baseMain->currentData().toInt() == 2000;
+              int i1 = baseMain->findData(1000); if( i1 >= 0 ) baseMain->setCurrentIndex(i1);
+              PumpEvents(60);
+            }
+
+            mon->findChild<QPushButton*>("bnAdd")->click();       // ch-0 total via (digi,ch) picker
+            RComboBox * cbs = mon->findChild<RComboBox*>("cbStore");
+            const int idx = cbs ? cbs->findData(gk) : -1;
+            bool offered = ( idx >= 0 );
+            if( offered ){ cbs->setCurrentIndex(idx); mon->findChild<QPushButton*>("bnAddStore")->click(); }
+            const int graphs = mon->findChild<QCustomPlot*>()->graphCount();
+            const bool onWhileShown = mon->findChild<QTimer*>("rateTimer")->isActive();
+
+            for( int i = 0; i < 3; i++ ){ PumpEvents(450); QMetaObject::invokeMethod(mon,"Sample"); }
+
+            double rTot = -1, rGate = -1;
+            const bool okT = ss2->rateStore.Rate( ss2->TotalRateKey(0,0), 1000, rTot );
+            const bool okG = ss2->rateStore.Rate( gk, 1000, rGate );
+            QListWidget * lw = mon->findChild<QListWidget*>("lstMonitored");
+            const int rows = lw ? lw->count() : -1;
+            const bool readout = lw && lw->count() == 2 &&
+                                 !lw->item(0)->text().contains("(gathering") &&
+                                 !lw->item(1)->text().contains("(gathering") &&
+                                 lw->item(0)->text().contains("Hz") &&
+                                 lw->item(1)->text().contains("Hz");
+
+            mon->hide();
+            const bool offWhenHidden = !mon->findChild<QTimer*>("rateTimer")->isActive();
+
+            const bool pass = offered && graphs == 2 && onWhileShown && okT && okG &&
+                              rTot > 0 && rGate > 0 && rows == 2 && readout && offWhenHidden &&
+                              linkedDown && linkedUp;
+            if( pass ) nMonOK = true;
+            else{ nMonErr++;
+              printf("MON: offered=%d graphs=%d on=%d okT=%d rT=%g okG=%d rG=%g rows=%d readout=%d off=%d linkD=%d linkU=%d\n",
+                     offered, graphs, onWhileShown, okT, rTot, okG, rGate, rows, readout, offWhenHidden,
+                     linkedDown, linkedUp);
+            }
+          }
+        }
+        chaos.start();
       }
 
       feedStop = true;
@@ -476,13 +653,28 @@ int main( int argc, char * argv[] ){
     }
 
     if( elapsed >= runSec ){
+      //--- scalar ground truth while the real board was running: find the scalar's line edits by
+      //    the grey background that marks the Trig. column, and report what the panel actually
+      //    shows per channel (row order == channel order inside its layout).
+      {
+        QList<QLineEdit *> eds = w->findChildren<QLineEdit *>();
+        int shown = 0;
+        for( QLineEdit * e : eds ){
+          if( !e->objectName().isEmpty() ) continue;
+          if( e->styleSheet().contains("#F0F0F0") && shown < 8 ){
+            // Trig.-column cell: report with row geometry so channels are identifiable
+            printf("SCALAR trig-cell row=%d text=[%s]\n", (int)e->geometry().y(), qPrintable(e->text()));
+            shown++;
+          }
+        }
+        printf("SCALAR dump: %d grey cells of %d line edits\n", shown, (int)eds.size());
+      }
       printf("phase 1 done: rebin=%d clear=%d combo=%d refresh=%d gate=%d gatePos=%d sawEvents=%d -> stop ACQ, start synthetic feed\n",
              nRebin, nClear, nCombo, nRefresh, nGate, nGateWithCounts, (int)sawEvents);
       QMetaObject::invokeMethod( w, "StopACQ", Qt::DirectConnection );
 
       dummy = new Digitizer2Gen();
       dummy->SetDummy(999);
-      static Digitizer2Gen * darr[1];  // must outlive the ctor call: SingleSpectra keeps the pointer
       darr[0] = dummy;
       ss2 = new SingleSpectra(darr, 1, "/home/ryan/ExpData/solaris_test/testing");
       ss2->show();
@@ -534,7 +726,7 @@ int main( int argc, char * argv[] ){
   chaos.start();
 
   int rc = a.exec();
-  printf("RESULT: clean exit rc=%d sawEvents=%d gates=%d gatesWithCounts=%d keyErr=%d boundsErr=%d sumErr=%d saveErr=%d vertDrag=%d weld=%d vertErr=%d\n",
-         rc, (int)sawEvents, nGate, nGateWithCounts, nKeyError, nBoundsError, nSumError, nSaveErr, nVertDrag, nWeldOK, nVertError);
-  return (rc == 0 && fedCount.load() > 0 && nGate > 0 && nGateWithCounts > 0 && nKeyError == 0 && nBoundsError == 0 && nSumError == 0 && nSaveErr == 0 && nVertError == 0 && nVertDrag > 0 && nWeldOK > 0) ? 0 : 3;
+  printf("RESULT: clean exit rc=%d sawEvents=%d gates=%d gatesWithCounts=%d keyErr=%d boundsErr=%d sumErr=%d saveErr=%d vertDrag=%d weld=%d vertErr=%d monOK=%d monErr=%d\n",
+         rc, (int)sawEvents, nGate, nGateWithCounts, nKeyError, nBoundsError, nSumError, nSaveErr, nVertDrag, nWeldOK, nVertError, (int)nMonOK, nMonErr);
+  return (rc == 0 && fedCount.load() > 0 && nGate > 0 && nGateWithCounts > 0 && nKeyError == 0 && nBoundsError == 0 && nSumError == 0 && nSaveErr == 0 && nVertError == 0 && nVertDrag > 0 && nWeldOK > 0 && nMonOK && nMonErr == 0) ? 0 : 3;
 }
