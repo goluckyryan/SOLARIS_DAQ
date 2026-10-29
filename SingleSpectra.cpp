@@ -1222,13 +1222,19 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
        Histogram1D * h = hist[d][ch];
        if( !h ) continue;
 
-       const int    bins = co["bins"].toInt(h->GetNBin());
-       const double lo   = co["xMin"].toDouble(h->GetXMin());
-       const double hi   = co["xMax"].toDouble(h->GetXMax());
-        if( bins > 0 && hi > lo ){
-          emit h->AboutToRebin();
-          h->Rebin(bins, lo, hi);
-          emit h->ReBinned();
+        const int    bins = co["bins"].toInt(h->GetNBin());
+        const double lo   = co["xMin"].toDouble(h->GetXMin());
+        const double hi   = co["xMax"].toDouble(h->GetXMax());
+        //^---- Rebin only when the geometry actually moved: Rebin() zeroes the plot and
+        //^     EndHistogramEdit() resizes (zeroing) the count arrays, so an unconditional
+        //^     re-apply on every window reopen threw away accumulated counts that came from
+        //^     the same file we saved. JSON doubles round-trip exactly, so == is the right
+        //^     test; the constructor pass sees defaults and rebin still runs there.
+        const bool geomSame = ( bins == h->GetNBin() ) && ( lo == h->GetXMin() ) && ( hi == h->GetXMax() );
+        if( bins > 0 && hi > lo && !geomSame ){
+           emit h->AboutToRebin();
+           h->Rebin(bins, lo, hi);
+           emit h->ReBinned();
         }
         //^---- (v1 "rateMs" is gone: the time base is global, applied above.)
 
@@ -1238,26 +1244,48 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
         //^     (a real file once held Gate-6/Gate-8 twice). ClearGates() emits GateDeleted per
         //^     gate, so the dropped RateStore histories go with them and the monitor picker
         //^     loses them on its next refresh.
-        h->ClearGates();
-        for( const QJsonValue & gv : co["gates"].toArray() ){
-          const QJsonObject go = gv.toObject();
-          h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
-                          go["low"].toDouble(), go["high"].toDouble() );
+        //^     An identical gate list is left ALONE: clearing also drops the store histories,
+        //^     and the reopened window would restart every gate rate from (gathering...).
+        const QJsonArray fileGates = co["gates"].toArray();
+        bool gatesSame = ( fileGates.size() == h->GateCount() );
+        for( int k = 0; k < fileGates.size() && gatesSame; k++ ){
+          const QJsonObject go = fileGates[k].toObject();
+          gatesSame = go["id"].toInt(-2)   == h->GateId(k)
+                   && go["name"].toString() == h->GateName(k)
+                   && go["low"].toDouble()  == h->GateLow(k)
+                   && go["high"].toDouble() == h->GateHigh(k);
         }
-        // Rebin + Clear/Restore redraw themselves per step, but the PUBLISHED curve still
-        // shows the old geometry until the next tick -- which never comes with ACQ stopped.
-        h->replot();
-     }
+        if( !gatesSame ){
+          h->ClearGates();
+          for( const QJsonValue & gv : fileGates ){
+            const QJsonObject go = gv.toObject();
+            h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
+                            go["low"].toDouble(), go["high"].toDouble() );
+          }
+          // Rebin + Clear/Restore redraw themselves per step, but the PUBLISHED curve still
+          // shows the old geometry until the next tick -- which never comes with ACQ stopped.
+          h->replot();
+        }
+      }
 
-     const QJsonObject s2 = dObj["spectrum2D"].toObject();
-     if( !s2.isEmpty() && hist2D[d] ){
-       emit hist2D[d]->AboutToRebin();
-        hist2D[d]->Rebin( s2["nx"].toInt(1),  s2["xMin"].toDouble(0.),   s2["xMax"].toDouble(1.),
-                          s2["ny"].toInt(1),  s2["yMin"].toDouble(0.),   s2["yMax"].toDouble(1.) );
-        emit hist2D[d]->ReBinned();
-        hist2D[d]->replot();   // same idle-canvas argument as the 1D loop
-     }
-   }
+      const QJsonObject s2 = dObj["spectrum2D"].toObject();
+      if( !s2.isEmpty() && hist2D[d] ){
+        //^---- same no-op guard as the 1D geometry above (keep the accumulated 2D counts)
+        const bool same2D = s2["nx"].toInt(-2)   == hist2D[d]->GetXNBin() - 2
+                         && s2["xMin"].toDouble() == hist2D[d]->GetXMin()
+                         && s2["xMax"].toDouble() == hist2D[d]->GetXMax()
+                         && s2["ny"].toInt(-2)   == hist2D[d]->GetYNBin() - 2
+                         && s2["yMin"].toDouble() == hist2D[d]->GetYMin()
+                         && s2["yMax"].toDouble() == hist2D[d]->GetYMax();
+        if( !same2D ){
+          emit hist2D[d]->AboutToRebin();
+          hist2D[d]->Rebin( s2["nx"].toInt(1),  s2["xMin"].toDouble(0.),   s2["xMax"].toDouble(1.),
+                            s2["ny"].toInt(1),  s2["yMin"].toDouble(0.),   s2["yMax"].toDouble(1.) );
+          emit hist2D[d]->ReBinned();
+          hist2D[d]->replot();   // same idle-canvas argument as the 1D loop
+        }
+      }
+    }
 
    //^---- pane sources, fenced like every other GUI-thread write of lastFilledIndex
    const QJsonArray panes = root["panes"].toArray();
