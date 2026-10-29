@@ -92,6 +92,7 @@ private:
     int d = -1, ch = -1;
     QCPGraph        * graph = nullptr; // the trace on the plot
     QListWidgetItem * item  = nullptr; // the row in lstMonitored (its live rate readout)
+    int miss = 0;                      // consecutive ticks the key has been gone from the store
   };
   QVector<Trace> traces;
 

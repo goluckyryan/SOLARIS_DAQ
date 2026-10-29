@@ -1400,11 +1400,17 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
 
         /// Size first, so each guard stands on its own rather than leaning on the isEmpty() above.
         if( data.size() >= 4 && 0 <= data[0] && data[0] < digi[digiID]->GetNChannels() ){
-          hist[digiID][int(data[0])]->Rebin(data[1], data[2], data[3]);
+          Histogram1D * hh = hist[digiID][int(data[0])];
+          /// Fenced exactly like the JSON reader's Rebins. Today this only ever runs from the
+          /// constructor (worker not started yet), but an unfenced Rebin() frees the yList the
+          /// fill worker indexes -- the pair below is what makes the call site safe in principle.
+          if( hh ){ emit hh->AboutToRebin(); hh->Rebin(data[1], data[2], data[3]); emit hh->ReBinned(); }
         }
 
         if( data.size() == 7 && int(data[0]) == digi[digiID]->GetNChannels() ){
+          emit hist2D[digiID]->AboutToRebin();
           hist2D[digiID]->Rebin(int(data[1]), data[2], data[3], int(data[4]), data[5], data[6]);
+          emit hist2D[digiID]->ReBinned();
         }
 
       }

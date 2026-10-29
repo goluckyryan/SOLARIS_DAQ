@@ -374,6 +374,18 @@ void RateMonitor::Sample(){
   // fresh as this tick, independent of the histogram replot period.
   ss->SampleRates();
 
+  // Auto-expire traces whose key has LEFT the store (its gate was deleted -- Drop is the only
+  // thing that removes keys, and it runs exactly when the histogram drops the gate). Two ticks
+  // are allowed to pass first so a replace-in-place (a settings reload that clears and restores
+  // the same gate id within one edit) does not evict a trace the user never removed.
+  for( int i = traces.size() - 1; i >= 0; i-- ){
+    if( ss->rateStore.Exists(traces[i].key) ){ traces[i].miss = 0; continue; }
+    if( ++traces[i].miss < 2 ) continue;
+    const int d = traces[i].d, ch = traces[i].ch;
+    RemoveTrace(traces[i].key);
+    ReleaseIfUnused(d, ch);   // the drain-hold dies with the trace
+  }
+
   const double t = clock.elapsed() / 1000.0;
 
   for( Trace & tr : traces ){

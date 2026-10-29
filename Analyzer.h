@@ -100,6 +100,9 @@ private:
     Histogram1D * w = nullptr;
     int nBin = 0; double lo = 0, hi = 0, dx = 1;
     std::unique_ptr<std::atomic<uint32_t>[]> c;
+    /// total counts IN-RANGE entries only (matches the widget's "Total Entry"); the rejects
+    /// live in under/over, so lifetime-filled == total+under+over. H2.total differs (it is
+    /// everything, with the rejects in out) -- publish paths for the two differ accordingly.
     std::atomic<uint64_t> total{0}, under{0}, over{0};
   };
   struct H2 {

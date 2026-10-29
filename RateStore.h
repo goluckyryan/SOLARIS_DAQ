@@ -68,8 +68,11 @@ public:
   const QStringList & Keys() const { return order; }
 
   void SetMeta(const QString & key, int d, int ch, const QString & label){
-    if( !chans.contains(key) ) order.append(key);
-    Chan & c = chans[key];
+    // Decorate-only: Sample() CREATES keys. A SetMeta-first would seed Keys() with a phantom
+    // that has no history and no owner action to drop it.
+    auto it = chans.find(key);
+    if( it == chans.end() ) return;
+    Chan & c = it.value();
     c.d = d; c.ch = ch;
     if( !label.isEmpty() ) c.label = label;
   }
