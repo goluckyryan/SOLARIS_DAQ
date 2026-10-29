@@ -99,11 +99,5 @@ Aux/testRawDecoder
 broker
 solaris-broker
 solaris-cli
-#---- headless test binaries and objects (the .cpp sources ARE tracked)
-tests/histRace
-tests/cutMenu
-tests/gateVision
-tests/probeStat
-tests/coincCheck
-tests/*.o
-tests/writeCase
+#---- the whole test folder stays local: sources, harnesses, binaries, objects
+tests/
