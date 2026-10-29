@@ -17,6 +17,7 @@ $CXX -o tests/cutMenu tests/cutMenu.o $OBJS $LIBS
 # live-board probes (READ-ONLY): built here so they cannot drift from the app's API unseen
 $CXX $INC -c tests/probeStat.cpp -o tests/probeStat.o
 $CXX -o tests/probeStat tests/probeStat.o $OBJS $LIBS
+$CXX -O0 -Wall tests/writeCase.cpp -o tests/writeCase -lCAEN_FELib
 $CXX $INC -c tests/coincCheck.cpp -o tests/coincCheck.o
 $CXX -o tests/coincCheck tests/coincCheck.o $OBJS $LIBS
-echo "built tests/histRace tests/cutMenu tests/probeStat tests/coincCheck"
+echo "built tests/histRace tests/cutMenu tests/probeStat tests/coincCheck tests/writeCase"

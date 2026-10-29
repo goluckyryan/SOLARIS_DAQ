@@ -106,3 +106,4 @@ tests/gateVision
 tests/probeStat
 tests/coincCheck
 tests/*.o
+tests/writeCase
