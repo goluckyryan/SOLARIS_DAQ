@@ -408,7 +408,7 @@ class TallyRegistry : public HistRegistry {
 public:
   struct Hist {
     std::string name;
-    int    nX, nY, row, col;
+    int    nX, nY;
     double xLo, xHi, yLo, yHi;
     long   fills, under, over;
     double xSum, ySum;
@@ -420,18 +420,32 @@ public:
   std::vector<Chan> chans;
   std::vector<Flag> flags;
 
+  void * WorkArea() override { return nullptr; }   // headless: no canvas, analyses must cope
+  void * View1(int) override { return nullptr; }
+  void * View2(int) override { return nullptr; }
+
+  // v3 plumbing: nothing to claim, no builder behind it -- the stub answers, the analysis copes.
+  void * StatusControl() override { return nullptr; }
+  uint64_t TimeWindow() override { return timeWindow; }
+  void SetTimeWindow(uint64_t ns) override { timeWindow = ns; }
+  double GuardFactor() override { return 5.0; }
+  void SetGuardFactor(double) override {}
+  void SetWindowTitle(const char *) override {}
+  void ResizeWindow(int, int) override {}
+  uint64_t timeWindow = 0;
+
   int Hist1D(const char * name, const char *, int nBin, double xMin, double xMax,
-             int row, int col) override {
-    Hist h{}; h.name = name; h.nX = nBin; h.xLo = xMin; h.xHi = xMax; h.row = row; h.col = col;
+             void *) override {
+    Hist h{}; h.name = name; h.nX = nBin; h.xLo = xMin; h.xHi = xMax;
     h1.push_back(h);
     return (int)h1.size() - 1;
   }
 
   int Hist2D(const char * name, const char *, const char *,
              int nX, double xMin, double xMax,
-             int nY, double yMin, double yMax, int row, int col) override {
+             int nY, double yMin, double yMax, void *) override {
     Hist h{}; h.name = name; h.nX = nX; h.xLo = xMin; h.xHi = xMax;
-    h.nY = nY; h.yLo = yMin; h.yHi = yMax; h.row = row; h.col = col;
+    h.nY = nY; h.yLo = yMin; h.yHi = yMax;
     h2.push_back(h);
     return (int)h2.size() - 1;
   }
@@ -451,11 +465,13 @@ public:
     h.fills++; h.xSum += x; h.ySum += y;
   }
 
-  void ChannelParam(const char * label, int * digi, int * channel) override {
+  void * ChannelParam(const char * label, int * digi, int * channel, void *) override {
     chans.push_back({std::string(label), digi, channel});
+    return nullptr;
   }
-  void BoolParam(const char * label, bool * value) override {
+  void * BoolParam(const char * label, bool * value, void *) override {
     flags.push_back({std::string(label), value});
+    return nullptr;
   }
 
   void Print() const {

@@ -11,10 +11,12 @@
 #include <QMainWindow>
 #include <QThread>
 #include <QTimer>
-#include <QVBoxLayout>
 
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <mutex>
+#include <string>
 #include <vector>
 
 #include "Analysis.h"
@@ -43,6 +45,11 @@
 ///
 /// Every GUI-initiated change is a BlockingQueuedConnection into the worker that owns the state,
 /// so the marshalling IS the fence — there is no hand-rolled suspend/drain flag anywhere.
+///
+/// Since ABI v2 the analysis lays out its own window: the host keeps the "Control" box (enable,
+/// selector, rebuild, event-builder settings, log) and hands the analysis everything below and
+/// beside it as one work area. What used to be plotBox + a stacked settings column is now the
+/// analysis' canvas, see Analysis.h.
 
 //^============================================================ histogram registry
 
@@ -52,53 +59,77 @@
 /// touched from the GUI thread. This is not tidiness: Histogram1D::Fill() assigns a QString into a
 /// QCPItemText, whose d-pointer store races the GUI thread's draw() and can leave it reading freed
 /// memory. Histogram2D::Fill() additionally walks cutList while the operator may be editing it.
+///
+/// Declarations arriving on the analysis thread reserve their id and counters but not a widget:
+/// the widget (a Qt object, GUI thread only) materialises at the next Publish(). placement is
+/// honoured either way, which is what makes an analysis-thread "add a histogram now" complete
+/// without any GUI-side follow-up from the analysis.
+
+struct AnalyzerHooks {
+  /// Run fn on the analysis thread and wait for it. This is the fence every parameter write rides.
+  std::function<void(const std::function<void()> &)> fence;
+  /// Analyzer::isSignalSlotActive, read when a widget signal fires.
+  std::function<bool()> signalsActive;
+  /// v4 plumbing: only the status label can be claimed; the builder setters are idle-gated
+  /// inside the window and keep the bar spinboxes in sync as a side effect.
+  std::function<QWidget *()> claimStatus;
+  std::function<uint64_t()>   timeWindow;
+  std::function<void(uint64_t)> setTimeWindow;
+  std::function<double()>     guardFactor;
+  std::function<void(double)> setGuardFactor;
+  std::function<void(const QString &)> setWindowTitle;
+  std::function<void(int,int)> resizeWindow;
+};
+
 class QtHistRegistry : public HistRegistry {
 public:
-  QtHistRegistry(QWidget * plotParent, QGridLayout * plotLayout,
-                 QWidget * ctrlParent, QVBoxLayout * ctrlLayout,
-                 Digitizer2Gen ** digi, const std::vector<int> & boardIndex);
+  QtHistRegistry(QWidget * root, Digitizer2Gen ** digi, unsigned int nDigi,
+                 const std::vector<int> & boardIndex, const AnalyzerHooks & hooks);
 
-  //---- HistRegistry, called from Declare() on the GUI thread
+  //---- HistRegistry. Declare-side calls work on any thread (see class comment).
+  void * WorkArea() override;
   int  Hist1D(const char * name, const char * xLabel,
-              int nBin, double xMin, double xMax, int row, int col) override;
+              int nBin, double xMin, double xMax, void * placement) override;
   int  Hist2D(const char * name, const char * xLabel, const char * yLabel,
               int nX, double xMin, double xMax,
-              int nY, double yMin, double yMax, int row, int col) override;
-  void ChannelParam(const char * label, int * digi, int * channel) override;
-  void BoolParam(const char * label, bool * value) override;
+              int nY, double yMin, double yMax, void * placement) override;
+  void * View1(int id) override;
+  void * View2(int id) override;
+  void * ChannelParam(const char * label, int * digi, int * channel, void * placement) override;
+  void * BoolParam(const char * label, bool * value, void * placement) override;
+
+  //---- HistRegistry, v3 claimable plumbing. GUI thread; they forward to AnalyzerHooks.
+  void * StatusControl() override;   ///< the only claimable plumbing widget; enable/window/guard
+                                     ///< are fixed Analyzer-bar chrome (v4)
+  uint64_t TimeWindow() override;
+  void SetTimeWindow(uint64_t ns) override;
+  double GuardFactor() override;
+  void SetGuardFactor(double factor) override;
+  void SetWindowTitle(const char * title) override;
+  void ResizeWindow(int width, int height) override;
 
   //---- HistRegistry, called from ProcessEvent() on the analysis thread
   void Fill1(int id, double x) override;
   void Fill2(int id, double x, double y) override;
 
   //---- GUI thread only
-  void Publish();      ///< counts -> widgets
+  /// Wire every picker/flag created during Declare(): seeding must read the members AFTER
+  /// LoadState() has restored them, so wiring cannot happen at creation time.
+  void FinishDeclare();
+  void Publish();      ///< materialise queued widgets, then counts -> widgets
   void ClearCounts();  ///< zero everything; used when a parameter changes
-  void Destroy();      ///< delete every widget this registry created
-
-  /// Re-read a widget's binning after a right-click rebin and resize/zero its counters. Without
-  /// this the counters stay on the binning the analysis declared while the widget moves to the
-  /// new one, and the plot shows counts binned against the wrong axis. Must run with the analysis
-  /// worker parked -- Analyzer wires it through a BlockingQueuedConnection, as it does for the
-  /// channel pickers.
-  void Resize1(int id);
-  void Resize2(int id);
-
-  int  NumH1() const { return (int) h1.size(); }
-  int  NumH2() const { return (int) h2.size(); }
-  Histogram1D * Widget1(int id) const { return ( id >= 0 && id < (int)h1.size() ) ? h1[id]->w : nullptr; }
-  Histogram2D * Widget2(int id) const { return ( id >= 0 && id < (int)h2.size() ) ? h2[id]->w : nullptr; }
-
-  /// Widgets the host built for declared parameters, so the window can wire them up.
-  struct ChanWidget { RComboBox * cbDigi; RComboBox * cbCh; int * digi; int * ch; };
-  std::vector<ChanWidget> chanWidget;
-  std::vector<QCheckBox *> flagWidget;
-  std::vector<bool *>      flagValue;
+  /// Forget every widget. It does NOT delete them: they are children of the work area, and the
+  /// window destroys the work area itself, before this registry or the analysis go away.
+  void Clear();
 
 private:
+
   struct H1 {
-    Histogram1D * w = nullptr;
-    int nBin = 0; double lo = 0, hi = 0, dx = 1;
+    Histogram1D * w = nullptr;                 ///< null until materialised (GUI thread)
+    std::string   name, xLabel;
+    void        * placement = nullptr;
+    bool          created = false;
+    int nBin = 0; double lo = 0, hi = 0, dx = 1;   ///< declared binning; Resize1 re-reads the widget's
     std::unique_ptr<std::atomic<uint32_t>[]> c;
     /// total counts IN-RANGE entries only (matches the widget's "Total Entry"); the rejects
     /// live in under/over, so lifetime-filled == total+under+over. H2.total differs (it is
@@ -107,6 +138,13 @@ private:
   };
   struct H2 {
     Histogram2D * w = nullptr;
+    std::string   name, xLabel, yLabel;
+    void        * placement = nullptr;
+    bool          created = false;
+    /// Before the widget exists, declared geometry decides in/out; guard cells only exist once
+    /// Histogram2D is constructed, so queued fills keep total/out but not cell counts (see Fill2).
+    int nXReq = 0, nYReq = 0;
+    double xLo = 0, xHi = 0, yLo = 0, yHi = 0;
     /// The widget's real cell grid, not the bin count the analysis asked for. See
     /// Histogram2D::GetCellGeom(): Rebin() adds two guard cells and coordToCell spreads the range
     /// over nx-1 intervals, so binning over the requested count draws everything on the wrong
@@ -116,16 +154,53 @@ private:
     std::atomic<uint64_t> total{0}, out{0};
   };
 
+  struct ChanReq {
+    std::string label;
+    int * digi = nullptr; int * ch = nullptr;
+    QWidget    * line = nullptr;
+    RComboBox  * cbDigi = nullptr;
+    RComboBox  * cbCh   = nullptr;
+    void * placement = nullptr;
+    bool wired = false;
+  };
+  struct FlagReq {
+    std::string label;
+    bool * value = nullptr;
+    QCheckBox * cb = nullptr;
+    void * placement = nullptr;
+    bool wired = false;
+  };
+
+  //---- GUI-thread materialisation
+  void CreateH1(size_t i);
+  void CreateH2(size_t i);
+  void CreateChan(size_t i);
+  void CreateFlag(size_t i);
+  void WireChan(size_t i);
+  void WireFlag(size_t i);
+  void DrainPending();
+  bool OnGuiThread() const;
+
+  //---- analysis thread (routed through hooks.fence)
+  void Resize1(int id);
+  void Resize2(int id);
+
   std::vector<std::unique_ptr<H1>> h1;
   std::vector<std::unique_ptr<H2>> h2;
+  std::vector<ChanReq>             chans;
+  std::vector<FlagReq>             flags;
   std::vector<uint32_t>            scratch;   ///< GUI thread only
 
-  QWidget      * plotParent;
-  QGridLayout  * plotLayout;
-  QWidget      * ctrlParent;
-  QVBoxLayout  * ctrlLayout;
+  /// Indices of entries declared on the analysis thread, waiting for their widgets.
+  std::mutex gate;
+  std::vector<size_t> pendH1, pendH2, pendChan, pendFlag;
+  bool declareFinished = false;
+
+  QWidget * root;
   Digitizer2Gen ** digi;
+  unsigned int   nDigi;
   std::vector<int> boardIndex;   ///< view position -> digi[] index
+  AnalyzerHooks hooks;
 };
 
 //^============================================================ workers
@@ -188,6 +263,14 @@ private:
   void SetEnabled(bool on);
   void UpdateStatus();
 
+  /// The analysis' canvas: destroyed and rebuilt on every SelectAnalysis, in that order — the
+  /// widgets inside belong to the registry's histogram entries, the layout tree to the analysis.
+  QWidget * ResetWorkArea();
+
+  /// One JSON object per analysis, next to the .so it came from: <analyzers>/state/<name>.json.
+  void SaveAnalysisState();
+  void LoadAnalysisState(const QString & name);
+
   Digitizer2Gen ** digi;
   unsigned int     nDigi;
   std::vector<int> boardIndex;      ///< view position -> digi[] index, dummies excluded
@@ -200,6 +283,7 @@ private:
   AnalysisPlugin   plugin;                 ///< owns the dlopen handle of the loaded analysis
   std::vector<AnalysisPlugin::Info> found; ///< what the last scan saw
   QString          pluginDir;
+  QString          stateDir;
   QProcess       * builder = nullptr;      ///< runs make for the Rebuild button
 
   QThread     * buildThread = nullptr;
@@ -210,17 +294,17 @@ private:
 
   QCheckBox      * chkEnable;
   RComboBox      * cbAnalysis;
+  QWidget        * ctrlVault;       ///< resting place for the unclaimed status label
+  QString          currentName;
   QPushButton    * bnRebuild;
   QPushButton    * bnReload;
   QPushButton    * bnRescan;
   QPlainTextEdit * logPane;
   RSpinBox    * sbTimeWindow;
-  RSpinBox    * sbGuardTime;
+  RSpinBox    * sbGuardFactor;      ///< guard time is ALWAYS this times the time window
   QLabel      * lbStatus;
-  QGroupBox   * plotBox;
-  QGridLayout * plotLayout;
-  QGroupBox   * ctrlBox;
-  QVBoxLayout * ctrlLayout;
+  QGridLayout * topLay;
+  QWidget     * workArea = nullptr;
 
   bool isSignalSlotActive = true;
 };

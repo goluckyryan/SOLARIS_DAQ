@@ -101,3 +101,4 @@ solaris-broker
 solaris-cli
 #---- the whole test folder stays local: sources, harnesses, binaries, objects
 tests/
+analyzers/state/

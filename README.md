@@ -345,7 +345,8 @@ cut. Both are use-after-free, not cosmetic.
 
 So the registry accumulates into plain `std::atomic<uint32_t>` arrays on the worker, and only the
 GUI thread publishes them into the widgets, through `Histogram1D::SetBinContents()` and
-`Histogram2D::SetCellContents()`. An analysis never sees a widget, so it cannot get this wrong.
+`Histogram2D::SetCellContents()`. An analysis holds `void *` handles it can position but never
+draw on, so it cannot get this wrong.
 
 (`SingleSpectra` still fills from its worker. That predates this and should eventually move to the
 same discipline; do not copy it.)
@@ -356,15 +357,23 @@ Drop one `.cpp` in `analyzers/`. No other file changes.
 
 ```cpp
 #include "../Analysis.h"
+#include <QSplitter>                       // Qt is allowed in an analysis (ABI v2)
 
 class MyAnalysis : public Analysis {
   int digiA = 0, chA = 0;      // plain members: the host writes them on the analysis thread
   int hE = -1, hEE = -1;
 public:
   void Declare(HistRegistry & reg, const AnalysisContext & ctx) override {
-    reg.ChannelParam("Channel A", &digiA, &chA);          // host builds the combo boxes
-    hE  = reg.Hist1D("Energy", "E [ch]", 512, 0, 30000, /*row*/0, /*col*/0);
-    hEE = reg.Hist2D("E vs E", "E(A)", "E(B)", 256, 0, 30000, 256, 0, 30000, 0, 1);
+    QWidget * root = static_cast<QWidget *>( reg.WorkArea() );   // the canvas is YOURS
+    if( root == nullptr ) return;          // headless driver: declare, do not arrange
+
+    void * pA = reg.ChannelParam("Channel A", &digiA, &chA, nullptr);
+    hE  = reg.Hist1D("Energy", "E [ch]", 512, 0, 30000, nullptr);
+    hEE = reg.Hist2D("E vs E", "E(A)", "E(B)", 256, 0, 30000, 256, 0, 30000, nullptr);
+
+    QSplitter * sp = new QSplitter(Qt::Horizontal, root);
+    sp->addWidget(static_cast<QWidget *>( reg.View2(hEE) ));
+    static_cast<QWidget *>( pA )->setParent(sp);      // or pass a QLayout as `placement`
   }
 
   void ProcessEvent(const BuiltHit * hits, int n, HistRegistry & reg) override {
@@ -374,8 +383,16 @@ public:
   }
 };
 
-REGISTER_ANALYSIS(MyAnalysis, "My Analysis");
+ANALYSIS_ENTRY(MyAnalysis, "My Analysis");
 ```
+
+Qt is fair game inside an analysis (`libQt6*` is a shared library, not a DAQ symbol) — splitters,
+group boxes, buttons, even custom-painted widgets (no `Q_OBJECT`, hence no moc; use an existing
+widget as the `connect()` context). What must stay host-built are the widgets that own thread
+fences and board knowledge: the histograms and the channel pickers, returned as opaque handles.
+`Hist1D`/`Hist2D`/`*Param` may also be called **during the run** — from a GUI callback the widget
+exists on return, from `ProcessEvent()` the id is valid immediately and the widget appears at the
+next publish tick.
 
 `Fill1` and `Fill2` are named apart on purpose: 1D and 2D ids are separate spaces, so filling a 2D
 histogram with a 1D call cannot silently land data in the wrong plot.
@@ -418,17 +435,50 @@ still the GUI's board number, so the two agree on labelling.
 #### Full registry API
 
 ```cpp
-int  Hist1D(name, xLabel, nBin, xMin, xMax, row, col);
-int  Hist2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, row, col);
+void * WorkArea();                                                 // the analysis' canvas
+int  Hist1D(name, xLabel, nBin, xMin, xMax, placement);
+int  Hist2D(name, xLabel, yLabel, nX, xMin, xMax, nY, yMin, yMax, placement);
+void * View1(id);                                                  // the plot as QWidget *
+void * View2(id);
 void Fill1(id, x);
 void Fill2(id, x, y);
-void ChannelParam(label, int * digi, int * channel);   // host builds two combo boxes
-void BoolParam(label, bool * value);                   // host builds a checkbox
+void * ChannelParam(label, int * digi, int * channel, placement);  // host builds the combo boxes
+void * BoolParam(label, bool * value, placement);                  // host builds a checkbox
 ```
 
-`row`/`col` place the plot in the window's grid. Parameters are written by the host on the analysis
-thread and **the histograms are cleared whenever one changes**, so a plot never mixes counts from
-two different channel selections.
+`placement` is an opaque `QLayout *` the widget is added to (null: place it yourself via
+`View*()`). Parameters are written by the host on the analysis thread and **the histograms are
+cleared whenever one changes**, so a plot never mixes counts from two different channel
+selections. `SaveState()` / `LoadState()` round-trip the analysis' own state through a flat
+key/value interface; the host keeps it in `analyzers/state/<name>.json`.
+
+#### Claiming the host plumbing (ABI v3)
+
+The event-builder controls are host-owned (they ride fences into the builder thread), but the
+analysis decides whether they EXIST on its UI:
+
+```cpp
+reg.EnableControl();         // the "run" checkbox
+reg.TimeWindowControl();     // spinbox, ns
+reg.GuardFactorControl();    // spinbox; guard time is ALWAYS factor x window now
+reg.StatusControl();         // the events/dropped/late label
+reg.SetTimeWindow(10000);    // idle-only; keeps the (claimed, visible) spinbox in sync
+reg.SetGuardFactor(5);
+reg.SetWindowTitle("MUSIC - bar array monitor");
+reg.ResizeWindow(1200, 900);
+```
+
+A claim reveals the widget and hands it over for placement — the host still owns it and parks it
+back before destroying the work area, so a claimed widget can never die with the analysis that
+merely displayed it. **Not claiming is the other half**: the control stays hidden, its value
+sits at the host default unchanged, and if the ENABLE control is unclaimed the analysis simply
+follows the main window's acquisition — it runs while ACQ runs and idles when ACQ stops (there is
+no other switch, so one is never needed). `analyzers/MUSICAnalyzer.cpp` claims all four;
+`analyzers/Coincidence.cpp` claims none and rides the DAQ.
+
+The host window itself is pure bootstrap: Rescan / Rebuild / Reload and the compiler log. There
+is no analysis selector — the alphabetically first `.so` in `analyzers/build/` **is** the
+analysis; switching means renaming or removing plugin files and pressing Rescan.
 
 #### Testing without a digitizer
 
@@ -450,12 +500,16 @@ make -C Aux tools
 It prints the declared histograms, the parameters, and a fill tally per histogram with means and
 under/overflow counts — enough to see whether the analysis is doing what you expect.
 
-Thread contract: `Declare()` runs on the GUI thread with the workers stopped (it is where widgets
-get created); `ProcessEvent()`, `OnRunStart()` and `OnRunStop()` run on the analysis thread. Nothing
-an analysis implements is ever entered concurrently with anything else it implements.
+Thread contract: `Declare()` and `LoadState()` run on the GUI thread with the workers stopped
+(widgets may be created and arranged there); `SaveState()` runs on the GUI thread when the analysis
+is deselected or the window closes; `ProcessEvent()`, `OnRunStart()` and `OnRunStop()` run on the
+analysis thread. The host always destroys the work area **before** `DestroyAnalysis`, so a widget
+callback can never fire on a dying window. Nothing an analysis implements is ever entered
+concurrently with anything else it implements.
 
-`analyzers/Coincidence.cpp` is the worked example: E(A) vs E(B), tB − tA, and multiplicity, with
-both channels chosen at runtime.
+`analyzers/Coincidence.cpp` is the worked example in the new style: its own splitter layout, both
+channels chosen at runtime, and a button that adds the tB − tA histogram mid-run and remembers it
+for the next session.
 
 #### What gets rebuilt
 
