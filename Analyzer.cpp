@@ -598,7 +598,19 @@ void Analyzer::SelectAnalysis(const QString & name){
         for( int c = 0; c < digi[d]->GetNChannels(); c++ ) cbC->addItem(QString::number(c), c);
       }
     };
+
+    /// Seed the pickers from the analysis's own members BEFORE wiring, so a compiled-in default
+    /// (e.g. chB = 4) reaches the GUI. Without this the combos sit at item 0 and the apply() at
+    /// the bottom of this loop writes that 0 back over the member -- the default never survives.
+    if( dp ){
+      const int i = cbD->findData(*dp);
+      if( i >= 0 ) cbD->setCurrentIndex(i);
+    }
     refillChannels();
+    if( cp ){
+      const int i = cbC->findData(*cp);
+      cbC->setCurrentIndex(i >= 0 ? i : 0);
+    }
 
     auto apply = [this, cbD, cbC, dp, cp](){
       if( !isSignalSlotActive ) return;
