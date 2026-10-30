@@ -834,6 +834,7 @@ void MainWindow::OpenDigitizers(){
     bnOpenScalar->setEnabled(true);
 
     singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
+    singleSpectra->SetInflux(influx, DatabaseName);   // may be null; the monitor self-disables
     bnSingleSpectra->setEnabled(true);
 
     analyzer = new Analyzer(digi, nDigi, this);
@@ -2587,6 +2588,7 @@ void MainWindow::OpenSingleSpectra(){
 
   if( singleSpectra == nullptr ) {
     singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath);
+    singleSpectra->SetInflux(influx, DatabaseName);
     singleSpectra->show();
   }else{
     singleSpectra->show();
@@ -2676,6 +2678,10 @@ void MainWindow::SetupInflux(){
   }else{
     LogMsg("No database is provided.");
   }
+
+  // hand the (possibly null) singleton to any live window; the Rate Monitor's Influx out
+  // enables itself only when a healthy connection came through
+  if( singleSpectra ) singleSpectra->SetInflux(influx, DatabaseName);
 }
 
 void MainWindow::SetupElog(){

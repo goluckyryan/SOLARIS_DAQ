@@ -28,6 +28,7 @@
 
 class HistWorker;  // Forward declaration
 class RateMonitor; // Forward declaration
+class InfluxDB;    // Forward declaration (MainWindow owns the singleton)
 
 #define MaxNumberOfPane 16 // the biggest split is 4x4
 
@@ -97,6 +98,14 @@ public:
   /// without it a test instance saves its chaos straight into the live experiment tree.
   void SetSettingPath(const QString & p){ settingPath = p; }
   QString SettingPath() const { return settingPath; }   // for the harness's self-check
+
+  /// MainWindow's InfluxDB singleton (may be null) + database name, forwarded to the
+  /// RateMonitor the moment it exists. Called at window creation AND at the end of
+  /// MainWindow::SetupInflux (settings can (re)configure the database mid-session).
+  void SetInflux(InfluxDB * db, const QString & database);
+
+  /// the persisted "Influx out" preference, flipped by the monitor's checkbox
+  void SetInfluxOut(bool on);
 
   /// The (d,ch) histogram widget, or nullptr. Unmounted widgets are parentless -- this is the
   /// only handle to them (the test harness verifies gate/monitor behaviour on them).
@@ -263,6 +272,10 @@ private:
   /// object owns the pointer and deletes it in ~SingleSpectra (after the worker is stopped), so it
   /// cannot be auto-freed a second time by the QObject destructor.
   RateMonitor * rateMonitor = nullptr;
+
+  InfluxDB  * influx = nullptr;      // not owned (MainWindow's singleton; may be null)
+  QString     influxDatabase;
+  bool        influxOut = false;     // persisted preference (json "influxOut"), default OFF
 
   //---- auto save (see markSettingsDirty)
   QCheckBox * chkAutoSave = nullptr;

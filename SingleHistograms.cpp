@@ -185,6 +185,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     connect(bnRateMonitor, &QPushButton::clicked, this, [=](){
       if( rateMonitor == nullptr ){
         rateMonitor = new RateMonitor(digi, nDigi, this);
+        rateMonitor->SetInflux( influx, influxDatabase, influxOut );
         // Created after the run already started: join it now (sets the gate + zeroes the clock).
         if( acqRunning ) rateMonitor->DAQStarted();
       }
@@ -386,6 +387,19 @@ SingleSpectra::~SingleSpectra(){
     delete hist2D[i];
     hist2D[i] = nullptr;
   }
+}
+
+void SingleSpectra::SetInflux(InfluxDB * db, const QString & database){
+  influx = db;
+  influxDatabase = database;
+  if( rateMonitor ) rateMonitor->SetInflux( influx, influxDatabase, influxOut );
+}
+
+void SingleSpectra::SetInfluxOut(bool on){
+  if( influxOut == on ) return;
+  influxOut = on;
+  if( rateMonitor ) rateMonitor->SetInflux( influx, influxDatabase, influxOut );
+  markSettingsDirty();
 }
 
 //^ The two ACQ hooks. startTimer also zeroes the clock EVERY rate number is measured on:
@@ -1187,6 +1201,7 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
    //^---- the auto-save preference travels with the settings it controls
    root["autoSave"] = ( chkAutoSave && chkAutoSave->isChecked() );
    root["autoSaveMs"] = ( sbAutoSaveQuietMs ? (int) sbAutoSaveQuietMs->value() : 1500 );
+   root["influxOut"]  = influxOut;
 
    //^---- spectra & gates, keyed by serial number (not board index), so they survive a
    //^     change of digitizer enumeration order -- same convention as the legacy txt.
@@ -1410,6 +1425,9 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
 
     //^---- the auto-save preference travels with the file (absent = on). The signal guard
     //^     keeps this write-back from marking the settings dirty the moment they were read.
+    influxOut = root["influxOut"].toBool( influxOut );
+    if( rateMonitor ) rateMonitor->SetInflux( influx, influxDatabase, influxOut );
+
     if( chkAutoSave ){
       bool oldFlag = isSignalSlotActive;
       isSignalSlotActive = false;

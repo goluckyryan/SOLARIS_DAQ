@@ -10,9 +10,11 @@
 #include "ClassDigitizer2Gen.h"
 
 class SingleSpectra;
+class InfluxDB;
 class RComboBox;
 class QListWidget;
 class QCheckBox;
+class QLabel;
 class QCPGraph;
 
 //^====================================================
@@ -49,6 +51,11 @@ public:
   /// Y auto-rescale currently paused (a user zoom owns the axis; Unzoom resumes). Public for
   /// the headless harness; there is deliberately no checkbox anymore.
   bool YFixed() const { return yFixed; }
+
+  /// MainWindow's InfluxDB singleton (may be null) + database + the persisted output
+  /// preference. The checkbox self-disables (with an explanatory tooltip) without a
+  /// healthy connection; the preference itself is SingleSpectra's to persist.
+  void SetInflux(InfluxDB * db, const QString & database, bool out);
 
   //^---- the acquisition gate. The monitor only samples while DAQ runs: DAQStopped freezes the
   //^     plot (last frame, no loop), DAQStarted resets ABSOLUTE TIME TO ZERO -- the x clock
@@ -106,6 +113,8 @@ private:
   RComboBox   * cbStore;    // live rateStore keys: totals and 1D gates
   RComboBox   * cmbTimeBase; // integration time (time base), e.g. 1 s / 5 s / 30 s
   QListWidget * lstMonitored;
+  QCheckBox   * chkInflux = nullptr;     // "Influx out": push this window's traced rates per tick
+  QLabel      * lbInfluxSchema = nullptr; // shows the line-protocol schema being pushed
 
   // One entry per subscribed store key. d/ch is the OWNING channel (drain refcount), not the key.
   struct Trace{
@@ -122,7 +131,10 @@ private:
   int windowSec = 300;           // keep the last five minutes
   bool acqOn = false;            // DAQ gate: no sampling, no timer, no pump until DAQStarted()
   bool yAutoBusy = false;        // we are setting the Y range ourselves; do not treat it as user action
-  bool yFixed    = false;        // Y auto-rescale paused by a USER zoom (Unzoom resumes)
+  InfluxDB    * influx = nullptr;     // not owned
+  QString      influxDb;
+  bool         influxOut = false;     // mirror of the checkbox (source of truth: SingleSpectra)
+  bool         yFixed    = false;        // Y auto-rescale paused by a USER zoom (Unzoom resumes)
 };
 
 #endif

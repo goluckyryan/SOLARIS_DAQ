@@ -1,6 +1,7 @@
 #include "RateMonitor.h"
 
 #include "SingleHistograms.h"
+#include "ClassInfluxDB.h"
 #include "CustomWidgets.h"
 
 #include <QVBoxLayout>
@@ -157,6 +158,28 @@ void RateMonitor::BuildUI(){
   ctrl->addWidget(bnAddStore, 1, 4);
   connect(bnAddStore, &QPushButton::clicked, this, &RateMonitor::AddStoreKey);
 
+  //---- InfluxDB output: exactly what the plot computes, batched into ONE write per tick.
+  //     Enabled only with a healthy singleton connection; the preference persists through
+  //     SingleSpectra (json "influxOut" + auto save).
+  chkInflux = new QCheckBox("Influx out", this);
+  chkInflux->setObjectName("chkInflux");
+  chkInflux->setToolTip("Push every traced rate to InfluxDB once per time-average tick"
+                        " (one batched POST, schema shown at right).");
+  ctrl->addWidget(chkInflux, 0, 8);
+  connect(chkInflux, &QCheckBox::toggled, this, [this](bool on){
+    if( influxOut == on ) return;
+    influxOut = on;
+    if( ss ) ss->SetInfluxOut( on );        // persist via the settings file
+  });
+
+  lbInfluxSchema = new QLabel("MonitorRate,Bd=<serial>,Ch=<NN>,Src=<total|gN> value=<Hz>", this);
+  lbInfluxSchema->setObjectName("lbInfluxSchema");
+  lbInfluxSchema->setStyleSheet("color:gray; font-family:monospace;");
+  lbInfluxSchema->setToolTip("Line protocol, one line per traced key per tick, batched into a\n"
+                             "single write. Src carries the gate ID (rename-stable); value is\n"
+                             "the time-averaged rate in Hz (server-side ingest timestamp).");
+  ctrl->addWidget(lbInfluxSchema, 1, 5, 1, 4);
+
   //---- the monitored set, with a live rate readout per row
   QGroupBox * monBox = new QGroupBox("Monitored Channels", this);
   main->addWidget(monBox);
@@ -283,6 +306,21 @@ void RateMonitor::ClearAll(){
   for( const Trace & tr : copy ) ReleaseIfUnused(tr.d, tr.ch);
   plot->replot();
   RefreshStorePicker();
+}
+
+void RateMonitor::SetInflux(InfluxDB * db, const QString & database, bool out){
+  influx = db;
+  influxDb = database;
+  if( !chkInflux ) return;   // arrives before BuildUI only in odd construction orders
+  const bool healthy = db && db->IsConnectionOK();
+  const QSignalBlocker guard(chkInflux);
+  chkInflux->setEnabled( healthy );
+  chkInflux->setChecked( healthy && out );
+  chkInflux->setToolTip( healthy
+      ? "Push every traced rate to InfluxDB once per time-average tick (one batched POST)."
+      : "InfluxDB is not configured or not connected (Program Settings -> Database)." );
+  influxOut = chkInflux->isChecked();
+  if( lbInfluxSchema ) lbInfluxSchema->setVisible( healthy );
 }
 
 void RateMonitor::SetLogY(bool on){
@@ -469,6 +507,7 @@ void RateMonitor::Sample(){
   }
 
   const double t = clock.elapsed() / 1000.0;
+  QVector<QByteArray> pushLines;   // this tick's InfluxDB batch (empty unless we append)
 
   for( Trace & tr : traces ){
     double r = 0.0;
@@ -480,10 +519,29 @@ void RateMonitor::Sample(){
       // as 1/sqrt(N) with a longer average -- that is its whole purpose.
       tr.graph->addData(t, r);
       tr.item->setText(DisplayFor(tr.key) + "  --  " + QString::number(r, 'f', 1) + " Hz");
+      const int gp = tr.key.indexOf( "/g" );
+      const QString src = ( gp >= 0 ) ? tr.key.mid(gp+1) : QString("total");
+      const QString bd  = ( tr.d >= 0 && tr.d < (int)nDigi && digi[tr.d] )
+                            ? QString::number( digi[tr.d]->GetSerialNumber() ) : QString("0");
+      pushLines.append( QString("MonitorRate,Bd=%1,Ch=%2,Src=%3 value=%4")
+                          .arg(bd)
+                          .arg( tr.ch, 2, 10, QChar('0') )
+                          .arg(src)
+                          .arg( QString::number(r, 'f', 3) ).toUtf8() );
     }else{
       // fewer than two samples inside the window yet: honest placeholder, not a fake zero.
       tr.item->setText(DisplayFor(tr.key) + "  --  (gathering...)");
     }
+  }
+
+  //---- batched push: everything this tick computed travels in ONE write -- and nothing
+  //     unmeasured fakes a zero. Synchronous curl on the GUI thread, exactly like the
+  //     scalar writers (tick period >= 1 s); should sub-second bases ever reach here,
+  //     move to SingleSpectra's one-shot writer-thread pattern.
+  if( influxOut && influx && influx->IsConnectionOK() && !pushLines.isEmpty() ){
+    influx->ClearDataPointsBuffer();
+    for( const QByteArray & line : pushLines ) influx->AddDataPoint( line.constData() );
+    influx->WriteData( influxDb.toStdString() );
   }
 
   // trim the rolling window, then pin the x range to the last windowSec and auto-scale the y axis
