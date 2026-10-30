@@ -6,6 +6,8 @@
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QColorDialog>
+#include <QPushButton>
 
 #define MaxNHist 10
 
@@ -112,7 +114,7 @@ public:
           gRen = menu.addAction("Edit Gates...");
           gClr = menu.addAction("Clear Gates");
           for( int k = 0; k < gates.size(); k++ ){
-            QAction * da = menu.addAction("Delete " + gates[k].name + " [" + gateColorName(gates[k].id) + "]");
+            QAction * da = menu.addAction("Delete " + gates[k].name + " [" + gates[k].color.name() + "]");
             /// The index rides the action (same lesson as the 2D cut menu): recovering it by
             /// parsing the label would break the moment a gate is renamed.
             da->setData(k);
@@ -332,6 +334,12 @@ public:
   double GateHigh(int k) const { return (k>=0 && k<gates.size()) ? qMax(gates[k].x0, gates[k].x1) : 0.; }
   int  GateId(int k)     const { return (k>=0 && k<gates.size()) ? gates[k].id : -1; }
   QString GateName(int k)const { return (k>=0 && k<gates.size()) ? gates[k].name : QString(); }
+  /// The gate's own colour (picked in Edit Gates; seeded from the id palette on creation)
+  QColor GateColor(int k)  const { return (k>=0 && k<gates.size()) ? gates[k].color : QColor(); }
+  void SetGateColor(int k, const QColor & c){
+    if( k < 0 || k >= gates.size() || !c.isValid() ) return;
+    gates[k].color = c; ApplyGateColor(k); replot();
+  }
   /// RateStore key. Carries the gate's NEVER-REUSED id, not its position: a middle delete must
   /// not graft the victim's rate history onto a survivor.
   QString GateKey(int k) const{
@@ -364,8 +372,9 @@ public:
     Gate g;
     g.x0 = c - hw;
     g.x1 = c + hw;
-    g.id   = gateSeq ++;                    // monotonic: colors and store keys follow the gate
-    g.name = QString("Gate-%1").arg(g.id);
+    g.id    = gateSeq ++;                   // monotonic: the store key (and the default colour) rides it
+    g.name  = QString("Gate-%1").arg(g.id);
+    g.color = gateColor(g.id);
     g.rateLine = "(gathering...)";
 
     const QColor col = gateColor(g.id);
@@ -397,13 +406,14 @@ public:
     return gates.size() - 1;
   }
 
-  /// Re-create a persisted gate: its saved id (which carries the COLOR and the RateStore key),
-  /// name and bounds. id < 0 keeps the auto-assigned one. gateSeq is pushed past the restored
+  /// Re-create a persisted gate: its saved id (which carries the RATE KEY; its colour is the
+  /// id palette's until the file brings one), name, bounds and colour. id < 0 keeps the
+  /// auto-assigned one; an empty colour keeps the palette. gateSeq is pushed past the restored
   /// id so fresh gates can never collide with it.
   /// A duplicated file (every gate twice, saved by a pre-clear LoadSetting) keeps its FIRST
   /// copy of each id and ignores the twin: two live gates sharing an id would share one
   /// RateStore key, and each SampleRates() pass would overwrite the other's sum.
-  int RestoreGate(int id, const QString & name, double lo, double hi){
+  int RestoreGate(int id, const QString & name, double lo, double hi, const QString & color = QString()){
     if( id >= 0 )
       for( int k = 0; k < gates.size(); k++ )
         if( gates[k].id == id ) return k;
@@ -412,8 +422,9 @@ public:
     if( id >= 0 ){
       gates[k].id   = id;
       gateSeq       = qMax(gateSeq, id + 1);
-      ApplyGateColor(k);
     }
+    gates[k].color = color.isEmpty() ? gateColor(gates[k].id) : QColor(color);
+    ApplyGateColor(k);
     if( !name.isEmpty() ) gates[k].name = name;
     SetGateBounds(k, lo, hi);
     UpdateGateLabel(k);
@@ -427,7 +438,7 @@ public:
   }
 
   void ApplyGateColor(int k){
-    const QColor col = gateColor(gates[k].id);
+    const QColor col = gates[k].color;
     QPen pen(col, 1.5);
     gates[k].l0->setPen(pen);
     gates[k].l1->setPen(pen);
@@ -468,6 +479,7 @@ public:
     QFormLayout layout(&dialog);
 
     QList<QLineEdit *> nameLe, loLe, hiLe;
+    QList<QColor>     rowCol;          // per-row editable colour, applied on OK
     for( int k = 0; k < gates.size(); k++ ){
       QHBoxLayout * row = new QHBoxLayout();
       nameLe.append(new QLineEdit(&dialog)); nameLe.last()->setText( gates[k].name );
@@ -478,7 +490,20 @@ public:
       row->addWidget(loLe.last());
       row->addWidget(new QLabel("to", &dialog));
       row->addWidget(hiLe.last());
-      layout.addRow( gateColorName(gates[k].id) + " :", row );
+      // the colour cell: a live swatch that opens the standard picker on click
+      QPushButton * sw = new QPushButton(&dialog);
+      sw->setFixedSize( 28, 16 );
+      sw->setToolTip( "Gate colour" );
+      rowCol.append( gates[k].color );
+      const auto paintSw = [sw]( const QColor & c ){
+        sw->setStyleSheet( QString("background-color: %1; border: 1px solid palette(mid);").arg( c.name() ) );
+      };
+      paintSw( rowCol.last() );
+      connect( sw, &QPushButton::clicked, &dialog, [sw, k, &rowCol, paintSw](){
+        const QColor c = QColorDialog::getColor( rowCol[k], sw, "Gate colour" );
+        if( c.isValid() ){ rowCol[k] = c; paintSw( c ); }
+      });
+      layout.addRow( sw, row );
     }
     layout.addRow(new QLabel("Boundaries in axis units; inverted pairs are swapped, out-of-range clamped.", &dialog));
 
@@ -495,6 +520,7 @@ public:
       const double lo = loLe[k]->text().toDouble(&okLo);
       const double hi = hiLe[k]->text().toDouble(&okHi);
       if( okLo && okHi ) SetGateBounds(k, lo, hi);   // unparsable pair: leave the gate where it is
+      if( rowCol[k] != gates[k].color ){ gates[k].color = rowCol[k]; ApplyGateColor(k); }
     }
     replot();
   }
@@ -549,14 +575,15 @@ public:
     }
   }
 
+  /// Default colours for freshly created gates (the picker overrides per gate)
   static QColor gateColor(int id){
     static const QColor c[MaxGates] = { QColor(200, 0,   0),   QColor(170, 0, 170),
                                         QColor(0, 120,   0),   QColor(230, 130, 0) };
-    return c[id % MaxGates];
+    return c[( id % MaxGates + MaxGates ) % MaxGates];
   }
   static QString gateColorName(int id){
     static const char * n[MaxGates] = { "red", "magenta", "green", "orange" };
-    return QString(n[id % MaxGates]);
+    return QString(n[( id % MaxGates + MaxGates ) % MaxGates]);
   }
 
   void SetColor(QColor color, unsigned short ID = 0) {
@@ -825,7 +852,8 @@ private:
   //^---- 1D gates
   struct Gate{
     double x0 = 0, x1 = 0;
-    int  id = -1;                 ///< monotonic per plot, NEVER reused: colors and RateStore keys ride it
+    int  id = -1;                 ///< monotonic per plot, NEVER reused: RateStore keys ride it
+    QColor color;                 ///< band/edge/label colour; seeded from the id palette, picker-owned after
     QString name;                 ///< default "Gate-<id>", renameable via the menu
     QString rateLine;             ///< last rate text; the label is rebuilt as name + rateLine
     QCPItemStraightLine * l0 = nullptr;

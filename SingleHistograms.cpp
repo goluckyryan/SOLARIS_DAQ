@@ -1226,10 +1226,11 @@ void SingleSpectra::closeEvent(QCloseEvent * event){
        QJsonArray gates;
        for( int k = 0; k < h->GateCount(); k++ ){
          QJsonObject go;
-         go["id"]   = h->GateId(k);      // carries the color + RateStore key across restarts
-         go["name"] = h->GateName(k);
-         go["low"]  = h->GateLow(k);
-         go["high"] = h->GateHigh(k);
+         go["id"]    = h->GateId(k);      // carries the RateStore key across restarts
+         go["name"]  = h->GateName(k);
+         go["low"]   = h->GateLow(k);
+         go["high"]  = h->GateHigh(k);
+         go["color"] = h->GateColor(k).name(QColor::HexRgb);   // picker-chosen; absent = palette
          gates.append(go);
        }
        co["gates"] = gates;
@@ -1485,17 +1486,22 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
         bool gatesSame = ( fileGates.size() == h->GateCount() );
         for( int k = 0; k < fileGates.size() && gatesSame; k++ ){
           const QJsonObject go = fileGates[k].toObject();
+          // a pre-colour file carries no "color": compare against the palette it rendered with
+          const QString colSaved = go.contains("color") ? go["color"].toString()
+                            : Histogram1D::gateColor( go["id"].toInt(-2) ).name( QColor::HexRgb );
           gatesSame = go["id"].toInt(-2)   == h->GateId(k)
                    && go["name"].toString() == h->GateName(k)
                    && go["low"].toDouble()  == h->GateLow(k)
-                   && go["high"].toDouble() == h->GateHigh(k);
+                   && go["high"].toDouble() == h->GateHigh(k)
+                   && colSaved.compare( h->GateColor(k).name(QColor::HexRgb), Qt::CaseInsensitive ) == 0;
         }
         if( !gatesSame ){
           h->ClearGates();
           for( const QJsonValue & gv : fileGates ){
             const QJsonObject go = gv.toObject();
             h->RestoreGate( go["id"].toInt(-1), go["name"].toString(),
-                            go["low"].toDouble(), go["high"].toDouble() );
+                            go["low"].toDouble(), go["high"].toDouble(),
+                            go["color"].toString() );
           }
           // Rebin + Clear/Restore redraw themselves per step, but the PUBLISHED curve still
           // shows the old geometry until the next tick -- which never comes with ACQ stopped.
