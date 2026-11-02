@@ -1403,7 +1403,9 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(pbCopyChannel, &QPushButton::clicked, this, [=](){ 
       
         int chFromIndex = -1;
-        for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+        /// Bound = the widgets' creation loop (digi[0]->GetNChannels(), ~1391); on a 32-ch
+        /// digi[0] the array entries beyond it were never assigned.
+        for( int i = 0 ; i < (int)digi[0]->GetNChannels() ; i++){
           if( rbCopyChFrom[i]->isChecked() ){
             chFromIndex = i;
             break;
@@ -1411,7 +1413,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
         if( chFromIndex < 0 ) return;
 
-        for( int i = 0; i < MaxNumberOfChannel; i++){
+        for( int i = 0; i < (int)digi[0]->GetNChannels(); i++){
           if( chkChTo[i]->isChecked() ) CopyChannelSettings(cbCopyDigiFrom->currentIndex(), chFromIndex, cbCopyDigiTo->currentIndex(), i );
         }
         SendLogMsg("------ done");
@@ -3365,7 +3367,10 @@ bool DigiSettingsPanel::CheckDigitizersCanCopy(){
 void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
 
   int chFromIndex = -1;
-  for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+  /// Bound = the widgets' creation loop, not MaxNumberOfChannel: entries beyond
+  /// digi[0]->GetNChannels() were never assigned (crash on a 32-ch digi[0]).
+  const int nCh = (int)digi[0]->GetNChannels();
+  for( int i = 0 ; i < nCh ; i++){
     rbCopyChFrom[i]->setStyleSheet("");
     if( rbCopyChFrom[i]->isChecked() && cbCopyDigiFrom->currentIndex() == cbCopyDigiTo->currentIndex()){
       chFromIndex = i;
@@ -3375,11 +3380,11 @@ void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
     }
   }
 
-  for( int i = 0 ; i < MaxNumberOfChannel ; i++)  chkChTo[i]->setEnabled(true);
+  for( int i = 0 ; i < nCh ; i++)  chkChTo[i]->setEnabled(true);
   if( chFromIndex >= 0 && cbCopyDigiFrom->currentIndex() == cbCopyDigiTo->currentIndex() ) chkChTo[chFromIndex]->setEnabled(false);
 
   bool isToIndexCleicked = false;
-  for( int i = 0 ; i < MaxNumberOfChannel ; i++){
+  for( int i = 0 ; i < nCh ; i++){
     if( chkChTo[i]->isChecked() ){
       isToIndexCleicked = true;
       chkChTo[i]->setStyleSheet("color : blue;");
@@ -3415,7 +3420,7 @@ bool DigiSettingsPanel::CopyBoardSettings(){
   if( !CheckDigitizersCanCopy() ) return false;
 
   SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFromIndex]->GetSerialNumber()) + " to DIG:" +  QString::number(digi[digiToIndex]->GetSerialNumber()));
-  for( int i = 0; i < MaxNumberOfChannel; i++){
+  for( int i = 0; i < (int)digi[0]->GetNChannels(); i++){  /// bound = the chkChTo creation loop
   if( chkChTo[i]->isChecked() ){
     //Copy setting
     for( int k = 0; k < (int) PHA::DIG::AllSettings.size(); k ++){

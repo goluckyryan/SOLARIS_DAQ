@@ -1138,6 +1138,10 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
   outFile = fopen(outFileName, mode);
   if( outFile == NULL ){
+    /// Set the error flag like the write/rollover failures do: without it SaveDataToFile()
+    /// drops every hit with droppedHitCount stuck at 0 and ReadDataThread's DAQ-log warning
+    /// never fires -- a save run that records nothing would look like "ACQ On" on the GUI.
+    fileWriteError = true;
     printf("Digitizer2Gen::%s | failed to open file '%s'\n", __func__, outFileName);
     outFileSize = 0;
     return;

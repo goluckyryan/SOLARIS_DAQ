@@ -12,8 +12,7 @@ LIBS += -lcurl -lCAEN_FELib -lX11 -ldl
 
 #=========== for GDB debug
 QMAKE_CXXFLAGS += -g  # for gdb debug
-QMAKE_CXXFLAGS_RELEASE = -O0
-QMAKE_CFLAGS_RELEASE = -O0
+# the -O0 release overrides that lived here shipped an unoptimized production binary
 
 # You can make your code fail to compile if you use deprecated APIs.
 # In order to do so, uncomment the following line.

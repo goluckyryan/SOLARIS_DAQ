@@ -265,6 +265,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
         chkSaveRun->setEnabled(true);
         cbDataFormat->setEnabled(true);
         if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
+        bnCloseDigitizers->setEnabled(true); // run stopped by hand: chain is done
         if( digiSetting ) digiSetting->EnableControl();
       }
 
@@ -652,7 +653,15 @@ void MainWindow::StopACQ(){
     if( readDataThread[i] == NULL ) continue;
     if( readDataThread[i]->isRunning()){
       if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
-      readDataThread[i]->wait();
+      /// A board whose link died mid-run never returns CAEN_FELib_Stop, so an unbounded wait()
+      /// froze the GUI on "Collecting remaining data...". Give up after 10 s, force Stop (the
+      /// read loop checks it every ReadData return), and tell the operator the tail is lost.
+      if( !readDataThread[i]->wait(10000) ){
+        readDataThread[i]->Stop();
+        readDataThread[i]->wait();
+        LogMsg("<font style=\"color: red;\"><b>Digi-" + QString::number(digi[i]->GetSerialNumber()) +
+               " either not responsive or not drained after 10 sec. force stop.</b></font>");
+      }
     }
     if( chkSaveRun->isChecked() ) {
        digi[i]->CloseOutFile();
@@ -684,6 +693,10 @@ void MainWindow::AutoRun(){
       chkSaveRun->setEnabled(false);
       cbAutoRun->setEnabled(false);
       cbDataFormat->setEnabled(false);
+      /// Close Digitizers frees digi[]; the auto-run timer would then StartACQ() on freed
+      /// boards. Reachable only when no run chain is live, so gate it here and re-enable
+      /// where the chain ends (Stop handler and the single-timed-run gap below).
+      bnCloseDigitizers->setEnabled(false);
       if( digiSetting ) digiSetting->EnableControl();
     }
     return;
@@ -709,6 +722,7 @@ void MainWindow::AutoRun(){
         chkSaveRun->setEnabled(true);
         cbAutoRun->setEnabled(true);
         cbDataFormat->setEnabled(true);
+        bnCloseDigitizers->setEnabled(true); // timed-run chain is done
         if( digiSetting ) digiSetting->EnableControl();
       }else{
         LogMsg("Wait for 10 sec for next Run....");
@@ -726,6 +740,10 @@ void MainWindow::AutoRun(){
   }
 
   if( isRun == 0 ) return;
+
+  /// Save-mode run chain is live (timed or interval): Close Digitizers must not free the
+  /// boards under the timer's next StartACQ(). See the note in the non-save branch above.
+  bnCloseDigitizers->setEnabled(false);
 
   int timeMiliSec = cbAutoRun->currentData().toInt() * 60 * 1000;
 

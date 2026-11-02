@@ -66,7 +66,7 @@ public:
           if( now - lastFileWarn >= std::chrono::seconds(10) ){
             lastFileWarn = now;
             emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) +
-                         " <font style=\"color: red;\">WARNING: file write failed on " +
+                         " <font style=\"color: red;\">WARNING: file open/write failed on " +
                          QString::fromStdString(digi->GetOutFileName()) +
                          " -- " + QString::number(digi->GetDroppedHitCount()) +
                          " hits dropped and not saved (disk full?).</font>");
