@@ -766,8 +766,6 @@ void Scope::UpdateScope(){
   /// clamp it first.
   int sample2ns = PHA::TraceStep * (1 << (waveRes < 0 ? 0 : waveRes));
 
-  emit UpdateScalar();
-
   if( iDigi < 0 || ch < 0 || !digi || !digi[iDigi] ) return;
 
   /// the settings are the same for PHA and PSD

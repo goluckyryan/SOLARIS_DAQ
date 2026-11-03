@@ -164,7 +164,7 @@ class Digitizer2Gen {
     void ProgramChannels(bool testPulse = false);
 
     /// Whether this model answers a given environment-sensor board parameter. The one place that
-    /// knows which sensors a model has; the loops that read, print and save board settings all
+    /// knows which sensors a model has; the loops that read and save board settings both
     /// ask it rather than carrying their own list. Non-sensor parameters are always true, so it
     /// is safe to apply to a whole table.
     bool IsSensorReadable(const Reg & para) const;

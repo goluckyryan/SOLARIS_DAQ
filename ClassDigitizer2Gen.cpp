@@ -1470,7 +1470,7 @@ void Digitizer2Gen::ReadAllSettings(){
   for(int i = 0; i < (int) boardSettings.size(); i++){
     if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
 
-    /// Same sensor rule as the print and save loops -- see IsSensorReadable. This site used to
+    /// Same sensor rule as the save loop -- see IsSensorReadable. This site used to
     /// carry its own, and it was the broken one: "ModelName == VX2740 && para != TempSensADC0"
     /// without the ReadOnly qualifier its twin in SaveSettingsToFile has, so on a VX2740 this
     /// loop skipped EVERY board setting and left the whole board cache empty.
@@ -1534,7 +1534,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       //--- exclude Gateway
       if( boardSettings[i].GetPara() == PHA::DIG::Gateway.GetPara()) continue;
 
-      /// Same sensor rule as the read and print loops -- see IsSensorReadable. The three lists
+      /// Same sensor rule as the read loop -- see IsSensorReadable. The three lists
       /// this replaces disagreed with each other; this site's third clause, "on a VX2740 no
       /// read-only setting but TempSensADC0", also swallowed FreqSensCore and DutyCycleSensDCDC,
       /// which its own clause above exists to keep. Both are ReadOnly, so on a VX2740 they were

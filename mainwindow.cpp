@@ -32,7 +32,7 @@ QMutex digiMTX[MaxNumberOfDigitizer];
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
   setWindowTitle("FSU SOLARIS DAQ");
-  setGeometry(500, 100, 1000, 500);
+  setGeometry(500, 100, 1000, 1000);
   QIcon icon("SOLARIS_favicon.png");
   setWindowIcon(icon);
 
@@ -1879,7 +1879,6 @@ bool MainWindow::LoadProgramSettings(){
 
     if( count >= 3 ) {
       logMsgHTMLMode = false;
-      // LogMsg("Setting File Path : " + programSettingsPath);
       LogMsg("          Analysis Path : " + analysisPath);
       LogMsg("            Database IP : " + DatabaseIP);
       LogMsg("          Database Name : " + DatabaseName);
@@ -1987,7 +1986,6 @@ void MainWindow::SaveProgramSettings(){
     return;
   }
 
-  // file.write((programSettingsPath+"\n").toStdString().c_str());
   file.write((masterExpDataPath+"\n").toStdString().c_str());
   file.write( chkSaveSubFolder->isChecked()  ? "SubFolder\n" : "SingleFolder\n" );
   file.write((expName+"\n").toStdString().c_str());
@@ -2018,10 +2016,8 @@ void MainWindow::OpenDirectory(int id){
   //qDebug() << fileDialog.selectedFiles();
   
   switch (id){
-    // case 0 : lSaveSettingPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 2 : lExpDataPath->setText(fileDialog.selectedFiles().at(0)); break;
-    // case 3 : lRootDataPath->setText(fileDialog.selectedFiles().at(0)); break;
   }
 }
 

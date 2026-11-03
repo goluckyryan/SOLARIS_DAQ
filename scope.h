@@ -152,7 +152,6 @@ private slots:
 signals:
 
   void CloseWindow();
-  void UpdateScalar();
   void SendLogMsg(const QString &msg);
   void UpdateOtherPanels();
   void TellSettingsPanelControlOnOff();
