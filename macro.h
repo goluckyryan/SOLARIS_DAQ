@@ -12,8 +12,11 @@
 
 //^=================================
 namespace Utility{
-  /// either haha is "0xFFF" or "12435", convert to 10-base 
-  static unsigned long TenBase(std::string haha){
+  /// either haha is "0xFFF" or "12435", convert to 10-base
+  /// inline (not static): a header free function needs internal *linkage-once*, not a per-TU
+  /// copy — the static copies not calling it warned as unused, which is what the deleted
+  /// `ksjaldja` dummy (audit #19) existed to silence. inline is the honest fix of that warning.
+  inline unsigned long TenBase(std::string haha){
     QString ans = QString::fromStdString(haha);
     unsigned long  mask = 0 ;
     if( ans.contains("0x")){
@@ -25,9 +28,6 @@ namespace Utility{
     return mask;
   }
 }
-
-//just to get rip of the warning;
-const unsigned long ksjaldja = Utility::TenBase("0");
 
 // if DebugMode is 1, define DebugPrint() to be printf(), else, DebugPrint() define nothing
 #if DebugMode

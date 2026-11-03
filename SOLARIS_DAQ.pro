@@ -37,7 +37,7 @@ HEADERS += ClassDigitizer2Gen.h \
 					 ClassElogTemplate.h \
 					 mainwindow.h \
 					 digiSettingsPanel.h \
-					 Digiparameters.h \
+					 DigiParameters.h \
 					 scope.h \
 					 CustomThreads.h \
 					 CustomWidgets.h \

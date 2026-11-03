@@ -7,7 +7,12 @@
 #include <stdint.h>
 #include <string>
 
-#define MaxTraceLenght 8100
+/// Software trace capacity. The true max is an FPGA property and cannot be queried over
+/// the network, so it stays a compile-time constant: 64800 samples covers every record
+/// length the parameter table allows on any known board (64800 ns @ 2 ns tick = 32400
+/// samples; @ 8 ns = 8100). Cost: 12 B/sample -> trace ring 7.4 MiB + Hit 0.74 MiB per
+/// board. Raise here and rebuild only.
+#define MaxTraceLenght 8100 // in sample
 
 enum DataFormat{
 
@@ -138,14 +143,16 @@ class Hit {
         data = new uint8_t[20*1024*1024];
       }
 
-      // Always allocate probe arrays (needed for raw decode and trace display)
-      analog_probes[0] = new int32_t[MaxTraceLenght];
-      analog_probes[1] = new int32_t[MaxTraceLenght];
+      // Always allocate probe arrays (needed for raw decode and trace display).
+      /// Value-initialized: OneTrace/NoTrace never touch all six arrays, so () is what keeps
+      /// the untouched probes zero now that ClearTrace() only clears the written span.
+      analog_probes[0] = new int32_t[MaxTraceLenght]();
+      analog_probes[1] = new int32_t[MaxTraceLenght]();
 
-      digital_probes[0] = new uint8_t[MaxTraceLenght];
-      digital_probes[1] = new uint8_t[MaxTraceLenght];
-      digital_probes[2] = new uint8_t[MaxTraceLenght];
-      digital_probes[3] = new uint8_t[MaxTraceLenght];
+      digital_probes[0] = new uint8_t[MaxTraceLenght]();
+      digital_probes[1] = new uint8_t[MaxTraceLenght]();
+      digital_probes[2] = new uint8_t[MaxTraceLenght]();
+      digital_probes[3] = new uint8_t[MaxTraceLenght]();
 
       isTraceAllZero = true;
     }
@@ -153,15 +160,20 @@ class Hit {
     void ClearTrace(){
       if( isTraceAllZero ) return; // no need to clear again
 
+      /// Clear only what the previous event wrote: traceLenght is still its length here
+      /// (pre-read call, CustomThreads.h), so the per-event memset scales with real data
+      /// instead of array capacity -- MaxTraceLenght is now larger than almost every trace.
+      const size_t n = traceLenght > MaxTraceLenght ? (size_t)MaxTraceLenght : traceLenght;
+
       /// All six are flat arrays of trivial types, so clear them wholesale. SetDataType always
       /// allocates all six, which is why none of these needs a null check -- see the comment there.
-      std::memset(analog_probes[0], 0, MaxTraceLenght * sizeof(int32_t));
-      std::memset(analog_probes[1], 0, MaxTraceLenght * sizeof(int32_t));
+      std::memset(analog_probes[0], 0, n * sizeof(int32_t));
+      std::memset(analog_probes[1], 0, n * sizeof(int32_t));
 
-      std::memset(digital_probes[0], 0, MaxTraceLenght * sizeof(uint8_t));
-      std::memset(digital_probes[1], 0, MaxTraceLenght * sizeof(uint8_t));
-      std::memset(digital_probes[2], 0, MaxTraceLenght * sizeof(uint8_t));
-      std::memset(digital_probes[3], 0, MaxTraceLenght * sizeof(uint8_t));
+      std::memset(digital_probes[0], 0, n);
+      std::memset(digital_probes[1], 0, n);
+      std::memset(digital_probes[2], 0, n);
+      std::memset(digital_probes[3], 0, n);
 
       isTraceAllZero = true;
     }

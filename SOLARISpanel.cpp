@@ -889,7 +889,7 @@ void SOLARISpanel::LoadSettings(){
       digi[i]->SetSettingFileName(settingFile.toStdString());
       SendLogMsg("done settings.");
     }else{
-      SendLogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
+      SendLogMsg("<font style=\"color: red;\">Unable to open/load setting file <b>" + settingFile + "</b> (board may have rejected writes; see console). </font>");
       digi[i]->SetSettingFileName("");
     }
     

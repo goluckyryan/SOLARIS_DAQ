@@ -243,7 +243,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
     bnStartACQ = new QPushButton("Start ACQ", this);
     bnStartACQ->setEnabled(false);
-    //connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::StartACQ);
     connect(bnStartACQ, &QPushButton::clicked, this, &MainWindow::AutoRun);
     
     bnStopACQ = new QPushButton("Stop ACQ", this);
@@ -837,7 +836,7 @@ void MainWindow::OpenDigitizers(){
 
       LogMsg("Opened digitizer : <font style=\"color:red;\">" + QString::number(digi[i]->GetSerialNumber()) + "</font>");
 
-      readDataThread[i] = new ReadDataThread(digi[i], i, this);
+      readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
       //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
@@ -847,7 +846,7 @@ void MainWindow::OpenDigitizers(){
         digi[i]->SetSettingFileName(settingFile.toStdString());
         LogMsg("done settings.");
       }else{
-        LogMsg("<font style=\"color: red;\">Unable to found setting file <b>" + settingFile + "</b>. </font>");
+        LogMsg("<font style=\"color: red;\">Unable to open/load setting file <b>" + settingFile + "</b> (board may have rejected writes; see console). </font>");
         digi[i]->SetSettingFileName("");
         //LogMsg("Reset digitizer And set default PHA settings.");        
         //digi[i]->Reset();
@@ -864,8 +863,14 @@ void MainWindow::OpenDigitizers(){
         oldSavedCount[i][ch] = 0;
       }
     }else{
+      /// FPGAType is only ever set once the board answered, so non-empty here means it
+      /// connected but the firmware was refused (OpenDigitizer closed it, audit #12) —
+      /// SetDummy() below overwrites it, hence reading it first.
+      std::string fw = digi[i]->GetFPGAType();
       digi[i]->SetDummy(i);
-      LogMsg("Cannot open digitizer. Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digi[i]->GetNChannels()) + " ch.");
+      QString reason = fw.empty() ? "Cannot open digitizer."
+                                  : "Firmware <b>" + QString::fromStdString(fw) + "</b> is not supported, digitizer closed.";
+      LogMsg("<font style=\"color: red;\">" + reason + "</font> Use a dummy with serial number " + QString::number(i) + " and " + QString::number(digi[i]->GetNChannels()) + " ch.");
 
       readDataThread[i] = NULL;
     }
@@ -1084,7 +1089,6 @@ void MainWindow::OpenScope(){
     if( !scope ){
       scope = new Scope(digi, nDigi, readDataThread);
       connect(scope, &Scope::CloseWindow, this, [=](){ bnStartACQ->setEnabled(true); });
-      //connect(scope, &Scope::UpdateScalar, this, &MainWindow::UpdateScalar);
       connect(scope, &Scope::SendLogMsg, this, &MainWindow::LogMsg);
       connect(scope, &Scope::UpdateOtherPanels, this, [=](){ UpdateAllPanel(0);});
       connect(scope, &Scope::TellACQOnOff, this, [=](const bool onOff){
@@ -1349,10 +1353,6 @@ void MainWindow::SetUpScalar(){
   scalarLayout->removeWidget(lbScalarACQStatus);
   scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
 
-  // QPushButton * bnUpdateScaler = new QPushButton("Manual Update", scalar);
-  // scalarLayout->addWidget(bnUpdateScaler, 2, 1, 1, 1 + nDigi);
-  // connect(bnUpdateScaler, &QPushButton::clicked, this, &MainWindow::UpdateScalar);
-
   ///==== create the 1st row
   int rowID = 5;
 
@@ -1606,16 +1606,6 @@ Leave <b>same as Exp Name</b> ticked unless the logbook is named differently fro
   helpInfo->appendHtml(" * items can be ommitted");
 
   layout->addWidget(helpInfo, rowID, 0, 1, 4);
-
-  //-------- Program Setting Path
-  // rowID ++;
-  // QLabel *lbSaveSettingPath = new QLabel("Settings Save Path", &dialog);
-  // lbSaveSettingPath->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-  // layout->addWidget(lbSaveSettingPath, rowID, 0);
-  // lSaveSettingPath = new QLineEdit(programSettingsPath, &dialog); layout->addWidget(lSaveSettingPath, rowID, 1, 1, 2);
-
-  // QPushButton * bnSaveSettingPath = new QPushButton("browser", &dialog); layout->addWidget(bnSaveSettingPath, rowID, 3);
-  // connect(bnSaveSettingPath, &QPushButton::clicked, this, [=](){this->OpenDirectory(0);});
 
   //-------- data Path
   rowID ++;

@@ -131,10 +131,6 @@ class Digitizer2Gen {
     int  OpenDigitizer(const char * url);
     int  CloseDigitizer();
 
-    uint64_t    GetHandle(const char * parameter);
-    uint64_t    GetParentHandle(uint64_t handle);
-    std::string GetPath(uint64_t handle);
-
     std::string  ReadValue(const char * parameter, bool verbose = false);
     std::string  ReadValue(const Reg &para, int ch_index = -1, bool verbose = false); // read digitizer and save to memory
     bool         WriteValue(const char * parameter, std::string value, bool verbose = true);
@@ -158,7 +154,6 @@ class Digitizer2Gen {
 
     int  ReadData();
     int  ReadStat(); // digitizer update it every 500 msec
-    void PrintStat();
     /// Bounded: these are read from the GUI timer with whatever channel count the board reported.
     uint32_t GetTriggerCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? triggerCount[ch] : 0;}
     uint64_t GetRealTime(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? realTime[ch] : 0;}
@@ -176,8 +171,6 @@ class Digitizer2Gen {
     /// For the settings panel, which lays out one box per ADC temperature sensor.
     int  GetNTempSensADC() const {return nTempSensADC;}
 
-    void PrintBoardSettings();
-    void PrintChannelSettings(unsigned short ch);
     void AdjustParameterRanges(); // adjust min/max/step based on ModelName and FPGAType
     
     unsigned short GetNChannels() const {return nChannels;}
@@ -207,7 +200,6 @@ class Digitizer2Gen {
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary
     void CloseOutFile();
     void SaveDataToFile();
-    unsigned int GetFileSize() const {return outFileSize;}
     uint64_t GetTotalFilesSize() const {return FinishedOutFilesSize + outFileSize;}
     bool     GetFileWriteError() const {return fileWriteError;}
     uint64_t GetDroppedHitCount()  const {return droppedHitCount;}

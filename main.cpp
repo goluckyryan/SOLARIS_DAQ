@@ -5,6 +5,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QFile>
+#include <QFileInfo>
 
 int main(int argc, char *argv[]){
 
@@ -36,7 +37,7 @@ int main(int argc, char *argv[]){
 
         QMessageBox msgBox;
         msgBox.setWindowTitle("Oopss....");
-        msgBox.setText("The DAQ program is already opened, or crashed perviously. \nPID is " + QString::number(pid) + "\n You can kill the procee by \"kill -9 <pid>\" and delete the " + DAQLockFile + "\n or click the \"Kill\" button");
+        msgBox.setText("The DAQ program is already opened, or crashed perviously. \nPID is " + QString::number(pid) + "\n If it is still running, kill it and delete the " + DAQLockFile + "\n or click the \"Kill\" button (kills only if that PID is really a DAQ)");
         msgBox.setIcon(QMessageBox::Information);
     
         QPushButton * kill = msgBox.addButton("Kill and Open New", QMessageBox::AcceptRole);
@@ -48,7 +49,17 @@ int main(int argc, char *argv[]){
 
         if(msgBox.clickedButton() == kill){
             remove(DAQLockFile);
-            QProcess::execute("kill", QStringList() << "-9" << QString::number(pid));
+            /// Audit #17: the kernel may have recycled this PID since the crash -- killing it
+            /// blindly could SIGKILL someone's editor. /proc/<pid>/exe resolves only for
+            /// processes we may inspect, so require it to be this same binary. pid == 0
+            /// (missing/unreadable pid file) is refused too: `kill -9 0` would signal the
+            /// caller's whole process group -- this terminal session included.
+            QString exe = pid > 0 ? QFile::symLinkTarget("/proc/" + QString::number(pid) + "/exe") : QString();
+            if( !exe.isEmpty() && QFileInfo(exe).canonicalFilePath() == QFileInfo(QCoreApplication::applicationFilePath()).canonicalFilePath() ){
+                QProcess::execute("kill", QStringList() << "-9" << QString::number(pid));
+            }else{
+                printf("######### PID %d is not a running SOLARIS_DAQ (recycled or gone). Lock removed, NOT killing.\n", pid);
+            }
         }else{
             return 0;
         }

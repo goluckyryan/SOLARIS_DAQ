@@ -94,40 +94,6 @@ void Digitizer2Gen::SetDummy(unsigned int sn){
   FPGAType = "DPP_PHA";
 }
 
-//########################################### Handles functions
-uint64_t Digitizer2Gen::GetHandle(const char * parameter){
-  
-  uint64_t par_handle;
-  int ret = CAEN_FELib_GetHandle(handle, parameter, &par_handle);
-  if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__, ret);
-    return 0;
-  }
-  return par_handle;
-
-}
-
-uint64_t Digitizer2Gen::GetParentHandle(uint64_t handle){
-  uint64_t par_handle;
-  int ret = CAEN_FELib_GetParentHandle(handle, NULL, &par_handle);
-  if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__, ret);
-    return 0;
-  }
-  return par_handle;
-}
-
-std::string Digitizer2Gen::GetPath(uint64_t handle){
-  char path[256];
-  int ret = CAEN_FELib_GetPath(handle, path);
-  if(ret != CAEN_FELib_Success) {
-    ErrorMsg(__func__, ret);
-    return "Error";
-  }
-  return path;
-  
-}
-
 //########################################### Read Write
 
 /// Look-up only: operator[] would INSERT on a miss, which mutates (and can rehash) the map from
@@ -245,6 +211,22 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
 
 bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index){
   if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy){
+    /// Verify on the board, not on faith: SetValue can succeed while the firmware stores a
+    /// clamped or different value. ReadValue() caches the REAL value, so the panels and the
+    /// per-run SaveSettingsToFile snapshot tell the truth either way; a mismatch fails the
+    /// write so the caller's "done" branch does not fire. WriteOnly registers are skipped.
+    if( !isDummy && para.ReadWrite() != WriteOnly ){
+      std::string back = ReadValue(para, ch_index);
+      bool same = ( para.GetAnswerType() == ANSTYPE::INTEGER )
+                  ? ( atoll(back.c_str()) == atoll(value.c_str()) )
+                  : ( back == value );
+      if( !same ){
+        printf("ReadbackMismatch|%d|%-45s| wrote %s, board has %s\n",
+               serialNumber, para.GetFullPara(ch_index, nChannels).c_str(),
+               value.c_str(), back.c_str());
+        return false;
+      }
+    }
     int index = FindIndex(para);
     if( index != -1 ){    
       switch(para.GetType()){
@@ -399,6 +381,12 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
 
   }else{
     printf(" DPP Type %s is not supported.\n", FPGAType.c_str());
+    /// A firmware this software cannot decode must never count as connected (audit #12):
+    /// close now so IsConnected() is false and the caller treats it as a dummy. The flag is
+    /// forced even if CAEN_FELib_Close failed -- an unsupported board listed as a real one
+    /// is the bug; the leaked handle at worst costs one session, the destructor skips it.
+    CloseDigitizer();
+    isConnected = false;
     return -303;
   }
 
@@ -814,18 +802,6 @@ int Digitizer2Gen::ReadStat(){
   return ret; // the status of the stat read; the ReadValue calls above no longer clobber it
 }
 
-void Digitizer2Gen::PrintStat(){
-  printf("ch | Real Time[ns] | Dead Time[ns] | Live Time[ns] | Trigger |  Saved  | Rate[Hz] | Self Trig Rate [Hz] \n");
-  for( int i = 0; i < nChannels && i < MaxNumberOfChannel; i++){
-    //if( triggerCount[i] == 0 ) continue;
-    if( chValue[i].empty() ) continue;
-    const int chEnable = atoi(chValue[i][0].c_str());
-    if( chEnable == 0 ) continue;
-    printf("%02d | %13lu | %13lu | %13lu | %7u | %7u | %8.3f | %d\n",
-         i, realTime[i], deadTime[i], liveTime[i], triggerCount[i], savedEventCount[i], triggerCount[i]*1e9*1.0/realTime[i], chEnable);
-  }
-}
-
 int Digitizer2Gen::ReadData(){
   //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
 
@@ -1076,6 +1052,13 @@ int Digitizer2Gen::ReadData(){
     //ErrorMsg("ReadData()");
     return ret;
   }
+
+  /// Software trace capacity belt (audit #11): CAEN_FELib_ReadData wrote WAVEFORM_SIZE samples
+  /// into hit's arrays above, so sizing MaxTraceLenght >= any record the parameter table allows
+  /// is the real defense; this only stops an over-long length (unknown/faster board, a third
+  /// party reprogramming the record length mid-run) from propagating into the trace-ring memcpy
+  /// and the .sol writes below as out-of-bounds reads. Truncated trace, not heap corruption.
+  if( hit->traceLenght > (size_t)MaxTraceLenght ) hit->traceLenght = MaxTraceLenght;
 
   //======== fill the ring buffers for the histograms and the event builder
   /// Done BEFORE the in-place scaling below, so both fields are scaled explicitly here and the
@@ -1464,57 +1447,6 @@ bool Digitizer2Gen::IsSensorReadable(const Reg & para) const {
   return true;
 }
 
-void Digitizer2Gen::PrintBoardSettings(){
-
-  for(int i = 0; i < (int) boardSettings.size(); i++){
-    if( boardSettings[i].ReadWrite() == RW::WriteOnly) continue;
-    if( !IsSensorReadable(boardSettings[i]) ) continue;
-
-    printf("%-45s  %d  %s\n", boardSettings[i].GetFullPara().c_str(),  
-                              boardSettings[i].ReadWrite() ,
-                              boardSettings[i].GetValue().c_str());
-  }
-
-  if( ModelName == "VX2745" && FPGAType == DPPType::PHA) {
-    for(int i = 0; i < 4 ; i ++){
-      printf("%-45s  %d  %s\n", VGASetting[i].GetFullPara(i).c_str(), 
-                                VGASetting[i].ReadWrite(), 
-                                VGASetting[i].GetValue().c_str());
-    }
-  }
-
-  /// Match ReadAllSettings()/SaveSettingsToFile(): InputDelay exists only when
-  /// CupVer >= 2023091800 AND the model is not VX2730.
-  if( CupVer >= 2023091800 && ModelName != "VX2730" ){
-    for(int idx = 0; idx < 16 ; idx ++ ){
-      printf("%-45s  %d  %s\n", InputDelay[idx].GetFullPara(idx).c_str(), 
-                                InputDelay[idx].ReadWrite(), 
-                                InputDelay[idx].GetValue().c_str());
-    }
-  }
-
-  for( int i = 0; i < (int) LVDSSettings[0].size(); i++){
-    for( int index = 0; index < 4; index++){
-      if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
-      printf("%-45s  %d  %s\n", LVDSSettings[index][i].GetFullPara(index).c_str(), 
-                                LVDSSettings[index][i].ReadWrite(),
-                                LVDSSettings[index][i].GetValue().c_str());
-    }
-  }
-
-}
-
-void Digitizer2Gen::PrintChannelSettings(unsigned short ch){
-
-  if( ch >= MaxNumberOfChannel ) return;
-  for( int i = 0; i < (int) chSettingTable.size(); i++){
-    if( chSettingTable[i].ReadWrite() == RW::WriteOnly) continue;
-    printf("%-45s  %d  %s\n", chSettingTable[i].GetFullPara(ch, nChannels).c_str(),
-                              chSettingTable[i].ReadWrite(),
-                              chValue[ch][i].c_str());
-  }
-}
-
 std::string Digitizer2Gen::ErrorMsg(const char * funcName, int ret){
   printf("======== %s | %5d | %s\n",__func__, serialNumber, funcName);
   char msg[1024];
@@ -1745,6 +1677,7 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
     std::string readWrite;
     std::string idStr;
     std::string value;
+    int nWriteFail = 0;
 
     char line[512];
     while(fgets(line, sizeof(line), loadFile) != NULL){
@@ -1814,10 +1747,19 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
           InputDelay[id - 9050].SetValue(value.c_str());
       }
       //printf("%s|%s|%d|%s|\n", para.c_str(), readWrite.c_str(), id, value.c_str());
-      if( readWrite == "2" && isConnected)  WriteValue(para.c_str(), value.c_str(), false);
+      if( readWrite == "2" && isConnected){
+        if( !WriteValue(para.c_str(), value.c_str(), false) ) nWriteFail ++;
+      }
     }
 
     fclose(loadFile);
+    /// A board that dropped off the net during the load used to still report "loaded" with
+    /// every write failing. Any rejected write fails the whole load; the console names them.
+    if( nWriteFail > 0 ){
+      printf("LoadSettingsFromFile|%d| %d write(s) REJECTED by the board -- '%s'\n",
+             serialNumber, nWriteFail, settingFileName.c_str());
+      return false;
+    }
     return true;
   }else{
     printf("Fail to opened %s\n", settingFileName.c_str());

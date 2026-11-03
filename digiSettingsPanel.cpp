@@ -581,14 +581,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           }
         });
 
-        // connect(cbDACoutMode[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-        //   if( cbDACoutMode[iDigi]->currentData().toString().toStdString() == "Square" ) {
-        //     bdTestPulse[iDigi]->setEnabled(true);
-        //   }else{
-        //     if( ckbGlbTrgSource[iDigi][3]->isChecked() == false )  bdTestPulse[iDigi]->setEnabled(false);
-        //   }
-        // });
-
       }
       
       {//^====================== Test Pulse settings

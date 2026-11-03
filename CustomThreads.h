@@ -24,23 +24,18 @@ extern QMutex digiMTX[MaxNumberOfDigitizer];
 class ReadDataThread : public QThread {
   Q_OBJECT
 public:
-  ReadDataThread(Digitizer2Gen * dig, int digiID, QObject * parent = 0) : QThread(parent){
+  ReadDataThread(Digitizer2Gen * dig, QObject * parent = 0) : QThread(parent){
     this->digi = dig;
-    this->ID = digiID;
     isSaveData = false;
     stop = false;
-    // canSendMsg = true;
     /// Epoch, so the first warning after a write error is immediate; time_point{} (not min())
     /// because now - min() would overflow the signed duration.
     lastFileWarn = std::chrono::steady_clock::time_point{};
   }
-  // void SuppressFileSizeMsg() {canSendMsg = false;}
   void Stop(){ this->stop = true;}
   void SetSaveData(bool onOff) {this->isSaveData = onOff;}
   void run(){
-    // canSendMsg = true;
     stop = false;
-    // clock_gettime(CLOCK_REALTIME, &ta);
     emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " ReadDataThread started.");
 
     while(!stop){
@@ -78,17 +73,6 @@ public:
         digi->ErrorMsg("ReadData Thread No more data", ret);
         break;
       }
-
-      // if( isSaveData && canSendMsg ){
-      //   clock_gettime(CLOCK_REALTIME, &tb);
-      //   if( tb.tv_sec - ta.tv_sec > 2 ) {
-      //     emit sendMsg("FileSize ("+ QString::number(digi->GetSerialNumber()) +"): " +  QString::number(digi->GetTotalFilesSize()/1024./1024.) + " MB");
-      //     //emit checkFileSize();
-      //     //double duration = tb.tv_nsec-ta.tv_nsec + tb.tv_sec*1e+9 - ta.tv_sec*1e+9;
-      //     //printf("%4d, duration : %10.0f, %6.1f\n", readCount, duration, 1e9/duration);
-      //     ta = tb;
-      //   }
-      // }
     }
 
     emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " ReadDataThread stopped.");
@@ -96,11 +80,8 @@ public:
   }
 signals:
   void sendMsg(const QString &msg);
-  //void endOfLastData();
-  //void checkFileSize();
 private:
   Digitizer2Gen * digi;
-  int ID;
   /// Atomic: Stop() and SetSaveData() are called from the GUI thread while run() reads them in its
   /// loop. As plain bools that is a data race, and nothing stops the compiler hoisting the load of
   /// `stop` out of the loop entirely.
