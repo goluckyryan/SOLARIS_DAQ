@@ -422,7 +422,18 @@ MainWindow::~MainWindow(){
 //*################################################################ ACQ control 
 int MainWindow::StartACQ(){
 
+  /// Nothing to start, and digi[] would be dereferenced below. "Close Digitizers" is disabled
+  /// for the life of a run chain so no widget path should get here, but that invariant is
+  /// spread over several setEnabled() calls -- this is the one place it costs a line to enforce.
+  if( digi == nullptr ){
+    LogMsg("<font style=\"color: red;\">Digitizers are closed, cannot start a run.</font>");
+    return 0;
+  }
+
   ACQStopButtonPressed = false;
+  /// this run has not failed to drain yet; without the reset the previous run's warning would
+  /// be attributed to this one, in its start-run elog and again in its stop-run record.
+  drainWarning.clear();
 
   if( chkSaveRun->isChecked() ){
     runID ++;
@@ -628,9 +639,10 @@ void MainWindow::StopACQ(){
   if( chkSaveRun->isChecked() ){
     LogMsg("===========================  <b><font style=\"color : red;\">Run-" + runIDStr + "</font></b> stopped.");
     LogMsg("<font style=\"color : blue;\">Please wait for collecting all remaining data.</font>");
+    /// Here, before the drain, so the stop time and comment survive a crash or a kill during
+    /// it. The row is left unterminated; CloseRunTimeStampRow() below finishes it with the
+    /// drain outcome. The elog needs the final file sizes, so it is posted down there too.
     WriteRunTimeStampDat(false, stopTimeStr);
-    /// the elog entry is posted further down, after the files are closed, so that the
-    /// file size and the file count it reports are the final ones.
   }else{
     LogMsg("===========================  no-Save Run stopped.");
   }
@@ -646,6 +658,10 @@ void MainWindow::StopACQ(){
   }
 
   if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
+  /// serial numbers of the boards whose tail the 10 s cap below threw away. Collected so the
+  /// loss lands in the run record (elog + RunTimeStamp), not only in this session's log panel.
+  QStringList drainFailedSN;
+  int drainTimeoutSec = 2; // 2 sec is the default, but a board whose link died mid-run never returns CAEN_FELib_Stop, so the GUI would freeze on "Collecting remaining data..." until the operator killed it. The 10 s cap below is a compromise between giving the board a chance to drain and not freezing the GUI for too long.
   for( int i = nDigi -1; i >=0; i--){
     /// NULL for a dummy (OpenDigitizers), which also never opened an out file. Unlike the
     /// StopACQ loop above, this one does not skip dummies, so without this it segfaults on
@@ -656,11 +672,17 @@ void MainWindow::StopACQ(){
       /// A board whose link died mid-run never returns CAEN_FELib_Stop, so an unbounded wait()
       /// froze the GUI on "Collecting remaining data...". Give up after 10 s, force Stop (the
       /// read loop checks it every ReadData return), and tell the operator the tail is lost.
-      if( !readDataThread[i]->wait(10000) ){
+      if( !readDataThread[i]->wait(drainTimeoutSec * 1000) ){
+        /// BEFORE the forced join, not after: the join below is the thing that can hang, so a
+        /// message printed after it is invisible for exactly as long as the operator needs it.
+        /// LogMsg() ends in logInfo->repaint(), so this paints synchronously -- do NOT reach for
+        /// processEvents() here, it would let the scalar tick re-enter UpdateScalar() and do
+        /// blocking CAEN reads on a board whose read thread is being torn down.
+        LogMsg("<font style=\"color: red;\"><b>Digi-" + QString::number(digi[i]->GetSerialNumber()) +
+               " either not responsive or not drained after " + QString::number(drainTimeoutSec) + " sec. force stop, data tail is lost.</b></font>");
         readDataThread[i]->Stop();
         readDataThread[i]->wait();
-        LogMsg("<font style=\"color: red;\"><b>Digi-" + QString::number(digi[i]->GetSerialNumber()) +
-               " either not responsive or not drained after 10 sec. force stop.</b></font>");
+        drainFailedSN.prepend(QString::number(digi[i]->GetSerialNumber()));
       }
     }
     if( chkSaveRun->isChecked() ) {
@@ -669,11 +691,26 @@ void MainWindow::StopACQ(){
     }
   }
 
-  // ============= elog. here, not at the "Run stopped" message above, so that
-  //                <TotalFileSize>, <NumberOfFile> and <Bd:FileSize> are final.
-  if( chkSaveRun->isChecked() ) AppendElog(BuildElogMsg(ElogSection::StopRun), chromeWindowID);
+  /// A forced drain means the run's files are short by an unknown amount, so it must outlive
+  /// this session's log panel. Built here because the loop above is the first place it is known,
+  /// and only for a save run: a no-save run has no comment, no elog and no record to annotate.
+  /// It is folded into stopComment because that is what carries text out of here -- the elog
+  /// (<StopComment>, <RunComment> and the built-in fallback) and both RunTimeStamp files.
+  if( chkSaveRun->isChecked() && !drainFailedSN.isEmpty() ){
+    const bool many = drainFailedSN.size() > 1;
+    drainWarning = "INCOMPLETE DATA: digi-" + drainFailedSN.join("/") + " did not drain within 10 s and "
+                 + (many ? "were" : "was") + " force stopped; the tail of "
+                 + (many ? "those files is" : "that file is") + " missing.";
+    stopComment += " [" + drainWarning + "]";
+    leRunComment->setText(stopComment);
+  }
 
+  // ============= the rest of the run record. Here, not at the "Run stopped" message above, so
+  //               that <TotalFileSize>, <NumberOfFile>, <Bd:FileSize> and the drain outcome are
+  //               final. CloseRunTimeStampRow() terminates the row WriteRunTimeStampDat() began.
   if( chkSaveRun->isChecked() ){
+    CloseRunTimeStampRow(drainWarning);
+    AppendElog(BuildElogMsg(ElogSection::StopRun), chromeWindowID);
     LogMsg("Run " + programPath + "/scripts/endRunScript.sh" );
     QProcess::startDetached(programPath + "/scripts/endRunScript.sh");
   }
@@ -732,7 +769,9 @@ void MainWindow::AutoRun(){
             ACQStopButtonPressed = false;
             return;
           }
-          StartACQ();
+          /// the only StartACQ() call that ignored its result: re-arming the timer after a
+          /// failed start gives a StopACQ() for a run that never began.
+          if( !StartACQ() ) return;
           runTimer->start(abs(cbAutoRun->currentData().toInt()) * 60 * 1000);
         });
       }
@@ -919,9 +958,10 @@ void MainWindow::CloseDigitizers(){
 
     /// The read thread is joined FIRST, before anything touches digi[i]. ReadDataThread::run()
     /// loops on digi->ReadData(), so closing or deleting the digitizer underneath it is a
-    /// use-after-free -- and it is reachable, because StartACQ()/AutoRun() never disable
-    /// bnCloseDigitizers: this button is live during a run. Stop() makes run() leave at its next
-    /// pass, and ReadData()'s own 100 ms endpoint timeout bounds how long that takes.
+    /// use-after-free. AutoRun() now disables bnCloseDigitizers for the life of a run chain, so
+    /// this should no longer be reachable mid-run -- but ~MainWindow() also comes through here,
+    /// and the join is what makes that safe. Stop() makes run() leave at its next pass, and
+    /// ReadData()'s own 100 ms endpoint timeout bounds how long that takes.
     if( readDataThread[i] != NULL ){
       LogMsg("Waiting for readData Thread .....");
       readDataThread[i]->Stop();
@@ -2825,6 +2865,7 @@ QString MainWindow::BuildElogMsg(ElogSection sec, QString * subject, QString * c
   elogTemplate->SetVar("StartComment"      , startComment);
   elogTemplate->SetVar("StopComment"       , stopComment);
   elogTemplate->SetVar("RunComment"        , isStartRun ? startComment : stopComment);
+  elogTemplate->SetVar("DrainWarning"      , isStartRun ? QString() : drainWarning);
   elogTemplate->SetVar("FilePath"          , runFolderPath);
   elogTemplate->SetVar("NumberOfFile"      , totalNumberOfFile);
   elogTemplate->SetVar("TotalFileSize"     , FormatFileSize(totalFileSize));
@@ -2908,27 +2949,51 @@ QString MainWindow::BuildElogMsg(ElogSection sec, QString * subject, QString * c
   return msg;
 }
 
+/// Writes the run's row, in two calls for a stop: this one, then CloseRunTimeStampRow() once
+/// the drain outcome is known. The stop half deliberately leaves the row unterminated, so a
+/// crash during the drain cannot lose it -- see CloseRunTimeStampRow().
 void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
-  
-  QString pcName = qEnvironmentVariable("PCName");
-  QString data_raw_str = "/data_raw";
-  if( pcName == "solaris-daq" ) data_raw_str = "";
 
-  QFile file(masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp.dat");
+  /// Terminates whatever the previous run left dangling, or the next row is glued onto the
+  /// dead one: the csv start half has never had a newline, and the stop half does not get one
+  /// until CloseRunTimeStampRow(). Only before a row that starts a run. Its own open, so the
+  /// writes below can stay O_APPEND -- the kernel keeps them at the end, where a seek to a
+  /// size() that NFS has cached would not.
+  auto terminateDanglingRow = [](const QString & path){
+    QFile f(path);
+    if( f.size() == 0 || !f.open(QIODevice::ReadWrite) ) return;
+    f.seek(f.size() - 1);
+    if( f.read(1) != "\n" ){
+      f.seek(f.size());
+      f.write("\n");
+    }
+    f.close();
+  };
+
+  const QString datPath = RunTimeStampPath("dat");
+  const QString csvPath = RunTimeStampPath("csv");
+  if( isStartRun ){
+    terminateDanglingRow(datPath);
+    terminateDanglingRow(csvPath);
+  }
+
+  QFile file(datPath);
 
   if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
     if( isStartRun ){
       file.write(("Start Run | " + QString::number(runID) + " | " + timeStr + " | " + startComment + "\n").toStdString().c_str());
     }else{
-      file.write((" Stop Run | " + QString::number(runID) + " | " + timeStr + " | " + stopComment + "\n").toStdString().c_str());
+      file.write((" Stop Run | " + QString::number(runID) + " | " + timeStr + " | " + stopComment).toStdString().c_str());
     }
-    
+
     file.close();
+  }else{
+    LogMsg("<font style=\"color: red;\"><b>Cannot write the run record " + file.fileName() + " : " + file.errorString() + "</b></font>");
   }
 
 
-  QFile fileCSV(masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp.csv");
+  QFile fileCSV(csvPath);
 
   if( fileCSV.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
 
@@ -2937,12 +3002,48 @@ void MainWindow::WriteRunTimeStampDat(bool isStartRun, QString timeStr){
     if( isStartRun){
       out << QString::number(runID) + "," + timeStr + "," + startComment;
     }else{
-      out << "," + timeStr + "," + stopComment + "\n";
+      out << "," + timeStr + "," + stopComment;
     }
 
     fileCSV.close();
+  }else{
+    LogMsg("<font style=\"color: red;\"><b>Cannot write the run record " + fileCSV.fileName() + " : " + fileCSV.errorString() + "</b></font>");
   }
 
+}
+
+/// Second half of the stop row. Split from WriteRunTimeStampDat() so the stop time and comment
+/// reach the disk BEFORE the drain loop -- which is the part that can hang or be killed -- while
+/// the drain outcome, known only after it, still lands on the same line.
+/// .dat is free-form, so the note only appears when there is one. .csv is parsed by column, so
+/// the field is always written: runID,startTime,startComment,stopTime,stopComment,drainWarning.
+/// A row left short is then readable as "this run never finished", instead of being lost.
+void MainWindow::CloseRunTimeStampRow(const QString & note){
+
+  QFile file(RunTimeStampPath("dat"));
+  if( file.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
+    file.write((note.isEmpty() ? QString("\n") : " | " + note + "\n").toStdString().c_str());
+    file.close();
+  }else{
+    LogMsg("<font style=\"color: red;\"><b>Cannot finish the run record " + file.fileName() + " : " + file.errorString() + "</b></font>");
+  }
+
+  QFile fileCSV(RunTimeStampPath("csv"));
+  if( fileCSV.open(QIODevice::Text | QIODevice::WriteOnly | QIODevice::Append) ){
+    QTextStream out(&fileCSV);
+    out << "," + note + "\n";
+    fileCSV.close();
+  }else{
+    LogMsg("<font style=\"color: red;\"><b>Cannot finish the run record " + fileCSV.fileName() + " : " + fileCSV.errorString() + "</b></font>");
+  }
+
+}
+
+/// The run record lives next to the raw data, except on solaris-daq itself where that path has
+/// no /data_raw level. Shared by the two writers above so the convention is stated once.
+QString MainWindow::RunTimeStampPath(const QString & ext) const {
+  const QString data_raw_str = (qEnvironmentVariable("PCName") == "solaris-daq") ? "" : "/data_raw";
+  return masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp." + ext;
 }
 
 /// The three copies of this all did new + deleteLater and then read lineEdit->text() after

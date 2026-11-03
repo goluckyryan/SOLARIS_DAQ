@@ -16,6 +16,10 @@
 # Run variables
 #   <ExpName> <ElogName> <RunID> <RunIDStr> <StartTime> <StopTime> <Duration>
 #   <StartComment> <StopComment> <RunComment> <DataFormat> <AutoRun>
+#   <DrainWarning>  stop Run only, and empty unless a board had to be force stopped
+#                   before it drained, i.e. its file is truncated. The same text is
+#                   already inside <StopComment>, so only add this if you want it on
+#                   a line of its own (that line is then blank on a healthy run).
 #   <FilePath> <NumberOfFile> <TotalFileSize> <TotalFileSizeMB> <TotalFileSizeByte>
 #   <NumberOfBoard> <Now> <Host>
 #

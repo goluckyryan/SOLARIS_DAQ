@@ -107,6 +107,8 @@ private slots:
   QString BuildElogMsg(ElogSection sec, QString * subject = nullptr, QString * category = nullptr);
 
   void WriteRunTimeStampDat(bool isStartRun, QString timeStr);
+  void CloseRunTimeStampRow(const QString & note);  /// terminates the stop row started above
+  QString RunTimeStampPath(const QString & ext) const;
 
 signals :
 
@@ -174,6 +176,10 @@ private:
   QString startComment;
   QString stopComment;
   QString appendComment;
+  /// Non-empty when StopACQ() had to force stop a board that did not drain in time, i.e. the
+  /// run's files are truncated. Set in StopACQ(), cleared in StartACQ(), exposed to the elog
+  /// template as <DrainWarning> and folded into stopComment for the RunTimeStamp records.
+  QString drainWarning;
   bool needManualComment;
   bool isACQRunning;
   QTimer * runTimer;
