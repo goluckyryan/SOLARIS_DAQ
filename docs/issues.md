@@ -236,7 +236,7 @@ If something turns up on the beam line, the unit of revert is the whole sweep.
 
 ## CAEN_FELib thread-safety (potential)
 
-**Status:** Open — verify against the CAEN_FELib docs / vendor.
+**Status:** Closed 2026-11-03 — tested on site: concurrent `CAEN_FELib_GetValue`/`SetValue` calls on one connection are handled by the library (no corruption). Mixed `ReadData` vs `GetValue` (the `ReadStat`-under-Raw case) was not directly exercised; it relies on the same per-connection serialization. Re-open if a Raw run ever shows garbage rates.
 
 ### Summary
 
@@ -269,6 +269,8 @@ different handles), these can race on shared library/device state.
 - `ReadData()` uses a local `ret`, not a member, so the GUI cannot clobber the DAQ status.
 
 ### Recommended actions
+
+*Superseded by the status note above: no per-object mutex needed.*
 
 1. Confirm with the CAEN_FELib docs/vendor whether concurrent calls on different handles of one
    connection are safe.

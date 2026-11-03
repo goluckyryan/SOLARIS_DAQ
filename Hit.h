@@ -59,8 +59,8 @@ class Hit {
     bool flush; 
     uint8_t  analog_probes_type[2];  // 3 bit for PHA, 4 bit for PSD
     uint8_t  digital_probes_type[4]; // 4 bit for PHA, 5 bit for PSD
-    int32_t * analog_probes[2];      // 18 bit
-    uint8_t * digital_probes[4];     // 1 bit
+    int32_t  analog_probes[2][MaxTraceLenght];   // 18 bit
+    uint8_t  digital_probes[4][MaxTraceLenght];  // 1 bit
     uint16_t trigger_threashold;     // 16 bit
     size_t   event_size;  // 64 bit
     uint32_t aggCounter; // 32 bit
@@ -73,17 +73,23 @@ class Hit {
     bool isTraceAllZero;
 
     Hit(){
-      Init();
+      DPPType =  DPPType::PHA;
+      dataType = DataFormat::ALL;
+      data = NULL;
+      ResetEventFields();
+      ZeroProbes();
     }
 
     ~Hit(){
-      ClearMemory();
+      if( data != NULL ) { delete[] data; data = NULL; }
     }
 
-    void Init(){
-      DPPType =  DPPType::PHA;
-      dataType = DataFormat::ALL;
+    /// Owns `data`; a copy would free it twice (and would silently copy ~97 KB of probes).
+    Hit(const Hit &) = delete;
+    Hit & operator=(const Hit &) = delete;
 
+    /// Per-event state, as a freshly constructed Hit has it. Not the buffers.
+    void ResetEventFields(){
       channel = 0;
       energy = 0;
       energy_short = 0;
@@ -97,12 +103,6 @@ class Hit {
       trigger_threashold = 0;
       event_size = 0;
       aggCounter = 0;
-      analog_probes[0] = NULL;
-      analog_probes[1] = NULL;
-      digital_probes[0] = NULL;
-      digital_probes[1] = NULL;
-      digital_probes[2] = NULL;
-      digital_probes[3] = NULL;
 
       analog_probes_type[0] = 0xFF;
       analog_probes_type[1] = 0xFF;
@@ -110,7 +110,6 @@ class Hit {
       digital_probes_type[1] = 0xFF;
       digital_probes_type[2] = 0xFF;
       digital_probes_type[3] = 0xFF;
-      data = NULL;
       traceLenght = 0;
       dataSize = 0;
       n_events = 0;
@@ -118,43 +117,31 @@ class Hit {
       isTraceAllZero = true; // indicate trace are all zero
     }
 
-    /// Every pointer is nulled after the delete. Without that, only the callers that immediately
-    /// reallocate are safe -- and `data` is reallocated only on the Raw branch of SetDataType(),
-    /// so a Raw -> non-Raw transition on the same Hit left it dangling for ~Hit() to free twice.
-    void ClearMemory(){
-      if( data != NULL ) { delete[] data; data = NULL; }
-
-      for( int i = 0; i < 2; i++ ){
-        if( analog_probes[i] != NULL ) { delete[] analog_probes[i]; analog_probes[i] = NULL; }
-      }
-      for( int i = 0; i < 4; i++ ){
-        if( digital_probes[i] != NULL ) { delete[] digital_probes[i]; digital_probes[i] = NULL; }
-      }
-
+    void ZeroProbes(){
+      std::memset(analog_probes,  0, sizeof(analog_probes));
+      std::memset(digital_probes, 0, sizeof(digital_probes));
       isTraceAllZero = true;
     }
 
+    /// Re-callable: SetDataFormat() calls this on the same Hit at every start-run, so it must not
+    /// reallocate. It used to free and re-new all six probe arrays and the 20 MB raw buffer, which
+    /// is why SetDataFormat deleted and re-created the whole Hit -- and a Hit that is re-created
+    /// under another thread's feet is a use-after-free.
     void SetDataType(unsigned int type, std::string dppType){
       dataType = type;
       DPPType = dppType;
-      ClearMemory();
+      ResetEventFields();
 
-      if( dataType == DataFormat::Raw){
+      /// Zero all six, not just the last event's span: OneTrace/NoTrace never write AP1/DP*, and
+      /// ClearTrace() only clears what the previous event wrote, so a trace left over from an ALL
+      /// run would otherwise show up in a OneTrace run.
+      ZeroProbes();
+
+      /// Allocated on first use and kept: Raw -> ALL -> Raw does not reallocate 20 MB. Freed only
+      /// in ~Hit().
+      if( dataType == DataFormat::Raw && data == NULL ){
         data = new uint8_t[20*1024*1024];
       }
-
-      // Always allocate probe arrays (needed for raw decode and trace display).
-      /// Value-initialized: OneTrace/NoTrace never touch all six arrays, so () is what keeps
-      /// the untouched probes zero now that ClearTrace() only clears the written span.
-      analog_probes[0] = new int32_t[MaxTraceLenght]();
-      analog_probes[1] = new int32_t[MaxTraceLenght]();
-
-      digital_probes[0] = new uint8_t[MaxTraceLenght]();
-      digital_probes[1] = new uint8_t[MaxTraceLenght]();
-      digital_probes[2] = new uint8_t[MaxTraceLenght]();
-      digital_probes[3] = new uint8_t[MaxTraceLenght]();
-
-      isTraceAllZero = true;
     }
 
     void ClearTrace(){
@@ -165,8 +152,7 @@ class Hit {
       /// instead of array capacity -- MaxTraceLenght is now larger than almost every trace.
       const size_t n = traceLenght > MaxTraceLenght ? (size_t)MaxTraceLenght : traceLenght;
 
-      /// All six are flat arrays of trivial types, so clear them wholesale. SetDataType always
-      /// allocates all six, which is why none of these needs a null check -- see the comment there.
+      /// All six are member arrays, always present, so none of these needs a null check.
       std::memset(analog_probes[0], 0, n * sizeof(int32_t));
       std::memset(analog_probes[1], 0, n * sizeof(int32_t));
 

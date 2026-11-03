@@ -539,8 +539,9 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
 
 
 
-  if( hit ) delete hit;
-  hit = new Hit();
+  /// Reused, not re-created: the scalar poller reads hit->dataType from another thread, and
+  /// SetDataType() is now re-callable without reallocating (Hit.h).
+  if( hit == NULL ) hit = new Hit();
   hit->SetDataType(dataFormat, FPGAType);
   dataStartIdentifier = 0xAA00 + dataFormat;
   if(FPGAType == DPPType::PSD ) dataStartIdentifier += 0x0010;
