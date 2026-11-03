@@ -151,8 +151,10 @@ private:
   /// CleanUpScalar() recovered the inner lengths by asking the digitizers for their channel
   /// count again at delete time. If a board had been reopened with a different count in between,
   /// that freed the wrong number of widgets. The vectors carry their own lengths.
-  /// The QWidgets they point at are still deleted explicitly; they outlive a rebuild otherwise,
-  /// since their Qt parent is the scalar window, not this list.
+  /// The QWidgets they point at are owned by scalarBoxes: one container per column (channel
+  /// numbers, then one per board), deleted by CleanUpScalar(). See SetUpScalar() for why the
+  /// widgets are not all direct children of scalarLayout.
+  std::vector<QWidget *> scalarBoxes;
   std::vector<QLabel *> lbFileSize;
   std::vector<std::vector<QLineEdit *>> leTriggers;
   std::vector<std::vector<QLineEdit *>> leSaved;

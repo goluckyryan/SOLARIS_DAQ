@@ -1346,77 +1346,92 @@ void MainWindow::SetUpScalar(){
   lbLastUpdateTime = new QLabel("Last update : ", scalar);
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
   scalarLayout->removeWidget(lbLastUpdateTime);
-  scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, 1 + nDigi);
+  scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, nDigi);
 
   lbScalarACQStatus = new QLabel("ACQ status", scalar);
   lbScalarACQStatus->setAlignment(Qt::AlignCenter);
   scalarLayout->removeWidget(lbScalarACQStatus);
-  scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, 1 + nDigi);
+  scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, nDigi);
 
-  ///==== create the 1st row
-  int rowID = 5;
+  /// One container widget per column -- the channel numbers, then one per board -- instead of
+  /// every label and line edit directly in scalarLayout. Qt paints sibling widgets with one
+  /// recursion level per sibling (QWidgetPrivate::paintSiblingsRecursive), and at 128 line edits
+  /// per board, 16 boards under one parent overflowed the default 8 MB stack and segfaulted on the
+  /// first paint (tests/scalarTiming --paint-only). Per box it is ~130 siblings at most.
+  /// Containers are added AlignTop so a board with fewer channels keeps its natural height instead
+  /// of being stretched, which would pull its rows out of line with the channel numbers.
+  auto makeBox = [this](int col){
+    QWidget * box = new QWidget(scalar);
+    QGridLayout * grid = new QGridLayout(box);
+    grid->setSpacing(0);
+    grid->setContentsMargins(0, 0, 0, 0);
+    scalarLayout->addWidget(box, 2, col, Qt::AlignTop);
+    scalarBoxes.push_back(box);
+    return grid;
+  };
 
-  for( int ch = 0; ch < maxNumChannelAcrossDigitizer; ch++){
+  /// Box rows: 0 board name, 1 file size, 2 column headers, 3.. one per channel.
+  /// The channel-number labels are fixed to a line edit's height, so row ch of this box lines up
+  /// with row ch of every board box.
+  const int rowH = QLineEdit().sizeHint().height();
 
-    if( ch == 0 ){
-      QLabel * lbCH_H = new QLabel("Ch", scalar); 
-      scalarLayout->addWidget(lbCH_H, rowID, 0);
-    }  
-
-    rowID ++;
-    QLabel * lbCH = new QLabel(QString::number(ch), scalar);
-    lbCH->setAlignment(Qt::AlignCenter);
-    scalarLayout->addWidget(lbCH, rowID, 0);
+  ///==== the channel-number column
+  {
+    QGridLayout * grid = makeBox(0);
+    grid->addWidget(new QLabel(" ", scalarBoxes.back()), 0, 0);   // spacers, as tall as the
+    grid->addWidget(new QLabel(" ", scalarBoxes.back()), 1, 0);   // board-name / file-size rows
+    grid->addWidget(new QLabel("Ch", scalarBoxes.back()), 2, 0);
+    for( int ch = 0; ch < maxNumChannelAcrossDigitizer; ch++){
+      QLabel * lbCH = new QLabel(QString::number(ch), scalarBoxes.back());
+      lbCH->setAlignment(Qt::AlignCenter);
+      lbCH->setFixedHeight(rowH);
+      grid->addWidget(lbCH, 3 + ch, 0);
+    }
   }
-  
+
   ///===== create the trigger and accept
   leTriggers.assign(nDigi, {});
   leSaved.assign(nDigi, {});
   lbFileSize.assign(nDigi, nullptr);
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
-    rowID = 3;
-    lbFileSize[iDigi] = new QLabel("file Size", scalar);
+    QGridLayout * grid = makeBox(1 + iDigi);
+    QWidget * box = scalarBoxes.back();
+
+    QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), box);
+    lbDigi->setAlignment(Qt::AlignCenter);
+    grid->addWidget(lbDigi, 0, 0, 1, 2);
+
+    lbFileSize[iDigi] = new QLabel("file Size", box);
     lbFileSize[iDigi]->setAlignment(Qt::AlignCenter);
+    grid->addWidget(lbFileSize[iDigi], 1, 0, 1, 2);
+
+    /// Column names state WHAT is counted, not just "Trig.": the first is the DPP's raw
+    /// trigger rate (SelfTrgRate), the second is the board-side SAVED rate
+    /// (ΔsavedEventCount/ΔrealTime). Downstream coincidence/analysis filters happen after
+    /// the saved counter, so a gated view can legitimately show less than Saved [Hz].
+    QLabel * lbA = new QLabel("Triggers [Hz]", box);
+    lbA->setAlignment(Qt::AlignCenter);
+    grid->addWidget(lbA, 2, 0);
+    QLabel * lbB = new QLabel("Saved [Hz]", box);
+    lbB->setAlignment(Qt::AlignCenter);
+    grid->addWidget(lbB, 2, 1);
+
     /// Clamped the same way UpdateScalar() clamps its own loops. A board reporting more
     /// channels than MaxNumberOfChannel would otherwise build rows that nothing ever fills.
     const int nCh = std::min<int>(digi[iDigi]->GetNChannels(), MaxNumberOfChannel);
     leTriggers[iDigi].assign(nCh, nullptr);
     leSaved[iDigi].assign(nCh, nullptr);
     for( int ch = 0; ch < nCh; ch++){
-
-      if( ch == 0 ){
-          QLabel * lbDigi = new QLabel("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()), scalar); 
-          lbDigi->setAlignment(Qt::AlignCenter);
-          scalarLayout->addWidget(lbDigi, rowID, 2*iDigi+1, 1, 2);
-          rowID ++;
-
-          scalarLayout->addWidget(lbFileSize[iDigi], rowID, 2*iDigi+1, 1, 2);
-          rowID ++;
-
-          /// Column names state WHAT is counted, not just "Trig.": the first is the DPP's raw
-          /// trigger rate (SelfTrgRate), the second is the board-side SAVED rate
-          /// (ΔsavedEventCount/ΔrealTime). Downstream coincidence/analysis filters happen after
-          /// the saved counter, so a gated view can legitimately show less than Saved [Hz].
-          QLabel * lbA = new QLabel("Triggers [Hz]", scalar);
-          lbA->setAlignment(Qt::AlignCenter);
-          scalarLayout->addWidget(lbA, rowID, 2*iDigi+1);
-          QLabel * lbB = new QLabel("Saved [Hz]", scalar);
-          lbB->setAlignment(Qt::AlignCenter);
-          scalarLayout->addWidget(lbB, rowID, 2*iDigi+2);
-      }
-    
-      rowID ++;
-      
-      leTriggers[iDigi][ch] = new QLineEdit(scalar);
+      leTriggers[iDigi][ch] = new QLineEdit(box);
       leTriggers[iDigi][ch]->setReadOnly(true);
       leTriggers[iDigi][ch]->setAlignment(Qt::AlignRight);
-      scalarLayout->addWidget(leTriggers[iDigi][ch], rowID, 2*iDigi+1);
+      grid->addWidget(leTriggers[iDigi][ch], 3 + ch, 0);
 
-      leSaved[iDigi][ch] = new QLineEdit(scalar);
+      leSaved[iDigi][ch] = new QLineEdit(box);
       leSaved[iDigi][ch]->setReadOnly(true);
       leSaved[iDigi][ch]->setAlignment(Qt::AlignRight);
       leSaved[iDigi][ch]->setStyleSheet("background-color: #F0F0F0;");
-      scalarLayout->addWidget(leSaved[iDigi][ch], rowID, 2*iDigi+2);
+      grid->addWidget(leSaved[iDigi][ch], 3 + ch, 1);
     }
   }
 
@@ -1425,22 +1440,17 @@ void MainWindow::SetUpScalar(){
 
 void MainWindow::CleanUpScalar(){
 
-  if( leTriggers.empty() ) return;
+  if( scalarBoxes.empty() ) return;
 
-  /// Lengths come from the vectors, not from asking the digitizers how many channels they have
-  /// now. That is the point of the change: the old loop re-read GetNChannels() at delete time,
-  /// so a board reopened with a different count between build and teardown made this free the
-  /// wrong number of widgets.
-  for( size_t i = 0; i < leTriggers.size(); i++){
-    for( size_t ch = 0; ch < leTriggers[i].size(); ch ++) delete leTriggers[i][ch];
-    for( size_t ch = 0; ch < leSaved[i].size(); ch ++)  delete leSaved[i][ch];
-  }
-  for( size_t i = 0; i < lbFileSize.size(); i++) delete lbFileSize[i];
+  /// Each box owns its column's labels and line edits, so deleting the boxes frees every widget
+  /// the three vectors point at -- the vectors are only cleared, never deleted through.
+  for( size_t i = 0; i < scalarBoxes.size(); i++) delete scalarBoxes[i];
+  scalarBoxes.clear();
   lbFileSize.clear();
   leTriggers.clear();
   leSaved.clear();
 
-  //Clean up QLabel
+  //Clean up the remaining QLabels (last update, ACQ status), which sit outside the boxes
   QList<QLabel *> labelChildren = scalar->findChildren<QLabel *>();
   for( int i = 0; i < labelChildren.size(); i++) delete labelChildren[i];
 
