@@ -77,10 +77,12 @@ int             traceLen[MAX_MULTI] = {0};
 ///   - the stride stays MAX_TRACE_LEN, so the on-disk layout is byte-for-byte what it was;
 ///   - the buffer is sized once, before tree->Branch() captures its address, and never resized
 ///     afterwards -- a reallocation would silently leave the branch pointing at freed memory.
-/// Value-initialisation matches the zeroed BSS it replaces, so the bytes written past
-/// traceLen[multi] are unchanged too.
-std::vector<int> traceBuf;
-inline int * traceRow(unsigned int m){ return traceBuf.data() + (size_t) m * MAX_TRACE_LEN; }
+/// calloc, not a zero-filled std::vector: a 1 GB calloc is served by mmap with pages that are
+/// already zero, so only the rows actually written become resident (~4 MB for typical events,
+/// vs the full 957 MB and ~0.37 s of zeroing for vector::assign). Starting all-zero keeps the
+/// bytes written past traceLen[multi] exactly as before. Freed after the output file is closed.
+int * traceBuf = nullptr;
+inline int * traceRow(unsigned int m){ return traceBuf + (size_t) m * MAX_TRACE_LEN; }
 
 void fillData(int &fileID, const bool &saveTrace){
   if( multi >= MAX_MULTI ) {
@@ -260,9 +262,13 @@ int main(int argc, char ** argv){
 
   if( saveTrace){
     /// Must be sized before Branch() takes the address, and never resized after.
-    traceBuf.assign((size_t) MAX_MULTI * MAX_TRACE_LEN, 0);
+    traceBuf = (int *) calloc((size_t) MAX_MULTI * MAX_TRACE_LEN, sizeof(int));
+    if( traceBuf == nullptr ){
+      printf("cannot allocate the trace buffer (%.1f GB). Abort.\n", (double) MAX_MULTI * MAX_TRACE_LEN * sizeof(int) / 1e9);
+      return -1;
+    }
     tree->Branch("traceLen",  traceLen, "traceLen[multi]/I");
-    tree->Branch("trace", traceBuf.data(), Form("trace[multi][%d]/I", MAX_TRACE_LEN));
+    tree->Branch("trace", traceBuf, Form("trace[multi][%d]/I", MAX_TRACE_LEN));
     tree->GetBranch("trace")->SetCompressionSettings(205);
   }
 
@@ -400,6 +406,7 @@ int main(int argc, char ** argv){
   delete [] reader;
   delete [] hit;
   outRootFile->Close();
+  free(traceBuf);   // after Close(): the tree reads the branch address until then
 
   return 0;
 }
