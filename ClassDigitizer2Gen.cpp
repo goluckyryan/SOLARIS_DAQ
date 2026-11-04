@@ -1028,11 +1028,16 @@ int Digitizer2Gen::ReadData(){
       }
 
       // Apply stat updates from time/counter events
+      /// The decoder hands over raw ticks; realTime/deadTime/liveTime are ns everywhere else (the
+      /// stats endpoint's *_NS fields). Unscaled, every Raw-mode rate built on realTime read
+      /// tick2ns times too high and the elog <Realtime> tick2ns times too short.
       for( const auto& su : rawDecoder.GetStatUpdates() ){
         if( su.channel < nChannels ){
-          realTime[su.channel]       = su.realTime;
-          deadTime[su.channel]       = su.deadTime;
-          liveTime[su.channel]       = (su.realTime > su.deadTime) ? (su.realTime - su.deadTime) : 0;
+          const uint64_t rtNs = su.realTime * tick2ns;
+          const uint64_t dtNs = su.deadTime * tick2ns;
+          realTime[su.channel]       = rtNs;
+          deadTime[su.channel]       = dtNs;
+          liveTime[su.channel]       = (rtNs > dtNs) ? (rtNs - dtNs) : 0;
           triggerCount[su.channel]   = su.triggerCount;
           savedEventCount[su.channel] = su.savedEventCount;
         }

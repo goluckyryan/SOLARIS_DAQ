@@ -734,11 +734,14 @@ of the hardware. The rates come from the last Scaler update.
 
 ## Design documents
 
-`docs/` records the reasoning behind the online analysis chain — why the choices are what they are,
-and which alternatives were tried and rejected. The README says how things work; these say why.
+`docs/` describes how the DAQ's subsystems work and why the choices are what they are.
+`docs/README.md` is the index, and states the rules those documents follow.
 
 | File | |
 |------|--|
+| docs/README.md | Index of the documents, and the principles they follow |
+| docs/scalar.md | The scalar panel: update, Accepted-rate calculation, cost and rate ceiling |
+| docs/issues.md | Open issues and behaviour not yet checked on hardware |
 | docs/sol-file-format.md | The on-disk `.sol` data format, field by field, per data format |
 | docs/experiment-workflow.md | `programSettings.txt`, the experiment-as-git-branch model, and the analysis folder |
 | docs/run-lifecycle.md | What happens between Start and Stop, and which ordering is load-bearing |

@@ -1,7 +1,7 @@
 # Online analysis — design decisions
 
 The README says how the online event builder and analyzer *work*. This says **why they are shaped
-the way they are**, including the alternatives that were tried and rejected, so the next person to
+the way they are**, including the alternatives and why they are not used, so the next person to
 touch them does not have to rediscover the reasoning — or undo it by accident.
 
 Read the README first. This is the layer underneath it.
@@ -97,7 +97,7 @@ loss in exchange for liveness — the counter is the point, silent loss would no
 not advancing, so using them to detect the stall cannot work.
 
 Also: the horizon comparison is written to be safe against unsigned wraparound. FSUDAQ
-(`MultiBuilder.cpp:197`) and the offline `Aux/EventBuilder.cpp:306` both compute that difference
+(`MultiBuilder.cpp:197`) and the offline `Aux/EventBuilder.cpp:318` both compute that difference
 unguarded, so a backwards hit wraps to ~1.8e19 and force-closes the event.
 
 **Window bound is exclusive**, `[seed, seed + timeWindow)`, matching `Aux/EventBuilder`. FSUDAQ is
@@ -106,7 +106,7 @@ mismatching it costs a day of chasing boundary-coincident hits.
 
 ## Why the event ring is separate from the builder
 
-`Aux/testOnlineBuilder.cpp` constructs `OnlineEventBuilder` on the **stack** in five places. An
+`Aux/testOnlineBuilder.cpp` constructs `OnlineEventBuilder` on the **stack** in seven places. An
 8 MiB member — `memset` by `RingBuffer`'s constructor — would overflow the default stack. The
 builder holds a non-owning `EventRing *` instead.
 
@@ -122,10 +122,9 @@ argument for the flat layout.
 Sized to hold as many hits as one board's `hitRing`, so a stalled consumer starts losing events at
 the same point the raw hits would have been lost anyway. A shallower ring would be pointless.
 
-**No epoch counter.** An earlier design had one, to avoid clearing a ring while a consumer held a
-stale cursor. It became unnecessary once the analyzer's enable toggle was the only run boundary:
-both workers are stopped at that point, so the ring can simply be cleared and the reader re-anchored
-together. Simpler and stronger.
+**No epoch counter.** The analyzer's enable toggle is the only run boundary, and both workers are
+stopped at that point, so the ring is simply cleared and the reader re-anchored together. A counter
+guarding against a consumer holding a stale cursor across a clear would add nothing.
 
 ## Why two worker threads
 
@@ -142,20 +141,20 @@ with a known premium.
 ## Why no hand-rolled thread fence
 
 `SingleSpectra` uses `isFillingHistograms` + `suspendFilling` + `WaitForFillToDrain()`, because its
-GUI thread mutates widgets directly while a worker fills them.
+GUI thread reallocates the count arrays its worker fills (on rebin or a source change).
 
 The Analyzer does not need any of it. Every GUI-initiated change is a
 `Qt::BlockingQueuedConnection` into the worker that **owns** that state, so the change executes on
 that worker thread between two `ProcessEvent()` calls. **The marshalling is the fence.** That is why
 an analysis can keep plain `int` parameter members with no atomics, and why there is no 200 ms
-give-up loop — which in `SingleSpectra` is a correctness hole, not a safety net.
+give-up loop. In `SingleSpectra` that loop is only safe while one fill pass ends sooner:
+the pass yields after `maxFillTimeinMilliSec` (default 50 ms), so a fill time set above 200 ms
+would let the GUI reallocate under a running worker.
 
 The cost is that a blocking call stalls the GUI until the worker finishes its current batch, so the
 drain is bounded per tick. That bound is wanted anyway.
 
 ## Why a worker must never call `Histogram*::Fill()`
-
-This was wrong in an early draft of the design and is worth stating bluntly.
 
 `Histogram1D::Fill()` assigns a `QString` into a `QCPItemText` on **every** call. The refcount is
 atomic; the d-pointer store is not. A worker can free the buffer the GUI thread is reading inside
@@ -168,8 +167,8 @@ So `QtHistRegistry` accumulates into `std::atomic<uint32_t>` arrays on the worke
 thread publishes them into the widgets via `SetBinContents` / `SetCellContents`. An analysis never
 sees a widget, so it cannot get this wrong.
 
-`SingleSpectra` still fills from its worker. That predates this work and should eventually move to
-the same discipline. **Do not copy it.**
+`SingleSpectra` follows the same split: its worker increments atomic `H1Counts`/`H2Counts`
+(`SingleHistograms.cpp:501-530`) and the GUI thread publishes them.
 
 ## Why the analysis interface has no Qt
 

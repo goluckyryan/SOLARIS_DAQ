@@ -8,8 +8,8 @@ SOLARIS data.
 
 | | |
 |---|---|
-| writer | `Digitizer2Gen::SaveDataToFile()` — `ClassDigitizer2Gen.cpp:1074` |
-| reader | `SolReader::ReadNextBlock()` — `Aux/SolReader.h:105` |
+| writer | `Digitizer2Gen::SaveDataToFile()` — `ClassDigitizer2Gen.cpp:1156` |
+| reader | `SolReader::ReadNextBlock()` — `Aux/SolReader.h:111` |
 
 If you change one, change the other in the same commit, and bear in mind that **every file already
 written becomes unreadable** if the layout shifts. There is no version field to protect you.
@@ -22,7 +22,7 @@ written becomes unreadable** if the layout shifts. There is no version field to 
 <expName>_<runID>_<digiIdx>_<serialNumber>_<fileIndex>.sol
 ```
 
-built in `MainWindow::StartACQ` (`mainwindow.cpp:498-511`) and finished by
+built in `MainWindow::StartACQ` (`mainwindow.cpp:534-551`) and finished by
 `Digitizer2Gen::OpenOutFile()`, which appends `_%03d` and the extension. `digiIdx` is
 right-justified to 2 digits, `fileIndex` to 3.
 
@@ -47,7 +47,7 @@ with a 2-byte identifier and the identifier alone tells you how to parse the res
        + 0x10 if PSD            0xAA13 = Minimum, PSD
 ```
 
-built at `ClassDigitizer2Gen.cpp:510`:
+built at `ClassDigitizer2Gen.cpp:546-547`:
 
 ```cpp
 dataStartIdentifier = 0xAA00 + dataFormat;
@@ -169,7 +169,8 @@ Two consequences of the data never being decoded on the way in:
 Reading 8 would swallow the next field.
 
 A reader must therefore read 6 bytes into a destination whose top two bytes are already zero.
-`SolReader` relies on `Hit::Init()` zeroing the field once at construction and on the hardware
+`SolReader` relies on `Hit::ResetEventFields()` (`Hit.h:92-96`) zeroing the field when the `Hit` is
+constructed and on the hardware
 timestamp being 48-bit, so bytes 6-7 are never written and stay zero for the life of the object. That
 is correct but implicit — if you write your own reader, zero the field explicitly rather than
 inheriting the assumption.
@@ -179,7 +180,7 @@ inheriting the assumption.
 determine it. Do not assume PHA.
 
 **Timestamps are in ns**, already scaled by `tick2ns` before writing
-(`ClassDigitizer2Gen.cpp:1015`).
+(`ClassDigitizer2Gen.cpp:1085`; `fine_timestamp` at `:1095`).
 
 **`fine_timestamp` is scaled by `tick2ns` too**, which makes its unit 1/1024 ns (≈0.977 ps) rather
 than exactly ps — the raw field is a 10-bit fraction of one coarse tick. Read as picoseconds it is
@@ -191,9 +192,6 @@ other; a correction would have to change both together.
 **No file header means no way to know the format without reading a block.** Tools generally read the
 first identifier and assume the rest of the file matches — true in practice, since the data format
 is fixed for a run, but nothing in the format enforces it.
-
-**`CloseOutFile()` does not null `outFile` after `fclose`**, so two stops in a row double-close.
-Pre-existing; relevant if you script start/stop cycles.
 
 ## Reading a file
 

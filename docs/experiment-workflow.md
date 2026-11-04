@@ -8,9 +8,9 @@ wrong costs a run.
 ## 1. `programSettings.txt` is a positional file
 
 Not JSON, not INI, not `QSettings` — **fifteen bare lines, identified by position**, terminated by a
-line starting with `//----`. Read by `MainWindow::LoadProgramSettings()` (`mainwindow.cpp:1723`)
+line starting with `//----`. Read by `MainWindow::LoadProgramSettings()` (`mainwindow.cpp:1836`)
 through a `switch` on the line index, written back in the same order by `SaveProgramSettings()`
-(`mainwindow.cpp:1884`).
+(`mainwindow.cpp:1996`).
 
 | line | field | notes |
 |---|---|---|
@@ -36,20 +36,21 @@ necessarily if the DAQ is launched from elsewhere.
 ### The rules that keep it working
 
 **Order is frozen. New fields go on the end, never in the middle.** The comments at
-`mainwindow.cpp:1776` and `:1778` say so explicitly, and `:1789` back-fills
+`mainwindow.cpp:1885` and `:1887` say so explicitly, and `:1895` back-fills
 (`if(count <= 12) ElogUseSSL = (ElogPort == "443")`) so that a shorter, older file still loads. Insert
 a line and every field after it silently shifts to the wrong variable — the file will load without
 complaint and your elog password becomes your database token.
 
-**Blank lines are meaningful.** An unset field is an empty line, not an absent one. The checked-in
-file has blanks at lines 5-11. Do not tidy them away.
+**Blank lines are meaningful.** An unset field is an empty line, not an absent one; a typical file
+has several blank lines in the middle. Do not tidy them away. (`programSettings.txt` is git-ignored:
+each machine has its own.)
 
 **Editing by hand is possible but unforgiving.** There is no validation and no error on a short or
 mis-ordered file.
 
 To add a setting you must touch four places: a `case` in `LoadProgramSettings`, a `file.write` in
 `SaveProgramSettings` in the matching position, a widget in `ProgramSettingsPanel()`
-(`mainwindow.cpp:1447`), and a read-back where the dialog is accepted (`:1652`). `lAnalysisPath` is
+(`mainwindow.cpp:1580`), and a read-back where the dialog is accepted (`:1759-1765`). `lAnalysisPath` is
 the clearest example to copy.
 
 ---
@@ -61,7 +62,7 @@ after `expName`**. This is entirely automatic and driven from `MainWindow` via `
 
 ### When you create a new experiment
 
-`mainwindow.cpp:2337-2393`, in order:
+`CreateNewExperiment()`, git part at `mainwindow.cpp:2459-2512`, in order (only when `useGit` is on):
 
 ```
 git init -b <expName>          # if the folder is not yet a repo
@@ -76,13 +77,13 @@ git push --set-upstream <remote> <expName>
 `--allow-empty` matters: a brand-new experiment folder may have nothing in it, and the commit still
 has to exist so the branch does.
 
-A `.gitignore` is created if absent (`:2354`) containing `data_raw`, `root_data`, `*.root`, `*.d`,
+A `.gitignore` is created if absent (`:2476-2486`) containing `data_raw`, `root_data`, `*.root`, `*.d`,
 `*.so` — i.e. **data and build products are deliberately not versioned**, only analysis code and
 configuration.
 
 ### When you open the new-experiment dialog
 
-`mainwindow.cpp:2036-2073` inspects the repository first:
+`mainwindow.cpp:2155-2192` (in `SetupNewExpPanel()`) inspects the repository first:
 
 ```
 git fetch                                           # so remote branches are visible
@@ -99,7 +100,9 @@ that check, which is what lets uncommitted raw data sit in the folder.
 - Switching experiments switches a git branch, so **uncommitted analysis code follows you** or
   blocks the switch.
 - The experiment name is constrained by what git accepts as a branch name.
-- If `useGit` is off, none of this runs and the folder is just a folder.
+- `useGit` only controls the git steps of `CreateNewExperiment()` (init/checkout, commit, push). The
+  dialog's `fetch` / `branch -a` / `status` and the `git checkout <expName>` when switching
+  experiments (`mainwindow.cpp:2557`) run regardless.
 - Nothing commits automatically *during* a run — only at experiment creation. Analysis code changes
   made while running are yours to commit.
 
@@ -113,29 +116,37 @@ Set as `analysisPath` (line 4 of the settings file). The DAQ expects and maintai
 <analysisPath>/
 ├── working/
 │   ├── Mapping.h          <- parsed by the DAQ, defines the detector panel
-│   └── Settings/          <- per-board register dumps
-├── data_raw   -> <masterExpDataPath>/<expName>      (symlink, git-ignored)
-├── root_data  -> ...                                (symlink, git-ignored)
+│   └── Settings/          <- register dumps saved from the SOLARIS panel
+├── data_raw   -> <rawDataPath>                      (symlink, git-ignored)
+├── root_data  -> <rootDataPath>                     (symlink, git-ignored)
 ├── .gitignore                                       (created if absent)
 └── (your analysis code)                             (versioned)
 ```
 
-**`working/Mapping.h`** is read by `CheckSOLARISpanelOK()` (`mainwindow.cpp:1083-1187`) and parsed
+**`working/Mapping.h`** is read by `CheckSOLARISpanelOK()` (`mainwindow.cpp:1163-1299`) and parsed
 into `mapping[digi][channel] -> detector ID`, plus `detType`, `detGroupID` and `detMaxID`. Those are
-handed to `SOLARISpanel` (`:1199`), which is what draws the detector view. It is a C++ header
+handed to `SOLARISpanel` (`:1293`), together with the detector group names, which is what draws the detector view. It is a C++ header
 because the offline analysis includes the same file — one definition of the channel map, shared
 between DAQ and analysis.
 
-**The symlinks** are created by `CreateDataSymbolicLink()` (`mainwindow.cpp:2489-2511`) so that
-analysis code can refer to `data_raw/` regardless of where the raw data actually lives. They are
+**The symlinks** are created by `CreateDataSymbolicLink()` (`mainwindow.cpp:2612-2640`) so that
+analysis code can refer to `data_raw/` regardless of where the raw data actually lives.
+`rawDataPath` is `<masterExpDataPath>/<expName>/data_raw/`, and `rootDataPath` is
+`<masterExpDataPath>/<expName>/root_data/`. On the machine whose `PCName` environment variable is
+`solaris-daq`, `rawDataPath` is `<masterExpDataPath>/<expName>/` and `rootDataPath` is
+`/mnt/data1/<expName>/` (`mainwindow.cpp:2440-2450`). They are
 git-ignored, so they do not follow the repository to another machine — expect to recreate them.
 
-**`Settings/`** receives the per-board register dumps. During a run, `StartACQ` also writes a
-settings snapshot next to the data itself (`<expName>_<runID>XSetting_<SN>.dat`), so a run's raw
-files and the configuration that produced them stay together.
+**Register dumps** go to two `Settings/` folders. The SOLARIS panel saves to
+`<analysisPath>/working/Settings/` (`SOLARISpanel.cpp:96`). The boards' settings files, loaded at
+open and used by the settings panel's Save/Load, are in `<expDataPath>/Settings/`
+(`mainwindow.cpp:829`, `:847`). During a run, `StartACQ` also writes a settings snapshot next to
+the data itself (`<expName>_<runID>XSetting_<SN>.dat`), so a run's raw files and the configuration
+that produced them stay together.
 
-**`expName.sh`** is written by `WriteExpNameSh()` — a shell fragment the analysis scripts source to
-learn the current experiment name.
+**`expName.sh`** is written by `WriteExpNameSh()` to `<rawDataPath>/expName.sh` (so it is reachable
+as `data_raw/expName.sh`) — a shell fragment with `expName`, `runID` and `elogID` that the analysis
+scripts source.
 
 ---
 
@@ -149,7 +160,7 @@ learn the current experiment name.
    the elog name.
 4. The DAQ creates the folder, writes `expName.sh` and `.gitignore`, makes the symlinks, and does
    the git init/checkout + commit + push.
-5. **Create the elog manually.** The DAQ logs a reminder (`mainwindow.cpp:2397`) because it cannot
+5. **Create the elog manually.** The DAQ logs a reminder (`mainwindow.cpp:2519`) because it cannot
    create one itself — there is a `//TODO` there about editing `config.cfg` directly.
 6. Put `Mapping.h` in `working/` before opening the SOLARIS panel.
 

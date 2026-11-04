@@ -59,8 +59,8 @@ public:
 
   struct StatUpdate {
     uint8_t  channel;
-    uint64_t realTime;        // from Word 0 timestamp field (raw ticks)
-    uint64_t deadTime;        // from extra word (raw ticks)
+    uint64_t realTime;        // from Word 0 timestamp field (raw ticks; the caller scales to ns)
+    uint64_t deadTime;        // from extra word (raw ticks; the caller scales to ns)
     uint32_t triggerCount;
     uint32_t savedEventCount;
   };
@@ -152,15 +152,13 @@ private:
       if( pos >= nAggWords ) break;
       uint64_t w0 = W(aggData, pos);
 
-      // Check if this is a special event embedded in the aggregate
-      uint8_t topNibble = (w0 >> 60) & 0xF;
-      if( topNibble == 0x3 ){
-        // Special event (Start/Stop Run) embedded
-        uint32_t seWords = w0 & 0xFFFFFFFF;
-        if( seWords == 0 || pos + seWords > nAggWords ) break;
-        pos += seWords;
-        continue;
-      }
+      /// No "[63:60] == 0x3 = embedded special event" test here. Inside an aggregate Word 0 is
+      /// 0 | channel[62:56] | ..., so channels 48-63 (0x30-0x3F) carry that nibble. The old test
+      /// read them as Start/Stop events, took timestamp bits as a word count and broke out of the
+      /// aggregate -- and since EnStatEvents puts one time/counter event per channel at the front
+      /// of every aggregate, ch48's dropped almost every hit (tests/rawDecoderHighCh). Special
+      /// events are top-level only (format_RAW.md; tests/rawBlobWalk saw start and stop run only
+      /// between aggregates); ParseBlob() handles them there.
 
       // Check bit 63: single-word event (EnDataReduction)?
       if( (w0 >> 63) & 0x1 ){

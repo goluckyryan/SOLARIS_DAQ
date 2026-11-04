@@ -41,20 +41,19 @@ The poller is started by `OpenScaler()` and `StartACQ()`, and stopped in `CloseD
 increase in that count by the time that passed.
 
 **1. Counting.** Every time `Digitizer2Gen::ReadData()` gets a hit, it pushes it into that
-channel's ring buffer, `ringBuffer[ch]` (DPP formats `ClassDigitizer2Gen.cpp:1069`, Raw `:1016`).
+channel's ring buffer, `ringBuffer[ch]` (DPP formats `ClassDigitizer2Gen.cpp:1074`, Raw `:1016`).
 The ring's write index is a running total of every hit ever pushed on that channel. It only goes
 up: it is never cleared, and it keeps counting when the 10 000-entry ring wraps around.
-`GetAcceptedCount(ch)` (`ClassDigitizer2Gen.h:164`) returns it. Nothing was added to `ReadData()`
-for this. It is the same counter `SingleSpectra` fills its histograms from, so the scalar and the
+`GetAcceptedCount(ch)` (`ClassDigitizer2Gen.h:164`) returns it. `ReadData()` does no extra
+work for it. It is the same counter `SingleSpectra` fills its histograms from, so the scalar and the
 histograms see the same hits.
 
 *Why the ring does not wrap the count.* `RingBuffer::push()` (`RingBuffer.h:22`) stores the hit
 in slot `writeIndex % N` but increments `writeIndex` itself without any modulo, and `index()`
 returns that raw value. So when the ring laps, old hit *data* is overwritten, but the *count* keeps
-going: 0, 1, …, 10 000, 10 001, …. Measured: in `tests/acceptMaxRate` a channel took up to
-200 000 hits/s (about 40 ring laps between two scalar ticks) and Accepted still matched the board's
-saved rate within 0.5%. In `tests/acceptRate` the count matched an independent hit-by-hit count
-exactly.
+going: 0, 1, …, 10 000, 10 001, …. Measured: with a channel taking up to 200 000 hits/s (about
+40 ring laps between two scalar ticks), Accepted still matched the board's saved rate within 0.5%,
+and the count matched an independent hit-by-hit count exactly.
 - Overflow: `writeIndex` is `unsigned long`, 64-bit on Linux. At the 7.4 M hits/s ceiling it
   overflows after ~79 000 years. (On Windows `unsigned long` is 32-bit; the app is Linux-only.)
 - Reset: `RingBuffer::clear()` sets the index back to 0, but nothing calls it on `ringBuffer[ch]`.
@@ -85,7 +84,7 @@ so the PC clock is the matching time base.
 
 **Why not the board's saved counter.** The board's `SAVED_EVENT_CNT` counts an event **before** the
 coincidence check. On the test station, ch0 needs a coincidence with TRG-IN (ch0 = 10 + 5 Hz,
-ch52 = 50 + 5 Hz, ch52 -> ITLA -> TRG-OUT -> TRG-IN). Measured with `tests/acceptRate`:
+ch52 = 50 + 5 Hz, ch52 -> ITLA -> TRG-OUT -> TRG-IN). Measured on the test station:
 
 | ch | Triggers | board saved counter | Accepted (hits received) |
 |---|---|---|---|
@@ -106,15 +105,12 @@ The board counter is still read: the elog's `<SavedCount>` and `<Realtime>` use 
 - **Hidden window.** While the scalar window is hidden, `UpdateScalar` returns early and the
   baseline is not updated. The first reading after reopening is the average over the whole hidden
   time.
-- **Raw format.** The Raw decoder currently loses most hits, so Accepted reads far too low in Raw.
-  See `accepted_count_Raw_format_bugs.md`.
 
 ---
 
 ## Cost per tick
 
-Measured with `tests/scalarTiming` on a VX2745 through the app's own `Digitizer2Gen`, 100 samples
-per condition:
+Measured on a VX2745 through the app's own `Digitizer2Gen`, 100 samples per condition:
 
 | Per board | mean | median | p95 |
 |---|---|---|---|
@@ -124,13 +120,12 @@ per condition:
 
 Almost all of it is the 64 `GetValue` calls (~0.18 ms each). Data load makes no difference.
 
-The Accepted calculation itself (`tests/acceptTiming`, no hardware, 64 channels):
+The Accepted calculation itself (measured without hardware, 64 channels):
 
 | Per board per tick | median | p99 |
 |---|---|---|
 | Accepted, no data arriving | 0.10 µs | 0.10 µs |
 | Accepted, DAQ thread writing all 64 rings flat out | 0.32 µs | 0.44 µs |
-| (old Saved calculation, for comparison) | 0.10 µs | 0.10 µs |
 
 That is about 0.003% of the 11 ms `ReadStat`. Reading the counters does not slow the DAQ thread at
 the real cadence: its push rate was 624 M/s with no reader and 633 M/s with a reader 1000 times more
@@ -155,7 +150,7 @@ Not included:
 
 ## Accepted rate ceiling
 
-Measured with `tests/acceptMaxRate`: internal test pulse on ch 1–63 (ch0 and ch52 untouched),
+Measured with the internal test pulse on ch 1–63 (ch0 and ch52 untouched),
 4 s per step, rates from the second half. VX2745 on 10 GbE.
 
 | Case | Max Accepted per board |
@@ -177,21 +172,21 @@ already moved ~1.9 Gb/s, more than a 1 Gb link could.
 
 ## Window layout: one container per column
 
-`SetUpScalar()` (`mainwindow.cpp:1343`) puts each column (the channel numbers, then one per board)
+`SetUpScalar()` (`mainwindow.cpp:1349`) puts each column (the channel numbers, then one per board)
 in its own container widget with a spacing-0 grid. The line edits are **not** all direct children
 of `scalarLayout`.
 
 Why: Qt paints sibling widgets with one recursion level per sibling
 (`QWidgetPrivate::paintSiblingsRecursive`). With all 128 line edits per board plus labels under one
-parent, 16 or more boards overflow the default 8 MB stack and segfault on the first paint
-(`tests/scalarTiming --paint-only --flat`). Per container it is ~130 siblings at most; 40 boards
+parent, 16 or more boards overflow the default 8 MB stack and segfault on the first paint.
+Per container it is ~130 siblings at most; 40 boards
 paint without problems.
 
 Details that keep the rows aligned:
 - containers are added `Qt::AlignTop`, so a board with fewer channels keeps its natural height and
   is not stretched out of line;
 - the channel-number labels are fixed to a `QLineEdit`'s height, so label row *ch* lines up with
-  row *ch* of every board (`--mixed` checks this with a 32-channel board: 0 px offset);
+  row *ch* of every board (measured with a 32-channel board next to 64-channel ones: 0 px offset);
 - `CleanUpScalar()` deletes the containers, which owns everything in them. `leTriggers` /
   `leAccepted` / `lbFileSize` are only cleared, never deleted through.
 
@@ -199,8 +194,8 @@ Details that keep the rows aligned:
 
 ## What CAEN_FELib tolerates (measured)
 
-`tests/testFELibConcurrency`, raw FELib (no app code), each phase run serialized as a control and
-then fully concurrent, 60 s per phase, 8 threads:
+Measured with raw FELib calls (no app code), each phase run serialized as a control and then fully
+concurrent, 60 s per phase, 8 threads:
 
 | Phase | errors | wrong values | data anomalies |
 |---|---|---|---|
@@ -244,8 +239,8 @@ All of the following is safe because it runs on the GUI thread. Each item become
 - **`hit` lives for the life of the digitizer object.** `SetDataFormat()` creates it once
   (`ClassDigitizer2Gen.cpp:544`) and re-calls `Hit::SetDataType()`, which zeroes the fixed probe
   arrays instead of reallocating them. The 20 MB raw buffer is allocated on first Raw use and kept.
-  So `hit->dataType` can be read from another thread across a start-run (`tests/hitReuse` checks
-  re-call safety under ASan/UBSan).
+  So `hit->dataType` can be read from another thread across a start-run (re-calling
+  `SetDataType()` is clean under ASan/UBSan).
 - The lightest async design is **one** worker for all boards, not one per board. FELib serializes
   per connection anyway; the only gain is that a dead board cannot freeze the GUI.
 
@@ -267,27 +262,6 @@ All of the following is safe because it runs on the GUI thread. Each item become
 ## Test-station quirks
 
 With the internal test pulse on ch 0–3 (ch 0–3 configured identically):
-- **ch0 fires at exactly 50 Hz with energy 3531**, while ch1–3 follow the 10 kHz pulse at 2173. In
-  `Aux/testRawDecoder` ch0 gives no hits at all, although its counters show ~9948 triggers.
+- **ch0 fires at exactly 50 Hz with energy 3531**, while ch1–3 follow the 10 kHz pulse at 2173.
 - ch52 produces ~549 stray hits (E ≈ 10275) in some runs.
-- So `testRawDecoder` Checks 1 and 4 fail because of board state, not the decoder. Energy checks
-  must use one reference per channel.
-
----
-
-## Tools
-
-All in `tests/`. Hardware tools need the board free (DAQ GUI closed); check with
-`ss -tn | grep 192.168.0.100` first.
-
-| Tool | Hardware | Build | What |
-|---|---|---|---|
-| `scalarTiming` | yes (`--paint-only`: no) | `tests/build_race.sh` (needs `make` first) | per-board `ReadStat` cost in 3 conditions + paint cost; `--boards N` sets the estimate size, `--pulse` adds test-pulse load (saves/restores/verifies ch 0–3 regs), `--flat` paints a single-parent layout for comparison, `--mixed` checks row alignment with a 32-ch board |
-| `testFELibConcurrency` | yes | `g++ -std=c++17 -O2 -pthread testFELibConcurrency.cpp -o testFELibConcurrency -lCAEN_FELib` | serialized-vs-concurrent FELib test; `--pulse` acquisition phase, `--solo` data reader alone (control for data anomalies), `--skip-get` |
-| `acceptRate` | yes (reads settings; starts/stops ACQ) | `tests/build_race.sh` | Triggers / board trigger count / board saved count / Accepted side by side per channel (default ch 0,52), DPP and Raw; checks `GetAcceptedCount` against an independent hit count |
-| `acceptTiming` | no | `tests/build_race.sh` | cost of the Accepted calculation per board, and whether reading the counters slows the DAQ thread |
-| `acceptMaxRate` | yes (changes test-pulse regs on ch 1..N; saves/restores/verifies) | `tests/build_race.sh` | Accepted ceiling: test-pulse sweep; `--nch`, `--periods`, `--fmt min\|all\|both`, `--save`, `--wave` (traces on) |
-| `hitReuse` | no | `g++ -std=c++17 -g -O1 -fsanitize=address,undefined -I.. hitReuse.cpp -o hitReuse` | `SetDataType` re-call safety under ASan |
-
-Run Qt tools with `QT_QPA_PLATFORM=offscreen`. Board-mutating runs write a rescue file to the cwd
-and delete it after a verified restore. Never pipe them into `head`/`less`.
+- So energy checks must use one reference per channel.

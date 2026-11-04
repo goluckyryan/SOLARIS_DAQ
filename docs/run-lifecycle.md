@@ -3,7 +3,7 @@
 What happens between pressing Start and Stop, in order, and which parts of that order are
 load-bearing rather than incidental.
 
-Both sequences live in `mainwindow.cpp`: `StartACQ()` at `:415`, `StopACQ()` at `:580`.
+Both sequences live in `mainwindow.cpp`: `StartACQ()` at `:425`, `StopACQ()` at `:601`.
 
 ---
 
@@ -11,10 +11,11 @@ Both sequences live in `mainwindow.cpp`: `StartACQ()` at `:415`, `StopACQ()` at 
 
 **1. Run ID and comment — only for a saving run.** `runID` increments and becomes `runIDStr`,
 zero-padded to 3 digits. If a manual comment is required, a modal dialog blocks here; **cancelling
-decrements `runID` back** (`:456`) so a refused start does not burn a number. A no-save run skips
-all of this and logs "Start no-save Run".
+decrements `runID` back** (`:455`) so a refused start does not burn a number. A saving run also
+logs the free space on the raw-data partition, in red below 10 GB. A no-save run skips all of this
+and logs "Start no-save Run".
 
-**2. Per board, iterating backwards** — `for(i = nDigi-1; i >= 0; i--)` at `:478`. The direction is
+**2. Per board, iterating backwards** — `for(i = nDigi-1; i >= 0; i--)` at `:492`. The direction is
 deliberate: `digi[0]` is the sync master and must be armed **last**, so the slaves are already
 waiting when it starts. Dummies are skipped entirely.
 
@@ -32,7 +33,7 @@ For each board:
 - `digi[i]->StartACQ()` — `/cmd/armacquisition` then `/cmd/swstartacquisition`
 - `readDataThread[i]->SetSaveData(...)` and `start(QThread::HighestPriority)`
 
-**3. Consumers.** `singleSpectra->startTimer()` (`:520`). The Analyzer is deliberately **not** here —
+**3. Consumers.** `singleSpectra->startTimer()` (`:561`). The Analyzer is deliberately **not** here —
 it is driven by its own enable checkbox and is independent of ACQ.
 
 **4. Bookkeeping.** elog start entry, `expName.sh`, the run-timestamp file, InfluxDB `StartStop`
@@ -45,27 +46,35 @@ The order matters more here, and three steps are load-bearing.
 **1. Stop comment dialog** — blocks in `exec()` **while the DAQ threads are still running**. That is
 intentional: data keeps flowing while the operator types.
 
-**2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:603`, *before* the boards are
+**2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:624`, *before* the boards are
 touched.
 
 **3. Stop the boards**, backwards again, each under `digiMTX[i]`: `StopACQ()` then `WaveSaving` back
 to `OnRequest`. `isACQRunning = false`.
 
-**4. Join the read threads** (`:654-658`) — and here is the subtle part:
+**4. Join the read threads** (`:672-688`) — and here is the subtle part:
 
 ```cpp
-if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop();   // force-stop ONLY for a no-save run
-readDataThread[i]->quit();
-readDataThread[i]->wait();
+if( readDataThread[i] == NULL ) continue;                    // dummy board
+if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop();    // force-stop ONLY for a no-save run
+if( !readDataThread[i]->wait(drainTimeoutSec * 1000) ){      // 2 s
+  LogMsg("... not drained ... data tail is lost");
+  readDataThread[i]->Stop();
+  readDataThread[i]->wait();
+  drainFailedSN.prepend(...);
+}
 ```
 
-For a **save run, `Stop()` is deliberately not called.** The loop is left to drain until FELib
-returns `CAEN_FELib_Stop`, which guarantees the tail of the run reaches disk. Force-stopping would
-silently truncate every file. (`quit()` has no effect on these threads — they override `run()` and
-have no event loop — so the exit is via the flag or that break.)
+For a **save run, `Stop()` is not called first.** The loop is left to drain until FELib returns
+`CAEN_FELib_Stop`, so the tail of the run reaches disk. The wait is capped at 2 s because a board
+whose link died never returns `Stop`. On timeout the thread is force-stopped, the tail is lost, and
+the board's serial number goes into the stop comment and the elog, so the loss is in the run
+record. There is no `quit()`: these threads override `run()` and have no event loop, so the exit
+is via the `Stop()` flag or the `CAEN_FELib_Stop` break (`CustomThreads.h:15-20`). In Raw format
+this cap is always hit; see `issues.md`.
 
 **5. Close the files** — only now, after the join, so sizes are final. `CloseOutFile()` also
-`chmod`s each file read-only.
+`chmod`s each file read-only, and nulls `outFile`, so a second call does nothing.
 
 **6. elog stop entry** — placed here rather than at the "Run stopped" message specifically so the
 file sizes it reports are the final ones.
@@ -84,6 +93,9 @@ no lap check at all.
 └── <expName>_<runID>XSetting_<SN>.dat           register dump per board
 ```
 
+With the Raw data format the data files end in `.raw` instead of `.sol`
+(`ClassDigitizer2Gen.cpp:1126`); their contents are described in `format_RAW.md`.
+
 `run<ID>/` subfolder only when `isSaveSubFolder` is set. See `sol-file-format.md` for the file
 layout and `settings-system.md` for the `.dat`.
 
@@ -99,13 +111,10 @@ own control. See `threading-model.md`.
 
 ## Traps
 
-- **`StopACQ` dereferences `readDataThread[i]` with no null check** (`:655`), and it is `NULL` for
-  every dummy board (`:816`). One unreachable IP plus a start/stop cycle is a crash.
 - **A cancelled start decrements `runID`**, so run numbers stay contiguous — but any external tool
   that latched the incremented value will disagree.
 - **`SetDataFormat` is applied per run**, so changing the combo between runs changes the on-disk
   format. Files from one experiment are not necessarily all the same format.
-- **`CloseOutFile()` does not null `outFile` after `fclose`**, so two stops in a row double-close.
 - The stop-comment dialog blocking while data flows is intentional, but it means a run does not end
   when you press Stop — it ends when you dismiss the dialog.
 
