@@ -145,6 +145,10 @@ double QtHistRegistry::GuardFactor(){          return hooks.guardFactor   ? hook
 void QtHistRegistry::SetGuardFactor(double f){ if( hooks.setGuardFactor ) hooks.setGuardFactor(f); }
 void QtHistRegistry::SetWindowTitle(const char * t){ if( hooks.setWindowTitle ) hooks.setWindowTitle(QString::fromUtf8(t)); }
 void QtHistRegistry::ResizeWindow(int w, int h){     if( hooks.resizeWindow )   hooks.resizeWindow(w, h); }
+bool QtHistRegistry::InfluxOut(){              return hooks.influxOut     ? hooks.influxOut()     : false; }
+void QtHistRegistry::InfluxConfig(std::string & url, std::string & token, std::string & db){
+  if( hooks.influxConfig ) hooks.influxConfig(url, token, db);
+}
 
 void * QtHistRegistry::View1(int id){
   return ( id >= 0 && id < (int)h1.size() && h1[id]->created ) ? (void*)h1[id]->w : nullptr;
@@ -561,6 +565,19 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
   chkEnable = new QCheckBox("Enable analyzer", cfgBox);
   cfg->addWidget(chkEnable, 0, 0, 1, 1);
 
+  //^---- "Influx out": host chrome next to Enable, gated on MainWindow's connection (SetInflux).
+  //^     The WRITE lives in the analysis (ABI v5 hands it this flag plus url/token/database);
+  //^     nothing here talks to the database itself.
+  chkInflux = new QCheckBox("Influx out", cfgBox);
+  chkInflux->setEnabled(false);
+  chkInflux->setToolTip("Let the selected analysis push its data to InfluxDB"
+                        " (Program Settings -> Database must be connected).");
+  cfg->addWidget(chkInflux, 0, 1, 1, 2);
+  connect(chkInflux, &QCheckBox::toggled, this, [this](bool on){
+    if( !isSignalSlotActive ) return;
+    influxOut.store(on, std::memory_order_relaxed);
+  });
+
   cfg->addWidget(new QLabel("Analysis Selector", cfgBox), 1, 0);
   cbAnalysis = new RComboBox(cfgBox);
   cfg->addWidget(cbAnalysis, 1, 1);
@@ -923,6 +940,11 @@ void Analyzer::SelectAnalysis(const QString & name){
   };
   hooks.setWindowTitle = [this](const QString & t){ setWindowTitle(t); };
   hooks.resizeWindow   = [this](int w, int h){ resize(w, h); };
+  hooks.influxOut      = [this](){ return influxOut.load(std::memory_order_relaxed); };
+  hooks.influxConfig   = [this](std::string & url, std::string & token, std::string & db){
+    std::lock_guard<std::mutex> g(influxMtx);
+    url = influxURL; token = influxToken; db = influxDatabase;
+  };
 
   registry = new QtHistRegistry(workArea, digi, nDigi, boardIndex, hooks);
 
@@ -1014,4 +1036,23 @@ void Analyzer::UpdateStatus(){
                     .arg(eb->totalHitsLate.load(std::memory_order_relaxed))
                     .arg(eb->monotonicityViolations.load(std::memory_order_relaxed))
                     .arg(anaWorker ? anaWorker->reader.eventsDropped : 0));
+}
+
+void Analyzer::SetInflux(const QString & url, const QString & token, const QString & database){
+  {
+    std::lock_guard<std::mutex> g(influxMtx);
+    influxURL      = url.toStdString();
+    influxToken    = token.toStdString();
+    influxDatabase = database.toStdString();
+  }
+  const bool healthy = !url.isEmpty() && !database.isEmpty();
+  if( chkInflux ){
+    const QSignalBlocker guard(chkInflux);            ///< mirrors RateMonitor::SetInflux
+    chkInflux->setEnabled(healthy);
+    chkInflux->setChecked(healthy && chkInflux->isChecked());
+    chkInflux->setToolTip(healthy
+        ? "Let the selected analysis push its data to InfluxDB (one batched POST per write tick)."
+        : "InfluxDB is not configured or not connected (Program Settings -> Database).");
+    influxOut.store(chkInflux->isChecked(), std::memory_order_relaxed);
+  }
 }

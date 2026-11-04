@@ -6,7 +6,13 @@
 # libQt6* is a shared library both the DAQ and the .so link against, not a host symbol. CAEN and
 # ROOT remain banned. Check it stays that way with:
 #
-#     nm -D -u build/Coincidence.so        # only libc / libstdc++ / libQt6* should appear
+#     nm -D -u build/Coincidence.so        # only libc / libstdc++ / libQt6* / libcurl should appear
+#
+# ClassInfluxDB.cpp is compiled INTO each .so (the exception, not a violation): an analysis that
+# writes to the database (ABI v5: HistRegistry::InfluxOut/InfluxConfig hand it url/token/database)
+# carries its own client rather than the host's InfluxDB *, which lives in the executable and is
+# also owned by the GUI thread's writer. Same TU, RTLD_LOCAL, no -rdynamic: each copy binds to
+# libcurl, exactly like Qt above.
 #
 # ONE ANALYSIS PER FILE. The plugin entry points are extern "C" with fixed names, so a second
 # ANALYSIS_ENTRY in the same .so would be a duplicate-symbol error.
@@ -29,8 +35,8 @@ ABI = ../Analysis.h ../BuiltHit.h
 
 all: $(SO)
 
-build/%.so: %.cpp $(ABI) | build
-	$(CXX) $(CXXFLAGS) $< -o $@ $(QLIBS)
+build/%.so: %.cpp ../ClassInfluxDB.cpp ../ClassInfluxDB.h $(ABI) | build
+	$(CXX) $(CXXFLAGS) $< ../ClassInfluxDB.cpp -o $@ $(QLIBS) -lcurl
 
 build:
 	mkdir -p build

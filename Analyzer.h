@@ -79,6 +79,8 @@ struct AnalyzerHooks {
   std::function<void(double)> setGuardFactor;
   std::function<void(const QString &)> setWindowTitle;
   std::function<void(int,int)> resizeWindow;
+  std::function<bool()> influxOut;
+  std::function<void(std::string &, std::string &, std::string &)> influxConfig;
 };
 
 class QtHistRegistry : public HistRegistry {
@@ -107,6 +109,10 @@ public:
   void SetGuardFactor(double factor) override;
   void SetWindowTitle(const char * title) override;
   void ResizeWindow(int width, int height) override;
+
+  //---- HistRegistry, v3+ InfluxDB plumbing (v5). Any thread; forwarded to AnalyzerHooks.
+  bool InfluxOut() override;
+  void InfluxConfig(std::string & url, std::string & token, std::string & database) override;
 
   //---- HistRegistry, called from ProcessEvent() on the analysis thread
   void Fill1(int id, double x) override;
@@ -252,6 +258,11 @@ public:
   Analyzer(Digitizer2Gen ** digi, unsigned int nDigi, QMainWindow * parent = nullptr);
   ~Analyzer();
 
+  /// MainWindow's InfluxDB connection settings, like SingleSpectra::SetInflux: pass real values
+  /// when the singleton is healthy, empty strings when it is not, and the bar's "Influx out"
+  /// checkbox enables itself accordingly. Re-callable mid-session (Program Settings -> Database).
+  void SetInflux(const QString & url, const QString & token, const QString & database);
+
 private:
   void BuildViewList();
   std::vector<DigiHitView> MakeViews() const;
@@ -293,6 +304,7 @@ private:
   QTimer      * replotTimer = nullptr;
 
   QCheckBox      * chkEnable;
+  QCheckBox      * chkInflux = nullptr;   ///< "Influx out" bar checkbox, host chrome like Enable
   RComboBox      * cbAnalysis;
   QWidget        * ctrlVault;       ///< resting place for the unclaimed status label
   QString          currentName;
@@ -307,6 +319,14 @@ private:
   QWidget     * workArea = nullptr;
 
   bool isSignalSlotActive = true;
+
+  //^---- InfluxDB output config (v5 ABI). Written on the GUI thread by SetInflux, read on the
+  //^     analysis thread through the registry hooks, so the mutex IS the fence -- there is no
+  //^     worker-parked window for a settings change to ride. influxOut mirrors the checkbox for
+  //^     the same cross-thread read.
+  std::mutex        influxMtx;
+  std::string       influxURL, influxToken, influxDatabase;
+  std::atomic<bool> influxOut{false};
 };
 
 #endif

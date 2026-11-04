@@ -11,8 +11,8 @@ all: EventBuilder EventBuilderRaw
 tools: testOnlineBuilder
 
 testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp ../EventRing.h ../Analysis.h ../analyzers/Coincidence.cpp \
-                   ../OnlineEventBuilder.h ../LeanHit.h ../BuiltHit.h ../RingBuffer.h ../Hit.h
-	$(CC) $(CFLAG) -fPIC $(shell pkg-config --cflags Qt6Widgets) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp ../analyzers/*.cpp -o testOnlineBuilder $(shell pkg-config --libs Qt6Widgets)
+                   ../OnlineEventBuilder.h ../LeanHit.h ../BuiltHit.h ../RingBuffer.h ../Hit.h ../ClassInfluxDB.h ../ClassInfluxDB.cpp
+	$(CC) $(CFLAG) -fPIC $(shell pkg-config --cflags Qt6Widgets) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp ../analyzers/*.cpp ../ClassInfluxDB.cpp -o testOnlineBuilder $(shell pkg-config --libs Qt6Widgets) -lcurl
 
 EventBuilder: EventBuilder.cpp SolReader.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilder.cpp -o EventBuilder ${ROOTFLAG}

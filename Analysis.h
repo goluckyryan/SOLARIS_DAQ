@@ -130,6 +130,15 @@ public:
   /// QMainWindow * itself: the host keeps the window, this is only dressing.
   virtual void SetWindowTitle(const char * title) = 0;
   virtual void ResizeWindow(int width, int height) = 0;
+
+  //^---- InfluxDB output (v5). The checkbox lives on the Analyzer bar, NOT in the analysis:
+  //^     InfluxOut() is its live state and InfluxConfig() the host's connection settings (empty
+  //^     url/database = no database configured). The write itself belongs to the analysis: it
+  //^     carries its own InfluxDB client (ClassInfluxDB.cpp is compiled into the .so), because
+  //^     handing over the host's InfluxDB * would be a SOLARIS symbol crossing the plugin
+  //^     boundary. Callable from any thread; both are cheap copies.
+  virtual bool InfluxOut() = 0;
+  virtual void InfluxConfig(std::string & url, std::string & token, std::string & database) = 0;
 };
 
 class Analysis {
@@ -204,7 +213,9 @@ private:
 ///       becomes factor x window, always
 ///   4 - the Analyzer bar is fixed chrome: Enable/TimeWindow/GuardFactor controls are no longer
 ///       claimable (virtuals removed). StatusControl, the setters and window dressing survive.
-#define ANALYSIS_ABI_VERSION 4
+///   5 - InfluxOut()/InfluxConfig(): the host's "Influx out" checkbox and connection settings,
+///       for analyses that carry their own InfluxDB client and write from ProcessEvent.
+#define ANALYSIS_ABI_VERSION 5
 
 /// The four C entry points a loadable analysis exports. Only emitted when compiled as a plugin.
 ///

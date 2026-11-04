@@ -900,6 +900,7 @@ void MainWindow::OpenDigitizers(){
     bnSingleSpectra->setEnabled(true);
 
     analyzer = new Analyzer(digi, nDigi, this);
+    if( influx ) analyzer->SetInflux(DatabaseIP, DatabaseToken, DatabaseName);   // may be null; the checkbox self-disables
     bnAnalyzer->setEnabled(true);
 
   }
@@ -2675,8 +2676,20 @@ void MainWindow::SetupInflux(){
     influx = NULL;
   }
 
+  /// Every exit of this function must run it: the old code returned early without telling the
+  /// windows, which then kept a pointer to the just-deleted singleton. The windows' contracts
+  /// are "null/unset = disable the output UI", so they must hear about failures too.
+  auto NotifyWindows = [this](){
+    if( singleSpectra ) singleSpectra->SetInflux(influx, DatabaseName);
+    if( analyzer ){
+      if( influx ) analyzer->SetInflux(DatabaseIP, DatabaseToken, DatabaseName);
+      else         analyzer->SetInflux(QString(), QString(), QString());   // unhealthy: the checkbox self-disables
+    }
+  };
+
   if( DatabaseIP.isEmpty() || DatabaseName.isEmpty() ){
     LogMsg("No Database IP or Name. No database will be used.");
+    NotifyWindows();
     return;
   }
 
@@ -2691,6 +2704,7 @@ void MainWindow::SetupInflux(){
         LogMsg("<font style=\"color : red;\">A Token is required for accessing the database.</font>");
         delete influx;
         influx = nullptr;
+        NotifyWindows();
         return;
       }
       
@@ -2735,7 +2749,7 @@ void MainWindow::SetupInflux(){
 
   // hand the (possibly null) singleton to any live window; the Rate Monitor's Influx out
   // enables itself only when a healthy connection came through
-  if( singleSpectra ) singleSpectra->SetInflux(influx, DatabaseName);
+  NotifyWindows();
 }
 
 void MainWindow::SetupElog(){

@@ -1,4 +1,5 @@
 #include "../Analysis.h"
+#include "../ClassInfluxDB.h"
 
 #include <QGridLayout>
 #include <QGroupBox>
@@ -6,6 +7,10 @@
 #include <QSplitter>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <chrono>
+#include <cstdio>
+#include <string>
 
 /// Coincidence between two channels chosen at runtime.
 ///
@@ -39,6 +44,20 @@ class Coincidence : public Analysis {
   QWidget     * root_  = nullptr;
   QVBoxLayout * addLay_ = nullptr;
   QPushButton * bnAdd_  = nullptr;
+
+  //^---- InfluxDB output (ABI v5), analysis thread only. Own client instance: the host's
+  //^     InfluxDB lives in the executable and may never be called from here, so ClassInfluxDB.cpp
+  //^     is compiled into this .so. One batched summary POST per kInfluxPeriodS; the write is
+  //^     synchronous curl bounded by ClassInfluxDB's timeouts (~4 s worst case) and the event
+  //^     ring absorbs the stall -- losing events, never raw hits, is the ring's whole purpose.
+  static constexpr double kInfluxPeriodS = 2.0;
+  InfluxDB  influx;
+  std::string influxCfgKey;              ///< url\ntoken\ndb last SetURL/SetToken'd
+  std::chrono::steady_clock::time_point influxLast{};     ///< end of the last WRITTEN window
+  std::chrono::steady_clock::time_point influxNextTry{};  ///< retry clock, once per period at most
+  unsigned long long influxN = 0;
+  unsigned influxSnA = 0, influxSnB = 0;
+  double influxEA = 0, influxEB = 0, influxDT = 0;
 
 public:
 
@@ -127,6 +146,85 @@ public:
     /// Signed difference, so cast out of uint64 before subtracting. Fill1(-1) is a no-op, so an
     /// unadded tB-tA costs one compare per coincidence.
     // reg.Fill1(hTDiff, (double)b->timestamp - (double)a->timestamp);
+
+    InfluxAccumulate(reg, a, b);
+  }
+
+  //^-------------------------------------------------------------- InfluxDB output (ABI v5)
+
+  void InfluxAccumulate(HistRegistry & reg, const BuiltHit * a, const BuiltHit * b){
+    if( !reg.InfluxOut() ){
+      /// Manual pause: drop the partial window rather than mix counts from either side of it.
+      influxN = 0; influxEA = 0; influxEB = 0; influxDT = 0;
+      influxLast = influxNextTry = std::chrono::steady_clock::now();
+      return;
+    }
+    influxN++;
+    influxSnA = a->sn; influxSnB = b->sn;
+    influxEA += a->energy; influxEB += b->energy;
+    influxDT += (double)b->timestamp - (double)a->timestamp;
+
+    const auto now = std::chrono::steady_clock::now();
+    if( now < influxNextTry ) return;           ///< attempt at most once per kInfluxPeriodS
+    influxNextTry = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>
+                              (std::chrono::duration<double>(kInfluxPeriodS));
+    if( InfluxFlush(reg, now) ) influxLast = now;   ///< window advances only on an accepted write
+  }
+
+  /// One summary point per batch, rate/means over the span actually covered: influxLast only
+  /// moves on success, so the first accepted point after an outage honestly reports the gap
+  /// instead of faking the whole backlog into two seconds. Returns true = written.
+  bool InfluxFlush(HistRegistry & reg, std::chrono::steady_clock::time_point now){
+    if( influxN == 0 ) return false;
+
+    std::string url, token, db;
+    reg.InfluxConfig(url, token, db);
+    if( db.empty() ) return false;              ///< no database configured (checkbox beats an unset db)
+
+    const std::string key = url + "\n" + token + "\n" + db;
+    if( key != influxCfgKey ){                  ///< first write, or Program Settings changed it
+      influxCfgKey = key;
+      influx.SetURL(url);
+      influx.SetToken(token);
+    }
+    if( !influx.IsConnectionOK() && !influx.TestingConnection() ) return false;   ///< re-probed once per batch, bounded
+
+    std::chrono::duration<double> span = ( influxLast.time_since_epoch().count() == 0 )
+                                       ? std::chrono::duration<double>(kInfluxPeriodS)
+                                       : (now - influxLast);
+    if( span.count() <= 0 ) span = std::chrono::duration<double>(kInfluxPeriodS);
+
+    char line[256];
+    std::snprintf(line, sizeof(line),
+        "Coincidence,BdA=%u,ChA=%02d,BdB=%u,ChB=%02d "
+        "count=%llu,rate=%.2f,meanEA=%.1f,meanEB=%.1f,meanDT=%.1f",
+        influxSnA, chA, influxSnB, chB,
+        influxN, (double)influxN / span.count(), influxEA / (double)influxN,
+        influxEB / (double)influxN, influxDT / (double)influxN);
+
+    influx.AddDataPoint(line);
+    influx.WriteData(db);
+    /// Drop the buffer either way, exactly like the scalar writers: no resends, and the buffer
+    /// can never grow while the DB is unreachable.
+    influx.ClearDataPointsBuffer();
+
+    if( influx.IsWriteOK() ){
+      influxN = 0; influxEA = 0; influxEB = 0; influxDT = 0;
+      return true;
+    }
+    influx.TestingConnection();   ///< force a re-probe next batch (connection may have died mid-write)
+    return false;
+  }
+
+  void OnRunStart() override {
+    influxLast = influxNextTry = std::chrono::steady_clock::now();
+    influxN = 0; influxEA = 0; influxEB = 0; influxDT = 0;
+  }
+
+  /// Flush the partial batch the run ended on, after AnaWorker's final drain.
+  void OnRunStop() override {
+    if( reg_ == nullptr || !reg_->InfluxOut() ) return;
+    InfluxFlush(*reg_, std::chrono::steady_clock::now());
   }
 
   void SaveState(SettingsKV & kv) override {

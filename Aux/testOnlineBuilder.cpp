@@ -432,6 +432,11 @@ public:
   void SetGuardFactor(double) override {}
   void SetWindowTitle(const char *) override {}
   void ResizeWindow(int, int) override {}
+  // v5 InfluxDB plumbing: off unless --influx points the driver at a database to write to.
+  bool influxOn = false;
+  std::string influxURL, influxDB;
+  bool InfluxOut() override { return influxOn; }
+  void InfluxConfig(std::string & u, std::string & t, std::string & d) override { u = influxURL; t.clear(); d = influxDB; }
   uint64_t timeWindow = 0;
 
   int Hist1D(const char * name, const char *, int nBin, double xMin, double xMax,
@@ -490,6 +495,9 @@ public:
   }
 };
 
+/// --influx URL DB: hand a real database to the analysis through TallyRegistry's v5 plumbing.
+static std::string g_influxURL, g_influxDB;
+
 /// Drive a registered analysis over the boards, through the real builder and the real event ring.
 static bool RunAnalysis(std::vector<Board> & boards, uint64_t window, const std::string & name,
                         int dA, int cA, int dB, int cB){
@@ -517,6 +525,11 @@ static bool RunAnalysis(std::vector<Board> & boards, uint64_t window, const std:
   ctx.timeWindow = window;
 
   TallyRegistry reg;
+  if( !g_influxURL.empty() ){
+    reg.influxOn  = true;
+    reg.influxURL = g_influxURL;
+    reg.influxDB  = g_influxDB;
+  }
   ana->Declare(reg, ctx);
 
   //---- apply the channel selection the way the GUI would
@@ -903,13 +916,15 @@ int main(int argc, char ** argv){
     else if ( a == "--chunk"   && i+1 < argc ) chunk     = (size_t) strtoull(argv[++i], NULL, 10);
     else if ( a == "--seed"    && i+1 < argc ) seed      = (unsigned) strtoul(argv[++i], NULL, 10);
     else if ( a == "--analysis"&& i+1 < argc ) anaName   = argv[++i];
+    else if ( a == "--influx"  && i+2 < argc ){ g_influxURL = argv[++i]; g_influxDB = argv[++i]; }
     else if ( a == "--chA"     && i+2 < argc ){ dA = atoi(argv[++i]); cA = atoi(argv[++i]); }
     else if ( a == "--chB"     && i+2 < argc ){ dB = atoi(argv[++i]); cB = atoi(argv[++i]); }
     else {
       printf("usage: %s [--selftest | --synth | --threaded | --replay f1.sol ...]\n"
              "          [--boards N] [--channels N] [--rate Hz] [--coinc Hz] [--seconds S]\n"
              "          [--window ns] [--chunk N] [--seed N] [--dump]\n"
-             "          [--analysis <name>] [--chA <digi> <ch>] [--chB <digi> <ch>]\n", argv[0]);
+             "          [--analysis <name>] [--chA <digi> <ch>] [--chB <digi> <ch>]\n"
+             "          [--influx <url> <database>]\n", argv[0]);
       return a == "--help" ? 0 : 1;
     }
   }
