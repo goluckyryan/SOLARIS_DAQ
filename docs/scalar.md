@@ -8,16 +8,16 @@ on the GUI thread.
 ## How it works
 
 `scalarThread` (a `TimingThread`) fires every 2 s. The slot, `MainWindow::UpdateScalar()`
-(`mainwindow.cpp:1466`), is queued to and **runs on the GUI thread**. Per tick:
+(`mainwindow.cpp:1480`), is queued to and **runs on the GUI thread**. Per tick:
 
-1. returns at once if the scalar window is hidden (`:1469`); see *Known gaps*;
-2. for each board, one after another: `digi->ReadStat()` (`:1504`), which is 64 ×
+1. returns at once if the scalar window is hidden (`:1483`); see *Known gaps*;
+2. for each board, one after another: `digi->ReadStat()` (`:1518`), which is 64 ×
    `GetValue(SelfTrgRate)` plus one `ReadData` on the stats handle (`ClassDigitizer2Gen.cpp:774`);
    then the Accepted rate for every channel (next section); then `setText` on two line edits per
    channel and the file-size label;
-3. one Influx POST for all boards (`:1567`), if Influx is configured;
+3. one Influx POST for all boards (`:1581`), if Influx is configured;
 4. `UpdateStatus()` on the settings panel and `UpdateThreshold()` on the SOLARIS panel, if those
-   are open (`:1572`, `:1574`).
+   are open (`:1586`, `:1588`).
 
 Each board has two columns:
 
@@ -60,7 +60,7 @@ and the count matched an independent hit-by-hit count exactly.
   If something ever does, the "count went down" rule below turns it into one 0 reading, not a
   garbage rate.
 
-**2. Rate.** In `UpdateScalar()` (`mainwindow.cpp:1511`), for each board:
+**2. Rate.** In `UpdateScalar()` (`mainwindow.cpp:1525`), for each board:
 
 ```
 now      = steady_clock (PC time), read once per board
@@ -74,7 +74,7 @@ oldAcceptedTimeNs[board] = now
 
 The rate is shown as 0 when:
 - it is the first tick after start-run or after opening the digitizers. There is no starting point
-  yet; this tick only records one. `oldAcceptedTimeNs` is reset to 0 in both places (`:495`, `:865`);
+  yet; this tick only records one. `oldAcceptedTimeNs` is reset to 0 in both places (`:509`, `:879`);
 - less than 1 s has passed since the last tick;
 - the count went down (should not happen; it is a safety check).
 
@@ -172,7 +172,7 @@ already moved ~1.9 Gb/s, more than a 1 Gb link could.
 
 ## Window layout: one container per column
 
-`SetUpScalar()` (`mainwindow.cpp:1349`) puts each column (the channel numbers, then one per board)
+`SetUpScalar()` (`mainwindow.cpp:1363`) puts each column (the channel numbers, then one per board)
 in its own container widget with a spacing-0 grid. The line edits are **not** all direct children
 of `scalarLayout`.
 
@@ -249,7 +249,7 @@ All of the following is safe because it runs on the GUI thread. Each item become
 ## Known gaps
 
 - **Closing the scalar window stops the Influx stream.** `UpdateScalar` returns before the POST when
-  the window is hidden (`:1469`). The fix needs no threading: compute the rates and post before the
+  the window is hidden (`:1483`). The fix needs no threading: compute the rates and post before the
   visibility check, and skip only the `setText` calls.
 - **A dead board freezes the GUI** for 64 × the CAEN timeout per tick.
 - `UpdateStatus()` (LED/ACQ status, temperatures) is also a blocking hardware read on the GUI

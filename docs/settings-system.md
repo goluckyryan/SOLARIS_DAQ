@@ -122,8 +122,8 @@ Where these files land:
 
 ## 5. The panel
 
-One `DigiSettingsPanel` for all boards, built lazily on first open (`mainwindow.cpp:1144`) and
-destroyed in `CloseDigitizers()` (`:958`). Three levels of nested `QTabWidget`:
+One `DigiSettingsPanel` for all boards, built lazily on first open (`mainwindow.cpp:1158`) and
+destroyed in `CloseDigitizers()` (`:972`). Three levels of nested `QTabWidget`:
 
 ```
 tabWidget                       one tab per digitizer, then "Inquiry / Copy"

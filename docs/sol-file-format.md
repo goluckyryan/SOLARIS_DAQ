@@ -22,7 +22,7 @@ written becomes unreadable** if the layout shifts. There is no version field to 
 <expName>_<runID>_<digiIdx>_<serialNumber>_<fileIndex>.sol
 ```
 
-built in `MainWindow::StartACQ` (`mainwindow.cpp:534-551`) and finished by
+built in `MainWindow::StartACQ` (`mainwindow.cpp:548-565`) and finished by
 `Digitizer2Gen::OpenOutFile()`, which appends `_%03d` and the extension. `digiIdx` is
 right-justified to 2 digits, `fileIndex` to 3.
 

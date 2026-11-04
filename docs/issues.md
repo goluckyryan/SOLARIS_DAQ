@@ -22,18 +22,6 @@ Possible fix: in the Raw path, end the read loop once the Stop Run special event
 
 ---
 
-## A full disk does not stop the run
-
-When a write fails (`ferror()` or a failed post-rollover `fopen`), `SaveDataToFile()` closes the
-file, sets `fileWriteError` and counts every later hit in `droppedHitCount`. `ReadDataThread`
-logs a red warning right away, then at most every 10 s with the running count. The run itself
-continues with ACQ On, and every hit after the failure is dropped. `MainWindow::StartACQ()` logs
-the free space on the raw-data partition at the start of every saving run, in red below 10 GB.
-
-Whether a write failure should stop the run is an open decision.
-
----
-
 ## `Aux/EventBuilder` with traces commits 1 GB
 
 With `saveTrace = 1`, `traceBuf.assign(MAX_MULTI * MAX_TRACE_LEN, 0)` (50 000 × 5 000 ints)

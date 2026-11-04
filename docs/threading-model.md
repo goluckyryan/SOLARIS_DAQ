@@ -12,7 +12,7 @@ the whole-system view.
 | thread | count | created | what it does |
 |---|---|---|---|
 | **GUI** | 1 | Qt | everything with a widget in it |
-| **`ReadDataThread`** | one per board | `mainwindow.cpp:843` | tight loop on `digi->ReadData()`, and `SaveDataToFile()` when saving. `QThread::HighestPriority`. **The only producer** for that board's rings |
+| **`ReadDataThread`** | one per board | `mainwindow.cpp:857` | tight loop on `digi->ReadData()`, and `SaveDataToFile()` when saving. `QThread::HighestPriority`. **The only producer** for that board's rings |
 | **`scalarThread`** | 1 | `mainwindow.cpp:99` | a `TimingThread`; fires `MainWindow::UpdateScalar` every 2 s |
 | **`updateTraceThread`** | 1, while the Scope is open | `scope.cpp:67` | a `TimingThread`; fires `Scope::UpdateScope` |
 | **`SingleSpectra` worker** | 1, while that window exists | `SingleHistograms.cpp:334-339` | drains the per-channel `ringBuffer` into atomic count arrays |
@@ -79,7 +79,7 @@ So there are **two independent paths that start and stop acquisition**, and the 
 overrides the data format to `ALL` because it needs traces.
 
 `TellACQOnOff` is how the rest of the GUI finds out. `MainWindow` connects it
-(`mainwindow.cpp:1101-1114`) to update the ACQ indicator, start/stop `SingleSpectra` and write the
+(`mainwindow.cpp:1115-1128`) to update the ACQ indicator, start/stop `SingleSpectra` and write the
 InfluxDB start/stop point. **Any new
 consumer of acquisition state must hook both paths** — `StartACQ`/`StopACQ` *and* this signal — or it
 silently misses every scope-driven run.
@@ -89,13 +89,13 @@ ACQ entirely.
 
 ## Stop ordering, and why it is the way it is
 
-`MainWindow::StopACQ` (`mainwindow.cpp:601-723`) does things in an order that matters:
+`MainWindow::StopACQ` (`mainwindow.cpp:615-737`) does things in an order that matters:
 
 1. quiesce consumers first — `singleSpectra->stopTimer()`
 2. stop the boards under `digiMTX`
 3. **join the read threads** — for a **save run** `Stop()` is deliberately *not* called first, so the
    loop drains until FELib returns `CAEN_FELib_Stop`. The wait is capped at `drainTimeoutSec` (2 s,
-   `mainwindow.cpp:667`): a board whose link died never returns `Stop`. On timeout the thread is
+   `mainwindow.cpp:681`): a board whose link died never returns `Stop`. On timeout the thread is
    force-stopped, the tail is lost, and the board is recorded in the stop comment and the elog.
 4. only then close the files, so sizes are final
 5. elog and `endRunScript.sh` last

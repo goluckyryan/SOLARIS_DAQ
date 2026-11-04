@@ -3,19 +3,26 @@
 What happens between pressing Start and Stop, in order, and which parts of that order are
 load-bearing rather than incidental.
 
-Both sequences live in `mainwindow.cpp`: `StartACQ()` at `:425`, `StopACQ()` at `:601`.
+Both sequences live in `mainwindow.cpp`: `StartACQ()` at `:425`, `StopACQ()` at `:615`.
 
 ---
 
 ## Start
 
-**1. Run ID and comment — only for a saving run.** `runID` increments and becomes `runIDStr`,
-zero-padded to 3 digits. If a manual comment is required, a modal dialog blocks here; **cancelling
-decrements `runID` back** (`:455`) so a refused start does not burn a number. A saving run also
-logs the free space on the raw-data partition, in red below 10 GB. A no-save run skips all of this
-and logs "Start no-save Run".
+**1. Free space — only for a saving run.** The free space on the disk holding `rawDataPath` (or
+its nearest existing parent) must be at least `MinFreeSpaceGB` (10 GB, `macro.h`). It is the
+volume that holds the raw data, found by `QStorageInfo` (symlinks followed), not the system disk.
+Otherwise the start is refused before a run number is taken: a red log line, and a modal dialog
+naming the path, the disk and its free space, which has only an OK button and no title-bar close
+button. The same happens if the free space cannot be determined. This is the guard against filling the disk: a run that fills it does
+not stop, and every hit after the failed write is dropped, with only a DAQ-log warning.
 
-**2. Per board, iterating backwards** — `for(i = nDigi-1; i >= 0; i--)` at `:492`. The direction is
+**2. Run ID and comment — only for a saving run.** `runID` increments and becomes `runIDStr`,
+zero-padded to 3 digits. If a manual comment is required, a modal dialog blocks here; **cancelling
+decrements `runID` back** so a refused start does not burn a number. A no-save run skips all of
+this and logs "Start no-save Run".
+
+**3. Per board, iterating backwards** — `for(i = nDigi-1; i >= 0; i--)` at `:506`. The direction is
 deliberate: `digi[0]` is the sync master and must be armed **last**, so the slaves are already
 waiting when it starts. Dummies are skipped entirely.
 
@@ -33,10 +40,10 @@ For each board:
 - `digi[i]->StartACQ()` — `/cmd/armacquisition` then `/cmd/swstartacquisition`
 - `readDataThread[i]->SetSaveData(...)` and `start(QThread::HighestPriority)`
 
-**3. Consumers.** `singleSpectra->startTimer()` (`:561`). The Analyzer is deliberately **not** here —
+**4. Consumers.** `singleSpectra->startTimer()` (`:575`). The Analyzer is deliberately **not** here —
 it is driven by its own enable checkbox and is independent of ACQ.
 
-**4. Bookkeeping.** elog start entry, `expName.sh`, the run-timestamp file, InfluxDB `StartStop`
+**5. Bookkeeping.** elog start entry, `expName.sh`, the run-timestamp file, InfluxDB `StartStop`
 point.
 
 ## Stop
@@ -46,13 +53,13 @@ The order matters more here, and three steps are load-bearing.
 **1. Stop comment dialog** — blocks in `exec()` **while the DAQ threads are still running**. That is
 intentional: data keeps flowing while the operator types.
 
-**2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:624`, *before* the boards are
+**2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:638`, *before* the boards are
 touched.
 
 **3. Stop the boards**, backwards again, each under `digiMTX[i]`: `StopACQ()` then `WaveSaving` back
 to `OnRequest`. `isACQRunning = false`.
 
-**4. Join the read threads** (`:672-688`) — and here is the subtle part:
+**4. Join the read threads** (`:686-702`) — and here is the subtle part:
 
 ```cpp
 if( readDataThread[i] == NULL ) continue;                    // dummy board

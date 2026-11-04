@@ -5,6 +5,7 @@
 #include <QDialog>
 #include <QFileDialog>
 #include <QStorageInfo>
+#include <QMessageBox>
 #include <QDir>
 #include <QFile>
 #include <QRandomGenerator>
@@ -437,6 +438,54 @@ int MainWindow::StartACQ(){
   /// be attributed to this one, in its start-run elog and again in its stop-run record.
   drainWarning.clear();
 
+  //=============== free space on the raw-data disk: a saving run needs at least 10 GB
+  /// Checked first, so a refused start burns no run number and asks for no comment. A run that
+  /// fills the disk does not stop: every hit after the failed write is dropped (DAQ-log warning
+  /// only). Refusing to start below 10 GB is the guard against that.
+  if( chkSaveRun->isChecked() ){
+    /// QStorageInfo is invalid for a path that does not exist yet; the nearest existing parent is
+    /// on the same filesystem.
+    QString probe = QDir::cleanPath(rawDataPath);
+    while( !probe.isEmpty() && !QFileInfo::exists(probe) ){
+      const QString up = QFileInfo(probe).path();
+      if( up == probe ) break;
+      probe = up;
+    }
+    /// The volume that holds rawDataPath, NOT the system disk: QStorageInfo resolves the path
+    /// (following symlinks) to the mount it is on. bytesAvailable() is what this user can write,
+    /// i.e. without the root-reserved blocks.
+    QStorageInfo storage(probe);
+    if( probe.isEmpty() || !storage.isValid() ){
+      LogMsg("<font style=\"color: red;\">Cannot check free space for the raw-data path <b>" + rawDataPath +
+             "</b>. Run not started.</font>");
+      QMessageBox box(QMessageBox::Critical, "Run not started",
+                      "Cannot determine the free space of the disk for the raw data.\n\n"
+                      "Raw-data path: " + rawDataPath + "\n\n"
+                      "The run was not started.", QMessageBox::Ok, this);
+      box.setWindowFlag(Qt::WindowCloseButtonHint, false);
+      box.exec();
+      return 0;
+    }
+    const double availGB = storage.bytesAvailable() / 1024. / 1024. / 1024.;
+    if( availGB < MinFreeSpaceGB ){
+      LogMsg("<font style=\"color: red;\"><b>Only " + QString::number(availGB, 'f', 1) +
+             " GB free on the raw-data disk (" + storage.rootPath() + "), at least " +
+             QString::number(MinFreeSpaceGB, 'f', 0) + " GB is required. Run not started.</b></font>");
+      /// Modal, closed only by OK: a refused start must not go unnoticed in the log panel.
+      QMessageBox box(QMessageBox::Critical, "Run not started: raw-data disk almost full",
+                      "Only " + QString::number(availGB, 'f', 1) + " GB free on the disk for the raw data.\n"
+                      "At least " + QString::number(MinFreeSpaceGB, 'f', 0) + " GB is required to start a run.\n\n"
+                      "Raw-data path: " + rawDataPath + "\n"
+                      "Disk: " + storage.rootPath() + " (" + QString::fromLocal8Bit(storage.device()) + ")\n\n"
+                      "Free some space on that disk, or change the raw-data path, then start again.",
+                      QMessageBox::Ok, this);
+      box.setWindowFlag(Qt::WindowCloseButtonHint, false);   // no title-bar X: answer with OK
+      box.exec();
+      return 0;
+    }
+    LogMsg("Free space on raw-data disk: " + QString::number(availGB, 'f', 1) + " GB.");
+  }
+
   if( chkSaveRun->isChecked() ){
     runID ++;
     leRunID->setText(QString::number(runID));
@@ -471,21 +520,6 @@ int MainWindow::StartACQ(){
 
   }else{
     LogMsg("=========================== Start no-save Run");
-  }
-
-  //=============== free space on the raw-data disk
-  if( chkSaveRun->isChecked() ){
-    QStorageInfo storage(rawDataPath);
-    if( storage.isValid() ){
-      const double availGB = storage.bytesAvailable() / 1024. / 1024. / 1024.;
-      if( availGB < 10. ){
-        LogMsg("<font style=\"color: red;\">WARNING: only " + QString::number(availGB, 'f', 1) +
-               " GB free on the raw-data disk -- a run that fills it up will stop saving "
-               "(hits dropped, file-size label frozen) with no other sign.</font>");
-      }else{
-        LogMsg("Free space on raw-data disk: " + QString::number(availGB, 'f', 1) + " GB.");
-      }
-    }
   }
 
   //============================= start digitizer

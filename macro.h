@@ -7,6 +7,7 @@
 #define DAQLockFile "DAQLock.dat"
 #define PIDFile  "pid.dat"
 #define SingleHistogramFillingTime 50  // ms between histogram fill refresh
+#define MinFreeSpaceGB 10.0            // a saving run does not start with less free space on the raw-data disk
 
 #include <QString>
 
