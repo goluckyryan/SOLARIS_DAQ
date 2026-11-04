@@ -459,7 +459,7 @@ void Digitizer2Gen::AdjustParameterRanges(){
     // AntiCoincidenceMask: VX2730 firmware has issues with ITLA/ITLB
     updateChParam("AntiCoincidenceMask", {{"Disabled","Disabled"},
                                           {"Ch64Trigger","Channel 64-Trigger"},
-                                          {"TrgIn","TRG-IN"},
+                                          {"TRGIN","TRG-IN"},
                                           {"GlobalTriggerSource","Global Trigger Source"}});
   }
 

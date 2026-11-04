@@ -158,6 +158,10 @@ class Digitizer2Gen {
     uint32_t GetTriggerCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? triggerCount[ch] : 0;}
     uint64_t GetRealTime(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? realTime[ch] : 0;}
     uint32_t GetSavedEventCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? savedEventCount[ch] : 0;}
+    /// Running total of hits ReadData() delivered on this channel, i.e. AFTER any hardware
+    /// coincidence/veto -- the board's savedEventCount counts before it. ringBuffer[ch] is pushed
+    /// once per delivered hit, written by the DAQ thread only and never cleared, so this only grows.
+    uint64_t GetAcceptedCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? ringBuffer[ch].index() : 0;}
 
     void Reset();
     void ProgramBoard();

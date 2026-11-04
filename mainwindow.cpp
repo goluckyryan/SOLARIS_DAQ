@@ -24,6 +24,7 @@
 
 #include <unistd.h>
 #include <algorithm>
+#include <chrono>
 
 //------ static memeber
 Digitizer2Gen ** MainWindow::digi = nullptr;
@@ -58,9 +59,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     }
   }
   for( int i = 0; i < MaxNumberOfDigitizer; i++){
+    oldAcceptedTimeNs[i] = 0;
     for( int ch = 0; ch < MaxNumberOfChannel; ch++){
       lastSelfTrgRate[i][ch] = 0;
-      lastSavedRate[i][ch] = 0;
+      lastAcceptedRate[i][ch] = 0;
+      oldAcceptedCount[i][ch] = 0;
     }
   }
 
@@ -90,7 +93,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     /// Empty, not null -- these are vectors now. CleanUpScalar() uses emptiness as its
     /// "nothing built yet" test, the way it used to use the null pointer.
     leTriggers.clear();
-    leSaved.clear();
+    leAccepted.clear();
     lbFileSize.clear();
 
     scalarThread = new TimingThread(); // 2 sec is default
@@ -489,10 +492,11 @@ int MainWindow::StartACQ(){
   for( int i = nDigi-1 ; i >= 0; i --){
     if( digi[i]->IsDummy () ) continue;
 
+    oldAcceptedTimeNs[i] = 0; // first scalar tick of the run only takes the baseline
     for( int ch = 0; ch < std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel); ch ++) {
       oldTimeStamp[i][ch] = 0;
       lastSelfTrgRate[i][ch] = 0;
-      lastSavedRate[i][ch] = 0;
+      lastAcceptedRate[i][ch] = 0;
     }
 
     //digi[i]->SetPHADataFormat(1);// only save 1 trace
@@ -858,9 +862,11 @@ void MainWindow::OpenDigitizers(){
       if( maxNumChannelAcrossDigitizer < digi[i]->GetNChannels()) maxNumChannelAcrossDigitizer = digi[i]->GetNChannels();
 
       int nCh = std::min((int) digi[i]->GetNChannels(), (int) MaxNumberOfChannel);
+      oldAcceptedTimeNs[i] = 0;
       for( int ch = 0; ch < nCh; ch++) {
         oldTimeStamp[i][ch] = 0;
         oldSavedCount[i][ch] = 0;
+        oldAcceptedCount[i][ch] = 0;
       }
     }else{
       /// FPGAType is only ever set once the board answered, so non-empty here means it
@@ -1392,7 +1398,7 @@ void MainWindow::SetUpScalar(){
 
   ///===== create the trigger and accept
   leTriggers.assign(nDigi, {});
-  leSaved.assign(nDigi, {});
+  leAccepted.assign(nDigi, {});
   lbFileSize.assign(nDigi, nullptr);
   for( int iDigi = 0; iDigi < nDigi; iDigi++){
     QGridLayout * grid = makeBox(1 + iDigi);
@@ -1407,13 +1413,13 @@ void MainWindow::SetUpScalar(){
     grid->addWidget(lbFileSize[iDigi], 1, 0, 1, 2);
 
     /// Column names state WHAT is counted, not just "Trig.": the first is the DPP's raw
-    /// trigger rate (SelfTrgRate), the second is the board-side SAVED rate
-    /// (ΔsavedEventCount/ΔrealTime). Downstream coincidence/analysis filters happen after
-    /// the saved counter, so a gated view can legitimately show less than Saved [Hz].
+    /// trigger rate (SelfTrgRate), the second is the ACCEPTED rate -- hits ReadData() actually
+    /// delivered, per second of host time. Not the board's savedEventCount: that counts before
+    /// the hardware coincidence (a TRGIN-gated channel read 15 Hz saved for 5 Hz of data).
     QLabel * lbA = new QLabel("Triggers [Hz]", box);
     lbA->setAlignment(Qt::AlignCenter);
     grid->addWidget(lbA, 2, 0);
-    QLabel * lbB = new QLabel("Saved [Hz]", box);
+    QLabel * lbB = new QLabel("Accepted [Hz]", box);
     lbB->setAlignment(Qt::AlignCenter);
     grid->addWidget(lbB, 2, 1);
 
@@ -1421,18 +1427,18 @@ void MainWindow::SetUpScalar(){
     /// channels than MaxNumberOfChannel would otherwise build rows that nothing ever fills.
     const int nCh = std::min<int>(digi[iDigi]->GetNChannels(), MaxNumberOfChannel);
     leTriggers[iDigi].assign(nCh, nullptr);
-    leSaved[iDigi].assign(nCh, nullptr);
+    leAccepted[iDigi].assign(nCh, nullptr);
     for( int ch = 0; ch < nCh; ch++){
       leTriggers[iDigi][ch] = new QLineEdit(box);
       leTriggers[iDigi][ch]->setReadOnly(true);
       leTriggers[iDigi][ch]->setAlignment(Qt::AlignRight);
       grid->addWidget(leTriggers[iDigi][ch], 3 + ch, 0);
 
-      leSaved[iDigi][ch] = new QLineEdit(box);
-      leSaved[iDigi][ch]->setReadOnly(true);
-      leSaved[iDigi][ch]->setAlignment(Qt::AlignRight);
-      leSaved[iDigi][ch]->setStyleSheet("background-color: #F0F0F0;");
-      grid->addWidget(leSaved[iDigi][ch], 3 + ch, 1);
+      leAccepted[iDigi][ch] = new QLineEdit(box);
+      leAccepted[iDigi][ch]->setReadOnly(true);
+      leAccepted[iDigi][ch]->setAlignment(Qt::AlignRight);
+      leAccepted[iDigi][ch]->setStyleSheet("background-color: #F0F0F0;");
+      grid->addWidget(leAccepted[iDigi][ch], 3 + ch, 1);
     }
   }
 
@@ -1449,7 +1455,7 @@ void MainWindow::CleanUpScalar(){
   scalarBoxes.clear();
   lbFileSize.clear();
   leTriggers.clear();
-  leSaved.clear();
+  leAccepted.clear();
 
   //Clean up the remaining QLabels (last update, ACQ status), which sit outside the boxes
   QList<QLabel *> labelChildren = scalar->findChildren<QLabel *>();
@@ -1466,7 +1472,7 @@ void MainWindow::UpdateScalar(){
 
   if( influx && scalarOutputInflux) influx->ClearDataPointsBuffer();
   std::string haha[MaxNumberOfChannel];
-  double savedRate[MaxNumberOfChannel];
+  double acceptedRate[MaxNumberOfChannel];
 
   ///===== Get trigger for all channel
   unsigned long totalFileSize  = 0;
@@ -1477,7 +1483,7 @@ void MainWindow::UpdateScalar(){
     /// shorter than nDigi and there is no row to write into.
     if( iDigi >= (int) leTriggers.size() ) break;
 
-    /// One bound for both loops below. haha[] and savedRate[] are std::string[64]/double[64] and
+    /// One bound for both loops below. haha[] and acceptedRate[] are std::string[64]/double[64] and
     /// the InfluxDB loop used to run to GetNChannels() unclamped, so a board reporting more than
     /// 64 channels read a non-trivial object out of bounds. The widget row's own length is in the
     /// min too, so a board that reports a different channel count than it did when the panel was
@@ -1488,7 +1494,7 @@ void MainWindow::UpdateScalar(){
 
     /// Reset per board. These live outside the iDigi loop, so a channel whose read failed used to
     /// report the *previous* board's value rather than nothing.
-    for( int ch = 0; ch < MaxNumberOfChannel; ch ++){ haha[ch] = "0"; savedRate[ch] = 0; }
+    for( int ch = 0; ch < MaxNumberOfChannel; ch ++){ haha[ch] = "0"; acceptedRate[ch] = 0; }
 
     /// One statistics read per board instead of three blocking round-trips per channel. ReadStat()
     /// fills realTime/savedEventCount for every channel in a single CAEN_FELib_ReadData and
@@ -1497,6 +1503,16 @@ void MainWindow::UpdateScalar(){
     // digiMTX[iDigi].lock();
     digi[iDigi]->ReadStat();
     // digiMTX[iDigi].unlock();
+
+    /// Accepted rate time base: host clock, once per board. The hits are counted as they reach
+    /// the host, so the board's realTime (the stats snapshot's clock) is the wrong reference.
+    /// No rate on the first tick after start/open (baseline only) or below 1 s (a tick that
+    /// was delayed and then caught up).
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch()).count();
+    const int64_t dtNs  = nowNs - oldAcceptedTimeNs[iDigi];
+    const bool haveRate = oldAcceptedTimeNs[iDigi] > 0 && dtNs > 1e9;
+    oldAcceptedTimeNs[iDigi] = nowNs;
 
     for( int ch = 0; ch < nCh; ch ++){
       haha[ch] = digi[iDigi]->GetSettingValueFromMemory(PHA::CH::SelfTrgRate, ch);
@@ -1511,29 +1527,23 @@ void MainWindow::UpdateScalar(){
 
       leTriggers[iDigi][ch]->setText(QString::fromStdString(haha[ch]));
 
-      if( oldTimeStamp[iDigi][ch] >  0 && time - oldTimeStamp[iDigi][ch] > 1e9 && kaka > oldSavedCount[iDigi][ch]){
-        savedRate[ch] = (kaka - oldSavedCount[iDigi][ch]) * 1e9 *1.0 / (time - oldTimeStamp[iDigi][ch]);
-      }else{
-        savedRate[ch] = 0;
-      }
-
-      //if( savedRate[ch] > 10000 ) printf("%d-%2d | old (%lu, %lu), new (%lu, %lu)\n", iDigi, ch, oldTimeStamp[iDigi][ch], oldSavedCount[iDigi][ch], time, kaka);
-      // if( ch == 3){
-      //   printf("time: %lu (%lu) = %12.10f, Channel Saved Count %lu (%lu) = %lu | accepted Rate %f\n", 
-      //     time, oldTimeStamp[iDigi][ch], (time - oldTimeStamp[iDigi][ch])/1e9, 
-      //     kaka, oldSavedCount[iDigi][ch], (kaka - oldSavedCount[iDigi][ch]),
-      //     savedRate[ch]);
-      // }
-
+      /// The board counters are no longer displayed; the elog's <SavedCount>/<Realtime> read them.
       oldSavedCount[iDigi][ch] = kaka;
       oldTimeStamp[iDigi][ch] = time;
 
+      const uint64_t acc = digi[iDigi]->GetAcceptedCount(ch);
+      if( haveRate && acc >= oldAcceptedCount[iDigi][ch] ){
+        acceptedRate[ch] = (acc - oldAcceptedCount[iDigi][ch]) * 1e9 / dtNs;
+      }else{
+        acceptedRate[ch] = 0;
+      }
+      oldAcceptedCount[iDigi][ch] = acc;
+
       /// keep the rates, the elog template reads them at stop-run without touching the hardware
       lastSelfTrgRate[iDigi][ch] = atof(haha[ch].c_str());
-      lastSavedRate[iDigi][ch] = savedRate[ch];
+      lastAcceptedRate[iDigi][ch] = acceptedRate[ch];
 
-      //if( kaka != "0" )  printf("%s, %s | %.2f\n", time.c_str(), kaka.c_str(), savedRate);
-      leSaved[iDigi][ch]->setText(QString::number(savedRate[ch],'f', 1));
+      leAccepted[iDigi][ch]->setText(QString::number(acceptedRate[ch],'f', 1));
 
     }
 
@@ -1541,11 +1551,11 @@ void MainWindow::UpdateScalar(){
     /// same string 64 times a tick.
     lbFileSize[iDigi]->setText(QString::number(digi[iDigi]->GetTotalFilesSize()/1024./1024.) + " MB");
 
-    ///============== push the trigger, savedRate rate database
+    ///============== push the trigger, acceptedRate rate database
     if( influx && scalarOutputInflux ){
       for( int ch = 0; ch < nCh; ch++ ){
         influx->AddDataPoint("Rate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + haha[ch]);
-        if( !std::isnan(savedRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(savedRate[ch]));
+        if( !std::isnan(acceptedRate[ch]) )  influx->AddDataPoint("AccpRate,Bd=" + std::to_string(digi[iDigi]->GetSerialNumber()) + ",Ch=" + QString::number(ch).rightJustified(2, '0').toStdString() + " value=" + std::to_string(acceptedRate[ch]));
       }
     }
     totalFileSize +=  digi[iDigi]->GetTotalFilesSize();
@@ -2928,7 +2938,7 @@ QString MainWindow::BuildElogMsg(ElogSection sec, QString * subject, QString * c
 
     if( prop.compare("TrigRate"   , Qt::CaseInsensitive) == 0 ||
         prop.compare("SelfTrgRate", Qt::CaseInsensitive) == 0 ) return QString::number(lastSelfTrgRate[bd][ch], 'f', 1);
-    if( prop.compare("AcceptRate" , Qt::CaseInsensitive) == 0 ) return QString::number(lastSavedRate[bd][ch], 'f', 1);
+    if( prop.compare("AcceptRate" , Qt::CaseInsensitive) == 0 ) return QString::number(lastAcceptedRate[bd][ch], 'f', 1);
     if( prop.compare("SavedCount" , Qt::CaseInsensitive) == 0 ) return QString::number(oldSavedCount[bd][ch]);
     if( prop.compare("Realtime"   , Qt::CaseInsensitive) == 0 ) return QString::number(oldTimeStamp[bd][ch]/1e9, 'f', 3);
 

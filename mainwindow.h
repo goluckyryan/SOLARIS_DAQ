@@ -157,7 +157,7 @@ private:
   std::vector<QWidget *> scalarBoxes;
   std::vector<QLabel *> lbFileSize;
   std::vector<std::vector<QLineEdit *>> leTriggers;
-  std::vector<std::vector<QLineEdit *>> leSaved;
+  std::vector<std::vector<QLineEdit *>> leAccepted;
   QLabel       * lbLastUpdateTime;
   QLabel       * lbScalarACQStatus;
   bool           scalarOutputInflux;
@@ -250,13 +250,17 @@ private:
   int runID;
   QString runIDStr;
 
-  //@------ calculate instant accept Rate
+  //@------ board counters, kept for the elog's <SavedCount> and <Realtime>
   unsigned long oldSavedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
   unsigned long oldTimeStamp[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
+  //@------ calculate instant accept Rate, from the hits actually delivered (Digitizer2Gen::GetAcceptedCount)
+  uint64_t oldAcceptedCount[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  int64_t  oldAcceptedTimeNs[MaxNumberOfDigitizer]; /// steady_clock, one per board; 0 = no baseline yet
+
   //@------ last rates seen by UpdateScalar(), for the elog template
   double lastSelfTrgRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
-  double lastSavedRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
+  double lastAcceptedRate[MaxNumberOfDigitizer][MaxNumberOfChannel];
 
   //@------ elog template
   ElogTemplate * elogTemplate;
