@@ -27,6 +27,7 @@
 #include "Histogram1D.h"
 #include "Histogram2D.h"
 #include "OnlineEventBuilder.h"
+#include "RateStore.h"
 
 /// Online analyzer window.
 ///
@@ -81,6 +82,7 @@ struct AnalyzerHooks {
   std::function<void(int,int)> resizeWindow;
   std::function<bool()> influxOut;
   std::function<void(std::string &, std::string &, std::string &)> influxConfig;
+  std::function<double()> rateBase;   ///< the bar's rate-average window in seconds
 };
 
 class QtHistRegistry : public HistRegistry {
@@ -114,6 +116,9 @@ public:
   bool InfluxOut() override;
   void InfluxConfig(std::string & url, std::string & token, std::string & database) override;
 
+  //---- HistRegistry v6: host-side rate ledger. Any thread; reads the published snapshot.
+  double GateRates(int id, std::vector<std::pair<std::string,double>> & rates) override;
+
   //---- HistRegistry, called from ProcessEvent() on the analysis thread
   void Fill1(int id, double x) override;
   void Fill2(int id, double x, double y) override;
@@ -124,6 +129,11 @@ public:
   void FinishDeclare();
   void Publish();      ///< materialise queued widgets, then counts -> widgets
   void ClearCounts();  ///< zero everything; used when a parameter changes
+  /// Sample every 2D's cumulative total and live-cut cell-sums into the rate stores, then
+  /// publish the {tag, Hz} snapshot. Driven by the replot clock WHILE ENABLED, independently of
+  /// visibility (see the v6 comment on HistRegistry::GateRates).
+  void SampleRates();
+  void ResetRates();   ///< run boundary: wipe sample history, keep keys
   /// Forget every widget. It does NOT delete them: they are children of the work area, and the
   /// window destroys the work area itself, before this registry or the analysis go away.
   void Clear();
@@ -158,6 +168,15 @@ private:
     Histogram2D::CellGeom g;
     std::unique_ptr<std::atomic<uint32_t>[]> c;
     std::atomic<uint64_t> total{0}, out{0};
+
+    //^---- v6 rate ledger (see HistRegistry::GateRates). store/rateBaseS are GUI-thread only;
+    //^     rateSnap is the published view the analysis thread reads under rateMtx. Sampled from
+    //^     SampleRates(), NOT Publish(): publishing is visibility-gated, the numbers must not be
+    //^     (a run whose window is hidden still tiles its rate points).
+    RateStore    store;                        ///< keys: "all" + one per live cut name
+    std::mutex   rateMtx;
+    std::vector<std::pair<std::string,double>> rateSnap;
+    double       rateBaseS = 0;
   };
 
   struct ChanReq {
@@ -265,6 +284,10 @@ public:
 
 private:
   void BuildViewList();
+  /// Close == stop, full stop: event building, rate sampling and Influx pushes die with the
+  /// window, so nothing streams to a database nobody is watching. Re-showing and re-enabling
+  /// starts a fresh run.
+  void closeEvent( QCloseEvent * ev ) override;
   std::vector<DigiHitView> MakeViews() const;
   void RescanPlugins();
   void SelectAnalysis(const QString & name);
@@ -283,8 +306,7 @@ private:
   void LoadAnalysisState(const QString & name);
 
   Digitizer2Gen ** digi;
-  unsigned int     nDigi;
-  std::vector<int> boardIndex;      ///< view position -> digi[] index, dummies excluded
+  unsigned int     nDigi;  std::vector<int> boardIndex;      ///< view position -> digi[] index, dummies excluded
   std::vector<uint8_t> nChannels;
 
   std::unique_ptr<OnlineEventBuilder> eb;
@@ -314,6 +336,7 @@ private:
   QPlainTextEdit * logPane;
   RSpinBox    * sbTimeWindow;
   RSpinBox    * sbGuardFactor;      ///< guard time is ALWAYS this times the time window
+  RSpinBox    * sbRateBase = nullptr;   ///< v6 rate-average window [s] for GateRates
   QLabel      * lbStatus;
   QGridLayout * topLay;
   QWidget     * workArea = nullptr;

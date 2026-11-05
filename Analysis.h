@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "BuiltHit.h"
@@ -139,6 +140,17 @@ public:
   //^     boundary. Callable from any thread; both are cheap copies.
   virtual bool InfluxOut() = 0;
   virtual void InfluxConfig(std::string & url, std::string & token, std::string & database) = 0;
+
+  //^---- Gate/total rates over a 2D histogram (v6). The HOST computes them: it samples the
+  //^     histogram's cumulative total and the cell-sum inside every live 2D cut on its own
+  //^     publish clock into a RateStore -- the same trailing-window dN/dt ledger behind every
+  //^     RateMonitor trace -- so the time base is one adjustable bar control, shared semantics.
+  //^     GateRates() hands back the latest published {tag, Hz} snapshot: "all" for the whole
+  //^     matrix, then one per live cut by name; EMPTY until the store has two real samples
+  //^     (never a faked zero). The return value is the averaging window in seconds actually in
+  //^     use, so the analysis can pace its write clock to tile windows back-to-back the way
+  //^     RateMonitor does. Callable from any thread: a mutex-guarded copy, never the widget.
+  virtual double GateRates(int id, std::vector<std::pair<std::string,double>> & rates) = 0;
 };
 
 class Analysis {
@@ -215,7 +227,9 @@ private:
 ///       claimable (virtuals removed). StatusControl, the setters and window dressing survive.
 ///   5 - InfluxOut()/InfluxConfig(): the host's "Influx out" checkbox and connection settings,
 ///       for analyses that carry their own InfluxDB client and write from ProcessEvent.
-#define ANALYSIS_ABI_VERSION 5
+///   6 - GateRates(): host-computed total/2D-cut rates over a shared RateStore, with an
+///       adjustable averaging window on the Analyzer bar.
+#define ANALYSIS_ABI_VERSION 6
 
 /// The four C entry points a loadable analysis exports. Only emitted when compiled as a plugin.
 ///

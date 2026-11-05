@@ -1,6 +1,7 @@
 #include "Analyzer.h"
 
 #include <QCoreApplication>
+#include <QCloseEvent>
 #include <QVBoxLayout>
 #include <QDir>
 #include <QFile>
@@ -13,6 +14,7 @@
 #include <QGuiApplication>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 //^-------------------------------------------------------------- connect() for non-QObjects
@@ -148,6 +150,13 @@ void QtHistRegistry::ResizeWindow(int w, int h){     if( hooks.resizeWindow )   
 bool QtHistRegistry::InfluxOut(){              return hooks.influxOut     ? hooks.influxOut()     : false; }
 void QtHistRegistry::InfluxConfig(std::string & url, std::string & token, std::string & db){
   if( hooks.influxConfig ) hooks.influxConfig(url, token, db);
+}
+
+double QtHistRegistry::GateRates(int id, std::vector<std::pair<std::string,double>> & rates){
+  if( id < 0 || id >= (int)h2.size() ) return 0;
+  std::lock_guard<std::mutex> g(h2[id]->rateMtx);
+  rates = h2[id]->rateSnap;
+  return h2[id]->rateBaseS;
 }
 
 void * QtHistRegistry::View1(int id){
@@ -312,6 +321,56 @@ void QtHistRegistry::DrainPending(){
   for( size_t i : b ) CreateH2(i);
   for( size_t i : c ){ CreateChan(i); if( declareFinished ) WireChan(i); }
   for( size_t i : d ){ CreateFlag(i); if( declareFinished ) WireFlag(i); }
+}
+
+//^-------------------------------------------------------------- rate ledger (v6, GUI thread)
+
+void QtHistRegistry::SampleRates(){
+  const double baseS = hooks.rateBase ? hooks.rateBase() : 0;
+  if( baseS <= 0 ) return;
+  const int    baseMs  = (int)( baseS * 1000.0 );
+  const qint64 tMs     = (qint64)( std::chrono::duration_cast<std::chrono::milliseconds>
+                                   ( std::chrono::steady_clock::now().time_since_epoch() ).count() );
+
+  for( size_t i = 0; i < h2.size(); i++ ){
+    H2 & h = *h2[i];
+    if( !h.created ) continue;                 ///< queued behind a publish tick: nothing to sum yet
+
+    //^- cumulative totals; the store's decrease detection handles every clear path, no bookkeeping
+    h.store.Sample( QStringLiteral("all"), tMs,
+                    h.total.load(std::memory_order_relaxed), baseMs + baseMs/2 );
+    const int nc = h.w->GetCuts().size();
+    for( int ci = 0; ci < nc; ci++ ){
+      if( h.w->GetCuts()[ci].poly.isEmpty() ) continue;   // tombstone
+      h.w->RecountCut(ci);                     ///< cell-sum inside the polygon; also revives the frozen cut number
+      const Histogram2D::Cut & c = h.w->GetCuts()[ci];
+      if( c.entries < 0 ) continue;            ///< deleted during the RecountCut
+      h.store.Sample( c.name, tMs, (unsigned long) c.entries, baseMs + baseMs/2 );
+    }
+
+    //^- publish the {tag, Hz} snapshot the analysis thread reads. A key with fewer than two
+    //^  samples is absent, never a faked zero.
+    std::vector<std::pair<std::string,double>> rows;
+    double r;
+    if( h.store.Rate( QStringLiteral("all"), baseMs, r ) ) rows.push_back( { "all", r } );
+    for( int ci = 0; ci < nc; ci++ ){
+      const Histogram2D::Cut & c = h.w->GetCuts()[ci];
+      if( c.poly.isEmpty() || c.entries < 0 ) continue;
+      if( h.store.Rate( c.name, baseMs, r ) )
+        rows.push_back( { c.name.toStdString(), r } );
+    }
+    std::lock_guard<std::mutex> g(h.rateMtx);
+    h.rateSnap.swap( rows );
+    h.rateBaseS = baseS;
+  }
+}
+
+void QtHistRegistry::ResetRates(){
+  for( size_t i = 0; i < h2.size(); i++ ){
+    h2[i]->store.ResetHistory();               ///< sampling clock restarts with the run
+    std::lock_guard<std::mutex> g(h2[i]->rateMtx);
+    h2[i]->rateSnap.clear();
+  }
 }
 
 //^-------------------------------------------------------------- filling (analysis thread)
@@ -558,7 +617,7 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
   topLay = new QGridLayout(central);
 
   QGroupBox * cfgBox = new QGroupBox("Analyzer Control", central);
-  cfgBox->setMaximumHeight(150);
+  cfgBox->setMaximumHeight(190);
   QGridLayout * cfg = new QGridLayout(cfgBox);
   topLay->addWidget(cfgBox, 0, 0, 1, 10);
 
@@ -594,6 +653,18 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
   sbGuardFactor->setSuffix(" x window");
   cfg->addWidget(new QLabel("Guard time", cfgBox), 3, 0);
   cfg->addWidget(sbGuardFactor, 3, 1);
+
+  //^---- v6: the averaging window behind GateRates, shared semantics with the RateMonitor's
+  //^     time base. Live-adjustable: the store widens its retention on demand, so raising it
+  //^     mid-run needs no restart.
+  sbRateBase = new RSpinBox(cfgBox, 0);
+  sbRateBase->setRange(0.5, 3600);
+  sbRateBase->setValue(5);
+  sbRateBase->setSuffix(" s");
+  sbRateBase->setToolTip("Averaging window for total / 2D-cut rates pushed to InfluxDB.\n"
+                         "Points tile back-to-back at this period (RateMonitor semantics).");
+  cfg->addWidget(new QLabel("Rate average", cfgBox), 4, 0);
+  cfg->addWidget(sbRateBase, 4, 1);
 
   bnRescan  = new QPushButton("Rescan",  cfgBox);
   bnRebuild = new QPushButton("Rebuild", cfgBox);
@@ -634,6 +705,8 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
   replotTimer = new QTimer(this);          // GUI thread
   connect(replotTimer, &QTimer::timeout, this, [this](){
     if( registry && isVisible() ) registry->Publish();
+    if( registry ) registry->SampleRates();   ///< the numbers are NOT visibility-gated: a hidden
+                                              ///  (minimised) window keeps its rate points complete
     UpdateStatus();
   });
 
@@ -676,8 +749,15 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
   UpdateStatus();
 }
 
-QWidget * Analyzer::ResetWorkArea(){
-  if( workArea ){
+void Analyzer::closeEvent( QCloseEvent * ev ){
+  /// Close == stop: toggling Enable off runs the whole shutdown (workers, ring, sampling clock)
+  /// and leaves the checkbox honest for the next show. The analysis thread's OnRunStop still
+  /// flushes the last Influx batch -- stopping the PUSH, not losing the final points.
+  if( chkEnable && chkEnable->isChecked() ) chkEnable->setChecked(false);
+  QMainWindow::closeEvent(ev);
+}
+
+QWidget * Analyzer::ResetWorkArea(){  if( workArea ){
     topLay->removeWidget(workArea);
     delete workArea;                              // takes the analysis' layout tree with it
   }
@@ -945,6 +1025,7 @@ void Analyzer::SelectAnalysis(const QString & name){
     std::lock_guard<std::mutex> g(influxMtx);
     url = influxURL; token = influxToken; db = influxDatabase;
   };
+  hooks.rateBase       = [this](){ return sbRateBase ? sbRateBase->value() : 5.0; };
 
   registry = new QtHistRegistry(workArea, digi, nDigi, boardIndex, hooks);
 
@@ -983,7 +1064,7 @@ void Analyzer::SetEnabled(bool on){
     /// whole idle period, so no producer can be mid-push.
     for( size_t k = 0; k < boardIndex.size(); k++ ) digi[boardIndex[k]]->hitRing.clear();
     ring->Clear();
-    if( registry ) registry->ClearCounts();
+    if( registry ){ registry->ClearCounts(); registry->ResetRates(); }
 
     for( size_t k = 0; k < boardIndex.size(); k++ ){
       digi[boardIndex[k]]->fillHitRing.store(true, std::memory_order_relaxed);
@@ -1014,6 +1095,11 @@ void Analyzer::SetEnabled(bool on){
       digi[boardIndex[k]]->fillHitRing.store(false, std::memory_order_relaxed);
     }
     ring->Clear();
+
+    /// Run boundary for the rate ledger: AnaWorker's Stop already ran the analysis' OnRunStop
+    /// flush on the FRESH snapshot, so the published view must not keep serving its last live
+    /// values to an idle window -- the plugin scatter reads an empty snapshot as "run over".
+    if( registry ) registry->ResetRates();
 
     if( registry ) registry->Publish();      // show the final state
   }

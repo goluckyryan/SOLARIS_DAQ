@@ -35,7 +35,7 @@ ABI = ../Analysis.h ../BuiltHit.h
 
 all: $(SO)
 
-build/%.so: %.cpp ../ClassInfluxDB.cpp ../ClassInfluxDB.h $(ABI) | build
+build/%.so: %.cpp ../ClassInfluxDB.cpp ../ClassInfluxDB.h RateScatter.h $(ABI) | build
 	$(CXX) $(CXXFLAGS) $< ../ClassInfluxDB.cpp -o $@ $(QLIBS) -lcurl
 
 build:
