@@ -10,6 +10,19 @@
 #define MinFreeSpaceGB 10.0            // a saving run does not start with less free space on the raw-data disk
 
 #include <QString>
+#include <QtGlobal>
+
+//^=================================
+/// QCheckBox::checkStateChanged(Qt::CheckState) only exists from Qt 6.7; before that the box
+/// emits stateChanged(int). Ubuntu 24.04 ships Qt 6.4.2, so connect through this alias to build
+/// on both. The two signals differ in argument type, so a slot reached this way must take no
+/// argument and read the box's state itself -- see the call sites in SOLARISpanel.cpp,
+/// digiSettingsPanel.cpp and SingleHistograms.cpp.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+  #define QCheckBoxStateSignal &QCheckBox::checkStateChanged
+#else
+  #define QCheckBoxStateSignal &QCheckBox::stateChanged
+#endif
 
 //^=================================
 namespace Utility{

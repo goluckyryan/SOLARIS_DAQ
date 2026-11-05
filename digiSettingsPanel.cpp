@@ -328,7 +328,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         for( int i = 0; i < (int) PHA::DIG::StartSource.GetAnswers().size(); i++){
           ckbStartSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::StartSource.GetAnswers())[i].second), digiTab[iDigi]);
           boardLayout->addWidget(ckbStartSource[iDigi][i], rowId, 1 + i);
-          connect(ckbStartSource[iDigi][i], &QCheckBox::checkStateChanged, this, &DigiSettingsPanel::SetStartSource);
+          connect(ckbStartSource[iDigi][i], QCheckBoxStateSignal, this, &DigiSettingsPanel::SetStartSource);
         }
 
         //-------------------------------------
@@ -340,7 +340,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         for( int i = 0; i < (int) PHA::DIG::GlobalTriggerSource.GetAnswers().size(); i++){
           ckbGlbTrgSource[iDigi][i] = new QCheckBox( QString::fromStdString((PHA::DIG::GlobalTriggerSource.GetAnswers())[i].second), digiTab[iDigi]);
           boardLayout->addWidget(ckbGlbTrgSource[iDigi][i], rowId, 1 + i%5);
-          connect(ckbGlbTrgSource[iDigi][i], &QCheckBox::checkStateChanged, this, &DigiSettingsPanel::SetGlobalTriggerSource);
+          connect(ckbGlbTrgSource[iDigi][i], QCheckBoxStateSignal, this, &DigiSettingsPanel::SetGlobalTriggerSource);
           if ( i ==  4) rowId++; 
         }
 

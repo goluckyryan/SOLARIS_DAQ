@@ -306,8 +306,8 @@ SOLARISpanel::SOLARISpanel(Digitizer2Gen **digi, unsigned short nDigi,
       chkAll[detGroup][SettingID] = new QCheckBox("Set for all", tab);
       layout->addWidget(chkAll[detGroup][SettingID], 0, 0);
 
-      connect(chkAll[detGroup][SettingID], &QCheckBox::checkStateChanged, this, [=](Qt::CheckState st){
-        const bool state = ( st == Qt::Checked );   // tri-state never used: Checked == "on"
+      connect(chkAll[detGroup][SettingID], QCheckBoxStateSignal, this, [=](){
+        const bool state = ( chkAll[detGroup][SettingID]->checkState() == Qt::Checked );   // tri-state never used: Checked == "on"
         bool found = false;
         for(int i = 0; i < detIDArrayList.size(); i++){
           if( detIDArrayList[i][0] != detGroup ) continue;
@@ -487,9 +487,9 @@ void SOLARISpanel::CreateDetGroup(int SettingID, QList<int> detIDArray, QGridLay
     });
     
     ///===================== for the OnOff CheckBox
-    connect(chkOnOff[SettingID][digiID][chID], &QCheckBox::checkStateChanged, this, [=](Qt::CheckState st){
+    connect(chkOnOff[SettingID][digiID][chID], QCheckBoxStateSignal, this, [=](){
       if( !enableSignalSlot ) return;
-      const bool state = ( st == Qt::Checked );   // tri-state never used: Checked == "on"
+      const bool state = ( chkOnOff[SettingID][digiID][chID]->checkState() == Qt::Checked );   // tri-state never used: Checked == "on"
 
       if( chkAll[detGroup][SettingID]->isChecked() ){
 

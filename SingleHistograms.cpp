@@ -102,7 +102,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     chkAutoRefresh->setChecked(true);
     chkAutoRefresh->setToolTip("Pick the replot period from the number and type of displayed plots.");
     ctrlLayout->addWidget(chkAutoRefresh, 0, 6);
-    connect(chkAutoRefresh, &QCheckBox::checkStateChanged, this, [=](Qt::CheckState){
+    connect(chkAutoRefresh, QCheckBoxStateSignal, this, [=](){
       if( !isSignalSlotActive ) return;
       UpdateRefreshRate();
       markSettingsDirty();
