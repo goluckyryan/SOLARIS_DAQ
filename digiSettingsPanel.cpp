@@ -2941,7 +2941,12 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
 
 
     }else{
-      if( digi[ID]->WriteValue(para, std::to_string((int)spb->value()), index)){
+      /// Keep the fraction for decimal spin boxes (Fine Gain has 3 decimals); casting to int
+      /// would silently write 1.234 as 1.
+      std::string valueStr = spb->decimals() > 0
+                           ? QString::number(spb->value(), 'f', spb->decimals()).toStdString()
+                           : std::to_string((long long) std::llround(spb->value()));
+      if( digi[ID]->WriteValue(para, valueStr, index)){
         SendLogMsg(msg + "|OK.");
         spb->setStyleSheet("");
         UpdatePanelFromMemory();

@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <algorithm>
+#include <cctype>
+#include <cmath>
 #include <sys/stat.h>
 
 Digitizer2Gen::Digitizer2Gen(){  
@@ -156,41 +158,37 @@ std::string Digitizer2Gen::ReadValue(const Reg &para, int ch_index,  bool verbos
   return ans;
 }
 
-bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool verbose){
-  if( !isConnected ) return false;
-  //ReadValue(parameter, 1);
-  if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
-
-  // Clamp numeric values to the parameter's valid range before writing
-  // Look up the parameter in settings arrays by matching the base name
+std::string Digitizer2Gen::ClampToRange(const char * parameter, std::string value){
   const char * parName = strrchr(parameter, '/');
   if( parName ) parName++; else parName = parameter;
 
   /// The name->index maps exist for exactly this. Scanning the table with string compares was a
   /// second, divergent way of finding a parameter, and it ran on every write.
-  auto clampToRange = [&](const std::unordered_map<std::string, int> & map,
-                          const std::vector<Reg> & settings) {
-    const int index = LookUp(map, parName);
-    if( index < 0 || index >= (int) settings.size() ) return;
-    const Reg & reg = settings[index];
-    if( reg.GetAnswerType() != ANSTYPE::INTEGER ) return;
-    const auto & answers = reg.GetAnswers();
-    if( answers.size() < 3 ) return;
-    long long minVal = atoll(answers[0].first.c_str());
-    long long maxVal = atoll(answers[1].first.c_str());
-    long long step   = atoll(answers[2].first.c_str());
-    long long val    = atoll(value.c_str());
-    if( val < minVal ) val = minVal;
-    if( val > maxVal ) val = maxVal;
-    if( step > 0 ) val = ((val - minVal + step/2) / step) * step + minVal;
-    value = std::to_string(val);
-  };
+  const bool isCh = strstr(parameter, "/ch/") != nullptr;
+  const std::unordered_map<std::string, int> & map = isCh ? chMap : boardMap;
+  const std::vector<Reg> & settings = isCh ? chSettingTable : boardSettings;
 
-  if( strstr(parameter, "/ch/") != nullptr ){
-    clampToRange(chMap, chSettingTable);
-  } else {
-    clampToRange(boardMap, boardSettings);
-  }
+  const int index = LookUp(map, parName);
+  if( index < 0 || index >= (int) settings.size() ) return value;
+  const Reg & reg = settings[index];
+  if( reg.GetAnswerType() != ANSTYPE::INTEGER ) return value;
+  const auto & answers = reg.GetAnswers();
+  if( answers.size() < 3 ) return value;
+  long long minVal = atoll(answers[0].first.c_str());
+  long long maxVal = atoll(answers[1].first.c_str());
+  long long step   = atoll(answers[2].first.c_str());
+  long long val    = atoll(value.c_str());
+  if( val < minVal ) val = minVal;
+  if( val > maxVal ) val = maxVal;
+  if( step > 0 ) val = ((val - minVal + step/2) / step) * step + minVal;
+  return std::to_string(val);
+}
+
+bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool verbose){
+  if( !isConnected ) return false;
+  if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
+
+  value = ClampToRange(parameter, value);
 
   if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
                              || strstr(parameter, "ChRecordLengthT") != nullptr
@@ -209,23 +207,94 @@ bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool v
   return true;
 }
 
+/// Does the board's readback mean the same setting as what was written? The board does not echo
+/// our text: it may print a number in another format ("50" vs "50.000000", "0xFF" vs "255"),
+/// reorder or respace a multi-select ("TrgIn | SwTrg" vs "SwTrg|TrgIn"), change case, or round a
+/// float to its hardware step. Compare by meaning, per answer type.
+static bool SameSetting(const Reg & para, const std::string & wrote, const std::string & back){
+  auto parseNum = [](const std::string & s, double & out) {
+    char * end = nullptr;
+    out = strtod(s.c_str(), &end);
+    return end != s.c_str();
+  };
+  auto parseInt = [](const std::string & s, unsigned long long & out) {
+    char * end = nullptr;
+    out = strtoull(s.c_str(), &end, 0); // base 0: accepts 0x.. hex and decimal
+    return end != s.c_str() && *end == '\0';
+  };
+  auto normalize = [](const std::string & s) {
+    std::vector<std::string> items;
+    std::string cur;
+    for( char c : s + "|" ){
+      if( c == '|' ){
+        if( !cur.empty() ) items.push_back(cur);
+        cur.clear();
+      }else if( !isspace((unsigned char) c) ){
+        cur += (char) tolower((unsigned char) c);
+      }
+    }
+    std::sort(items.begin(), items.end());
+    std::string out;
+    for( auto & it : items ) out += it + "|";
+    return out;
+  };
+
+  switch( para.GetAnswerType() ){
+    case ANSTYPE::INTEGER:
+    case ANSTYPE::FLOAT: {
+      double w, b;
+      if( !parseNum(wrote, w) || !parseNum(back, b) ) return wrote == back;
+      /// An INTEGER register can read back at the board's own resolution: DCOffset written as 50
+      /// reads 50.001. It matches if it rounds to what was written.
+      if( para.GetAnswerType() == ANSTYPE::INTEGER ) return std::llround(w) == std::llround(b);
+      /// A FLOAT register is rounded by the board to its step (e.g. 74.074 ps): accept anything
+      /// within half a step.
+      double tol = 1e-6 * std::max(1.0, std::fabs(w));
+      if( para.GetAnswers().size() >= 3 ){
+        tol = std::max(tol, std::fabs(atof(para.GetAnswers()[2].first.c_str())) / 2 + 1e-9);
+      }
+      return std::fabs(w - b) <= tol;
+    }
+    case ANSTYPE::BYTE:
+    case ANSTYPE::BINARY: {
+      unsigned long long w, b;
+      if( parseInt(wrote, w) && parseInt(back, b) ) return w == b;
+      return normalize(wrote) == normalize(back);
+    }
+    default:
+      return normalize(wrote) == normalize(back);
+  }
+}
+
 bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index){
-  if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy){
+  const std::string fullPara = para.GetFullPara(ch_index, nChannels);
+  /// Compare and cache what is actually sent, not what the caller asked for.
+  value = ClampToRange(fullPara.c_str(), value);
+  if( WriteValue(fullPara.c_str(), value) || isDummy){
     /// Verify on the board, not on faith: SetValue can succeed while the firmware stores a
     /// clamped or different value. ReadValue() caches the REAL value, so the panels and the
     /// per-run SaveSettingsToFile snapshot tell the truth either way; a mismatch fails the
     /// write so the caller's "done" branch does not fire. WriteOnly registers are skipped.
+    /// The /ch/0..N/ range path is write-only on the board (reading it returns "Command
+    /// error"), so an all-channel write is verified one channel at a time.
     if( !isDummy && para.ReadWrite() != WriteOnly ){
-      std::string back = ReadValue(para, ch_index);
-      bool same = ( para.GetAnswerType() == ANSTYPE::INTEGER )
-                  ? ( atoll(back.c_str()) == atoll(value.c_str()) )
-                  : ( back == value );
-      if( !same ){
-        printf("ReadbackMismatch|%d|%-45s| wrote %s, board has %s\n",
-               serialNumber, para.GetFullPara(ch_index, nChannels).c_str(),
-               value.c_str(), back.c_str());
-        return false;
+      auto verify = [&](int idx) {
+        std::string back = ReadValue(para, idx);
+        bool same = SameSetting(para, value, back);
+        if( !same ){
+          printf("ReadbackMismatch|%d|%-45s| wrote %s, board has %s\n",
+                 serialNumber, para.GetFullPara(idx, nChannels).c_str(),
+                 value.c_str(), back.c_str());
+        }
+        return same;
+      };
+      bool allSame = true;
+      if( para.GetType() == TYPE::CH && ch_index < 0 ){
+        for( int ch = 0; ch < nChannels; ch++ ) allSame &= verify(ch);
+      }else{
+        allSame = verify(ch_index);
       }
+      if( !allSame ) return false;
     }
     int index = FindIndex(para);
     if( index != -1 ){    

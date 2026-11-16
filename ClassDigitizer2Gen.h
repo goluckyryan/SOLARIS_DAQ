@@ -58,6 +58,10 @@ class Digitizer2Gen {
     unsigned short tick2ns;
     std::string ModelName;
 
+    /// The value WriteValue will actually send: integer parameters clamped to [min,max] and
+    /// snapped to the step. Idempotent, so the typed WriteValue can compare readback against it.
+    std::string ClampToRange(const char * parameter, std::string value);
+
     /// How many TempSensADCn this model answers, resolved from ModelName once the board has been
     /// opened. It replaces three hand-written exclusion lists that had drifted apart -- and all
     /// three were wrong in the same way: they said a VX2745 has TempSensADC0..6 and forgot
