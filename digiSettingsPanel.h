@@ -17,6 +17,7 @@
 #include <QPushButton>
 #include <QFrame>
 #include <QSignalMapper>
+#include <QHash>
 
 #include "ClassDigitizer2Gen.h"
 #include "CustomWidgets.h"
@@ -86,6 +87,13 @@ private:
   QWidget * digiTab[MaxNumberOfDigitizer];
 
   bool enableSignalSlot;
+
+  /// Each setting widget (and each one-parameter tab page) with the parameter it writes.
+  /// EnableControl uses it to decide what stays editable while a board is acquiring.
+  QHash<QWidget*, Reg> ctrlReg;
+  bool EditableNow(int id, QWidget * w) const;
+  void LockChildren(int id, QWidget * container);
+  void ReportWriteFail(QWidget * w, const QString & msg);
 
   //---------------- Inquiry and copy
   QTabWidget * ICTab; // inquiry and copy

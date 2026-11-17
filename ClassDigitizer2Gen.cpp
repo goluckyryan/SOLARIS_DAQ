@@ -116,30 +116,41 @@ int Digitizer2Gen::FindIndex(const Reg &para){
   return -1;
 }
 
-std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
-  if( !isConnected ) return "not connected";
+int Digitizer2Gen::ReadRaw(const char * parameter, std::string & out, bool verbose){
+  if( !isConnected ){ out = "not connected"; return CAEN_FELib_GenericError; }
   //printf(" %s|%s \n", __func__, parameter);
   char retValue[256] = {0};
   int ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
     printf("  %s|%d|%-45s| read fail\n", __func__, serialNumber, parameter);
-    return ErrorMsg(__func__, ret);
-  }else{
-    if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
+    out = ErrorMsg(__func__, ret);
+    return ret;
   }
+  if( verbose ) printf("  %s|%d|%-45s:%s\n", __func__, serialNumber, parameter, retValue);
   if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
                              || strstr(parameter, "ChRecordLengthT") != nullptr
                              || strstr(parameter, "CFDDelayT") != nullptr
                              || strstr(parameter, "GateLongLengthT") != nullptr
                              || strstr(parameter, "GateShortLengthT") != nullptr
                              || strstr(parameter, "GateOffsetT") != nullptr )){
-    return std::to_string(atoi(retValue) * 4);
+    out = std::to_string(atoi(retValue) * 4);
+  }else{
+    out = retValue;
   }
-  return retValue;
+  return CAEN_FELib_Success;
+}
+
+std::string Digitizer2Gen::ReadValue(const char * parameter, bool verbose){
+  std::string ans;
+  ReadRaw(parameter, ans, verbose);
+  return ans;
 }
 
 std::string Digitizer2Gen::ReadValue(const Reg &para, int ch_index,  bool verbose){
-  std:: string ans = ReadValue(para.GetFullPara(ch_index, nChannels).c_str(), verbose); 
+  std::string ans;
+  /// A failed read returns the error text to the caller, but it must never land in the cache:
+  /// the panels would show it and the per-run settings file would record it as the setting.
+  if( ReadRaw(para.GetFullPara(ch_index, nChannels).c_str(), ans, verbose) != CAEN_FELib_Success ) return ans;
 
   int index = FindIndex(para);
   if( index < 0 ) return ans; // unknown parameter, nothing to cache
@@ -267,6 +278,14 @@ static bool SameSetting(const Reg & para, const std::string & wrote, const std::
 }
 
 bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index){
+  lastWriteError.clear();
+  /// The board refuses some parameters while acquiring (PulsePolarity, the filter times, ...).
+  /// Refuse here instead, without touching the board, and say why.
+  if( !CanWriteNow(para) ){
+    lastWriteError = "cannot be changed while acquisition is running";
+    printf("WriteRefused|%d|%s| %s\n", serialNumber, para.GetPara().c_str(), lastWriteError.c_str());
+    return false;
+  }
   const std::string fullPara = para.GetFullPara(ch_index, nChannels);
   /// Compare and cache what is actually sent, not what the caller asked for.
   value = ClampToRange(fullPara.c_str(), value);
@@ -275,8 +294,8 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
     /// clamped or different value. ReadValue() caches the REAL value, so the panels and the
     /// per-run SaveSettingsToFile snapshot tell the truth either way; a mismatch fails the
     /// write so the caller's "done" branch does not fire. WriteOnly registers are skipped.
-    /// The /ch/0..N/ range path is write-only on the board (reading it returns "Command
-    /// error"), so an all-channel write is verified one channel at a time.
+    /// Range paths (/ch/0..N/, /vga/0..3/, ...) are write-only on the board (reading one returns
+    /// "Command error"), so a write to all of them is verified one index at a time.
     if( !isDummy && para.ReadWrite() != WriteOnly ){
       auto verify = [&](int idx) {
         std::string back = ReadValue(para, idx);
@@ -285,12 +304,22 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
           printf("ReadbackMismatch|%d|%-45s| wrote %s, board has %s\n",
                  serialNumber, para.GetFullPara(idx, nChannels).c_str(),
                  value.c_str(), back.c_str());
+          if( lastWriteError.empty() ) lastWriteError = "board has " + back + " (wrote " + value + ")";
         }
         return same;
       };
+      int nIndex = 0; // how many indices a -1 covers; 0 = not a range path
+      if( ch_index < 0 ){
+        switch( para.GetType() ){
+          case TYPE::CH   : nIndex = nChannels; break;
+          case TYPE::VGA  : case TYPE::LVDS : nIndex = 4; break;
+          case TYPE::GROUP: nIndex = MaxNumberOfGroup; break;
+          case TYPE::DIG  : break;
+        }
+      }
       bool allSame = true;
-      if( para.GetType() == TYPE::CH && ch_index < 0 ){
-        for( int ch = 0; ch < nChannels; ch++ ) allSame &= verify(ch);
+      if( nIndex > 0 ){
+        for( int i = 0; i < nIndex; i++ ) allSame &= verify(i);
       }else{
         allSame = verify(ch_index);
       }
@@ -352,8 +381,49 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
     }
     return true;
   }else{
+    lastWriteError = isConnected ? "board rejected the write" : "digitizer not connected";
     return false;
   }
+}
+
+/// The run flag lives on the board's own table entry for the parameter; the Reg a caller passes
+/// is usually a global PHA::/PSD:: definition, which only carries the name and type.
+bool Digitizer2Gen::IsSetInRun(const Reg &para) const {
+  switch( para.GetType() ){
+    case TYPE::CH : {
+      const int i = LookUp(chMap, para.GetPara());
+      return i >= 0 && i < (int) chSettingTable.size() && chSettingTable[i].IsSetInRun();
+    }
+    case TYPE::DIG : {
+      const int i = LookUp(boardMap, para.GetPara());
+      return i >= 0 && i < (int) boardSettings.size() && boardSettings[i].IsSetInRun();
+    }
+    case TYPE::LVDS : {
+      const int i = LookUp(LVDSMap, para.GetPara());
+      return i >= 0 && i < (int) LVDSSettings[0].size() && LVDSSettings[0][i].IsSetInRun();
+    }
+    case TYPE::VGA   : return VGASetting[0].IsSetInRun();
+    case TYPE::GROUP : return InputDelay[0].IsSetInRun();
+  }
+  return false;
+}
+
+void Digitizer2Gen::ReadSetInRunFlags(){
+  if( !isConnected ) return;
+  /// ~0.2 ms each: FELib answers attributes from its local copy of the device tree.
+  auto readFlag = [&](Reg & reg, int index){
+    char v[32] = {0};
+    const std::string path = reg.GetFullPara(index, nChannels) + "/setinrun";
+    reg.SetSetInRun( CAEN_FELib_GetValue(handle, path.c_str(), v) == CAEN_FELib_Success
+                     && std::string(v) == "true" );
+  };
+  for( auto & reg : boardSettings ) readFlag(reg, -1);
+  for( auto & reg : chSettingTable ) readFlag(reg, 0);
+  for( int i = 0; i < 4; i++ ){
+    readFlag(VGASetting[i], i);
+    for( auto & reg : LVDSSettings[i] ) readFlag(reg, i);
+  }
+  for( int i = 0; i < MaxNumberOfGroup; i++ ) readFlag(InputDelay[i], i);
 }
 
 void Digitizer2Gen::SendCommand(const char * parameter){
@@ -460,6 +530,7 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   }
 
   AdjustParameterRanges();
+  ReadSetInRunFlags();
   ReadAllSettings();
   //------ set default setting file name
   settingFileName = "settings_"+ std::to_string(serialNumber) + ".dat";
@@ -1828,6 +1899,10 @@ bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
     }
 
     fclose(loadFile);
+    /// The loop above filled the cache from the FILE and wrote with the raw overload, which does
+    /// not read back. Re-read so the cache holds what the board actually took (clamped, rounded,
+    /// or refused), as everywhere else.
+    if( isConnected ) ReadAllSettings();
     /// A board that dropped off the net during the load used to still report "loaded" with
     /// every write failing. Any rejected write fails the whole load; the console names them.
     if( nWriteFail > 0 ){

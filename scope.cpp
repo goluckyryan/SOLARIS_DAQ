@@ -416,10 +416,16 @@ void Scope::ChangeDigitizer(){
   digiMTX[index].unlock();
   allowChange = true;
 
+  /// SetupPHA/SetupPSD just rebuilt every setting widget, enabled. While the scope runs that
+  /// handed the user Polarity and the filter times, which the board refuses mid-acquisition --
+  /// the "polarity turns red and cannot change back" report. Put the running-state lock back.
+  if( scopeRunning ) ScopeControlOnOff(false);
+
   RefreshTraceBrowser(); // this board has its own ring buffer
 }
 
 void Scope::CleanUpSettingsGroupBox(){
+  scopeCtrls.clear();
   QList<QLabel *> labelChildren1 = settingBox->findChildren<QLabel *>();
   for( int i = 0; i < labelChildren1.size(); i++) delete labelChildren1[i];
   
@@ -553,8 +559,15 @@ void Scope::UpdateSettingsFromMemeory(){
     ScopeReadSpinBoxValue(iDigi, ch, sbBaselineGuard, PHA::CH::EnergyFilterBaselineGuard);
     ScopeReadSpinBoxValue(iDigi, ch, sbPileUpGuard, PHA::CH::EnergyFilterPileUpGuard);
 
+    cbPolarity->setStyleSheet("");
+    cbWaveRes->setStyleSheet("");
+    cbTrapPeakAvg->setStyleSheet("");
+    cbBaselineAvg->setStyleSheet("");
+    cbLowFreqFilter->setStyleSheet("");
+
     sbRL->setStyleSheet("");
     sbPT->setStyleSheet("");
+    sbDCOffset->setStyleSheet("");
     sbThreshold->setStyleSheet("");
     sbTimeRiseTime->setStyleSheet("");
     sbTimeGuard->setStyleSheet("");
@@ -714,6 +727,7 @@ void Scope::StartScope(){
   /// already-running QThread once per digitizer was the visible part of having these inside.
   if( anyStarted ){
     updateTraceThread->start();
+    scopeRunning = true;
     ScopeControlOnOff(false);
     emit TellSettingsPanelControlOnOff();
   }
@@ -750,6 +764,7 @@ void Scope::StopScope(){
     emit TellACQOnOff(false);
   }
 
+  scopeRunning = false;
   ScopeControlOnOff(true);
   emit TellSettingsPanelControlOnOff();
 
@@ -942,9 +957,25 @@ void Scope::ScopeControlOnOff(bool on){
     }
   }
 
-  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PHA ){ 
+  //^======== Which settings stay editable while the scope is running -- edit this block.
+  /// `on` is true when the scope is stopped. setEnabled(true) = live while the scope runs;
+  /// setEnabled(on) = locked while it runs. The loop below also locks anything the board itself
+  /// refuses while acquiring (Digitizer2Gen::IsSetInRun), whatever this block says, so a wrong
+  /// `true` here only greys out instead of failing in red.
+  const int iDigi = cbScopeDigi->currentIndex();
+
+  if( digi[iDigi]->GetFPGAType() == DPPType::PHA ){
+    //--- live
+    sbThreshold->setEnabled(true);
+    sbDCOffset->setEnabled(true);
+    sbPT->setEnabled(true);
+    sbBaselineGuard->setEnabled(true);
+    sbPileUpGuard->setEnabled(true);
+    cbLowFreqFilter->setEnabled(true);
+    //--- locked while running (the board refuses these during acquisition)
     sbRL->setEnabled(on);
-    sbPT->setEnabled(on);
+    cbPolarity->setEnabled(on);
+    cbWaveRes->setEnabled(on);
     sbTimeRiseTime->setEnabled(on);
     sbTimeGuard->setEnabled(on);
     sbTrapRiseTime->setEnabled(on);
@@ -952,51 +983,45 @@ void Scope::ScopeControlOnOff(bool on){
     sbTrapPoleZero->setEnabled(on);
     sbEnergyFineGain->setEnabled(on);
     sbTrapPeaking->setEnabled(on);
-    cbPolarity->setEnabled(on);
-    cbWaveRes->setEnabled(on);
     cbTrapPeakAvg->setEnabled(on);
     cbBaselineAvg->setEnabled(on);
-
-    //sbDCOffset->setEnabled(on);
-    //sbThreshold->setEnabled(on);
-    //sbBaselineGuard->setEnabled(on);
-    //sbPileUpGuard->setEnabled(on);
-    //cbLowFreqFilter->setEnabled(on);
   }
 
-  if( digi[cbScopeDigi->currentIndex()]->GetFPGAType() == DPPType::PSD ){
-
+  if( digi[iDigi]->GetFPGAType() == DPPType::PSD ){
+    //--- live
+    sbThreshold->setEnabled(true);
+    sbDCOffset->setEnabled(true);
+    sbPT->setEnabled(true);
+    spbADCInputBaselineGuard->setEnabled(true);
+    spbAbsBaseline->setEnabled(true);
+    spbPileupGap->setEnabled(true);
+    //--- locked while running
+    cbbSmoothingFactor->setEnabled(on);      // settable in run, kept locked by choice
+    cbbTimeFilterSmoothing->setEnabled(on);  // settable in run, kept locked by choice
+    sbRL->setEnabled(on);
     cbPolarity->setEnabled(on);
     cbWaveRes->setEnabled(on);
     cbbADCInputBaselineAvg->setEnabled(on);
-    cbbSmoothingFactor->setEnabled(on);
     cbbTriggerFilter->setEnabled(on);
-    cbbTimeFilterSmoothing->setEnabled(on);
     cbbEnergyGain->setEnabled(on);
-
-    sbRL->setEnabled(on);
-    sbPT->setEnabled(on);
-    
-    //sbThreshold->setEnabled(on);
-    //sbDCOffset->setEnabled(on);
-    
-    //spbADCInputBaselineGuard->setEnabled(on);
-    //spbCFDDelay->setEnabled(on);
-    //spbCFDFraction->setEnabled(on);
-    //spbAbsBaseline->setEnabled(on);
-    //spbTimeFilterReTriggerGuard->setEnabled(on);
-    //spbPileupGap->setEnabled(on);
-    //spbGateLong->setEnabled(on);
-    //spbGateShort->setEnabled(on);
-    //spbGateOffset->setEnabled(on);
-
+    spbCFDDelay->setEnabled(on);
+    spbCFDFraction->setEnabled(on);
+    spbTimeFilterReTriggerGuard->setEnabled(on);
+    spbGateLong->setEnabled(on);
+    spbGateShort->setEnabled(on);
+    spbGateOffset->setEnabled(on);
   }
 
+  if( !on ){
+    for( const auto & c : scopeCtrls ){
+      if( !digi[iDigi]->IsSetInRun(c.second) ) c.first->setEnabled(false);
+    }
+  }
 }
 
 void Scope::ScopeReadSpinBoxValue(int iDigi, int ch, RSpinBox *sb, const Reg digPara){
   std::string ans = digi[iDigi]->GetSettingValueFromMemory(digPara, ch);
-  sb->setValue(atoi(ans.c_str()));
+  sb->setValue(atof(ans.c_str())); // atof: Fine Gain 1.234 showed as 1
 }
 
 void Scope::ScopeReadComboBoxValue(int iDigi, int ch, RComboBox *cb, const Reg digPara){
@@ -1015,6 +1040,9 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   layout->addWidget(lb, row, col);
   sb = new RSpinBox(settingBox);
+  scopeCtrls.push_back({sb, digPara});
+  /// Decimals before the range (QDoubleSpinBox rounds min/max to them): Fine Gain's step is 0.001.
+  if( digPara.GetAnswerType() == ANSTYPE::FLOAT ) sb->SetDecimalsFromStep(digPara.GetAnswers()[2].first);
   sb->setMinimum(atof(digPara.GetAnswers()[0].first.c_str()));
   sb->setMaximum(atof(digPara.GetAnswers()[1].first.c_str()));
   sb->setSingleStep(atof(digPara.GetAnswers()[2].first.c_str()));
@@ -1037,14 +1065,13 @@ void Scope::ScopeMakeSpinBox(RSpinBox * &sb, QString str, QGridLayout *layout, i
     QString msg;
     msg = QString::fromStdString(digPara.GetPara()) + "|DIG:"+ QString::number(digi[iDigi]->GetSerialNumber()) + ",CH:" + (ch == -1 ? "All" : QString::number(ch));
     msg += " = " + QString::number(sb->value());
-    if( digi[iDigi]->WriteValue(digPara, std::to_string((int)sb->value()), ch)){
+    if( digi[iDigi]->WriteValue(digPara, sb->ValueString(), ch)){
       SendLogMsg(msg + "|OK.");
       sb->setStyleSheet("");
       UpdateSettingsFromMemeory();
       UpdateOtherPanels();
     }else{
-      SendLogMsg(msg + "|Fail.");
-      sb->setStyleSheet("color:red;");
+      ReportWriteFail(iDigi, sb, msg);
     }
   });
 
@@ -1057,6 +1084,7 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
   layout->addWidget(lb, row, col);
 
   cb = new RComboBox(settingBox);
+  scopeCtrls.push_back({cb, digPara});
   for( int i = 0 ; i < (int) digPara.GetAnswers().size(); i++){
     cb->addItem(QString::fromStdString((digPara.GetAnswers())[i].second), QString::fromStdString((digPara.GetAnswers())[i].first));
   }
@@ -1076,10 +1104,18 @@ void Scope::ScopeMakeComoBox(RComboBox * &cb, QString str, QGridLayout *layout, 
       UpdateSettingsFromMemeory();
       UpdateOtherPanels();
     }else{
-      SendLogMsg(msg + "|Fail.");
-      cb->setStyleSheet("color:red;");
+      ReportWriteFail(iDigi, cb, msg);
     }
   });
+}
+
+/// A failed write leaves the board unchanged, so refill the widgets from the cache (what the
+/// board reported) rather than leave the rejected value on show, then mark this one red and log why.
+void Scope::ReportWriteFail(int iDigi, QWidget * w, const QString & msg){
+  const std::string & why = digi[iDigi]->GetLastWriteError();
+  SendLogMsg(msg + "|Fail" + (why.empty() ? QString(".") : ": " + QString::fromStdString(why)));
+  UpdateSettingsFromMemeory();
+  w->setStyleSheet("color:red;");
 }
 
 

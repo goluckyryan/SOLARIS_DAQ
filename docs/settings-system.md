@@ -67,18 +67,40 @@ Everything a channel `Reg` carries except its value (name, type, RW flag, unit, 
 the same for every channel, so there is one `chSettingTable` and a per-channel `chValue` vector
 indexed like it.
 
-`WriteValue(Reg, value, ch)` writes to hardware **and** updates the cache — `ClassDigitizer2Gen.cpp:213`:
+**The cache only ever holds what the board reported.** `ReadValue(Reg, ch)` stores a value only
+when the read succeeded; a failed read hands its error text back to the caller but never into the
+cache. `LoadSettingsFromFile()` re-reads the whole board after replaying a file, so values the
+board clamped, rounded or refused show as the board has them.
+
+`WriteValue(Reg, value, ch)` is the one checked write path:
+
+1. **Run lock.** If the board is acquiring and the parameter is not settable in run, it refuses
+   without touching the board (`WriteRefused` on the console).
+2. **Clamp** the value to the parameter's range and step (`ClampToRange`).
+3. **Write**, then **read back** every index the write covered. A range path (`/ch/0..N/`,
+   `/vga/0..3/`, ...) cannot be read, so an all-channel write is verified channel by channel.
+   `SameSetting()` compares by type: integers by rounded value (DC Offset written as 50 reads
+   back 50.001), floats within half a step (clock-out delay rounds to 74.074 ps), masks by number
+   (`0xFF` == `255`), choices ignoring case, spacing and order (`TrgIn | SwTrg` == `SwTrg|TrgIn`).
+4. On a match, update the cache. On a mismatch, print `ReadbackMismatch` and return false; the
+   readback has already put the board's real value in the cache.
+
+`GetLastWriteError()` says why the last write failed, for the panels' log line.
 
 ```cpp
 if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy ){
-  // real board, readable register: read it back; a mismatch (e.g. the firmware clamped
-  // the value) prints ReadbackMismatch and returns false without touching the cache
-  // ... update the cache
+  // real board: verify by readback, then update the cache
 ```
 
 That `|| isDummy` is the entire reason dummy boards exist: with no hardware the write fails, the
 cache accepts the value anyway, and settings can be loaded, edited and saved with no digitizer
 present. See the README's *Dummy digitizers* section.
+
+**Settable in run.** At open, `ReadSetInRunFlags()` reads CAEN's `setinrun` attribute
+(`<path>/setinrun`) for every parameter into the board's own table; a parameter without the
+attribute counts as not settable. `IsSetInRun(Reg)` and `CanWriteNow(Reg)` answer from that. On a
+VX2745 DPP-PHA the board refuses, among others, Polarity, Record length, every trapezoid and
+time-filter time, Fine gain, Peaking, Wave source/resolution, ITL, LVDS, clock and start source.
 
 `GetSettingValueFromMemory()` reads the cache without touching hardware, which is what lets the GUI
 and the elog template query settings while a run is in progress.
@@ -148,25 +170,46 @@ for combo boxes (`:3053`).
 wrapped in a `false` / `true` sandwich. Without it, populating a combo triggers a write.
 
 **Spin boxes commit on Enter, not on change.** `valueChanged` only paints the box blue;
-`returnPressed` does the write (`:2909-2913`). The style sheet is the state: `""` committed,
-`blue` edited-not-committed, `red` write failed, `orange` non-default.
+`returnPressed` does the write. The style sheet is the state: `""` committed,
+`blue` edited-not-committed, `red` write failed, `orange` non-default. A spin box for a FLOAT
+parameter shows as many decimals as its step, and `RSpinBox::ValueString()` writes the fraction.
+
+**A failed write refills the panel.** `ReportWriteFail()` logs the reason, refills every widget
+from the cache — so the box shows what the board really holds, not the rejected value — and
+marks the widget red.
+
+**What stays editable during a run.** `EnableControl()` keeps a short allow-list editable while a
+board acquires (`IsRunEditable()` in `digiSettingsPanel.cpp`): Threshold, the wave probes and
+DAC-out — and only where the board also allows it. Everything else is locked, even what the board
+would accept, because changing it mid-run alters which events are recorded, shifts the energy,
+breaks multi-board sync, or (Pre-trigger, re-enabling a channel) restarts that channel's
+timestamp — and the settings file saved at run start would no longer describe the data. Every
+`SetupSpinBox`/`SetupComboBox` widget, and every one-parameter tab page, is recorded with its
+parameter in `ctrlReg`; containers that mix editable and locked parameters stay enabled and lock
+their children one by one, the rest are locked whole.
+
+**The scope keeps its own list.** `Scope::ScopeControlOnOff()` has one block that says which
+scope widgets stay live while the scope runs (Threshold, DC offset, Pre-trigger, guards, ...).
+After it, anything the board refuses in run is locked regardless. The lock is re-applied when
+`ChangeDigitizer()` rebuilds the widgets.
 
 ## Adding a new parameter
 
 1. Add a `Reg` to the right namespace in `DigiParameters.h` and **append** it to the matching
    `AllSettings` vector — appending, because the settings-file id is its position.
 2. Add a widget in `digiSettingsPanel.cpp` with `SetupSpinBox` / `SetupComboBox`, or a whole page
-   with `SetupSpinBoxTab` / `SetupComboBoxTab`.
+   with `SetupSpinBoxTab` / `SetupComboBoxTab`. It is locked during a run unless its name is in
+   `IsRunEditable()`. A widget built by hand is not in `ctrlReg`, so it is always locked in a run.
 3. Add a refresh line in `UpdatePanelFromMemory()` (per-channel loop from `:2632`).
 4. Nothing else — save, load and the cache are all driven off the vectors.
 
 ## Traps
 
 - **Ids are positional.** Inserting into an `AllSettings` vector invalidates every existing `.dat`.
-- **`EnableControl()`** (`:2338`) re-enables an explicit list of widgets based only on `IsAcqOn()`,
-  and clobbers the construction-time dummy greying at `:264`. It also disables every page of
-  `inputTab`/`trapTab`/`probeTab`/`otherTab` during a run (`:2380-2388`), except the first three
-  pages of `inputTab`, so anything added to those other pages is dead during a run.
+- **`EnableControl()`** enables the board buttons from `IsAcqOn()` alone, which clobbers the
+  construction-time dummy greying of those buttons. It calls `UpdatePanelFromMemory()` last,
+  because that is where value-dependent states (the DAC-out level and channel boxes follow
+  DAC-out mode) are applied.
 - **`UpdatePanelFromMemory()` early-returns when the panel is not visible** (`:2477`).
 - **`chBox->setFixedWidth(900)`** (`:875`) constrains how wide a channel grid can be.
 - The panel is rebuilt wholesale when digitizers are reopened, so `IsDummy()` is stable for its

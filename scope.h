@@ -238,6 +238,15 @@ private:
 
   bool allowChange;
 
+  /// True between StartScope() and StopScope(). ChangeDigitizer() rebuilds the setting widgets
+  /// and needs it to put the running-state lock back on the new ones.
+  bool scopeRunning = false;
+
+  /// Each setting widget with the parameter it writes, rebuilt with the widgets. ScopeControlOnOff
+  /// uses it to keep disabled anything the board refuses while acquiring.
+  QVector<QPair<QWidget*, Reg>> scopeCtrls;
+  void ReportWriteFail(int iDigi, QWidget * w, const QString & msg);
+
   void ChangeDigitizer();
 
   void PlotSnapshot(const TraceSnapshot & ts, unsigned int traceLength, int sample2ns);

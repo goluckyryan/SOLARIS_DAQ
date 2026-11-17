@@ -22,7 +22,11 @@ class Reg {
     ANSTYPE ansType;
     std::string answerUnit;
     std::vector<std::pair<std::string, std::string>> answer;
-    
+    /// Whether the board accepts this parameter while acquiring. Read from the board's own
+    /// "setinrun" attribute when it is opened (Digitizer2Gen::ReadSetInRunFlags), so it is only
+    /// meaningful on a board's table, not on the global PHA::/PSD:: definitions.
+    bool setInRun = false;
+
   public:
     Reg(){
       name = "";
@@ -56,6 +60,8 @@ class Reg {
     RW          ReadWrite() const {return readWrite;}
     TYPE        GetType() const {return type;}
     ANSTYPE     GetAnswerType() const {return ansType;}
+    bool        IsSetInRun() const {return setInRun;}
+    void        SetSetInRun(bool yes) {setInRun = yes;}
     std::string GetUnit() const {return answerUnit;}
     /// By reference. This used to copy the whole answer list -- dozens of string pairs -- on every
     /// call, and several call sites call it twice per loop iteration just to index it.
@@ -421,7 +427,7 @@ namespace PHA{
   }
 
   namespace VGA{
-    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::INTEGER, "dB"); // VX2745 only
+    const Reg VGAGain ("VGAGain", RW::ReadWrite, TYPE::VGA, {{"0", ""},{"40", ""}, {"0.5",""}}, ANSTYPE::FLOAT, "dB"); // VX2745 only; FLOAT: the step is 0.5 dB
   }
 
   namespace LVDS{

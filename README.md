@@ -71,8 +71,9 @@ if( WriteValue(para.GetFullPara(ch_index, nChannels).c_str(), value) || isDummy)
 ```
 
 With no board the hardware write fails, and `|| isDummy` lets the in-memory cache accept the value
-anyway, so `LoadSettingsFromFile` / `SaveSettingsToFile` round-trip normally. `isDummy` appears in
-only three places in the whole `.cpp` — initialised false, set by `SetDummy()`, and this line.
+anyway, so `LoadSettingsFromFile` / `SaveSettingsToFile` round-trip normally. The same write path
+skips the readback check for a dummy, `CanWriteNow()` never run-locks one, and `ReadData()`
+returns at once for one; beyond that, `isDummy` is only initialised and set by `SetDummy()`.
 
 **A dummy is a settings object, never a data source.** `readDataThread[i]` is `NULL` for one, and
 it never produces a hit. Any code that reads data or talks to hardware must therefore guard on

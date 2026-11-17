@@ -62,6 +62,17 @@ class Digitizer2Gen {
     /// snapped to the step. Idempotent, so the typed WriteValue can compare readback against it.
     std::string ClampToRange(const char * parameter, std::string value);
 
+    /// GetValue that reports success separately from the text, so a failed read can never be
+    /// mistaken for a value (ReadValue hands back the error text as its string).
+    int ReadRaw(const char * parameter, std::string & out, bool verbose);
+
+    /// Fill each table Reg's setInRun from the board's "setinrun" attribute. A parameter with no
+    /// attribute, or one the board does not answer, counts as not settable in run.
+    void ReadSetInRunFlags();
+
+    /// Why the last typed WriteValue failed, for the panels' log line. GUI thread only.
+    std::string lastWriteError;
+
     /// How many TempSensADCn this model answers, resolved from ModelName once the board has been
     /// opened. It replaces three hand-written exclusion lists that had drifted apart -- and all
     /// three were wrong in the same way: they said a VX2745 has TempSensADC0..6 and forgot
@@ -143,6 +154,13 @@ class Digitizer2Gen {
     void         SendCommand(std::string shortPara);
 
     int FindIndex(const Reg &para); // get index from DIGIPARA
+
+    /// Does the board accept this parameter while acquiring? From the board's own flags.
+    bool IsSetInRun(const Reg &para) const;
+    /// Can this parameter be written right now? False only for a non-run parameter while the
+    /// board is acquiring; the typed WriteValue refuses those without touching the board.
+    bool CanWriteNow(const Reg &para) const { return isDummy || !acqON || IsSetInRun(para); }
+    const std::string & GetLastWriteError() const { return lastWriteError; }
     std::string GetSettingValueFromMemory(const Reg &para, unsigned int ch_index = 0); // read from memory
 
     

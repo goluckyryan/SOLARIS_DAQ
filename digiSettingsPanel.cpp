@@ -5,6 +5,10 @@
 #include <QStyledItemDelegate>
 #include <QToolTip>
 #include <QPoint>
+#include <QAbstractButton>
+#include <QAbstractSpinBox>
+#include <QLineEdit>
+#include <QSet>
 
 std::vector<std::pair<std::string, Reg>> infoIndex = {{"Serial Num : ",            PHA::DIG::SerialNumber},
                                                       {"IP : ",                    PHA::DIG::IPAddress},
@@ -2335,33 +2339,84 @@ void DigiSettingsPanel::UpdateStatus(){
 
 }
 
-void DigiSettingsPanel::EnableControl(){
+/// The settings a user may change while a DAQ run is acquiring. Kept deliberately short: the board
+/// accepts many more (measured on a VX2745: trigger sources, coincidence, channel enable, pre-
+/// trigger, DC offset, VGA, veto/sync, test pulse), but changing those mid-run alters which
+/// events are recorded, shifts the energy, breaks multi-board sync, or -- for Pre-trigger and
+/// re-enabling a channel -- restarts that channel's timestamp. They also make the settings file
+/// saved at run start wrong for the data. The scope has its own, wider list (Scope::ScopeControlOnOff).
+static bool IsRunEditable(const Reg & para){
+  static const QSet<QString> names = {
+    "TriggerThr",
+    "WaveAnalogProbe0", "WaveAnalogProbe1",
+    "WaveDigitalProbe0", "WaveDigitalProbe1", "WaveDigitalProbe2", "WaveDigitalProbe3",
+    "DACoutMode", "DACoutStaticLevel", "DACoutChSelect",
+  };
+  return names.contains(QString::fromStdString(para.GetPara()));
+}
 
-  UpdatePanelFromMemory();
+/// A widget that takes user input. The internals of a compound widget (a spin box's line edit)
+/// are skipped by the caller, so they follow their owner.
+static bool IsInputWidget(const QWidget * w){
+  return qobject_cast<const QAbstractSpinBox*>(w) || qobject_cast<const QComboBox*>(w)
+      || qobject_cast<const QAbstractButton*>(w)  || qobject_cast<const QLineEdit*>(w);
+}
+
+bool DigiSettingsPanel::EditableNow(int id, QWidget * w) const {
+  if( !digi[id]->IsAcqOn() ) return true;
+  auto it = ctrlReg.constFind(w);
+  if( it == ctrlReg.constEnd() ) return false; // not tied to one parameter: locked in a run
+  return IsRunEditable(it.value()) && digi[id]->IsSetInRun(it.value());
+}
+
+/// For a container that mixes run-editable and locked parameters (Threshold sits next to
+/// Polarity): keep the container enabled -- a disabled parent forces every child off -- and set
+/// each input widget in it on its own.
+void DigiSettingsPanel::LockChildren(int id, QWidget * container){
+  container->setEnabled(true);
+  const auto children = container->findChildren<QWidget*>();
+  for( QWidget * w : children ){
+    if( !IsInputWidget(w) ) continue;
+    bool inner = false;
+    for( QWidget * p = w->parentWidget(); p && p != container; p = p->parentWidget() ){
+      if( IsInputWidget(p) ){ inner = true; break; }
+    }
+    if( !inner ) w->setEnabled(EditableNow(id, w));
+  }
+}
+
+void DigiSettingsPanel::EnableControl(){
 
   /// icBox1/icBox2 are the single Inquiry/Copy tab, not per-digitizer, so they must reflect every
   /// board: copying settings while any board is acquiring is what has to be blocked.
   bool anyAcqOn = false;
 
   for( int id = 0; id < nDigi; id ++){
-    bool enable = !digi[id]->IsAcqOn();
+    const bool enable = !digi[id]->IsAcqOn();
     if( !enable ) anyAcqOn = true;
 
-    //digiBox[id]->setEnabled(enable);
-    //if( digi[id]->GetFPGAType() == "DPP_PHA") VGABox[id]->setEnabled(enable);
-    //if( ckbGlbTrgSource[id][3]->isChecked() ) testPulseBox[id]->setEnabled(enable);
+    //--- containers that hold run-editable parameters: per widget
+    LockChildren(id, bdCfg[id]);   // DAC-out
+    LockChildren(id, box1[id]);    // Threshold
+    LockChildren(id, box4[id]);    // probes
 
-    bdCfg[id]->setEnabled(enable);
-    // bdTestPulse[id]->setEnabled(enable);
-    bdVGA[id]->setEnabled(enable);
+    //--- containers with nothing editable in a run: the whole container
+    bdTestPulse[id]->setEnabled(enable);
+    bdVGA[id]->setEnabled(enable && digi[id]->GetModelName() == "VX2745");
     bdLVDS[id]->setEnabled(enable);
     bdITL[id]->setEnabled(enable);
-
-    box1[id]->setEnabled(enable);
+    if( digi[id]->GetModelName() != "VX2730" ) bdGroup[id]->setEnabled(enable && digi[id]->GetCupVer() >= MIN_VERSION_GROUP);
     box3[id]->setEnabled(enable);
-    box4[id]->setEnabled(enable);
     box5[id]->setEnabled(enable);
     box6[id]->setEnabled(enable);
+    triggerMapTab[id]->setEnabled(enable);
+
+    //--- per-parameter tab pages: one parameter per page, so the page follows its parameter
+    for( QTabWidget * tab : {inputTab[id], trapTab[id], probeTab[id], otherTab[id]} ){
+      for( int i = 0; i < tab->count(); i++ ){
+        if( QWidget * page = tab->widget(i) ) page->setEnabled(EditableNow(id, page));
+      }
+    }
 
     bnReadSettngs[id]->setEnabled(enable);
     bnResetBd[id]->setEnabled(enable);
@@ -2373,28 +2428,14 @@ void DigiSettingsPanel::EnableControl(){
     bnDisarmACQ[id]->setEnabled(enable);
     bnSoftwareStart[id]->setEnabled(enable);
     bnSoftwareStop[id]->setEnabled(enable);
-    
-    if( digi[id]->GetModelName() != "VX2745" ) bdVGA[id]->setEnabled(false);
-
-    QVector<QTabWidget*> tempArray = {inputTab[id], trapTab[id], probeTab[id], otherTab[id] };
-
-    for( int k = 0; k < tempArray.size(); k++){
-      for( int i = 0; i < tempArray[k]->count(); i++) {
-        if( k == 0 && (i == 0 || i == 1 || i == 2 ) ) continue;
-        QWidget* currentTab = tempArray[k]->widget(i);
-        /// Disable the page and let Qt propagate. Walking every descendant instead used to
-        /// re-enable bdVGA on a non-VX2745 board, undoing the line above.
-        if( currentTab ) currentTab->setEnabled(enable);
-      }
-    }
-
-    //triggerMapTab[ID]->setEnabled(enable);
-
   }
 
   icBox1->setEnabled(!anyAcqOn);
   icBox2->setEnabled(!anyAcqOn);
 
+  /// Last: it re-applies the widget states that depend on a value (the DAC-out level and
+  /// channel boxes follow DAC-out mode), which the loop above would otherwise overwrite.
+  UpdatePanelFromMemory();
 }
 
 void DigiSettingsPanel::SaveSettings(){
@@ -2860,6 +2901,7 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   cbb = new RComboBox(this);
+  ctrlReg.insert(cbb, para);
   layout->addWidget(cbb, row, col+1, srow, scol);
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), QString::fromStdString((para.GetAnswers())[i].first));
@@ -2881,10 +2923,19 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_
       UpdatePanelFromMemory();
       UpdateOtherPanels();
     }else{
-      SendLogMsg(msg + "|Fail.");
-      cbb->setStyleSheet("color:red;");
+      ReportWriteFail(cbb, msg);
     }
   });
+}
+
+/// A failed write leaves the board unchanged, so the widget must not keep showing the value the
+/// user typed: refill every widget from the cache (which holds what the board reported), then
+/// mark this one red and say why in the log.
+void DigiSettingsPanel::ReportWriteFail(QWidget * w, const QString & msg){
+  const std::string & why = digi[ID]->GetLastWriteError();
+  SendLogMsg(msg + "|Fail" + (why.empty() ? QString(".") : ": " + QString::fromStdString(why)));
+  UpdatePanelFromMemory();
+  w->setStyleSheet("color:red;");
 }
 
 void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
@@ -2892,6 +2943,12 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
   layout->addWidget(lb, row, col);
   lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
   spb = new RSpinBox(this);  
+  ctrlReg.insert(spb, para);
+  /// A FLOAT parameter shows as many decimals as its step (Fine Gain 0.001, VGA 0.5 dB). Before
+  /// the range: QDoubleSpinBox rounds min/max to the current decimals.
+  if( para.GetAnswerType() == ANSTYPE::FLOAT && para.GetAnswers().size() >= 3 ){
+    spb->SetDecimalsFromStep(para.GetAnswers()[2].first);
+  }
   if( isMaster ){
     spb->setMinimum(qMin(-1.0, atof( para.GetAnswers()[0].first.c_str())));
   }else{
@@ -2925,36 +2982,18 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
     if( para.GetType() == TYPE::CH ) msg += ",CH:" + (index == -1 ? "All" : QString::number(index));
     msg += " = " + QString::number(spb->value());
 
-    if( para.GetPara() == PHA::GROUP::InputDelay.GetPara() ){
+    /// InputDelay is shown in ns but written in 8 ns units.
+    const std::string valueStr = ( para.GetPara() == PHA::GROUP::InputDelay.GetPara() )
+                               ? std::to_string((int)(spb->value()/8))
+                               : spb->ValueString();
 
-      if( digi[ID]->WriteValue(para, std::to_string((int)(spb->value()/8)), index)){
-        SendLogMsg(msg + "|OK.");
-        spb->setStyleSheet("");
-        UpdatePanelFromMemory();
-        UpdateOtherPanels();
-      }else{
-        SendLogMsg(msg + "|Fail.");
-        spb->setStyleSheet("color:red;");
-      }
-
-      // printf("============%d| %s \n", index, digi[ID]->GetSettingValueFromMemory(PHA::GROUP::InputDelay, index).c_str());
-
-
+    if( digi[ID]->WriteValue(para, valueStr, index)){
+      SendLogMsg(msg + "|OK.");
+      spb->setStyleSheet("");
+      UpdatePanelFromMemory();
+      UpdateOtherPanels();
     }else{
-      /// Keep the fraction for decimal spin boxes (Fine Gain has 3 decimals); casting to int
-      /// would silently write 1.234 as 1.
-      std::string valueStr = spb->decimals() > 0
-                           ? QString::number(spb->value(), 'f', spb->decimals()).toStdString()
-                           : std::to_string((long long) std::llround(spb->value()));
-      if( digi[ID]->WriteValue(para, valueStr, index)){
-        SendLogMsg(msg + "|OK.");
-        spb->setStyleSheet("");
-        UpdatePanelFromMemory();
-        UpdateOtherPanels();
-      }else{
-        SendLogMsg(msg + "|Fail.");
-        spb->setStyleSheet("color:red;");
-      }
+      ReportWriteFail(spb, msg);
     }
   });
 }
@@ -3036,6 +3075,7 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
 
 void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1], const Reg & para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
+  ctrlReg.insert(tabPage, para); // one parameter per page: EnableControl locks the whole page
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
   allLayout->setAlignment(Qt::AlignTop);
@@ -3048,6 +3088,7 @@ void DigiSettingsPanel::SetupSpinBoxTab(RSpinBox *(&spb)[][MaxNumberOfChannel+1]
 
 void DigiSettingsPanel::SetupComboBoxTab(RComboBox *(&cbb)[][MaxNumberOfChannel + 1], const Reg & para, QString text, QTabWidget *tabWidget, int iDigi, int nChannel, int nCol){
   QWidget * tabPage = new QWidget(this); tabWidget->addTab(tabPage, text);
+  ctrlReg.insert(tabPage, para); // one parameter per page: EnableControl locks the whole page
   QGridLayout * allLayout = new QGridLayout(tabPage); 
   //allLayout->setAlignment(Qt::AlignTop | Qt::AlignHCenter);
   allLayout->setAlignment(Qt::AlignTop);
@@ -3384,21 +3425,24 @@ void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
   pbCopyChannel->setEnabled(chFromIndex >= 0 && isToIndexCleicked );
 }
 
+/// Both copies walk the TARGET board's own table: the global PHA list was used before, which on a
+/// PSD board tried PHA-only parameters. A failed parameter is logged and the copy carries on, so
+/// one refusal does not leave the rest half-copied; the return value says whether all went in.
 bool DigiSettingsPanel::CopyChannelSettings(int digiFrom, int chFrom, int digiTo, int chTo){
 
   if( !CheckDigitizersCanCopy() ) return false;
 
   SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFrom]->GetSerialNumber()) + ", CH:" +  QString::number(chFrom) + " ---> DIG:" + QString::number(digi[digiTo]->GetSerialNumber()) + ", CH:" +  QString::number(chTo));
-  for( int k = 0; k < (int) PHA::CH::AllSettings.size(); k ++){
-    if( PHA::CH::AllSettings[k].ReadWrite() != RW::ReadWrite ) continue;
-    std::string haha = digi[digiFrom]->GetSettingValueFromMemory(PHA::CH::AllSettings[k], chFrom);
-    if( !digi[digiTo]->WriteValue( PHA::CH::AllSettings[k],  haha , chTo ) ){
-      SendLogMsg("something wrong when copying setting : " + QString::fromStdString( PHA::CH::AllSettings[k].GetPara())) ;
-      return false;
-      break;
+  int nFail = 0;
+  for( const Reg & para : digi[digiTo]->GetChSettingTable() ){
+    if( para.ReadWrite() != RW::ReadWrite ) continue;
+    std::string value = digi[digiFrom]->GetSettingValueFromMemory(para, chFrom);
+    if( !digi[digiTo]->WriteValue(para, value, chTo) ){
+      SendLogMsg("Copy failed for " + QString::fromStdString(para.GetPara()) + ": " + QString::fromStdString(digi[digiTo]->GetLastWriteError()));
+      nFail++;
     }
   }
-  return true;
+  return nFail == 0;
 }
 
 bool DigiSettingsPanel::CopyBoardSettings(){
@@ -3408,21 +3452,19 @@ bool DigiSettingsPanel::CopyBoardSettings(){
   if( !CheckDigitizersCanCopy() ) return false;
 
   SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFromIndex]->GetSerialNumber()) + " to DIG:" +  QString::number(digi[digiToIndex]->GetSerialNumber()));
-  for( int i = 0; i < (int)digi[0]->GetNChannels(); i++){  /// bound = the chkChTo creation loop
-  if( chkChTo[i]->isChecked() ){
-    //Copy setting
-    for( int k = 0; k < (int) PHA::DIG::AllSettings.size(); k ++){
-      if( PHA::DIG::AllSettings[k].ReadWrite() != RW::ReadWrite ) continue;
-        if( ! digi[digiToIndex]->WriteValue( PHA::DIG::AllSettings[k],  digi[digiFromIndex]->GetSettingValueFromMemory(PHA::DIG::AllSettings[k])) ){
-          SendLogMsg("something wrong when copying setting : " + QString::fromStdString( PHA::DIG::AllSettings[k].GetPara())) ;
-          return false;
-          break;
-        }
-      }
+  /// Once. This used to sit inside a loop over the ticked channels, so the board settings were
+  /// written once per ticked channel -- and not at all when none was ticked, which is also how
+  /// CopyWholeDigitizer reached it.
+  int nFail = 0;
+  for( const Reg & para : digi[digiToIndex]->GetBoardSettings() ){
+    if( para.ReadWrite() != RW::ReadWrite ) continue;
+    if( !digi[digiToIndex]->WriteValue(para, digi[digiFromIndex]->GetSettingValueFromMemory(para)) ){
+      SendLogMsg("Copy failed for " + QString::fromStdString(para.GetPara()) + ": " + QString::fromStdString(digi[digiToIndex]->GetLastWriteError()));
+      nFail++;
     }
   }
-  SendLogMsg("------ done");
-  return true;
+  SendLogMsg(nFail == 0 ? "------ done" : "------ done, " + QString::number(nFail) + " setting(s) failed");
+  return nFail == 0;
 }
 
 bool DigiSettingsPanel::CopyWholeDigitizer(){
