@@ -59,22 +59,31 @@ void Digitizer2Gen::Initialization(){
   /// ResolveModelSensors() once ModelName has been read. A dummy never gets that far and keeps 1.
   nTempSensADC = 1;
 
-  boardSettings = PHA::DIG::AllSettings;
-  SetChSettingTable(PHA::CH::AllSettings);
+  SetFirmwareTables(false);
+
+}
+
+void Digitizer2Gen::SetFirmwareTables(bool isPSD){
+  const std::vector<Reg> & dig  = isPSD ? PSD::DIG::AllSettings  : PHA::DIG::AllSettings;
+  const std::vector<Reg> & ch   = isPSD ? PSD::CH::AllSettings   : PHA::CH::AllSettings;
+  const std::vector<Reg> & lvds = isPSD ? PSD::LVDS::AllSettings : PHA::LVDS::AllSettings;
+
+  boardSettings = dig;
+  SetChSettingTable(ch);
   for( int index = 0 ; index < 4; index ++) {
-    VGASetting[index] = PHA::VGA::VGAGain;
-    LVDSSettings[index] = PHA::LVDS::AllSettings;
+    VGASetting[index] = isPSD ? PSD::VGA::VGAGain : PHA::VGA::VGAGain;
+    LVDSSettings[index] = lvds;
   }
   for( int idx = 0; idx < 16; idx ++){
-    InputDelay[idx] = PHA::GROUP::InputDelay;
+    InputDelay[idx] = isPSD ? PSD::GROUP::InputDelay : PHA::GROUP::InputDelay;
   }
 
-  //build map
-  for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
-  for( int i = 0; i < (int) PHA::LVDS::AllSettings.size(); i++) LVDSMap[PHA::LVDS::AllSettings[i].GetPara()] = i;
-  for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
-
-
+  boardMap.clear();
+  LVDSMap.clear();
+  chMap.clear();
+  for( int i = 0; i < (int) dig.size(); i++)  boardMap[dig[i].GetPara()] = i;
+  for( int i = 0; i < (int) lvds.size(); i++) LVDSMap[lvds[i].GetPara()] = i;
+  for( int i = 0; i < (int) ch.size(); i++)   chMap[ch[i].GetPara()] = i;
 }
 
 /// Point the channel parameters at a firmware's table and give every channel -- all 64, not just
@@ -480,43 +489,10 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   printf("     ADC rate : %d Msps, tick2ns : %d ns\n", adcRate, tick2ns);
   printf("     Channels : %d\n", nChannels);
 
-  if( FPGAType == DPPType::PHA) {
+  if( FPGAType == DPPType::PHA || FPGAType == DPPType::PSD ) {
 
     printf("========== defining setting arrays for %s \n", FPGAType.c_str());
-
-    boardSettings = PHA::DIG::AllSettings;
-    SetChSettingTable(PHA::CH::AllSettings);
-    for( int index = 0 ; index < 4; index ++) {
-      VGASetting[index] = PHA::VGA::VGAGain;
-      LVDSSettings[index] = PHA::LVDS::AllSettings;
-    }
-    for( int idx = 0; idx < 16; idx ++ ){
-      InputDelay[idx] = PHA::GROUP::InputDelay;
-    }
-
-    //build map
-    for( int i = 0; i < (int) PHA::DIG::AllSettings.size(); i++) boardMap[PHA::DIG::AllSettings[i].GetPara()] = i;
-    for( int i = 0; i < (int) PHA::LVDS::AllSettings.size(); i++) LVDSMap[PHA::LVDS::AllSettings[i].GetPara()] = i;
-    for( int i = 0; i < (int) PHA::CH::AllSettings.size(); i++) chMap[PHA::CH::AllSettings[i].GetPara()] = i;
-
-  }else if (FPGAType == DPPType::PSD){
-
-    printf("========== defining setting arrays for %s \n", FPGAType.c_str());
-
-    boardSettings = PSD::DIG::AllSettings;
-    SetChSettingTable(PSD::CH::AllSettings);
-    for( int index = 0 ; index < 4; index ++) {
-      VGASetting[index] = PSD::VGA::VGAGain;
-      LVDSSettings[index] = PSD::LVDS::AllSettings;
-    }
-    for( int idx = 0; idx < 16; idx ++ ){
-      InputDelay[idx] = PSD::GROUP::InputDelay;
-    }
-
-    //build map
-    for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++) boardMap[PSD::DIG::AllSettings[i].GetPara()] = i;
-    for( int i = 0; i < (int) PSD::LVDS::AllSettings.size(); i++) LVDSMap[PSD::LVDS::AllSettings[i].GetPara()] = i;
-    for( int i = 0; i < (int) PSD::CH::AllSettings.size(); i++) chMap[PSD::CH::AllSettings[i].GetPara()] = i;
+    SetFirmwareTables(FPGAType == DPPType::PSD);
 
   }else{
     printf(" DPP Type %s is not supported.\n", FPGAType.c_str());
@@ -951,6 +927,7 @@ int Digitizer2Gen::ReadData(){
   /// null for a dummy, since only SetDataFormat() allocates it and that returns early when the
   /// CAEN handle is 0. Stop rather than Timeout: ReadDataThread::run() has no sleep of its own,
   /// so every other code loops straight back in and spins a core.
+  stopRunSeen = false;   // per call; set below when this call's Raw blob carries the Stop Run event
   if( isDummy || hit == NULL ) return CAEN_FELib_Stop;
 
   if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
@@ -1148,6 +1125,7 @@ int Digitizer2Gen::ReadData(){
 
     if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
       rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
+      stopRunSeen = rawDecoder.SawStopRun();
 
       // Decode all hits and push to ring buffers (waveform samples are skipped)
       RawDecoder::DecodedHit decoded;

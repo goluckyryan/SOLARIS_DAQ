@@ -594,7 +594,7 @@ static bool RunAnalysis(std::vector<Board> & boards, uint64_t window, const std:
   ana->OnRunStop();
 
   printf("\n%ld events through the analysis (ring dropped %ld, torn %ld)\n",
-         nEvents, reader.eventsDropped, reader.eventsTorn);
+         nEvents, reader.eventsDropped.load(), reader.eventsTorn.load());
   reg.Print();
   eb.PrintStat();
 
@@ -665,7 +665,7 @@ static bool RingTest(){
 
   bool same = SameEvents(sent, got, "ring round trip");
   printf("  %zu events in, %zu out, dropped %ld, torn %ld : %s\n",
-         sent.size(), got.size(), reader.eventsDropped, reader.eventsTorn,
+         sent.size(), got.size(), reader.eventsDropped.load(), reader.eventsTorn.load(),
          (same && reader.eventsDropped == 0 && reader.eventsTorn == 0) ? "OK" : "FAILED");
   ok &= same && reader.eventsDropped == 0 && reader.eventsTorn == 0;
 
@@ -693,7 +693,7 @@ static bool RingTest(){
   const bool balances  = (accounted == nPublish);
   const bool lapped    = (r2.eventsDropped > 0);
   printf("  published %ld, read %ld, dropped %ld, torn %ld\n",
-         nPublish, drained, r2.eventsDropped, r2.eventsTorn);
+         nPublish, drained, r2.eventsDropped.load(), r2.eventsTorn.load());
   printf("  lap occurred %s, accounting %s\n",
          lapped ? "yes" : "NO (test did not exercise the path)",
          balances ? "OK" : "MISMATCH");
@@ -752,7 +752,7 @@ static bool SinkTest(uint64_t window){
   const bool same = SameEvents(viaCallback, viaRing, "sink vs callback");
   const bool ok   = same && reader.eventsDropped == 0 && reader.eventsTorn == 0;
   printf("  %zu via callback, %zu via ring, dropped %ld, torn %ld : %s\n",
-         viaCallback.size(), viaRing.size(), reader.eventsDropped, reader.eventsTorn,
+         viaCallback.size(), viaRing.size(), reader.eventsDropped.load(), reader.eventsTorn.load(),
          ok ? "OK" : "FAILED");
   return ok;
 }

@@ -365,6 +365,9 @@ private:
   void ReadSetting(const std::vector<Reg> & table, int cbIndex, int ch, const InquiryWidgets & w);
   void ReadBoardSetting(int cbIndex);
   void ReadChannelSetting(int cbIndex);
+  /// The Inquiry tab's selected parameter, from the table of the selected board's firmware.
+  const Reg & IQBoardPara() const;
+  const Reg & IQChannelPara() const;
 
   bool CheckDigitizersCanCopy();
   void CheckRadioAndCheckedButtons();

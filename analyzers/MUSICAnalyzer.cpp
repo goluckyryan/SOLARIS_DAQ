@@ -1,5 +1,6 @@
 #include "../Analysis.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include <QGridLayout>
@@ -29,7 +30,7 @@ class MUSIC : public Analysis {
   //^     Only the analysis thread reads it during ProcessEvent; SaveState/LoadState ride the
   //^     parked-thread window like every other member.
   int    nBoards_ = 1;
-  double gain_[8][16] = { { 1. } };
+  double gain_[8][16];   // filled with 1.0 in the constructor; a brace initializer would set only [0][0]
 
   int hLeft = -1, hRight = -1, hSum = -1, hMulti = -1;
 
@@ -37,6 +38,8 @@ class MUSIC : public Analysis {
   QWidget      * root_ = nullptr;
 
 public:
+
+  MUSIC(){ std::fill(&gain_[0][0], &gain_[0][0] + 8 * 16, 1.0); }
 
   void Declare(HistRegistry & reg, const AnalysisContext & ctx) override {
 

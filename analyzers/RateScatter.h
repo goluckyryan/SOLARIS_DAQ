@@ -65,10 +65,6 @@ public:
       /// able to recover history the user zoomed away from mid-run.
       while( !s.pts.empty() && s.pts.front().first < t - kMaxS ) s.pts.pop_front();
     }
-    yMax_ = 1.0;
-    for( const auto & kv : ser_ )
-      for( const auto & q : kv.second.pts ) yMax_ = std::max( yMax_, q.second );
-    yMax_ *= 1.15;
     update();
   }
 
@@ -88,6 +84,13 @@ protected:
       if( !kv.second.pts.empty() ) tMax = std::max(tMax, kv.second.pts.back().first);
     const double xLo = std::max(0.0, tMax - winS_);
     const double xHi = xLo + winS_;
+
+    /// y scale from the points on screen, not the whole retained hour: one old spike would
+    /// otherwise flatten the live trace. Here rather than in Sample(), so a zoom rescales too.
+    yMax_ = 1.0;
+    for( const auto & kv : ser_ )
+      for( const auto & q : kv.second.pts ) if( q.first >= xLo ) yMax_ = std::max( yMax_, q.second );
+    yMax_ *= 1.15;
 
     p.setPen(QColor(110,110,110));
     p.drawRect(ax);

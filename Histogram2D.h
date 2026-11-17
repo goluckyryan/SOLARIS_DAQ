@@ -471,13 +471,14 @@ inline void Histogram2D::SetCellContents(const uint32_t * z, int nx, int ny, uns
 
   if( isBusy || z == nullptr ) return;
 
-  /// xBin/yBin include the two guard bins Rebin() adds, so only the inner cells are ours.
-  if( nx > xBin ) nx = xBin;
-  if( ny > yBin ) ny = yBin;
+  /// The counts must have this widget's cell grid (callers size them from GetCellGeom()). Right
+  /// after a rebin they can still have the old one until the owner resizes them; drawing them
+  /// against the new grid would scramble the map (ny is the stride), so skip that frame.
+  if( nx != xBin || ny != yBin ) return;
 
   for( int ix = 0; ix < xBin; ix++ ){
     for( int iy = 0; iy < yBin; iy++ ){
-      const uint32_t c = ( ix < nx && iy < ny ) ? z[ix*ny + iy] : 0u;
+      const uint32_t c = z[ix*ny + iy];
       colorMap->data()->setCell(ix, iy, c ? (double) c : std::numeric_limits<double>::quiet_NaN());
     }
   }

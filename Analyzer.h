@@ -85,6 +85,35 @@ struct AnalyzerHooks {
   std::function<double()> rateBase;   ///< the bar's rate-average window in seconds
 };
 
+/// Append-only list whose storage never moves, so one thread can index it while another appends.
+/// A std::vector reallocates on push_back, which is a use-after-free for a concurrent reader.
+/// Writers serialise among themselves (QtHistRegistry holds `gate`); readers take no lock: Add()
+/// fills the slot before the release store of the count, and size() is an acquire load.
+template <class T, int N>
+class SlotList {
+public:
+  static constexpr int kCapacity = N;
+  int  size() const { return n.load(std::memory_order_acquire); }
+  T &  operator[](size_t i) { return *slot[i]; }
+  /// Returns the new index, or -1 when full. Caller holds the writers' lock.
+  int Add(std::unique_ptr<T> p){
+    const int i = n.load(std::memory_order_relaxed);
+    if( i >= N ) return -1;
+    slot[i] = std::move(p);
+    n.store(i + 1, std::memory_order_release);
+    return i;
+  }
+  /// Only while no other thread can read (the analysis thread is parked).
+  void clear(){
+    const int k = n.load(std::memory_order_relaxed);
+    n.store(0, std::memory_order_relaxed);
+    for( int i = 0; i < k; i++ ) slot[i].reset();
+  }
+private:
+  std::unique_ptr<T> slot[N];
+  std::atomic<int>   n{0};
+};
+
 class QtHistRegistry : public HistRegistry {
 public:
   QtHistRegistry(QWidget * root, Digitizer2Gen ** digi, unsigned int nDigi,
@@ -144,7 +173,7 @@ private:
     Histogram1D * w = nullptr;                 ///< null until materialised (GUI thread)
     std::string   name, xLabel;
     void        * placement = nullptr;
-    bool          created = false;
+    std::atomic<bool> created{false};          ///< set on the GUI thread after w is built
     int nBin = 0; double lo = 0, hi = 0, dx = 1;   ///< declared binning; Resize1 re-reads the widget's
     std::unique_ptr<std::atomic<uint32_t>[]> c;
     /// total counts IN-RANGE entries only (matches the widget's "Total Entry"); the rejects
@@ -156,7 +185,9 @@ private:
     Histogram2D * w = nullptr;
     std::string   name, xLabel, yLabel;
     void        * placement = nullptr;
-    bool          created = false;
+    /// Set (release) on the GUI thread after g and c are ready; Fill2 reads it (acquire) on the
+    /// analysis thread before touching them.
+    std::atomic<bool> created{false};
     /// Before the widget exists, declared geometry decides in/out; guard cells only exist once
     /// Histogram2D is constructed, so queued fills keep total/out but not cell counts (see Fill2).
     int nXReq = 0, nYReq = 0;
@@ -210,13 +241,16 @@ private:
   void Resize1(int id);
   void Resize2(int id);
 
-  std::vector<std::unique_ptr<H1>> h1;
-  std::vector<std::unique_ptr<H2>> h2;
-  std::vector<ChanReq>             chans;
-  std::vector<FlagReq>             flags;
-  std::vector<uint32_t>            scratch;   ///< GUI thread only
+  /// Declarations may come from the GUI thread or the analysis thread, mid-run included, while the
+  /// other thread indexes these lists; see SlotList.
+  SlotList<H1, 256>      h1;
+  SlotList<H2, 256>      h2;
+  SlotList<ChanReq, 256> chans;
+  SlotList<FlagReq, 256> flags;
+  std::vector<uint32_t>  scratch;   ///< GUI thread only
 
-  /// Indices of entries declared on the analysis thread, waiting for their widgets.
+  /// Serialises declarations (the SlotList writers) and guards the pending-index lists: indices of
+  /// entries declared on the analysis thread, waiting for their widgets.
   std::mutex gate;
   std::vector<size_t> pendH1, pendH2, pendChan, pendFlag;
   bool declareFinished = false;

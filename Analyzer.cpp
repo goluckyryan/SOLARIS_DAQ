@@ -64,11 +64,16 @@ int QtHistRegistry::Hist1D(const char * name, const char * xLabel,
   h->c.reset(new std::atomic<uint32_t>[nBin]);
   for( int i = 0; i < nBin; i++ ) h->c[i].store(0, std::memory_order_relaxed);
 
-  h1.push_back(std::move(h));
-  const size_t i = h1.size() - 1;
-  if( OnGuiThread() ) CreateH1(i);
-  else { std::lock_guard<std::mutex> g(gate); pendH1.push_back(i); }
-  return (int)i;
+  const bool gui = OnGuiThread();
+  int i;
+  {
+    std::lock_guard<std::mutex> g(gate);
+    i = h1.Add(std::move(h));
+    if( i >= 0 && !gui ) pendH1.push_back(i);
+  }
+  if( i < 0 ){ printf("Analyzer: histogram \"%s\" not created, limit of %d 1D histograms\n", name, h1.kCapacity); return -1; }
+  if( gui ) CreateH1(i);
+  return i;
 }
 
 int QtHistRegistry::Hist2D(const char * name, const char * xLabel, const char * yLabel,
@@ -98,45 +103,54 @@ int QtHistRegistry::Hist2D(const char * name, const char * xLabel, const char * 
   h->yLo    = yMin; h->yHi = yMax;
   h->placement = placement;
 
-  h2.push_back(std::move(h));
-  const size_t i = h2.size() - 1;
-  if( OnGuiThread() ) CreateH2(i);
-  else { std::lock_guard<std::mutex> g(gate); pendH2.push_back(i); }
-  return (int)i;
+  const bool gui = OnGuiThread();
+  int i;
+  {
+    std::lock_guard<std::mutex> g(gate);
+    i = h2.Add(std::move(h));
+    if( i >= 0 && !gui ) pendH2.push_back(i);
+  }
+  if( i < 0 ){ printf("Analyzer: histogram \"%s\" not created, limit of %d 2D histograms\n", name, h2.kCapacity); return -1; }
+  if( gui ) CreateH2(i);
+  return i;
 }
 
 void * QtHistRegistry::ChannelParam(const char * label, int * digiPtr, int * chPtr, void * placement){
-  ChanReq rq;
-  rq.label    = label;
-  rq.digi     = digiPtr;
-  rq.ch       = chPtr;
-  rq.placement = placement;
-  chans.push_back(rq);
-  const size_t i = chans.size() - 1;
-  if( OnGuiThread() ){
-    CreateChan(i);
-    if( declareFinished ) WireChan(i);      // seeding reads the members, so it waits for LoadState
-  }else{
+  std::unique_ptr<ChanReq> rq(new ChanReq());
+  rq->label    = label;
+  rq->digi     = digiPtr;
+  rq->ch       = chPtr;
+  rq->placement = placement;
+  const bool gui = OnGuiThread();
+  int i;
+  {
     std::lock_guard<std::mutex> g(gate);
-    pendChan.push_back(i);
+    i = chans.Add(std::move(rq));
+    if( i >= 0 && !gui ) pendChan.push_back(i);
   }
-  return chans[i].line;                     // null while still queued
+  if( i < 0 ){ printf("Analyzer: channel picker \"%s\" not created, limit of %d\n", label, chans.kCapacity); return nullptr; }
+  if( !gui ) return nullptr;                // queued; the widget is made on the GUI thread
+  CreateChan(i);
+  if( declareFinished ) WireChan(i);        // seeding reads the members, so it waits for LoadState
+  return chans[i].line;
 }
 
 void * QtHistRegistry::BoolParam(const char * label, bool * value, void * placement){
-  FlagReq rq;
-  rq.label    = label;
-  rq.value    = value;
-  rq.placement = placement;
-  flags.push_back(rq);
-  const size_t i = flags.size() - 1;
-  if( OnGuiThread() ){
-    CreateFlag(i);
-    if( declareFinished ) WireFlag(i);
-  }else{
+  std::unique_ptr<FlagReq> rq(new FlagReq());
+  rq->label    = label;
+  rq->value    = value;
+  rq->placement = placement;
+  const bool gui = OnGuiThread();
+  int i;
+  {
     std::lock_guard<std::mutex> g(gate);
-    pendFlag.push_back(i);
+    i = flags.Add(std::move(rq));
+    if( i >= 0 && !gui ) pendFlag.push_back(i);
   }
+  if( i < 0 ){ printf("Analyzer: flag \"%s\" not created, limit of %d\n", label, flags.kCapacity); return nullptr; }
+  if( !gui ) return nullptr;                // queued; the widget is made on the GUI thread
+  CreateFlag(i);
+  if( declareFinished ) WireFlag(i);
   return flags[i].cb;
 }
 
@@ -154,23 +168,23 @@ void QtHistRegistry::InfluxConfig(std::string & url, std::string & token, std::s
 
 double QtHistRegistry::GateRates(int id, std::vector<std::pair<std::string,double>> & rates){
   if( id < 0 || id >= (int)h2.size() ) return 0;
-  std::lock_guard<std::mutex> g(h2[id]->rateMtx);
-  rates = h2[id]->rateSnap;
-  return h2[id]->rateBaseS;
+  std::lock_guard<std::mutex> g(h2[id].rateMtx);
+  rates = h2[id].rateSnap;
+  return h2[id].rateBaseS;
 }
 
 void * QtHistRegistry::View1(int id){
-  return ( id >= 0 && id < (int)h1.size() && h1[id]->created ) ? (void*)h1[id]->w : nullptr;
+  return ( id >= 0 && id < (int)h1.size() && h1[id].created ) ? (void*)h1[id].w : nullptr;
 }
 
 void * QtHistRegistry::View2(int id){
-  return ( id >= 0 && id < (int)h2.size() && h2[id]->created ) ? (void*)h2[id]->w : nullptr;
+  return ( id >= 0 && id < (int)h2.size() && h2[id].created ) ? (void*)h2[id].w : nullptr;
 }
 
 //^-------------------------------------------------------------- materialisation (GUI thread)
 
 void QtHistRegistry::CreateH1(size_t i){
-  H1 & h = *h1[i];
+  H1 & h = h1[i];
   if( h.created ) return;
   h.w = new Histogram1D(QString::fromStdString(h.name), QString::fromStdString(h.xLabel),
                         h.nBin, h.lo, h.hi, root);
@@ -182,11 +196,11 @@ void QtHistRegistry::CreateH1(size_t i){
   connect(h.w, &Histogram1D::ReBinned, h.w, [this, id](){
     hooks.fence([this, id](){ Resize1(id); });
   });
-  h.created = true;
+  h.created.store(true, std::memory_order_release);
 }
 
 void QtHistRegistry::CreateH2(size_t i){
-  H2 & h = *h2[i];
+  H2 & h = h2[i];
   if( h.created ) return;
   h.w = new Histogram2D(QString::fromStdString(h.name), QString::fromStdString(h.xLabel),
                         QString::fromStdString(h.yLabel), h.nXReq, h.xLo, h.xHi,
@@ -201,7 +215,7 @@ void QtHistRegistry::CreateH2(size_t i){
   connect(h.w, &Histogram2D::ReBinned, h.w, [this, id](){
     hooks.fence([this, id](){ Resize2(id); });
   });
-  h.created = true;
+  h.created.store(true, std::memory_order_release);
 }
 
 void QtHistRegistry::CreateChan(size_t i){
@@ -305,8 +319,8 @@ void QtHistRegistry::WireFlag(size_t i){
 
 void QtHistRegistry::FinishDeclare(){
   declareFinished = true;
-  for( size_t i = 0; i < chans.size(); i++ ) WireChan(i);
-  for( size_t i = 0; i < flags.size();  i++ ) WireFlag(i);
+  for( size_t i = 0; i < (size_t)chans.size(); i++ ) WireChan(i);
+  for( size_t i = 0; i < (size_t)flags.size();  i++ ) WireFlag(i);
 }
 
 void QtHistRegistry::DrainPending(){
@@ -332,8 +346,8 @@ void QtHistRegistry::SampleRates(){
   const qint64 tMs     = (qint64)( std::chrono::duration_cast<std::chrono::milliseconds>
                                    ( std::chrono::steady_clock::now().time_since_epoch() ).count() );
 
-  for( size_t i = 0; i < h2.size(); i++ ){
-    H2 & h = *h2[i];
+  for( size_t i = 0; i < (size_t)h2.size(); i++ ){
+    H2 & h = h2[i];
     if( !h.created ) continue;                 ///< queued behind a publish tick: nothing to sum yet
 
     //^- cumulative totals; the store's decrease detection handles every clear path, no bookkeeping
@@ -366,10 +380,10 @@ void QtHistRegistry::SampleRates(){
 }
 
 void QtHistRegistry::ResetRates(){
-  for( size_t i = 0; i < h2.size(); i++ ){
-    h2[i]->store.ResetHistory();               ///< sampling clock restarts with the run
-    std::lock_guard<std::mutex> g(h2[i]->rateMtx);
-    h2[i]->rateSnap.clear();
+  for( size_t i = 0; i < (size_t)h2.size(); i++ ){
+    h2[i].store.ResetHistory();               ///< sampling clock restarts with the run
+    std::lock_guard<std::mutex> g(h2[i].rateMtx);
+    h2[i].rateSnap.clear();
   }
 }
 
@@ -377,7 +391,7 @@ void QtHistRegistry::ResetRates(){
 
 void QtHistRegistry::Fill1(int id, double x){
   if( id < 0 || id >= (int)h1.size() ) return;
-  H1 & h = *h1[id];
+  H1 & h = h1[id];
   /// total counts only in-range entries (what "Total Entry" shows); under/over are the rejects.
   /// NaN fails both range tests below and would reach the (int) cast, which is undefined for a
   /// non-finite value. An analysis computing a ratio or a log makes NaN easily, so check first.
@@ -391,7 +405,7 @@ void QtHistRegistry::Fill1(int id, double x){
 
 void QtHistRegistry::Fill2(int id, double x, double y){
   if( id < 0 || id >= (int)h2.size() ) return;
-  H2 & h = *h2[id];
+  H2 & h = h2[id];
   h.total.fetch_add(1, std::memory_order_relaxed);
   if( !std::isfinite(x) || !std::isfinite(y)
       || x < h.xLo || x >= h.xHi || y < h.yLo || y >= h.yHi ){
@@ -417,8 +431,8 @@ void QtHistRegistry::Fill2(int id, double x, double y){
 void QtHistRegistry::Publish(){
   DrainPending();
 
-  for( size_t i = 0; i < h1.size(); i++ ){
-    H1 & h = *h1[i];
+  for( size_t i = 0; i < (size_t)h1.size(); i++ ){
+    H1 & h = h1[i];
     if( !h.created ) continue;
     scratch.resize(h.nBin);
     for( int b = 0; b < h.nBin; b++ ) scratch[b] = h.c[b].load(std::memory_order_relaxed);
@@ -429,8 +443,8 @@ void QtHistRegistry::Publish(){
     h.w->UpdatePlot();
   }
 
-  for( size_t i = 0; i < h2.size(); i++ ){
-    H2 & h = *h2[i];
+  for( size_t i = 0; i < (size_t)h2.size(); i++ ){
+    H2 & h = h2[i];
     if( !h.created ) continue;
     const size_t n = (size_t)h.g.nx * h.g.ny;
     scratch.resize(n);
@@ -445,7 +459,7 @@ void QtHistRegistry::Publish(){
 
 void QtHistRegistry::Resize1(int id){
   if( id < 0 || id >= (int)h1.size() ) return;
-  H1 & h = *h1[id];
+  H1 & h = h1[id];
   if( !h.created ) return;
   h.nBin = h.w->GetNBin();
   h.lo   = h.w->GetXMin();
@@ -458,7 +472,7 @@ void QtHistRegistry::Resize1(int id){
 
 void QtHistRegistry::Resize2(int id){
   if( id < 0 || id >= (int)h2.size() ) return;
-  H2 & h = *h2[id];
+  H2 & h = h2[id];
   if( !h.created ) return;
   h.g = h.w->GetCellGeom();
   const size_t n = (size_t)h.g.nx * h.g.ny;
@@ -468,13 +482,13 @@ void QtHistRegistry::Resize2(int id){
 }
 
 void QtHistRegistry::ClearCounts(){
-  for( size_t i = 0; i < h1.size(); i++ ){
-    H1 & h = *h1[i];
+  for( size_t i = 0; i < (size_t)h1.size(); i++ ){
+    H1 & h = h1[i];
     if( h.c ) for( int b = 0; b < h.nBin; b++ ) h.c[b].store(0, std::memory_order_relaxed);
     h.total.store(0); h.under.store(0); h.over.store(0);
   }
-  for( size_t i = 0; i < h2.size(); i++ ){
-    H2 & h = *h2[i];
+  for( size_t i = 0; i < (size_t)h2.size(); i++ ){
+    H2 & h = h2[i];
     if( h.c ){
       const size_t n = (size_t)h.g.nx * h.g.ny;
       for( size_t k = 0; k < n; k++ ) h.c[k].store(0, std::memory_order_relaxed);
@@ -1121,7 +1135,7 @@ void Analyzer::UpdateStatus(){
                     .arg(eb->totalHitsDropped.load(std::memory_order_relaxed))
                     .arg(eb->totalHitsLate.load(std::memory_order_relaxed))
                     .arg(eb->monotonicityViolations.load(std::memory_order_relaxed))
-                    .arg(anaWorker ? anaWorker->reader.eventsDropped : 0));
+                    .arg(anaWorker ? anaWorker->reader.eventsDropped.load(std::memory_order_relaxed) : 0L));
 }
 
 void Analyzer::SetInflux(const QString & url, const QString & token, const QString & database){

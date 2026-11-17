@@ -56,8 +56,8 @@ intentional: data keeps flowing while the operator types.
 **2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:638`, *before* the boards are
 touched.
 
-**3. Stop the boards**, backwards again, each under `digiMTX[i]`: `StopACQ()` then `WaveSaving` back
-to `OnRequest`. `isACQRunning = false`.
+**3. Stop the boards**, backwards again, each under `digiMTX[i]`: `StopACQ()`. `WaveSaving` is left
+as `StartACQ` set it, so a Raw run keeps the settings panel's choice. `isACQRunning = false`.
 
 **4. Join the read threads** (`:686-702`) — and here is the subtle part:
 
@@ -72,13 +72,15 @@ if( !readDataThread[i]->wait(drainTimeoutSec * 1000) ){      // 2 s
 }
 ```
 
-For a **save run, `Stop()` is not called first.** The loop is left to drain until FELib returns
-`CAEN_FELib_Stop`, so the tail of the run reaches disk. The wait is capped at 2 s because a board
-whose link died never returns `Stop`. On timeout the thread is force-stopped, the tail is lost, and
-the board's serial number goes into the stop comment and the elog, so the loss is in the run
-record. There is no `quit()`: these threads override `run()` and have no event loop, so the exit
-is via the `Stop()` flag or the `CAEN_FELib_Stop` break (`CustomThreads.h:15-20`). In Raw format
-this cap is always hit; see `issues.md`.
+For a **save run, `Stop()` is not called first.** The loop is left to drain to the end of the run,
+so the tail reaches disk. The end is `CAEN_FELib_Stop` in the DPP formats. In Raw the endpoint
+never returns `Stop` (after the stop it returns only timeouts), so the loop ends on the blob that
+carries the board's Stop Run event, after saving it (`Digitizer2Gen::StopRunSeen()`). The wait is
+capped at 2 s because a board whose link died never reaches either end. On timeout the thread is
+force-stopped, the tail is lost, and the board's serial number goes into the stop comment and the
+elog, so the loss is in the run record. There is no `quit()`: these threads override `run()` and
+have no event loop, so the exit is via the `Stop()` flag, the `CAEN_FELib_Stop` break or the Stop
+Run break (`CustomThreads.h`).
 
 **5. Close the files** — only now, after the join, so sizes are final. `CloseOutFile()` also
 `chmod`s each file read-only, and nulls `outFile`, so a second call does nothing.

@@ -105,6 +105,7 @@ class Digitizer2Gen {
     bool acqON;
 
     RawDecoder rawDecoder;
+    bool stopRunSeen = false;
 
     //all read and read/write settings
     std::string settingFileName;
@@ -128,6 +129,10 @@ class Digitizer2Gen {
     std::unordered_map<std::string, int> boardMap;
     std::unordered_map<std::string, int> LVDSMap;
     std::unordered_map<std::string, int> chMap;
+
+    /// Point every settings table and name map at one firmware's parameters. The maps are cleared
+    /// first, so a PSD board cannot resolve a PHA-only name to an unrelated PSD row.
+    void SetFirmwareTables(bool isPSD);
 
   public:
     Digitizer2Gen();
@@ -175,6 +180,10 @@ class Digitizer2Gen {
     void SetDataFormat(unsigned short dataFormat); // dataFormat = namespace DataFormat
 
     int  ReadData();
+    /// The last ReadData() returned a Raw blob holding the board's Stop Run event. Under Raw the
+    /// endpoint keeps returning timeouts after it instead of CAEN_FELib_Stop, so the read loop ends
+    /// on this. Read and written by the read thread only.
+    bool StopRunSeen() const { return stopRunSeen; }
     int  ReadStat(); // digitizer update it every 500 msec
     /// Bounded: these are read from the GUI timer with whatever channel count the board reported.
     uint32_t GetTriggerCount(int ch) const {return (ch >= 0 && ch < MaxNumberOfChannel) ? triggerCount[ch] : 0;}

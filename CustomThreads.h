@@ -73,6 +73,14 @@ public:
         digi->ErrorMsg("ReadData Thread No more data", ret);
         break;
       }
+
+      /// Raw: the blob with the Stop Run event (already saved above) is the end of the run; the
+      /// endpoint never returns CAEN_FELib_Stop after it, so waiting for that would always run
+      /// into StopACQ's drain cap and record the run as truncated.
+      if( digi->StopRunSeen() ){
+        emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " Stop Run event received.");
+        break;
+      }
     }
 
     emit sendMsg("Digi-" + QString::number(digi->GetSerialNumber()) + " ReadDataThread stopped.");

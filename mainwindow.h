@@ -69,6 +69,7 @@ private slots:
   void ProgramSettingsPanel();
   bool LoadProgramSettings();
   void SaveProgramSettings();
+  void UpdateDataPaths();
   void DecodeIPList();
   void SetupInflux();
   void SetupElog();
@@ -219,7 +220,6 @@ private:
   QLineEdit * lElogUser;
   QLineEdit * lElogPWD;
 
-  QCheckBox * chkSaveSubFolder;
   bool isSaveSubFolder;
 
   QStringList existGitBranches;

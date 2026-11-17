@@ -1,6 +1,7 @@
 #ifndef EVENT_RING_H
 #define EVENT_RING_H
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -75,14 +76,15 @@ public:
   /// One per consumer: holds the cursor and that consumer's own loss accounting.
   struct Reader {
     unsigned long cursor        = 0;
-    long          eventsDropped = 0;   ///< lapped by the producer before we reached them
-    long          eventsTorn    = 0;   ///< read caught mid-write, or a bad nHits; discarded
+    /// Written by the consumer thread only; atomic because the GUI thread reads them for display.
+    std::atomic<long> eventsDropped{0};   ///< lapped by the producer before we reached them
+    std::atomic<long> eventsTorn{0};      ///< read caught mid-write, or a bad nHits; discarded
 
     /// Start from wherever the ring is now, and forget past losses.
     void Rewind(const EventRing & ring){
       cursor        = ring.idxRing.index();
-      eventsDropped = 0;
-      eventsTorn    = 0;
+      eventsDropped.store(0, std::memory_order_relaxed);
+      eventsTorn.store(0, std::memory_order_relaxed);
     }
 
     /// Copy the next event into `out`. Returns false when nothing new is available.
@@ -99,7 +101,7 @@ public:
         //---- index ring lapped: skip to the oldest entry still guaranteed intact
         if( w - cursor >= ring.idxRing.size() ){
           const unsigned long safe = w - ring.idxRing.size() + 1;
-          eventsDropped += (long)(safe - cursor);
+          eventsDropped.fetch_add((long)(safe - cursor), std::memory_order_relaxed);
           cursor = safe;
           continue;
         }
@@ -110,13 +112,13 @@ public:
         /// producer that reached this slot mid-read leaves us with a torn value. Do not advance
         /// the cursor -- the lap check at the top of the next iteration will move it.
         if( ring.idxRing.index() - cursor >= ring.idxRing.size() ){
-          eventsTorn++;
+          eventsTorn.fetch_add(1, std::memory_order_relaxed);
           continue;
         }
 
         //---- a torn or corrupt entry must never be used to size a copy loop
         if( e.nHits == 0 || e.nHits > ring.hitRing.size() / 2 ){
-          eventsTorn++;
+          eventsTorn.fetch_add(1, std::memory_order_relaxed);
           cursor++;
           continue;
         }
@@ -129,7 +131,7 @@ public:
 
         //---- and check the hits themselves were not overwritten while we copied them
         if( ring.hitRing.index() - e.firstHit >= ring.hitRing.size() ){
-          eventsDropped++;
+          eventsDropped.fetch_add(1, std::memory_order_relaxed);
           cursor++;
           continue;
         }

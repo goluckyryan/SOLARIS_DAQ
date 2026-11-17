@@ -386,12 +386,11 @@ MainWindow::~MainWindow(){
   }
 
   printf("-------- delete readData Thread\n");
-  if( digi ){
-    for( int i = 0; i < nDigi ; i++){
-      if( digi[i]->IsDummy()) continue;
-      //printf("=== %d %p\n", i, readDataThread[i]);
-      if( readDataThread[i]->isRunning()) StopACQ();
-    }
+  /// Once, not once per board, and without the stop-comment dialog: a dialog during destruction
+  /// can be cancelled, which would leave the boards armed.
+  if( digi && isACQRunning ){
+    needManualComment = false;
+    StopACQ();
   }
   CloseDigitizers(); // SOlaris panel, digiSetting, scope are also deleted.
 
@@ -662,8 +661,6 @@ void MainWindow::StopACQ(){
     if( digi[i]->IsDummy () ) continue;
     digiMTX[i].lock();
     digi[i]->StopACQ();
-    // readDataThread[i]->SuppressFileSizeMsg();
-    digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
     digiMTX[i].unlock();
   }
   isACQRunning = false;
@@ -695,10 +692,16 @@ void MainWindow::StopACQ(){
   }
 
   if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
-  /// serial numbers of the boards whose tail the 10 s cap below threw away. Collected so the
+  /// serial numbers of the boards whose tail the drain cap below threw away. Collected so the
   /// loss lands in the run record (elog + RunTimeStamp), not only in this session's log panel.
   QStringList drainFailedSN;
-  int drainTimeoutSec = 2; // 2 sec is the default, but a board whose link died mid-run never returns CAEN_FELib_Stop, so the GUI would freeze on "Collecting remaining data..." until the operator killed it. The 10 s cap below is a compromise between giving the board a chance to drain and not freezing the GUI for too long.
+  /// A board whose link died mid-run never returns CAEN_FELib_Stop, so an unbounded wait would freeze
+  /// the GUI on "Collecting remaining data...". The cap trades a chance to drain against that freeze.
+  ///
+  /// The cap is per board, waited one board after another, by design. Only a board whose link
+  /// died reaches it (Raw boards end on the Stop Run event, DPP boards on CAEN_FELib_Stop), so a
+  /// shared deadline across boards is not wanted here.
+  const int drainTimeoutSec = 2;
   for( int i = nDigi -1; i >=0; i--){
     /// NULL for a dummy (OpenDigitizers), which also never opened an out file. Unlike the
     /// StopACQ loop above, this one does not skip dummies, so without this it segfaults on
@@ -707,7 +710,7 @@ void MainWindow::StopACQ(){
     if( readDataThread[i]->isRunning()){
       if( !chkSaveRun->isChecked() ) readDataThread[i]->Stop(); // if it is a save run, don't force stop the readDataThread, wait for it.
       /// A board whose link died mid-run never returns CAEN_FELib_Stop, so an unbounded wait()
-      /// froze the GUI on "Collecting remaining data...". Give up after 10 s, force Stop (the
+      /// froze the GUI on "Collecting remaining data...". Give up after drainTimeoutSec, force Stop (the
       /// read loop checks it every ReadData return), and tell the operator the tail is lost.
       if( !readDataThread[i]->wait(drainTimeoutSec * 1000) ){
         /// BEFORE the forced join, not after: the join below is the thing that can hang, so a
@@ -735,7 +738,7 @@ void MainWindow::StopACQ(){
   /// (<StopComment>, <RunComment> and the built-in fallback) and both RunTimeStamp files.
   if( chkSaveRun->isChecked() && !drainFailedSN.isEmpty() ){
     const bool many = drainFailedSN.size() > 1;
-    drainWarning = "INCOMPLETE DATA: digi-" + drainFailedSN.join("/") + " did not drain within 10 s and "
+    drainWarning = "INCOMPLETE DATA: digi-" + drainFailedSN.join("/") + " did not drain within " + QString::number(drainTimeoutSec) + " s and "
                  + (many ? "were" : "was") + " force stopped; the tail of "
                  + (many ? "those files is" : "that file is") + " missing.";
     stopComment += " [" + drainWarning + "]";
@@ -749,7 +752,8 @@ void MainWindow::StopACQ(){
     CloseRunTimeStampRow(drainWarning);
     AppendElog(BuildElogMsg(ElogSection::StopRun), chromeWindowID);
     LogMsg("Run " + programPath + "/scripts/endRunScript.sh" );
-    QProcess::startDetached(programPath + "/scripts/endRunScript.sh");
+    QProcess::startDetached(programPath + "/scripts/endRunScript.sh",
+                            {expDataPath, rawDataPath, QString::number(runID)});
   }
   
   LogMsg("<b><font style=\"color : green;\">SOLARIS DAQ is ready for next run.</font></b>");
@@ -1534,6 +1538,9 @@ void MainWindow::UpdateScalar(){
     /// fills realTime/savedEventCount for every channel in a single CAEN_FELib_ReadData and
     /// refreshes the SelfTrgRate cache; at 4 boards x 64 channels this was 768 synchronous
     /// round-trips every 2 s, on the GUI thread.
+    ///
+    /// By design this also runs when no board is acquiring: the scalar shows the live trigger
+    /// rates whenever it is open, not only during a run. Do not skip boards with !IsAcqOn().
     // digiMTX[iDigi].lock();
     digi[iDigi]->ReadStat();
     // digiMTX[iDigi].unlock();
@@ -1674,7 +1681,7 @@ Leave <b>same as Exp Name</b> ticked unless the logbook is named differently fro
 
   //-------- Is Save single folder
   rowID ++;
-  chkSaveSubFolder = new QCheckBox("Save runs in sub-folders", this); 
+  QCheckBox * chkSaveSubFolder = new QCheckBox("Save runs in sub-folders", &dialog);
   chkSaveSubFolder->setChecked(isSaveSubFolder);
   layout->addWidget(chkSaveSubFolder, rowID, 1);
 
@@ -1798,6 +1805,7 @@ Leave <b>same as Exp Name</b> ticked unless the logbook is named differently fro
     DatabaseToken = lDatbaseToken->text();
     analysisPath = lAnalysisPath->text();
     masterExpDataPath = lExpDataPath->text();
+    isSaveSubFolder = chkSaveSubFolder->isChecked();
     expName = lExpName->text();
     ElogIP = lElogIP->text();
     ElogPort = lElogPort->text().isEmpty() ? defaultElogPort : lElogPort->text();
@@ -1829,17 +1837,7 @@ Leave <b>same as Exp Name</b> ticked unless the logbook is named differently fro
     SetupInflux();
     SetupElog();
 
-    expDataPath = masterExpDataPath + "/" + expName;
-    rawDataPath = expDataPath + "/data_raw/";
-    rootDataPath = expDataPath + "/root_data/";    
-    QString pcName = qEnvironmentVariable("PCName");
-    if( pcName == "solaris-daq" ){
-      LogMsg("This is SOLARIS DAQ....");
-      rawDataPath = expDataPath + "/";
-      LogMsg("Raw Data Path : " + rawDataPath);
-      rootDataPath = "/mnt/data1/" + expName + "/";
-      LogMsg("Root Data Path : " + rootDataPath);
-    }
+    UpdateDataPaths();
     leExpName->setText(expName);
     leRawDataPath->setText(rawDataPath);
     
@@ -1950,18 +1948,7 @@ bool MainWindow::LoadProgramSettings(){
       LogMsg("          Digi. IP List : " + IPListStr);
       logMsgHTMLMode = true;
 
-      expDataPath = masterExpDataPath + "/" + expName;
-      rawDataPath = expDataPath + "/data_raw/";
-      rootDataPath = expDataPath + "/root_data/";
-
-      QString pcName = qEnvironmentVariable("PCName");
-      if( pcName == "solaris-daq" ){
-        LogMsg("This is SOLARIS DAQ....");
-        rawDataPath = expDataPath + "/";
-        LogMsg("Raw Data Path : " + rawDataPath);
-        rootDataPath = "/mnt/data1/" + expName + "/";
-        LogMsg("Root Data Path : " + rootDataPath);
-      }
+      UpdateDataPaths();
 
       leExpName->setText(expName);
       
@@ -2027,6 +2014,23 @@ bool MainWindow::LoadProgramSettings(){
   }
 }
 
+/// expDataPath, rawDataPath and rootDataPath from masterExpDataPath and expName (the branch name,
+/// never a "remotes/origin/X" ref). On the SOLARIS DAQ PC the raw data sit directly in the
+/// experiment folder and the root files on /mnt/data1.
+void MainWindow::UpdateDataPaths(){
+  expDataPath  = masterExpDataPath + "/" + expName;
+  rawDataPath  = expDataPath + "/data_raw/";
+  rootDataPath = expDataPath + "/root_data/";
+
+  if( qEnvironmentVariable("PCName") == "solaris-daq" ){
+    LogMsg("This is SOLARIS DAQ....");
+    rawDataPath = expDataPath + "/";
+    LogMsg("Raw Data Path : " + rawDataPath);
+    rootDataPath = "/mnt/data1/" + expName + "/";
+    LogMsg("Root Data Path : " + rootDataPath);
+  }
+}
+
 void MainWindow::SaveProgramSettings(){
 
   if( masterExpDataPath.isEmpty() ){
@@ -2042,7 +2046,7 @@ void MainWindow::SaveProgramSettings(){
   }
 
   file.write((masterExpDataPath+"\n").toStdString().c_str());
-  file.write( chkSaveSubFolder->isChecked()  ? "SubFolder\n" : "SingleFolder\n" );
+  file.write( isSaveSubFolder ? "SubFolder\n" : "SingleFolder\n" );
   file.write((expName+"\n").toStdString().c_str());
   file.write((IPListStr+"\n").toStdString().c_str());
   file.write((analysisPath+"\n").toStdString().c_str());
@@ -2472,18 +2476,7 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   runID = -1;
   elog->SetID(0);
 
-  expDataPath = masterExpDataPath + "/" + expName;
-  rawDataPath = expDataPath + "/data_raw/";
-  rootDataPath = expDataPath + "/root_data/";
-
-  QString pcName = qEnvironmentVariable("PCName");
-  if( pcName == "solaris-daq" ){
-    LogMsg("This is SOLARIS DAQ....");
-    rawDataPath = expDataPath + "/";
-    LogMsg("Raw Data Path : " + rawDataPath);
-    rootDataPath = "/mnt/data1/" + expName + "/";
-    LogMsg("Root Data Path : " + rootDataPath);
-  }
+  UpdateDataPaths();
 
   CreateRawDataFolder();
   WriteExpNameSh();
@@ -2595,9 +2588,7 @@ void MainWindow::ChangeExperiment(const QString newExpName){
   LogMsg("=============================================");
   LogMsg("Swicted to branch : <b>" + expName + "</b>");
 
-  expDataPath = masterExpDataPath + "/" + newExpName;
-  rawDataPath = expDataPath + "/data_raw/"; 
-  rootDataPath = expDataPath + "/root_data/"; 
+  UpdateDataPaths();
 
   CreateRawDataFolder();
   CreateDataSymbolicLink();

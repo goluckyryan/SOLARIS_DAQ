@@ -94,8 +94,9 @@ ACQ entirely.
 1. quiesce consumers first — `singleSpectra->stopTimer()`
 2. stop the boards under `digiMTX`
 3. **join the read threads** — for a **save run** `Stop()` is deliberately *not* called first, so the
-   loop drains until FELib returns `CAEN_FELib_Stop`. The wait is capped at `drainTimeoutSec` (2 s,
-   `mainwindow.cpp:681`): a board whose link died never returns `Stop`. On timeout the thread is
+   loop drains to the end of the run: `CAEN_FELib_Stop` in the DPP formats, the blob holding the
+   Stop Run event in Raw. The wait is capped at `drainTimeoutSec` (2 s, `MainWindow::StopACQ`): a
+   board whose link died never reaches either end. On timeout the thread is
    force-stopped, the tail is lost, and the board is recorded in the stop comment and the elog.
 4. only then close the files, so sizes are final
 5. elog and `endRunScript.sh` last

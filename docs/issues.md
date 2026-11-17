@@ -5,23 +5,6 @@ Scalar-specific gaps are listed in `scalar.md` (*Known gaps*).
 
 ---
 
-## Raw format: every stop-run is reported as a lost data tail
-
-In Raw mode, after `StopACQ`, `Digitizer2Gen::ReadData()` keeps returning timeouts and never
-`CAEN_FELib_Stop`, even after the board's Stop Run event has arrived. `MainWindow::StopACQ()`
-waits at most `drainTimeoutSec` (2 s) for each `ReadDataThread` to end on `Stop`. When the wait
-expires, it force-stops the thread, logs "not drained … data tail is lost" in red, and adds the
-board to `drainFailedSN`, which goes into the stop comment and the elog.
-
-So, as far as can be told from the code and a direct Raw read loop on the test station, a Raw
-saving run always ends with that warning and the run record says its tail was lost, even when it
-was not. Not yet confirmed in the GUI. DPP formats are not affected.
-
-Possible fix: in the Raw path, end the read loop once the Stop Run special event has been decoded
-(`RawDecoder::ParseBlob` sees it at the top level), instead of waiting for `CAEN_FELib_Stop`.
-
----
-
 ## `Histogram1D`: half a bin is not drawn at each end
 
 Each bin is one vertex at its centre, drawn with `QCPGraph::lsStepCenter`. The polyline starts at

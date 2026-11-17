@@ -767,7 +767,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( ITLConnectStatus[iDigi][i] == 2 ) value = "ITLB";
 
             QString msg;
-            msg = "DIG:" + QString::number(digi[ID]->GetNChannels()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
+            msg = "DIG:" + QString::number(digi[ID]->GetSerialNumber()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
             if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
               SendLogMsg(msg + "|OK.");
             }else{
@@ -799,7 +799,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( ITLConnectStatus[iDigi][i] == 2 ) value = "ITLB";
 
             QString msg;
-            msg = "DIG:" + QString::number(digi[ID]->GetNChannels()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
+            msg = "DIG:" + QString::number(digi[ID]->GetSerialNumber()) + ",CH:" + QString::number(i) + "|" + QString::fromStdString(PHA::CH::ITLConnect.GetPara() ) + " = " + QString::fromStdString(value);
             if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
               SendLogMsg(msg + "|OK.");
             }else{
@@ -1097,7 +1097,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           cbBdSettings->addItem( QString::fromStdString( PHA::DIG::AllSettings[i].GetPara() ), i);
         }
       }
-      if( digi[ID]->GetFPGAType() == DPPType::PSD ){
+      if( digi[0]->GetFPGAType() == DPPType::PSD ){
         for( int i = 0; i < (int) PSD::DIG::AllSettings.size(); i++ ){
           cbBdSettings->addItem( QString::fromStdString( PSD::DIG::AllSettings[i].GetPara() ), i);
         }
@@ -1140,7 +1140,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         leBdSettingsWrite->setText(QString::fromStdString(value));
         leBdSettingsWrite->setStyleSheet("");
 
-        Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        const Reg & para = IQBoardPara();
         ID = cbIQDigi->currentIndex();
         QString msg;
         msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
@@ -1170,7 +1170,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           sbBdSettingsWrite->setValue( (std::round(value/step) * step) );
         }
 
-        Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        const Reg & para = IQBoardPara();
         ID = cbIQDigi->currentIndex();
         QString msg;
         msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
@@ -1196,21 +1196,21 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(leBdSettingsWrite, &QLineEdit::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         std::string value = leBdSettingsWrite->text().toStdString();
-        Reg para = PHA::DIG::AllSettings[cbBdSettings->currentIndex()];
+        const Reg & para = IQBoardPara();
         ID = cbIQDigi->currentIndex();
         QString msg;
         msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
-        msg += " = " + QString::number(sbBdSettingsWrite->value());
+        msg += " = " + leBdSettingsWrite->text();
         if( digi[ID]->WriteValue(para, value)){
           leBdSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para)));
           SendLogMsg(msg + "|OK.");
-          sbBdSettingsWrite->setStyleSheet("");
+          leBdSettingsWrite->setStyleSheet("");
           UpdatePanelFromMemory();
           UpdateOtherPanels();
         }else{
           leBdSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
-          sbBdSettingsWrite->setStyleSheet("color:red;");
+          leBdSettingsWrite->setStyleSheet("color:red;");
         }
       });
 
@@ -1264,7 +1264,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         leChSettingsWrite->setText(QString::fromStdString(value));
         leChSettingsWrite->setStyleSheet("");
 
-        Reg para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
+        const Reg & para = IQChannelPara();
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
@@ -1272,7 +1272,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg += ",CH:" + QString::number(ch_index);
         msg += " = " + cbChSettingsWrite->currentData().toString();
         if( digi[ID]->WriteValue(para, value, ch_index) ){
-          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para)));
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index)));
           SendLogMsg(msg + "|OK.");
           cbChSettingsWrite->setStyleSheet("");
           UpdatePanelFromMemory();
@@ -1297,9 +1297,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         }
         
         ID = cbIQDigi->currentIndex();
-        Reg para ;
-        if ( digi[ID]->GetFPGAType() == DPPType::PHA) para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
-        if ( digi[ID]->GetFPGAType() == DPPType::PSD) para = PSD::CH::AllSettings[cbChSettings->currentIndex()];
+        const Reg & para = IQChannelPara();
 
         int ch_index = cbIQCh->currentIndex();
         QString msg;
@@ -1307,7 +1305,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         msg += ",CH:" + QString::number(ch_index);
         msg += " = " + QString::number(sbChSettingsWrite->value());
         if( digi[ID]->WriteValue(para, std::to_string(sbChSettingsWrite->value()), ch_index)){
-          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para)));
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index)));
           SendLogMsg(msg + "|OK.");
           sbChSettingsWrite->setStyleSheet("");
           UpdatePanelFromMemory();
@@ -1326,22 +1324,23 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(leChSettingsWrite, &QLineEdit::returnPressed, this, [=](){
         if( !enableSignalSlot ) return;
         std::string value = leChSettingsWrite->text().toStdString();
-        Reg para = PHA::CH::AllSettings[cbChSettings->currentIndex()];
+        const Reg & para = IQChannelPara();
         ID = cbIQDigi->currentIndex();
         int ch_index = cbIQCh->currentIndex();
         QString msg;
         msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara());
-        msg += " = " + QString::number(sbChSettingsWrite->value());
+        msg += ",CH:" + QString::number(ch_index);
+        msg += " = " + leChSettingsWrite->text();
         if( digi[ID]->WriteValue(para, value, ch_index)){
-          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para)));
+          leChSettingsRead->setText( QString::fromStdString(digi[ID]->GetSettingValueFromMemory(para, ch_index)));
           SendLogMsg(msg + "|OK.");
-          sbChSettingsWrite->setStyleSheet("");
+          leChSettingsWrite->setStyleSheet("");
           UpdatePanelFromMemory();
           UpdateOtherPanels();
         }else{
           leChSettingsRead->setText("fail write value");
           SendLogMsg(msg + "|Fail.");
-          sbChSettingsWrite->setStyleSheet("color:red;");
+          leChSettingsWrite->setStyleSheet("color:red;");
         }
       });
 
@@ -1791,7 +1790,7 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
     SetupComboBoxTab(cbbChVetoSrc, PHA::CH::ChannelVetoSource, "Veto Source", triggerTab[digiID], digiID, digi[digiID]->GetNChannels(), 2);
   }
 
-  for( int ch = 0; ch < digi[ID]->GetNChannels() + 1; ch++) {
+  for( int ch = 0; ch < digi[digiID]->GetNChannels() + 1; ch++) {
     //----- SyncBox
     connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
     connect(spbDCOffset[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
@@ -2270,7 +2269,7 @@ void DigiSettingsPanel::onTriggerClick(int haha){
   QString kaka = QString::number(mask);
 
   QString msg;
-  msg = "DIG:" + QString::number(digi[iDig]->GetNChannels()) + ",CH:" + QString::number(ch) + "|" + QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + " = 0x" + QString::number(mask,16);
+  msg = "DIG:" + QString::number(digi[iDig]->GetSerialNumber()) + ",CH:" + QString::number(ch) + "|" + QString::fromStdString(PHA::CH::ChannelsTriggerMask.GetPara() ) + " = 0x" + QString::number(mask,16);
 
   if( digi[iDig]->WriteValue(PHA::CH::ChannelsTriggerMask, kaka.toStdString(), ch) ){
     SendLogMsg(msg + "|OK.");
@@ -2328,8 +2327,7 @@ void DigiSettingsPanel::UpdateStatus(){
 
   digi[ID]->ReadValue(PHA::DIG::LED_status);
   digi[ID]->ReadValue(PHA::DIG::ACQ_status);
-  int nADC = (digi[ID]->GetModelName() == "VX2740") ? 1 : (int) PHA::DIG::TempSensADC.size();
-  for( int i = 0; i < nADC; i++) digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
+  for( int i = 0; i < digi[ID]->GetNTempSensADC(); i++) digi[ID]->ReadValue(PHA::DIG::TempSensADC[i]);
 
   for( int i = 0; i < (int) PHA::DIG::TempSensOthers.size(); i++){
     digi[ID]->ReadValue(PHA::DIG::TempSensOthers[i]);
@@ -2964,13 +2962,20 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
   spb->SetToolTip( atof( para.GetAnswers()[0].first.c_str()));
   layout->addWidget(spb, row, col + 1, srow, scol);
 
-  connect(spb, &RSpinBox::valueChanged, this, [=](){ 
-    if( !enableSignalSlot ) return; 
+  connect(spb, &RSpinBox::valueChanged, this, [=](){
+    if( !enableSignalSlot ) return;
+    spb->setProperty("mixed", false);   // the user typed a value; see SyncSpinBox
     spb->setStyleSheet("color:blue;");
   });
   connect(spb, &RSpinBox::returnPressed, this, [=](){
     if( !enableSignalSlot ) return;
-    //printf("%s %d  %d \n", para.GetPara().c_str(), index, spb->value());
+    /// The "all channels" box shows a placeholder while the channels differ. Writing that would
+    /// set every channel to it.
+    if( isMaster && spb->property("mixed").toBool() ){
+      SendLogMsg("DIG:" + QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(para.GetPara())
+                 + ",CH:All | channels differ, type a value first. Nothing written.");
+      return;
+    }
     if( spb->decimals() == 0 && spb->singleStep() != 1) {
       double step = spb->singleStep();
       double value = spb->value();
@@ -3040,32 +3045,32 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
   const int nCh = digi[ID]->GetNChannels();
 
   if( ch == nCh ){ // set all channels to same value
-    const int value = spb[ID][nCh]->value();
-    if( spb[ID][nCh]->value() == -999 ) return;  
+    if( spb[ID][nCh]->property("mixed").toBool() ) return;   // placeholder, nothing was written
+    const double value = spb[ID][nCh]->value();
     enableSignalSlot = false;
     for( int i = 0; i < nCh; i++) spb[ID][i]->setValue(value);
     enableSignalSlot = true;
-  }else{ 
+  }else{
     if( ch == -1 ) {
-      //check is all ComboBox has same index;
+      //check whether all channels have the same value
       int count = 1;
-      const int value = spb[ID][0]->value();
+      const double value = spb[ID][0]->value();
       for( int i = 1; i < nCh; i ++){
         if( spb[ID][i]->value() == value ) count++;
       }
 
-      //printf("%d =? %d \n", count, nCh);
+      /// Channels that differ: show -1 (clamped to the minimum by the spin box) and mark the box
+      /// "mixed", so pressing Enter on it does not write the placeholder.
       enableSignalSlot = false;
-      if( count != nCh ){
-        spb[ID][nCh]->setValue(-1);
-      }else{
-        spb[ID][nCh]->setValue(value);
-      }
+      const bool mixed = ( count != nCh );
+      spb[ID][nCh]->setValue( mixed ? -1 : value );
+      spb[ID][nCh]->setProperty("mixed", mixed);
       enableSignalSlot = true;
 
     }else{
       enableSignalSlot = false;
       spb[ID][nCh]->setValue(spb[ID][ch]->value());
+      spb[ID][nCh]->setProperty("mixed", false);
       enableSignalSlot = true;
     }
 
@@ -3384,6 +3389,18 @@ void DigiSettingsPanel::ReadChannelSetting(int cbIndex){
   enableSignalSlot = true;
 }
 
+const Reg & DigiSettingsPanel::IQBoardPara() const {
+  const bool isPSD = digi[cbIQDigi->currentIndex()]->GetFPGAType() == DPPType::PSD;
+  const std::vector<Reg> & table = isPSD ? PSD::DIG::AllSettings : PHA::DIG::AllSettings;
+  return table[cbBdSettings->currentIndex()];
+}
+
+const Reg & DigiSettingsPanel::IQChannelPara() const {
+  const bool isPSD = digi[cbIQDigi->currentIndex()]->GetFPGAType() == DPPType::PSD;
+  const std::vector<Reg> & table = isPSD ? PSD::CH::AllSettings : PHA::CH::AllSettings;
+  return table[cbChSettings->currentIndex()];
+}
+
 bool DigiSettingsPanel::CheckDigitizersCanCopy(){
   int digiFromIndex = cbCopyDigiFrom->currentIndex();
   int digiToIndex = cbCopyDigiTo->currentIndex();
@@ -3467,14 +3484,23 @@ bool DigiSettingsPanel::CopyBoardSettings(){
   return nFail == 0;
 }
 
+/// Board settings, then every channel of the target board. A failed channel is logged and the copy
+/// carries on, like a failed parameter inside CopyChannelSettings.
 bool DigiSettingsPanel::CopyWholeDigitizer(){
-  if( !CopyBoardSettings() ) return false;
+  if( !CheckDigitizersCanCopy() ) return false;
 
-  int digiTo =  cbCopyDigiTo->currentIndex();
+  const int digiFrom = cbCopyDigiFrom->currentIndex();
+  const int digiTo   = cbCopyDigiTo->currentIndex();
 
-  for( int ch = 0; ch < digi[ID]->GetNChannels() ; ch ++){
-    if ( ! CopyChannelSettings(cbCopyDigiFrom->currentIndex(), ch, digiTo, ch ) ) return false;
+  bool allOK = CopyBoardSettings();
+  int nChFail = 0;
+  for( int ch = 0; ch < digi[digiTo]->GetNChannels() ; ch ++){
+    if( !CopyChannelSettings(digiFrom, ch, digiTo, ch) ) nChFail++;
+  }
+  if( nChFail > 0 ){
+    SendLogMsg(QString::number(nChFail) + " channel(s) had settings that failed to copy");
+    allOK = false;
   }
 
-  return true;
+  return allOK;
 }

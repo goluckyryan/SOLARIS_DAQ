@@ -71,10 +71,7 @@ public:
 
 protected:
   bool viewportEvent(QEvent *event){
-    if (event->type() == QEvent::TouchBegin) {
-      m_isTouching = true;
-      chart()->setAnimationOptions(QChart::NoAnimation);
-    }
+    if (event->type() == QEvent::TouchBegin) m_isTouching = true;
     return QChartView::viewportEvent(event);
   }
   void mousePressEvent(QMouseEvent *event){
@@ -93,8 +90,9 @@ protected:
 
   }
   void mouseReleaseEvent(QMouseEvent *event){
+    /// No animation change here: the scope runs with NoAnimation (scope.cpp), and an animated
+    /// series re-animates on every trace update.
     if (m_isTouching)  m_isTouching = false;
-    chart()->setAnimationOptions(QChart::SeriesAnimations);
     QChartView::mouseReleaseEvent(event);
   }
   void leaveEvent(QEvent *event) override {

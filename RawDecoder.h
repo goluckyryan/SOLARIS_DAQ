@@ -74,6 +74,7 @@ public:
     hits_.clear();
     statUpdates_.clear();
     cursor_ = 0;
+    sawStopRun_ = false;
     decodeWaveform_ = decodeWaveform;
     if( data == nullptr || dataSize < 8 ) return;
     ParseBlob(data, dataSize, dppType);
@@ -90,12 +91,16 @@ public:
 
   const std::vector<StatUpdate>& GetStatUpdates() const { return statUpdates_; }
 
+  /// The loaded blob holds the board's Stop Run event: the last thing it sends for a run.
+  bool SawStopRun() const { return sawStopRun_; }
+
   uint32_t GetDecodedCount() const { return (uint32_t) hits_.size(); }
 
 private:
   std::vector<DecodedHit> hits_;
   std::vector<StatUpdate> statUpdates_;
   size_t cursor_;
+  bool sawStopRun_ = false;
   bool decodeWaveform_;
 
   static uint64_t ReadBE64(const uint8_t* p){
@@ -124,9 +129,10 @@ private:
         // Individual Trigger Mode aggregate
         pos += ParseAggregate(data + pos * 8, nTotalWords - pos, dppType);
       } else if( format == 0x3 ){
-        // Special event (Start Run / Stop Run)
+        // Special event: subtype [59:56] 0x0 = Start Run, 0x2 = Stop Run (format_RAW.md)
         uint32_t nWords = w0 & 0xFFFFFFFF;
         if( nWords == 0 || pos + nWords > nTotalWords ) break;
+        if( ((w0 >> 56) & 0xF) == 0x2 ) sawStopRun_ = true;
         pos += nWords;
       } else {
         // Unknown format, try to skip 1 word
