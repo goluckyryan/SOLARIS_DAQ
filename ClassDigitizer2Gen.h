@@ -53,6 +53,10 @@ class Digitizer2Gen {
     unsigned int serialNumber;
     unsigned int CupVer;
     std::string  FPGAType; // look the DigitiParameter.h::PHA::DIG::FirwareType, DPP_PHA, DPP_ZLE, DPP_PSD, DPP_DAW, DPP_OPEN, and Scope
+    /// FPGAType as flags, set with it (OpenDigitizer, SetDummy), so the per-call and per-hit paths
+    /// (ReadData, SaveDataToFile, the raw decoder) test a bool instead of comparing strings.
+    bool isPSD = false;
+    bool isSupportedFw = false;   // DPP_PHA or DPP_PSD
     unsigned int FPGAVer; // for checking copy setting
     unsigned short nChannels;
     unsigned short tick2ns;
@@ -230,6 +234,11 @@ class Digitizer2Gen {
     /// analysing. Set by the Analyzer window's enable toggle; read on the DAQ hot path, where a
     /// relaxed load is a plain mov. Off by default: hitRing stays empty until something asks.
     std::atomic<bool> fillHitRing{false};
+
+    /// Same idea for traceRingBuffer: only the Scope reads it, so ReadData() copies traces into it
+    /// only while the Scope is running (set in Scope::StartScope, cleared in Scope::StopScope). A DAQ
+    /// run in the All/OneTrace format then pays nothing for the copy (up to ~97 KB per hit).
+    std::atomic<bool> fillTraceRing{false};
 
     Hit *hit;  // should be hit[MaxNumber], when full or stopACQ, save into file
     void OpenOutFile(std::string fileName, const char * mode = "wb"); //overwrite binary

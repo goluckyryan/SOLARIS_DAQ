@@ -547,8 +547,8 @@ int MainWindow::StartACQ(){
       if( digi[i]->ReadValue(PHA::DIG::EnableStatisticEvents) != "True" ){
         LogMsg("digi-" + QString::number(digi[i]->GetSerialNumber()) +
                " : Raw format needs EnStatEvents, turning it on (rates come from stat events).");
+        digi[i]->WriteValue(PHA::DIG::EnableStatisticEvents, "True");
       }
-      digi[i]->WriteValue(PHA::DIG::EnableStatisticEvents, "True");
 
     }else if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
       digi[i]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
@@ -691,7 +691,7 @@ void MainWindow::StopACQ(){
     influx->WriteData(DatabaseName.toStdString());
   }
 
-  if( chkSaveRun->isChecked() ) LogMsg("Collecting remaining data from the digitizers... ");
+  if( chkSaveRun->isChecked() ) LogMsgNow("Collecting remaining data from the digitizers... ");
   /// serial numbers of the boards whose tail the drain cap below threw away. Collected so the
   /// loss lands in the run record (elog + RunTimeStamp), not only in this session's log panel.
   QStringList drainFailedSN;
@@ -715,10 +715,10 @@ void MainWindow::StopACQ(){
       if( !readDataThread[i]->wait(drainTimeoutSec * 1000) ){
         /// BEFORE the forced join, not after: the join below is the thing that can hang, so a
         /// message printed after it is invisible for exactly as long as the operator needs it.
-        /// LogMsg() ends in logInfo->repaint(), so this paints synchronously -- do NOT reach for
+        /// LogMsgNow() ends in logInfo->repaint(), so this paints synchronously -- do NOT reach for
         /// processEvents() here, it would let the scalar tick re-enter UpdateScalar() and do
         /// blocking CAEN reads on a board whose read thread is being torn down.
-        LogMsg("<font style=\"color: red;\"><b>Digi-" + QString::number(digi[i]->GetSerialNumber()) +
+        LogMsgNow("<font style=\"color: red;\"><b>Digi-" + QString::number(digi[i]->GetSerialNumber()) +
                " either not responsive or not drained after " + QString::number(drainTimeoutSec) + " sec. force stop, data tail is lost.</b></font>");
         readDataThread[i]->Stop();
         readDataThread[i]->wait();
@@ -856,7 +856,7 @@ void MainWindow::AutoRun(){
 //*###################################################################### open and close digitizer
 void MainWindow::OpenDigitizers(){
 
-  LogMsg("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
+  LogMsgNow("<font style=\"color:blue;\">Opening " + QString::number(nDigi) + " Digitizers..... </font>");
 
   digi = new Digitizer2Gen*[nDigi];
   readDataThread = new ReadDataThread*[nDigi];
@@ -869,7 +869,7 @@ void MainWindow::OpenDigitizers(){
 
   for( int i = 0; i < nDigi; i++){
 
-    LogMsg("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
+    LogMsgNow("IP : " + IPList[i] + " | " + QString::number(i+1) + "/" + QString::number(nDigi));
 
     digi[i] = new Digitizer2Gen();
     digi[i]->OpenDigitizer(("dig2://" + IPList[i]).toStdString().c_str());
@@ -884,7 +884,7 @@ void MainWindow::OpenDigitizers(){
       //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
       QString settingFile = expDataPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
       if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
-        LogMsg("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
+        LogMsgNow("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
         digi[i]->SetSettingFileName(settingFile.toStdString());
         LogMsg("done settings.");
       }else{
@@ -2701,8 +2701,13 @@ void MainWindow::LogMsg(QString msg){
     }
     QScrollBar *v = logInfo->verticalScrollBar();
     v->setValue(v->maximum());
-    //qDebug() << msg;
-    logInfo->repaint();
+}
+
+/// LogMsg, painted at once. For a message followed by blocking work on the GUI thread (opening
+/// boards, loading settings, the stop drain), which would otherwise appear only after that work.
+void MainWindow::LogMsgNow(QString msg){
+  LogMsg(msg);
+  logInfo->repaint();
 }
 
 void MainWindow::SetupInflux(){

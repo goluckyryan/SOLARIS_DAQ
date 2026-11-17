@@ -714,6 +714,7 @@ void Scope::StartScope(){
     /// drop the previous run's traces so the browser only ever shows this run. Safe here: this
     /// board's ReadDataThread is started below, so nothing is writing to its ring yet.
     digi[iDigi]->traceRingBuffer.clear();
+    digi[iDigi]->fillTraceRing.store(true, std::memory_order_relaxed);
 
     digi[iDigi]->StartACQ();
 
@@ -751,6 +752,8 @@ void Scope::StopScope(){
 
       readDataThread[i]->Stop();
       readDataThread[i]->wait();
+      /// After the join, so the ring keeps this run's last traces for the trace browser.
+      digi[i]->fillTraceRing.store(false, std::memory_order_relaxed);
 
       digiMTX[i].lock();
       digi[i]->StopACQ();

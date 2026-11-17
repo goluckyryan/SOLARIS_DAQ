@@ -103,6 +103,8 @@ void Digitizer2Gen::SetDummy(unsigned int sn){
   serialNumber = sn;
   nChannels = 64;
   FPGAType = "DPP_PHA";
+  isPSD = false;
+  isSupportedFw = true;
 }
 
 //########################################### Read Write
@@ -471,6 +473,8 @@ int Digitizer2Gen::OpenDigitizer(const char * url){
   //========== PHA and PSD are the same
   serialNumber = atoi(ReadValue(PHA::DIG::SerialNumber).c_str());
   FPGAType = ReadValue(PHA::DIG::FirmwareType);
+  isPSD = ( FPGAType == DPPType::PSD );
+  isSupportedFw = ( FPGAType == DPPType::PHA || isPSD );
   FPGAVer = atoi(ReadValue(PHA::DIG::FPGA_firmwareVersion).c_str());
   nChannels = atoi(ReadValue(PHA::DIG::NumberOfChannel).c_str());
   ModelName = ReadValue(PHA::DIG::ModelName);
@@ -930,14 +934,14 @@ int Digitizer2Gen::ReadData(){
   stopRunSeen = false;   // per call; set below when this call's Raw blob carries the Stop Run event
   if( isDummy || hit == NULL ) return CAEN_FELib_Stop;
 
-  if( FPGAType != DPPType::PHA && FPGAType != DPPType::PSD ) return -404;
+  if( !isSupportedFw ) return -404;
 
   /// local, not a member: the GUI thread calls ReadValue() on this same object while we are here,
   /// and a shared member would let it overwrite our status between the read and the check below.
   int ret = CAEN_FELib_GenericError;
 
   if( hit->dataType == DataFormat::ALL ){
-    if( FPGAType == DPPType::PHA ){
+    if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
         &hit->timestamp,
@@ -1004,7 +1008,7 @@ int Digitizer2Gen::ReadData(){
     hit->isTraceAllZero = false;
 
   }else if( hit->dataType == DataFormat::OneTrace){
-    if( FPGAType == DPPType::PHA ){
+    if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
         &hit->timestamp,
@@ -1046,7 +1050,7 @@ int Digitizer2Gen::ReadData(){
     hit->isTraceAllZero = false;
 
   }else if( hit->dataType == DataFormat::NoTrace){
-    if( FPGAType == DPPType::PHA ){
+    if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
         &hit->timestamp,
@@ -1082,7 +1086,7 @@ int Digitizer2Gen::ReadData(){
     hit->isTraceAllZero = true;
 
   }else if( hit->dataType == DataFormat::MiniWithFineTime){
-    if( FPGAType == DPPType::PHA ){
+    if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
         &hit->timestamp,
@@ -1102,7 +1106,7 @@ int Digitizer2Gen::ReadData(){
     hit->isTraceAllZero = true;
 
   }else if( hit->dataType == DataFormat::Minimum){
-    if( FPGAType == DPPType::PHA ){
+    if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
         &hit->timestamp,
@@ -1124,12 +1128,11 @@ int Digitizer2Gen::ReadData(){
     ret = CAEN_FELib_ReadData(ep_handle, 100, hit->data, &hit->dataSize, &hit->n_events);
 
     if( ret == CAEN_FELib_Success && hit->dataSize > 0 ){
-      rawDecoder.LoadBlob(hit->data, hit->dataSize, FPGAType);
+      rawDecoder.LoadBlob(hit->data, hit->dataSize, isPSD);
       stopRunSeen = rawDecoder.SawStopRun();
 
-      // Decode all hits and push to ring buffers (waveform samples are skipped)
-      RawDecoder::DecodedHit decoded;
-      while( rawDecoder.Next(decoded) ){
+      // Decode all hits and push to ring buffers (waveform samples are skipped). Read in place.
+      for( const RawDecoder::DecodedHit & decoded : rawDecoder.Hits() ){
         if( decoded.channel < nChannels ){
           ringBuffer[decoded.channel].push({decoded.energy, decoded.energy_short});
           /// Both timestamps are raw here (RawDecoder.h:16-17), so apply the same scaling the DPP
@@ -1212,8 +1215,8 @@ int Digitizer2Gen::ReadData(){
   /// baked into every .sol file; correcting it means changing all of them together.
   hit->fine_timestamp *= tick2ns;
 
-  //======== fill trace ring buffer for scope
-  if( !hit->isTraceAllZero ){
+  //======== fill trace ring buffer for scope, only while the scope is running; see fillTraceRing
+  if( !hit->isTraceAllZero && fillTraceRing.load(std::memory_order_relaxed) ){
     TraceSnapshot& ts = traceRingBuffer.nextSlot();
     ts.traceLenght = hit->traceLenght;
     memcpy(ts.analog_probes[0], hit->analog_probes[0], hit->traceLenght * sizeof(int32_t));
@@ -1243,6 +1246,10 @@ void Digitizer2Gen::OpenOutFile(std::string fileName, const char * mode){
   outFileNameBase = fileName;
   const char * ext = (hit && hit->dataType == DataFormat::Raw) ? "raw" : "sol";
   snprintf(outFileName, sizeof(outFileName), "%s_%03d.%s", fileName.c_str(), outFileIndex, ext);
+  /// Default stdio buffering on purpose: no setvbuf() to a large buffer, here or after the rollover
+  /// fopen. A big buffer saves CPU in the read thread but holds up to its size of data in memory, so
+  /// a crash or kill loses it, and at low rates it reaches disk minutes late. The DAQ puts not losing
+  /// data first, and readout is limited by the network link, not by this thread's CPU.
   outFile = fopen(outFileName, mode);
   if( outFile == NULL ){
     /// Set the error flag like the write/rollover failures do: without it SaveDataToFile()
@@ -1299,7 +1306,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&dataStartIdentifier,      2, 1, outFile);
     fwrite(&hit->channel,             1, 1, outFile);
     fwrite(&hit->energy,              2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( isPSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,           6, 1, outFile);
     fwrite(&hit->fine_timestamp,      2, 1, outFile);
     fwrite(&hit->flags_high_priority, 1, 1, outFile);
@@ -1324,7 +1331,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&dataStartIdentifier,        2, 1, outFile);
     fwrite(&hit->channel,               1, 1, outFile);
     fwrite(&hit->energy,                2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( isPSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,             6, 1, outFile);
     fwrite(&hit->fine_timestamp,        2, 1, outFile);
     fwrite(&hit->flags_high_priority,   1, 1, outFile);
@@ -1337,7 +1344,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&dataStartIdentifier,      2, 1, outFile);
     fwrite(&hit->channel,             1, 1, outFile);
     fwrite(&hit->energy,              2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( isPSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,           6, 1, outFile);
     fwrite(&hit->fine_timestamp,      2, 1, outFile);
     fwrite(&hit->flags_high_priority, 1, 1, outFile);
@@ -1347,7 +1354,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&dataStartIdentifier, 2, 1, outFile);
     fwrite(&hit->channel,        1, 1, outFile);
     fwrite(&hit->energy,         2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( isPSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,      6, 1, outFile);
     fwrite(&hit->fine_timestamp, 2, 1, outFile);
 
@@ -1355,7 +1362,7 @@ void Digitizer2Gen::SaveDataToFile(){
     fwrite(&dataStartIdentifier, 2, 1, outFile);
     fwrite(&hit->channel,        1, 1, outFile);
     fwrite(&hit->energy,         2, 1, outFile);
-    if( FPGAType == DPPType::PSD ) fwrite(&hit->energy_short, 2, 1, outFile);
+    if( isPSD ) fwrite(&hit->energy_short, 2, 1, outFile);
     fwrite(&hit->timestamp,      6, 1, outFile);
 
   }else if( hit->dataType == DataFormat::Raw){

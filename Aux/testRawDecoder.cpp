@@ -257,16 +257,22 @@ static void CollectRaw(Digitizer2Gen& digi, double seconds, size_t maxBytes,
   digi.StopACQ();
 }
 
-/// Decode a set of blobs into one flat hit list.
+/// Decode a set of blobs into one flat hit list. With `waves`, the decoded waveforms are kept too
+/// and each hit's `wave` is re-pointed into that list (the decoder's own list is per blob).
 static void DecodeAll(const std::vector<std::vector<uint8_t>>& blobs,
                       const std::string& dppType, bool wf,
                       std::vector<RawDecoder::DecodedHit>& out,
-                      std::vector<RawDecoder::StatUpdate>* stats = nullptr){
+                      std::vector<RawDecoder::StatUpdate>* stats = nullptr,
+                      std::vector<RawDecoder::DecodedWave>* waves = nullptr){
   RawDecoder dec;
+  const bool isPSD = ( dppType == DPPType::PSD );
   for( auto &b : blobs ){
-    dec.LoadBlob(b.data(), b.size(), dppType, wf);
-    RawDecoder::DecodedHit h;
-    while( dec.Next(h) ) out.push_back(h);
+    dec.LoadBlob(b.data(), b.size(), isPSD, wf);
+    for( RawDecoder::DecodedHit h : dec.Hits() ){
+      if( h.wave >= 0 && waves ){ waves->push_back(dec.Waves()[h.wave]); h.wave = (int32_t)(waves->size() - 1); }
+      else h.wave = -1;
+      out.push_back(h);
+    }
     if( stats ) for( auto &s : dec.GetStatUpdates() ) stats->push_back(s);
   }
 }
@@ -651,8 +657,9 @@ static bool Check4(const std::vector<std::vector<uint8_t>>& blobs,
   bool ok = true;
 
   std::vector<RawDecoder::DecodedHit> noWf, withWf;
+  std::vector<RawDecoder::DecodedWave> waves;
   DecodeAll(blobs, dppType, false, noWf);
-  DecodeAll(blobs, dppType, true,  withWf);
+  DecodeAll(blobs, dppType, true,  withWf, nullptr, &waves);
 
   //--- skip-path equivalence --------------------------------------------------
   // The skip branch and the decode branch must advance `pos` identically, or every
@@ -680,44 +687,46 @@ static bool Check4(const std::vector<std::vector<uint8_t>>& blobs,
   size_t nWave = 0, nLenBad = 0;
   size_t nStepFound = 0, nStepMissing = 0;
   Stat edgePos, amplitude;
-  const RawDecoder::DecodedHit * sample = nullptr;
+  const RawDecoder::DecodedHit  * sample  = nullptr;
+  const RawDecoder::DecodedWave * sampleW = nullptr;
 
   for( auto &h : withWf ){
-    if( !h.hasWaveform ) continue;
+    if( h.wave < 0 ) continue;
+    const RawDecoder::DecodedWave & w = waves[h.wave];
     nWave++;
-    if( !sample ) sample = &h;
+    if( !sample ){ sample = &h; sampleW = &w; }
 
-    if( h.traceLenght != h.analog_probes_0.size() ||
-        h.traceLenght != h.digital_probes_3.size() ){
+    if( w.traceLenght != w.analog_probes_0.size() ||
+        w.traceLenght != w.digital_probes_3.size() ){
       printf("        -> [FAIL] traceLenght %zu but AP0 has %zu and DP3 has %zu samples\n",
-             h.traceLenght, h.analog_probes_0.size(), h.digital_probes_3.size());
+             w.traceLenght, w.analog_probes_0.size(), w.digital_probes_3.size());
       ok = false;
       break;
     }
-    if( expectSamples && h.channel == wfChannel && h.traceLenght != expectSamples ) nLenBad++;
+    if( expectSamples && h.channel == wfChannel && w.traceLenght != expectSamples ) nLenBad++;
 
-    for( int i = 0; i < 2; i++ ) if( h.analog_probes_type[i] > 7 ){
-      printf("        -> [FAIL] analog probe %d type %u out of range\n", i, h.analog_probes_type[i]);
+    for( int i = 0; i < 2; i++ ) if( w.analog_probes_type[i] > 7 ){
+      printf("        -> [FAIL] analog probe %d type %u out of range\n", i, w.analog_probes_type[i]);
       ok = false;
     }
-    for( int i = 0; i < 4; i++ ) if( h.digital_probes_type[i] > 15 ){
-      printf("        -> [FAIL] digital probe %d type %u out of range\n", i, h.digital_probes_type[i]);
+    for( int i = 0; i < 4; i++ ) if( w.digital_probes_type[i] > 15 ){
+      printf("        -> [FAIL] digital probe %d type %u out of range\n", i, w.digital_probes_type[i]);
       ok = false;
     }
 
     // The source is a square wave, so AP0 must show one step: flat, edge, flat.
     // This is what proves the probe unpacking is right rather than merely not crashing.
-    if( h.traceLenght >= 8 ){
-      int32_t lo = h.analog_probes_0[0], hi = h.analog_probes_0[0];
-      for( auto v : h.analog_probes_0 ){ lo = std::min(lo,v); hi = std::max(hi,v); }
+    if( w.traceLenght >= 8 ){
+      int32_t lo = w.analog_probes_0[0], hi = w.analog_probes_0[0];
+      for( auto v : w.analog_probes_0 ){ lo = std::min(lo,v); hi = std::max(hi,v); }
       int32_t amp = hi - lo;
       amplitude.Add(amp);
       if( amp < 50 ){ nStepMissing++; continue; }
       int32_t mid = lo + amp/2;
       int nCross = 0; size_t where = 0;
-      bool above = h.analog_probes_0[0] > mid;
-      for( size_t i = 1; i < h.traceLenght; i++ ){
-        bool a = h.analog_probes_0[i] > mid;
+      bool above = w.analog_probes_0[0] > mid;
+      for( size_t i = 1; i < w.traceLenght; i++ ){
+        bool a = w.analog_probes_0[i] > mid;
         if( a != above ){ nCross++; if(nCross==1) where = i; above = a; }
       }
       if( nCross >= 1 ){ nStepFound++; edgePos.Add(where); }
@@ -749,19 +758,19 @@ static bool Check4(const std::vector<std::vector<uint8_t>>& blobs,
 
   if( sample ){
     printf("  first waveform: ch%02d, %zu samples, downSampling=%u, thr=%u, AP types {%u,%u}, DP types {%u,%u,%u,%u}\n",
-           sample->channel, sample->traceLenght, sample->downSampling, sample->trigger_threashold,
-           sample->analog_probes_type[0], sample->analog_probes_type[1],
-           sample->digital_probes_type[0], sample->digital_probes_type[1],
-           sample->digital_probes_type[2], sample->digital_probes_type[3]);
+           sample->channel, sampleW->traceLenght, sampleW->downSampling, sampleW->trigger_threashold,
+           sampleW->analog_probes_type[0], sampleW->analog_probes_type[1],
+           sampleW->digital_probes_type[0], sampleW->digital_probes_type[1],
+           sampleW->digital_probes_type[2], sampleW->digital_probes_type[3]);
     // Print the whole trace when it is short -- the step is the evidence, and it
     // sits past the pre-trigger, so a truncated dump shows nothing but baseline.
-    size_t nShow = std::min(sample->traceLenght, (size_t)40);
-    printf("    %zu of %zu samples (AP0 AP1 | DP0 DP1 DP2 DP3):\n", nShow, sample->traceLenght);
+    size_t nShow = std::min(sampleW->traceLenght, (size_t)40);
+    printf("    %zu of %zu samples (AP0 AP1 | DP0 DP1 DP2 DP3):\n", nShow, sampleW->traceLenght);
     for( size_t i = 0; i < nShow; i++ ){
       printf("      [%2zu] %7d %7d |  %u %u %u %u\n", i,
-             sample->analog_probes_0[i], sample->analog_probes_1[i],
-             sample->digital_probes_0[i], sample->digital_probes_1[i],
-             sample->digital_probes_2[i], sample->digital_probes_3[i]);
+             sampleW->analog_probes_0[i], sampleW->analog_probes_1[i],
+             sampleW->digital_probes_0[i], sampleW->digital_probes_1[i],
+             sampleW->digital_probes_2[i], sampleW->digital_probes_3[i]);
     }
   }
 

@@ -123,6 +123,7 @@ private:
   //@----- log msg
   QPlainTextEdit * logInfo;
   void LogMsg(QString msg);
+  void LogMsgNow(QString msg);
   bool logMsgHTMLMode = true;
     
   //@----- buttons
