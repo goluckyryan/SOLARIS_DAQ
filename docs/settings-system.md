@@ -69,7 +69,7 @@ indexed like it.
 
 **The cache only ever holds what the board reported.** `ReadValue(Reg, ch)` stores a value only
 when the read succeeded; a failed read hands its error text back to the caller but never into the
-cache. `LoadSettingsFromFile()` re-reads the whole board after replaying a file, so values the
+cache. After writing a file's settings, `ApplySettings()` re-reads the whole board, so values the
 board clamped, rounded or refused show as the board has them.
 
 `WriteValue(Reg, value, ch)` is the one checked write path:
@@ -131,9 +131,24 @@ where a value belongs:
 So **the id encodes the position in the `AllSettings` vector**. Reordering or inserting into those
 vectors silently changes what an old file's ids mean. Append, do not insert.
 
-On load, a value is also **replayed to the hardware** when `readWrite == "2"` (i.e. `ReadWrite`) and
-the board is connected (`:1756`). A dummy is never connected, so loading into a dummy populates the
-cache only — which is exactly what makes offline settings editing work.
+**Comparing and applying.** `ReadSettingsFile()` parses a file without touching the board or the
+cache. `DiffWithSettings()` lists the `ReadWrite` entries whose value differs from the cache, which
+equals the board right after `ReadAllSettings()`. Numbers compare by value and within half the
+parameter's step (the board stores DC offset 30 as 29.999), `A|B` source lists as sets, text
+case-insensitively. Entries with no place on this board (e.g. VGA on a non-VX2745) are left out.
+`ApplySettings()` writes only those differing entries, in file order, then re-reads the board.
+
+`LoadSettingsFromFile()` (the settings panel's and the SOLARIS panel's Load) is `ReadSettingsFile`
++ `ApplySettings`: no prompt, but only what differs is written. A dummy is never connected, so
+loading into a dummy fills the cache from the file only — which is exactly what makes offline
+settings editing work.
+
+**At Open Digitizers**, `OpenDigitizer()` has already read every setting, and each board's
+`Settings/setting_<SN>_<PHA|PSD>.dat`, if present, is only compared. Boards whose file matches are
+left alone. If any differ, one dialog (`MainWindow::PromptSettingsRestore`), shown after all boards
+are open and before the panels are built, lists every difference (board, parameter, board value,
+file value) with a Restore checkbox per board: Restore applies the file to the ticked boards
+(writing only the differences), Keep writes nothing.
 
 Where these files land:
 

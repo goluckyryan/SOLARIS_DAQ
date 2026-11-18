@@ -1796,112 +1796,167 @@ int Digitizer2Gen::ReadAndSaveSettingsToFile(const char *saveFileName){
   return SaveSettingsToFile(saveFileName);
 }
 
+/// VGA settings exist only on a VX2745 running PHA (as the setting file is written).
+static bool FitsVGA(const std::string & model, const std::string & fpga){ return model == "VX2745" && fpga == DPPType::PHA; }
+
+std::string Digitizer2Gen::CachedValueForId(int id, bool * known) const {
+  if( known ) *known = true;
+  if( id >= 0 && id < 7000 ){
+    const int ch = id / 100, index = id % 100;
+    if( ch < nChannels && ch < MaxNumberOfChannel && index < (int) chValue[ch].size() ) return chValue[ch][index];
+  }else if( id >= 7000 && id < 8000 ){
+    const int index = (id - 7000) % 4, i = (id - 7000) / 4;
+    if( i < (int) LVDSSettings[index].size() ) return LVDSSettings[index][i].GetValue();
+  }else if( id >= 8000 && id < 9000 ){
+    if( id - 8000 < (int) boardSettings.size() ) return boardSettings[id - 8000].GetValue();
+  }else if( id >= 9000 && id < 9050 ){
+    if( id - 9000 < 4 && FitsVGA(ModelName, FPGAType) ) return VGASetting[id - 9000].GetValue();
+  }else if( id >= 9050 ){
+    if( CupVer >= 2023091800 && ModelName != "VX2730" && id - 9050 < 16 ) return InputDelay[id - 9050].GetValue();
+  }
+  if( known ) *known = false;
+  return "";
+}
+
+bool Digitizer2Gen::ReadSettingsFile(const char * fileName, std::vector<SettingLine> & lines){
+  lines.clear();
+  FILE * f = fopen(fileName, "r");
+  if( !f ) return false;
+  char line[512];
+  while( fgets(line, sizeof(line), f) != NULL ){
+    SettingLine sl;
+    std::string idStr, rwStr;
+    char * token = std::strtok(line, "!");
+    int count = 0;
+    while( token != nullptr && count <= 3 ){
+      /// Trim the ends only: a value like "SwTrg | TestPulse" keeps its inner spaces.
+      token[std::strcspn(token, "\n")] = '\0';
+      char * beg = token;
+      while( *beg != '\0' && std::isspace((unsigned char) *beg) ) beg++;
+      char * end = beg + std::strlen(beg);
+      while( end > beg && std::isspace((unsigned char) *(end-1)) ) end--;
+      *end = '\0';
+      if( count == 0 ) sl.para = beg;
+      if( count == 1 ) rwStr = beg;
+      if( count == 2 ) idStr = beg;
+      if( count == 3 ) sl.value = beg;
+      count ++;
+      token = std::strtok(nullptr, "!");
+    }
+    if( count < 4 ) continue;                     // not a setting line
+    sl.rw = atoi(rwStr.c_str());
+    sl.id = idStr.empty() ? -1 : atoi(idStr.c_str());
+    lines.push_back(sl);
+  }
+  fclose(f);
+  return true;
+}
+
+double Digitizer2Gen::StepForId(int id) const {
+  const Reg * r = nullptr;
+  if( id >= 0 && id < 7000 ){ const int index = id % 100; if( index < (int) chSettingTable.size() ) r = &chSettingTable[index]; }
+  else if( id >= 7000 && id < 8000 ){ const int index = (id - 7000) % 4, i = (id - 7000) / 4; if( i < (int) LVDSSettings[index].size() ) r = &LVDSSettings[index][i]; }
+  else if( id >= 8000 && id < 9000 ){ if( id - 8000 < (int) boardSettings.size() ) r = &boardSettings[id - 8000]; }
+  else if( id >= 9000 && id < 9050 ){ if( id - 9000 < 4 ) r = &VGASetting[id - 9000]; }
+  else if( id >= 9050 ){ if( id - 9050 < 16 ) r = &InputDelay[id - 9050]; }
+  if( r == nullptr ) return 0;
+  const ANSTYPE t = r->GetAnswerType();
+  if( (t != ANSTYPE::INTEGER && t != ANSTYPE::FLOAT) || r->GetAnswers().size() < 3 ) return 0;
+  return atof(r->GetAnswers()[2].first.c_str());
+}
+
+bool Digitizer2Gen::SameSettingValue(const std::string & a, const std::string & b, double step){
+  auto trim = [](std::string s){
+    size_t p = s.find_first_not_of(" \t"); if( p == std::string::npos ) return std::string();
+    return s.substr(p, s.find_last_not_of(" \t") - p + 1); };
+  auto lower = [](std::string s){ for( char & c : s ) c = (char) std::tolower((unsigned char) c); return s; };
+  const std::string x = trim(a), y = trim(b);
+  if( x == y ) return true;
+  /// numbers by value: "50" vs "50.000000", "1e3" vs "1000"
+  char * ex = nullptr; char * ey = nullptr;
+  const double dx = std::strtod(x.c_str(), &ex), dy = std::strtod(y.c_str(), &ey);
+  if( !x.empty() && !y.empty() && *ex == '\0' && *ey == '\0' ){
+    const double tol = std::max( step > 0 ? 0.5 * step * (1 - 1e-9) : 0.0, 1e-9 + 1e-7 * std::max(std::fabs(dx), std::fabs(dy)) );
+    return std::fabs(dx - dy) <= tol;
+  }
+  /// source lists: "TrgIn | SwTrg" == "SwTrg|TrgIn"
+  if( x.find('|') != std::string::npos || y.find('|') != std::string::npos ){
+    auto split = [&](const std::string & s){
+      std::vector<std::string> v; size_t p = 0;
+      while( true ){ size_t q = s.find('|', p); v.push_back(lower(trim(s.substr(p, q == std::string::npos ? std::string::npos : q - p))));
+                     if( q == std::string::npos ) break; p = q + 1; }
+      std::sort(v.begin(), v.end()); return v; };
+    return split(x) == split(y);
+  }
+  return lower(x) == lower(y);
+}
+
+std::vector<Digitizer2Gen::SettingDiff> Digitizer2Gen::DiffWithSettings(const std::vector<SettingLine> & lines) const {
+  std::vector<SettingDiff> diffs;
+  for( const SettingLine & l : lines ){
+    if( l.rw != RW::ReadWrite || l.id < 0 ) continue;
+    bool known = false;
+    const std::string cur = CachedValueForId(l.id, &known);
+    if( !known || SameSettingValue(cur, l.value, StepForId(l.id)) ) continue;
+    diffs.push_back({ l.para, cur, l.value });
+  }
+  return diffs;
+}
+
+int Digitizer2Gen::ApplySettings(const std::vector<SettingLine> & lines, int * nWritten){
+  int nW = 0, nFail = 0;
+  for( const SettingDiff & d : DiffWithSettings(lines) ){
+    nW ++;
+    if( !WriteValue(d.para.c_str(), d.fileValue, false) ){
+      nFail ++;
+      printf("ApplySettings|%d| REFUSED %s = %s\n", serialNumber, d.para.c_str(), d.fileValue.c_str());
+    }
+  }
+  /// The raw writes do not read back: re-read so memory holds what the board actually took.
+  if( nW > 0 && isConnected ) ReadAllSettings();
+  if( nWritten ) *nWritten = nW;
+  return nFail;
+}
+
 bool Digitizer2Gen::LoadSettingsFromFile(const char * loadFileName){
 
   if( loadFileName != NULL) settingFileName = loadFileName;
 
-  FILE * loadFile = fopen(settingFileName.c_str(), "r");
+  std::vector<SettingLine> lines;
+  if( !ReadSettingsFile(settingFileName.c_str(), lines) ){
+    printf("Fail to opened %s\n", settingFileName.c_str());
+    return false;
+  }
+  printf("Opened %s\n", settingFileName.c_str());
 
-  if( loadFile ){
-    printf("Opened %s\n", settingFileName.c_str());
-    std::string para;
-    std::string readWrite;
-    std::string idStr;
-    std::string value;
-    int nWriteFail = 0;
-
-    char line[512];
-    while(fgets(line, sizeof(line), loadFile) != NULL){
-
-      //printf("%s", line);
-      char* token = std::strtok(line, "!");
-      int count = 0;
-      while( token != nullptr){
-
-        /// Trim the ends only. This used to remove_if() every space in the token, which also
-        /// collapsed spaces INSIDE a value: a multi-source setting saved as "SwTrg | TestPulse"
-        /// (the form ProgramChannels() writes) came back as "SwTrg|TestPulse" and was written to
-        /// the board in that shape.
-        size_t len = std::strcspn(token, "\n");
-        token[len] = '\0';
-
-        char * beg = token;
-        while( *beg != '\0' && std::isspace((unsigned char) *beg) ) beg++;
-        char * end = beg + std::strlen(beg);
-        while( end > beg && std::isspace((unsigned char) *(end-1)) ) end--;
-        *end = '\0';
-        token = beg;
-
-        if( count == 0 ) para = token;
-        if( count == 1 ) readWrite = token;
-        if( count == 2 ) idStr = token;
-        if( count == 3 ) value = token;
-        if( count > 3) break;
-
-        count ++;
-        token = std::strtok(nullptr, "!");
-      }
-
-      int id = atoi(idStr.c_str());
-      /// A malformed or missing id used to fall through to the channel branch and index with a
-      /// negative value. Only the upper bounds were ever checked.
-      if( id < 0 ){
-        printf("LoadSettingsFromFile: ignoring line with bad id |%s| (%s)\n",
-               idStr.c_str(), para.c_str());
-      }else if( id < 7000){ // channel
-        int ch = id / 100;
-        int index = id - ch * 100;
-        if( ch < nChannels && ch < MaxNumberOfChannel && index >= 0 && index < (int) chValue[ch].size() )
-          chValue[ch][index] = value;
-        //printf("-------id : %d, ch: %d, index : %d\n", id,  ch, index);
-        //printf("%s|%d|%d|%s|\n", chSettingTable[index].GetFullPara(ch).c_str(),
-        //                         chSettingTable[index].ReadWrite(), id,
-        //                         chValue[ch][index].c_str());
-
-      }else if ( 7000 <= id && id < 8000){ // LVDS
-        int index = (id-7000) % 4;
-        int ch = (id-7000) / 4;
-        if( index < 4 && ch < (int) LVDSSettings[index].size() )
-          LVDSSettings[index][ch].SetValue(value.c_str());
-
-      }else if ( 8000 <= id && id < 9000){ // board
-        if( id - 8000 < (int) boardSettings.size() )
-          boardSettings[id - 8000].SetValue(value.c_str());
-        //printf("%s|%d|%d|%s\n", boardSettings[id-8000].GetFullPara().c_str(),
-        //                        boardSettings[id-8000].ReadWrite(), id,
-        //                        boardSettings[id-8000].GetValue().c_str());
-      }else if ( 9000 <= id && id < 9050){ // vga
-        if( id - 9000 < 4 && ModelName == "VX2745" && FPGAType == DPPType::PHA )
-          VGASetting[id - 9000].SetValue(value.c_str());
-      }else if ( id >= 9050 ){ // group
-        if( CupVer >= 2023091800 && ModelName != "VX2730" && id - 9050 < 16 )
-          InputDelay[id - 9050].SetValue(value.c_str());
-      }
-      //printf("%s|%s|%d|%s|\n", para.c_str(), readWrite.c_str(), id, value.c_str());
-      if( readWrite == "2" && isConnected){
-        if( !WriteValue(para.c_str(), value.c_str(), false) ) nWriteFail ++;
-      }
-    }
-
-    fclose(loadFile);
-    /// The loop above filled the cache from the FILE and wrote with the raw overload, which does
-    /// not read back. Re-read so the cache holds what the board actually took (clamped, rounded,
-    /// or refused), as everywhere else.
-    if( isConnected ) ReadAllSettings();
-    /// A board that dropped off the net during the load used to still report "loaded" with
-    /// every write failing. Any rejected write fails the whole load; the console names them.
-    if( nWriteFail > 0 ){
-      printf("LoadSettingsFromFile|%d| %d write(s) REJECTED by the board -- '%s'\n",
-             serialNumber, nWriteFail, settingFileName.c_str());
-      return false;
+  /// Not connected (a dummy): nothing to write; show the file's values.
+  if( !isConnected ){
+    for( const SettingLine & l : lines ){
+      bool known = false;
+      CachedValueForId(l.id, &known);
+      if( !known ) continue;
+      const int id = l.id;
+      if( id < 7000 ) chValue[id / 100][id % 100] = l.value;
+      else if( id < 8000 ) LVDSSettings[(id - 7000) % 4][(id - 7000) / 4].SetValue(l.value.c_str());
+      else if( id < 9000 ) boardSettings[id - 8000].SetValue(l.value.c_str());
+      else if( id < 9050 ) VGASetting[id - 9000].SetValue(l.value.c_str());
+      else InputDelay[id - 9050].SetValue(l.value.c_str());
     }
     return true;
-  }else{
-    printf("Fail to opened %s\n", settingFileName.c_str());
   }
 
-  return false;
-  
+  /// Connected: memory equals the board, so only the entries that differ need writing.
+  int nWritten = 0;
+  const int nFail = ApplySettings(lines, &nWritten);
+  printf("LoadSettingsFromFile|%d| %d setting(s) differed from the board and were written -- '%s'\n",
+         serialNumber, nWritten, settingFileName.c_str());
+  /// Any rejected write fails the load; the console names them.
+  if( nFail > 0 ){
+    printf("LoadSettingsFromFile|%d| %d write(s) REJECTED by the board -- '%s'\n",
+           serialNumber, nFail, settingFileName.c_str());
+    return false;
+  }
+  return true;
 }
 
 /// Every index is bounded here. The arrays have very different lengths -- chValue[64],

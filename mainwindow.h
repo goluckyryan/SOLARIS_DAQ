@@ -224,6 +224,12 @@ private:
 
   bool isSaveSubFolder;
 
+  /// A board whose setting file differs from what it reported at opening.
+  struct SettingsRestore { int digi; QString file; std::vector<Digitizer2Gen::SettingLine> lines; std::vector<Digitizer2Gen::SettingDiff> diffs; };
+  /// One dialog for all such boards: lists the differences, asks which boards to restore, and
+  /// writes only the differing settings of the boards chosen.
+  void PromptSettingsRestore(std::vector<SettingsRestore> & pending);
+
   QStringList existGitBranches;
 
   QString programPath;

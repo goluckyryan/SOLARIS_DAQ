@@ -261,7 +261,29 @@ class Digitizer2Gen {
     void ReadAllSettings(); // read settings from digitier and save to memory
     int  SaveSettingsToFile(const char * saveFileName = NULL, bool setReadOnly = false); //Save settings from memory to text file
     int  ReadAndSaveSettingsToFile(const char * saveFileName = NULL); // ReadAllSettings + text file
-    bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load settings, write to digitizer and save to memory
+    bool LoadSettingsFromFile(const char * loadFileName = NULL); // Load a file: write only what differs from memory, then re-read
+
+    /// One line of a setting file (as SaveSettingsToFile writes it): full parameter path, RW code
+    /// (RW::ReadWrite = 2 is what gets written), id (where the value lives in memory), value.
+    struct SettingLine { std::string para; int rw = 0; int id = -1; std::string value; };
+    struct SettingDiff { std::string para; std::string boardValue; std::string fileValue; };
+    /// Parse a setting file; nothing is written or cached. False if it cannot be opened.
+    static bool ReadSettingsFile(const char * fileName, std::vector<SettingLine> & lines);
+    /// The file's read/write entries whose value differs from memory (which equals the board right
+    /// after ReadAllSettings). Entries that have no place in memory on this board are left out.
+    std::vector<SettingDiff> DiffWithSettings(const std::vector<SettingLine> & lines) const;
+    /// Bring the board to the file: write only the entries DiffWithSettings() reports, in file
+    /// order, then ReadAllSettings() if anything was written. Returns the number of refused writes;
+    /// *nWritten gets the number of writes made.
+    int  ApplySettings(const std::vector<SettingLine> & lines, int * nWritten = nullptr);
+    /// Two setting strings the board treats as equal: numbers by value, within half a step when the
+    /// parameter's step is given (the board stores e.g. DC offset 30 as 29.999); "A|B" source lists
+    /// as sets; anything else case-insensitively.
+    static bool SameSettingValue(const std::string & a, const std::string & b, double step = 0);
+    /// The parameter-table step of the setting at a file id (0 if none).
+    double StepForId(int id) const;
+    /// Memory's value for a setting-file id; *known is false if the id has no place on this board.
+    std::string CachedValueForId(int id, bool * known = nullptr) const;
 
 };
 

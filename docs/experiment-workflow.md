@@ -138,9 +138,9 @@ analysis code can refer to `data_raw/` regardless of where the raw data actually
 git-ignored, so they do not follow the repository to another machine — expect to recreate them.
 
 **Register dumps** go to two `Settings/` folders. The SOLARIS panel saves to
-`<analysisPath>/working/Settings/` (`SOLARISpanel.cpp:96`). The boards' settings files, loaded at
-open and used by the settings panel's Save/Load, are in `<expDataPath>/Settings/`
-(`mainwindow.cpp:843`, `:861`). During a run, `StartACQ` also writes a settings snapshot next to
+`<analysisPath>/working/Settings/` (`SOLARISpanel.cpp:96`). The boards' settings files, compared with
+the boards at open (and offered for restore when they differ) and used by the settings panel's
+Save/Load, are in `<expDataPath>/Settings/` (`MainWindow::OpenDigitizers`). During a run, `StartACQ` also writes a settings snapshot next to
 the data itself (`<expName>_<runID>XSetting_<SN>.dat`), so a run's raw files and the configuration
 that produced them stay together.
 

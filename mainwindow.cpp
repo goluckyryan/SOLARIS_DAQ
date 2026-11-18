@@ -833,6 +833,7 @@ void MainWindow::OpenDigitizers(){
   readDataThread = new ReadDataThread*[nDigi];
 
   nDigiConnected = 0;
+  std::vector<SettingsRestore> pendingRestore;
 
   //Check path exist
   QDir dir(expDataPath + "/Settings/");
@@ -852,18 +853,23 @@ void MainWindow::OpenDigitizers(){
       readDataThread[i] = new ReadDataThread(digi[i], this);
       connect(readDataThread[i], &ReadDataThread::sendMsg, this, &MainWindow::LogMsg);
 
-      //*------ search for settings_XXX_YYY.dat, YYY is DPP-type, XXX is serial number
+      //*------ setting_<SN>_<DPP>.dat: compare with what the board reported, write nothing yet.
+      /// OpenDigitizer() has read every setting, so memory equals the board here. A file that
+      /// differs is offered for restore once all boards are open (PromptSettingsRestore).
       QString settingFile = expDataPath + "/Settings/setting_" + QString::number(digi[i]->GetSerialNumber()) + "_" + QString::fromStdString(digi[i]->GetFPGAType().substr(4)) + ".dat";
-      if( digi[i]->LoadSettingsFromFile( settingFile.toStdString().c_str() ) ){
-        LogMsgNow("Found setting file <b>" + settingFile + "</b> and loading. please wait.");
+      std::vector<Digitizer2Gen::SettingLine> lines;
+      if( Digitizer2Gen::ReadSettingsFile(settingFile.toStdString().c_str(), lines) ){
         digi[i]->SetSettingFileName(settingFile.toStdString());
-        LogMsg("done settings.");
+        std::vector<Digitizer2Gen::SettingDiff> diffs = digi[i]->DiffWithSettings(lines);
+        if( diffs.empty() ){
+          LogMsg("Setting file <b>" + settingFile + "</b> matches the board.");
+        }else{
+          LogMsg("Setting file <b>" + settingFile + "</b> differs from the board in " + QString::number(diffs.size()) + " setting(s).");
+          pendingRestore.push_back({ i, settingFile, std::move(lines), std::move(diffs) });
+        }
       }else{
-        LogMsg("<font style=\"color: red;\">Unable to open/load setting file <b>" + settingFile + "</b> (board may have rejected writes; see console). </font>");
+        LogMsg("No setting file <b>" + settingFile + "</b>; the board keeps its settings.");
         digi[i]->SetSettingFileName("");
-        //LogMsg("Reset digitizer And set default PHA settings.");        
-        //digi[i]->Reset();
-        //digi[i]->ProgramBoard(false);
       }
       
       nDigiConnected ++;
@@ -891,6 +897,9 @@ void MainWindow::OpenDigitizers(){
     }
     QCoreApplication::processEvents(); // to prevent application busy.
   }
+
+  /// Before the panels are built, so they show the settings the boards end up with.
+  if( !pendingRestore.empty() ) PromptSettingsRestore(pendingRestore);
 
   if( nDigiConnected > 0 ){
     SetUpScalar();
@@ -922,6 +931,76 @@ void MainWindow::OpenDigitizers(){
 
   bnSOLSettings->setEnabled(CheckSOLARISpanelOK());
 
+}
+
+void MainWindow::PromptSettingsRestore(std::vector<SettingsRestore> & pending){
+
+  QDialog dialog(this);
+  dialog.setWindowTitle("Setting files differ from the boards");
+  dialog.resize(900, 600);
+  QVBoxLayout * layout = new QVBoxLayout(&dialog);
+
+  QLabel * info = new QLabel("These boards report settings that differ from their saved setting files.\n"
+                             "Restore writes only the settings that differ, so the board ends up as in the file.\n"
+                             "Keep leaves the board as it is.", &dialog);
+  layout->addWidget(info);
+
+  std::vector<QCheckBox *> restore;
+  int nRows = 0;
+  for( const SettingsRestore & r : pending ){
+    QCheckBox * cb = new QCheckBox("Restore Digi-" + QString::number(digi[r.digi]->GetSerialNumber()) + " from " + r.file
+                                   + "  (" + QString::number(r.diffs.size()) + " setting(s) differ)", &dialog);
+    cb->setChecked(true);
+    layout->addWidget(cb);
+    restore.push_back(cb);
+    nRows += (int) r.diffs.size();
+  }
+
+  QTableWidget * table = new QTableWidget(nRows, 4, &dialog);
+  table->setHorizontalHeaderLabels({"Board", "Parameter", "Board value", "File value"});
+  table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  table->verticalHeader()->setVisible(false);
+  int row = 0;
+  for( const SettingsRestore & r : pending ){
+    const QString sn = "Digi-" + QString::number(digi[r.digi]->GetSerialNumber());
+    for( const Digitizer2Gen::SettingDiff & d : r.diffs ){
+      table->setItem(row, 0, new QTableWidgetItem(sn));
+      table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(d.para)));
+      table->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(d.boardValue)));
+      table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(d.fileValue)));
+      row ++;
+    }
+  }
+  table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+  layout->addWidget(table);
+
+  QDialogButtonBox * buttons = new QDialogButtonBox(&dialog);
+  QPushButton * bnRestore = buttons->addButton("Restore checked boards", QDialogButtonBox::AcceptRole);
+  buttons->addButton("Keep board settings", QDialogButtonBox::RejectRole);
+  bnRestore->setDefault(true);
+  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+  layout->addWidget(buttons);
+
+  if( dialog.exec() != QDialog::Accepted ){
+    LogMsg("Kept the boards' settings; setting files not restored.");
+    return;
+  }
+
+  for( size_t k = 0; k < pending.size(); k++ ){
+    const SettingsRestore & r = pending[k];
+    const QString sn = QString::number(digi[r.digi]->GetSerialNumber());
+    if( !restore[k]->isChecked() ){ LogMsg("Digi-" + sn + ": kept the board's settings."); continue; }
+    LogMsgNow("Digi-" + sn + ": restoring " + QString::number(r.diffs.size()) + " setting(s) from <b>" + r.file + "</b> ...");
+    int nWritten = 0;
+    const int nFail = digi[r.digi]->ApplySettings(r.lines, &nWritten);
+    if( nFail == 0 ){
+      LogMsg("Digi-" + sn + ": restored, " + QString::number(nWritten) + " setting(s) written.");
+    }else{
+      LogMsg("<font style=\"color: red;\">Digi-" + sn + ": " + QString::number(nFail) + " of " + QString::number(nWritten)
+             + " setting(s) refused by the board (see console).</font>");
+    }
+  }
 }
 
 void MainWindow::CloseDigitizers(){
