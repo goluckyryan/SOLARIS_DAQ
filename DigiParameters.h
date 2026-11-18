@@ -7,6 +7,11 @@
 
 #define MIN_VERSION_GROUP 2022122300
 
+/// The parameter tables below are namespace-scope `const`, so every translation unit that includes
+/// this header builds its own copy at start-up (a few MB and milliseconds in total). Kept on purpose:
+/// the cost is negligible, and `inline const` would change cross-file static initialisation order,
+/// a classic source of start-up bugs (the AllSettings tables are built from the Regs above them).
+
 enum ANSTYPE {INTEGER, FLOAT, COMBOX, STR, BYTE, BINARY, NONE};
 enum TYPE {CH, DIG, LVDS, VGA, GROUP};
 enum RW { ReadOnly, WriteOnly, ReadWrite};

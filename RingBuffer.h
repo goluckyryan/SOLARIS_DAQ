@@ -17,6 +17,9 @@ class RingBuffer {
   std::atomic<unsigned long> writeIndex;
 
 public:
+  /// The zero-fill commits the whole buffer at construction (~7.6 MB per board for its three rings,
+  /// dummies included). Kept on purpose: the cost is negligible on the DAQ PC, and every slot holds a
+  /// defined value even if a consumer ever reads one that was not written yet.
   RingBuffer() : writeIndex(0) { memset(buffer, 0, sizeof(buffer)); }
 
   void push(const T& val) {

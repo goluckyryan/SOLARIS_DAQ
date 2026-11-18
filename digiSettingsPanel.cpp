@@ -65,6 +65,13 @@ QStringList chToolTip = { "Channel signal delay initialization status (1 = initi
 
 QColor orangeColor(255, 165, 0);
 
+/// setStyleSheet() re-polishes the widget even when the string is unchanged (measured: 4096
+/// buttons, ~20 ms per pass), and the refreshes below run after every write over the 64x64 trigger
+/// map and every status LED. Only call it when the style actually changes.
+static inline void SetStyleIfChanged(QWidget * w, const QString & style){
+  if( w->styleSheet() != style ) w->setStyleSheet(style);
+}
+
 DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi, QString settingPath, QWidget * parent) : QWidget(parent){
 
   setWindowTitle("Digitizers Settings");
@@ -1790,58 +1797,13 @@ void DigiSettingsPanel::SetupPHAChannels(unsigned short digiID){
     SetupComboBoxTab(cbbChVetoSrc, PHA::CH::ChannelVetoSource, "Veto Source", triggerTab[digiID], digiID, digi[digiID]->GetNChannels(), 2);
   }
 
+  /// No per-widget Sync connects here: every write handler (SetupComboBox/SetupSpinBox) ends in
+  /// UpdatePanelFromMemory(), which re-syncs the "all channels" boxes from the cache. A Sync lambda
+  /// connected after the write handler would run last and overwrite that (e.g. show one channel's
+  /// value in the "all" box while the channels differ).
   for( int ch = 0; ch < digi[digiID]->GetNChannels() + 1; ch++) {
-    //----- SyncBox
-    connect(cbbOnOff[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
-    connect(spbDCOffset[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
-    connect(spbThreshold[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbThreshold, ch);});
-    connect(cbbParity[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbParity, ch);});
-    connect(spbRecordLength[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbRecordLength, ch);});
-    connect(spbPreTrigger[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPreTrigger, ch);});
-    
-    connect(cbbWaveSource[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSource, ch);});
-    connect(cbbWaveRes[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveRes, ch);});
-    connect(cbbWaveSave[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSave, ch);});
-
-    connect(cbbAnaProbe0[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe0, ch);});
-    connect(cbbAnaProbe1[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe1, ch);});
-    connect(cbbDigProbe0[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe0, ch);});
-    connect(cbbDigProbe1[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe1, ch);});
-    connect(cbbDigProbe2[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe2, ch);});
-    connect(cbbDigProbe3[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe3, ch);});
-
-    connect(cbbEventSelector[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEventSelector, ch);});
-    connect(cbbWaveSelector[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSelector, ch);});
-    connect(spbEnergySkimLow[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimLow, ch);});
-    connect(spbEnergySkimHigh[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimHigh, ch);});
-
-    connect(cbbEvtTrigger[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEvtTrigger, ch);});
-    connect(cbbWaveTrigger[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveTrigger, ch);});
-    connect(cbbChVetoSrc[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbChVetoSrc, ch);});
-    connect(cbbCoinMask[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbCoinMask, ch);});
-    connect(cbbAntiCoinMask[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
-    connect(spbCoinLength[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
-    connect(spbADCVetoWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
-    connect(spbSelfTriggerWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbSelfTriggerWidth, ch);});
-
-    connect(spbInputRiseTime[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbInputRiseTime, ch);});
-    connect(spbTriggerGuard[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTriggerGuard, ch);});
-    connect(cbbLowFilter[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbLowFilter, ch);});
-    
-    connect(spbTrapRiseTime[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapRiseTime, ch);});
-    connect(spbTrapFlatTop[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapFlatTop, ch);});
-    connect(spbTrapPoleZero[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbTrapPoleZero, ch);});
- 
-    connect(spbPeaking[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPeaking, ch);});
-    connect(spbBaselineGuard[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbBaselineGuard, ch);});
-    connect(spbPileupGuard[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPileupGuard, ch);});
- 
-    connect(cbbBaselineAvg[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbBaselineAvg, ch);});
-    connect(cbbPeakingAvg[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbPeakingAvg, ch);});
-    connect(spbFineGain[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbFineGain, ch);});
     spbFineGain[digiID][ch]->setSingleStep(0.001);
     spbFineGain[digiID][ch]->setDecimals(3);
-
   }
 
   
@@ -2177,67 +2139,10 @@ void DigiSettingsPanel::SetupPSDChannels(unsigned short digiID){
 
   }
 
-  for( int ch = 0; ch < digi[digiID]->GetNChannels() + 1; ch++) {
-    //----- SyncBox
-    connect(cbbOnOff[digiID][ch],        &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbOnOff, ch);});
-    connect(spbDCOffset[digiID][ch],     &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbDCOffset, ch);});
-    connect(spbThreshold[digiID][ch],    &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbThreshold, ch);});
-    connect(cbbParity[digiID][ch],       &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbParity, ch);});
-    connect(spbRecordLength[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbRecordLength, ch);});
-    connect(spbPreTrigger[digiID][ch],   &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbPreTrigger, ch);});
-    
-    connect(cbbWaveSource[digiID][ch],  &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSource, ch);});
-    connect(cbbWaveRes[digiID][ch],     &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveRes, ch);});
-    connect(cbbWaveSave[digiID][ch],    &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSave, ch);});
-    
-    connect(cbbAnaProbe0[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe0, ch);});
-    connect(cbbAnaProbe1[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAnaProbe1, ch);});
-    connect(cbbDigProbe0[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe0, ch);});
-    connect(cbbDigProbe1[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe1, ch);});
-    connect(cbbDigProbe2[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe2, ch);});
-    connect(cbbDigProbe3[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbDigProbe3, ch);});
-
-    connect(cbbEventSelector[digiID][ch],  &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEventSelector, ch);});
-    connect(cbbWaveSelector[digiID][ch],   &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveSelector, ch);});
-    connect(spbEnergySkimLow[digiID][ch],  &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimLow, ch);});
-    connect(spbEnergySkimHigh[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbEnergySkimHigh, ch);});
-
-    connect(cbbEvtTrigger[digiID][ch],   &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEvtTrigger, ch);});
-    connect(cbbWaveTrigger[digiID][ch],  &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveTrigger, ch);});
-    connect(cbbChVetoSrc[digiID][ch],    &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbChVetoSrc, ch);});
-    connect(cbbCoinMask[digiID][ch],     &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbCoinMask, ch);});
-    connect(cbbAntiCoinMask[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbAntiCoinMask, ch);});
-    connect(spbCoinLength[digiID][ch],   &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbCoinLength, ch);});
-    connect(spbADCVetoWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbADCVetoWidth, ch);});
-    connect(spbSelfTriggerWidth[digiID][ch], &RSpinBox::returnPressed, this, [=](){ SyncSpinBox(spbSelfTriggerWidth, ch);});
-
-
-    connect(cbbADCInputBaselineAvg[digiID][ch],   &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbADCInputBaselineAvg, ch);});
-    connect(spbAbsBaseline[digiID][ch],           &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbAbsBaseline, ch);});
-    connect(spbADCInputBaselineGuard[digiID][ch], &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbADCInputBaselineGuard, ch);});
-
-    connect(cbbTriggerFilter[digiID][ch],            &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbTriggerFilter, ch);});
-    connect(cbbTriggerHysteresis[digiID][ch],        &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbTriggerHysteresis, ch);});
-    connect(spbCFDDelay[digiID][ch],                 &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbCFDDelay, ch);});
-    connect(spbCFDFraction[digiID][ch],              &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbCFDFraction, ch);});
-    connect(cbbSmoothingFactor[digiID][ch],          &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbSmoothingFactor, ch);});
-    connect(cbbChargeSmooting[digiID][ch],           &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbChargeSmooting, ch);});
-    connect(cbbTimeFilterSmoothing[digiID][ch],      &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbTimeFilterSmoothing, ch);});
-    connect(spbTimeFilterReTriggerGuard[digiID][ch], &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbTimeFilterReTriggerGuard, ch);});
-    connect(spbPileupGap[digiID][ch],                &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbPileupGap, ch);});
-
-    connect(spbGateLong[digiID][ch],                       &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbGateLong, ch);});
-    connect(spbGateShort[digiID][ch],                      &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbGateShort, ch);});
-    connect(spbGateOffset[digiID][ch],                     &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbGateOffset, ch);});
-    connect(spbLongChargeIntergratorPedestal[digiID][ch],  &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbLongChargeIntergratorPedestal, ch);});
-    connect(spbShortChargeIntergratorPedestal[digiID][ch], &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbShortChargeIntergratorPedestal, ch);});
-    connect(cbbEnergyGain[digiID][ch],                     &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEnergyGain, ch);});
-
-    connect(spbNeutronThreshold[digiID][ch],   &RSpinBox::returnPressed,        this, [=](){ SyncSpinBox(spbNeutronThreshold, ch);});
-    connect(cbbEventNeutronReject[digiID][ch], &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbEventNeutronReject, ch);});
-    connect(cbbWaveNeutronReject[digiID][ch],  &RComboBox::currentIndexChanged, this, [=](){ SyncComboBox(cbbWaveNeutronReject, ch);});
-
-  }
+  /// No per-widget Sync connects here: every write handler (SetupComboBox/SetupSpinBox) ends in
+  /// UpdatePanelFromMemory(), which re-syncs the "all channels" boxes from the cache. A Sync lambda
+  /// connected after the write handler would run last and overwrite that (e.g. show one channel's
+  /// value in the "all" box while the channels differ).
 
 }
 
@@ -2303,9 +2208,9 @@ void DigiSettingsPanel::ReadTriggerMap(){
     for( int k = 0; k < (int) digi[ID]->GetNChannels(); k ++ ){
       trgMapClickStatus[ID][ch][k] = ( (mask >> k) & 0x1 );
       if( (mask >> k) & 0x1 ){
-        trgMap[ID][ch][k]->setStyleSheet("background-color: red;"); 
+        SetStyleIfChanged(trgMap[ID][ch][k], "background-color: red;"); 
       }else{
-        trgMap[ID][ch][k]->setStyleSheet("");
+        SetStyleIfChanged(trgMap[ID][ch][k], "");
       }
     }
   }
@@ -2527,9 +2432,9 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   unsigned int ledStatus = atoi(digi[ID]->GetSettingValueFromMemory(PHA::DIG::LED_status).c_str());
   for( int i = 0; i < 19; i++){
     if( (ledStatus >> i) & 0x1 ) {
-      LEDStatus[ID][i]->setStyleSheet("background-color:green;");
+      SetStyleIfChanged(LEDStatus[ID][i], "background-color:green;");
     }else{
-      LEDStatus[ID][i]->setStyleSheet("");
+      SetStyleIfChanged(LEDStatus[ID][i], "");
     }
   }
 
@@ -2537,9 +2442,9 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
   unsigned int acqStatus = atoi(digi[ID]->GetSettingValueFromMemory(PHA::DIG::ACQ_status).c_str());
   for( int i = 0; i < 7; i++){
     if( (acqStatus >> i) & 0x1 ) {
-      ACQStatus[ID][i]->setStyleSheet("background-color:green;");
+      SetStyleIfChanged(ACQStatus[ID][i], "background-color:green;");
     }else{
-      ACQStatus[ID][i]->setStyleSheet("");
+      SetStyleIfChanged(ACQStatus[ID][i], "");
     }
   }
 
@@ -2563,6 +2468,8 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     return;
   }
 
+  /// Board Info is read from the board on every refresh, by design: it shows what the board reports
+  /// now, not the cache. Do not switch these to GetSettingValueFromMemory().
   for (unsigned short j = 0; j < (unsigned short) infoIndex.size(); j++){
     Reg reg = infoIndex[j].second;
     QString text = QString::fromStdString(digi[ID]->ReadValue(reg));
@@ -2673,9 +2580,9 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     unsigned int status = atoi(digi[ID]->GetSettingValueFromMemory(PHA::CH::ChannelStatus, ch).c_str());
     for( int i = 0; i < 9; i++){
       if( (status >> i) & 0x1 ) {
-        chStatus[ID][ch][i]->setStyleSheet("background-color:green;");
+        SetStyleIfChanged(chStatus[ID][ch][i], "background-color:green;");
       }else{
-        chStatus[ID][ch][i]->setStyleSheet("");
+        SetStyleIfChanged(chStatus[ID][ch][i], "");
       }
     }
     chGainFactor[ID][ch]->setText(QString::fromStdString(digi[ID]->GetSettingValueFromMemory(PHA::CH::GainFactor, ch)));
@@ -2687,18 +2594,18 @@ void DigiSettingsPanel::UpdatePanelFromMemory(bool onlyStatus){
     std::string itlConnect = digi[ID]->GetSettingValueFromMemory(PHA::CH::ITLConnect, ch);
     if( itlConnect == "Disabled" ) {
       ITLConnectStatus[ID][ch] = 0;
-      chITLConnect[ID][ch][0]->setStyleSheet("");
-      chITLConnect[ID][ch][1]->setStyleSheet("");
+      SetStyleIfChanged(chITLConnect[ID][ch][0], "");
+      SetStyleIfChanged(chITLConnect[ID][ch][1], "");
     }
     if( itlConnect == "ITLA" ) {
       ITLConnectStatus[ID][ch] = 1;
-      chITLConnect[ID][ch][0]->setStyleSheet("background-color : green;");
-      chITLConnect[ID][ch][1]->setStyleSheet("");
+      SetStyleIfChanged(chITLConnect[ID][ch][0], "background-color : green;");
+      SetStyleIfChanged(chITLConnect[ID][ch][1], "");
     }
     if( itlConnect == "ITLB" ) {
       ITLConnectStatus[ID][ch] = 2;
-      chITLConnect[ID][ch][0]->setStyleSheet("");
-      chITLConnect[ID][ch][1]->setStyleSheet("background-color : green;");
+      SetStyleIfChanged(chITLConnect[ID][ch][0], "");
+      SetStyleIfChanged(chITLConnect[ID][ch][1], "background-color : green;");
     }
 
     if( digi[ID]->GetFPGAType() == DPPType::PHA ) FillPHAChannelWidgets(ch, ch);
@@ -3009,13 +2916,10 @@ void DigiSettingsPanel::SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel + 1]
 
   const int nCh = digi[ID]->GetNChannels();
 
-  if( ch == nCh ){
-    const int index = cbb[ID][nCh]->currentIndex();
-    if( cbb[ID][nCh]->currentText() == "" ) return;  
-    enableSignalSlot = false;
-    for( int i = 0; i < nCh; i++) cbb[ID][i]->setCurrentIndex(index);
-    enableSignalSlot = true;
-  }else{
+  /// Called only from UpdatePanelFromMemory(), with the channel picker's value: -1 ("All") or a
+  /// channel. The "all" box -> every channel direction needs no code: the write is followed by a
+  /// refresh that reads every channel widget back from the cache.
+  {
     if( ch == -1 ) {
       //check is all ComboBox has same index;
       int count = 1;
@@ -3044,13 +2948,9 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
 
   const int nCh = digi[ID]->GetNChannels();
 
-  if( ch == nCh ){ // set all channels to same value
-    if( spb[ID][nCh]->property("mixed").toBool() ) return;   // placeholder, nothing was written
-    const double value = spb[ID][nCh]->value();
-    enableSignalSlot = false;
-    for( int i = 0; i < nCh; i++) spb[ID][i]->setValue(value);
-    enableSignalSlot = true;
-  }else{
+  /// Called only from UpdatePanelFromMemory(), with the channel picker's value: -1 ("All") or a
+  /// channel; see SyncComboBox.
+  {
     if( ch == -1 ) {
       //check whether all channels have the same value
       int count = 1;
@@ -3074,7 +2974,7 @@ void DigiSettingsPanel::SyncSpinBox(RSpinBox *(&spb)[][MaxNumberOfChannel+1], in
       enableSignalSlot = true;
     }
 
-    spb[ID][nCh]->setStyleSheet("");
+    SetStyleIfChanged(spb[ID][nCh], "");
   }
 }
 
