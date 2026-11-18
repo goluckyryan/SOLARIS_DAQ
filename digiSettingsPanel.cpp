@@ -307,27 +307,8 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         //-------------------------------------
         SetupComboBox(cbbClockSource[iDigi], PHA::DIG::ClockSource, -1, false, "Clock Source :", boardLayout, rowId, 0, 1, 2);
 
-        QLabel * lbEnClockFP = new QLabel("Enable Clock Out Font Panel :", digiTab[iDigi]);
-        lbEnClockFP->setAlignment(Qt::AlignRight | Qt::AlignCenter);
-        boardLayout->addWidget(lbEnClockFP, rowId, 2, 1, 3);
-
-        cbbEnClockFrontPanel[iDigi] = new RComboBox(digiTab[iDigi]);
-        boardLayout->addWidget(cbbEnClockFrontPanel[iDigi], rowId, 5);
-        SetupShortComboBox(cbbEnClockFrontPanel[iDigi], PHA::DIG::EnableClockOutFrontPanel);
-        connect(cbbEnClockFrontPanel[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableClockOutFrontPanel.GetPara());
-          msg += " = " + cbbEnClockFrontPanel[ID]->currentData().toString();
-          if( digi[ID]->WriteValue(PHA::DIG::EnableClockOutFrontPanel, cbbEnClockFrontPanel[ID]->currentData().toString().toStdString())){
-            SendLogMsg(msg + "|OK.");
-            cbbEnClockFrontPanel[ID]->setStyleSheet("");
-          }else{
-            SendLogMsg(msg + "|Fail.");
-            cbbEnClockFrontPanel[ID]->setStyleSheet("color:red;");
-          }
-        });
+        /// Right half of the row: the label spans columns 2-4, the widget sits in 5.
+        SetupComboBox(cbbEnClockFrontPanel[iDigi], PHA::DIG::EnableClockOutFrontPanel, -1, false, "Enable Clock Out Font Panel :", boardLayout, rowId, 2, 1, 1, 3);
 
 
         //-------------------------------------
@@ -364,77 +345,19 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBox(cbbGPIO[iDigi], PHA::DIG::GPIOMode, -1, false, "GPIO Mode :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
-        QLabel * lbAutoDisarmAcq = new QLabel("Auto disarm ACQ :", digiTab[iDigi]);
-        lbAutoDisarmAcq->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbAutoDisarmAcq, rowId, 4, 1, 2);
-
-        cbbAutoDisarmAcq[iDigi] = new RComboBox(digiTab[iDigi]);
-        boardLayout->addWidget(cbbAutoDisarmAcq[iDigi], rowId, 6);
-        SetupShortComboBox(cbbAutoDisarmAcq[iDigi], PHA::DIG::EnableAutoDisarmACQ);
-        connect(cbbAutoDisarmAcq[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          //printf("%s %d  %s \n", para.GetPara().c_str(), ch_index, cbb->currentData().toString().toStdString().c_str());
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableAutoDisarmACQ.GetPara());
-          msg += " = " + cbbAutoDisarmAcq[ID]->currentData().toString();
-          if( digi[ID]->WriteValue(PHA::DIG::EnableAutoDisarmACQ, cbbAutoDisarmAcq[ID]->currentData().toString().toStdString())){
-            SendLogMsg(msg + "|OK.");
-            cbbAutoDisarmAcq[ID]->setStyleSheet("");
-          }else{
-            SendLogMsg(msg + "|Fail.");
-            cbbAutoDisarmAcq[ID]->setStyleSheet("color:red;");
-          }
-        });
+        SetupComboBox(cbbAutoDisarmAcq[iDigi], PHA::DIG::EnableAutoDisarmACQ, -1, false, "Auto disarm ACQ :", boardLayout, rowId, 4, 1, 1, 2);
 
         //-------------------------------------
         rowId ++;
         SetupComboBox(cbbBusyIn[iDigi], PHA::DIG::BusyInSource, -1, false, "Busy In Source :", boardLayout, rowId, 0, 1, 2);
 
-        QLabel * lbStatEvents = new QLabel("Stat. Event :", digiTab[iDigi]);
-        lbStatEvents->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbStatEvents, rowId, 4, 1, 2);
-
-        cbbStatEvents[iDigi] = new RComboBox(digiTab[iDigi]);
-        boardLayout->addWidget(cbbStatEvents[iDigi], rowId, 6);
-        SetupShortComboBox(cbbStatEvents[iDigi], PHA::DIG::EnableStatisticEvents);
-        connect(cbbStatEvents[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableStatisticEvents.GetPara());
-          msg += " = " + cbbStatEvents[ID]->currentData().toString();
-          if( digi[ID]->WriteValue(PHA::DIG::EnableStatisticEvents, cbbStatEvents[ID]->currentData().toString().toStdString()) ){
-            SendLogMsg(msg + "|OK.");
-            cbbStatEvents[ID]->setStyleSheet("");
-          }else{
-            SendLogMsg(msg + "|Fail.");
-            cbbStatEvents[ID]->setStyleSheet("color:red");
-          }
-        });
+        SetupComboBox(cbbStatEvents[iDigi], PHA::DIG::EnableStatisticEvents, -1, false, "Stat. Event :", boardLayout, rowId, 4, 1, 1, 2);
 
         //-------------------------------------
         rowId ++;
         SetupComboBox(cbbSyncOut[iDigi], PHA::DIG::SyncOutMode, -1, false, "Sync Out mode :", boardLayout, rowId, 0, 1, 2);
 
-        QLabel * lbDataReduction = new QLabel("Data Reduction :", digiTab[iDigi]);
-        lbDataReduction->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbDataReduction, rowId, 4, 1, 2);
-
-        cbbDataReduction[iDigi] = new RComboBox(digiTab[iDigi]);
-        boardLayout->addWidget(cbbDataReduction[iDigi], rowId, 6);
-        SetupShortComboBox(cbbDataReduction[iDigi], PHA::DIG::EnableDataReduction);
-        connect(cbbDataReduction[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::EnableDataReduction.GetPara());
-          msg += " = " + cbbDataReduction[ID]->currentData().toString();
-          if( digi[ID]->WriteValue(PHA::DIG::EnableDataReduction, cbbDataReduction[ID]->currentData().toString().toStdString()) ){
-            SendLogMsg(msg + "|OK.");
-            cbbDataReduction[ID]->setStyleSheet("");
-          }else{
-            SendLogMsg(msg + "|Fail.");
-            cbbDataReduction[ID]->setStyleSheet("color:red");
-          }
-        });
+        SetupComboBox(cbbDataReduction[iDigi], PHA::DIG::EnableDataReduction, -1, false, "Data Reduction :", boardLayout, rowId, 4, 1, 1, 2);
 
 
         //-------------------------------------
@@ -446,51 +369,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         rowId ++;
         SetupComboBox(cbbBoardVetoSource[iDigi], PHA::DIG::BoardVetoSource, -1, false, "Board Veto Source :", boardLayout, rowId, 0, 1, 2);
 
-        QLabel * lbBdVetoWidth = new QLabel("Board Veto Width [ns] :", digiTab[iDigi]);
-        lbBdVetoWidth->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbBdVetoWidth, rowId, 3, 1, 2);
+        SetupSpinBox(dsbBdVetoWidth[iDigi], PHA::DIG::BoardVetoWidth, -1, false, "Board Veto Width [ns] :", boardLayout, rowId, 3, 1, 1, 2);
+        dsbBdVetoWidth[iDigi]->setSingleStep(20);   // wheel step only; values are not snapped to it
 
-        dsbBdVetoWidth[iDigi] = new RSpinBox(digiTab[iDigi], 0); // may be QDoubleSpinBox
-        dsbBdVetoWidth[iDigi]->setMinimum(0);
-        dsbBdVetoWidth[iDigi]->setMaximum(34359738360);
-        dsbBdVetoWidth[iDigi]->setSingleStep(20);
-        dsbBdVetoWidth[iDigi]->SetToolTip();
-        boardLayout->addWidget(dsbBdVetoWidth[iDigi], rowId, 5);
-        connect(dsbBdVetoWidth[iDigi], &RSpinBox::valueChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          dsbBdVetoWidth[ID]->setStyleSheet("color:blue;");
-        });
-        connect(dsbBdVetoWidth[iDigi], &RSpinBox::returnPressed, this, [=](){
-          if( !enableSignalSlot ) return;
-          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoWidth.GetPara());
-          msg += " = " + QString::number(dsbBdVetoWidth[iDigi]->value());
-          if( digi[ID]->WriteValue(PHA::DIG::BoardVetoWidth, std::to_string(dsbBdVetoWidth[iDigi]->value()), -1) ){
-            dsbBdVetoWidth[ID]->setStyleSheet("");
-            SendLogMsg(msg + "|OK.");
-          }else{
-            dsbBdVetoWidth[ID]->setStyleSheet("color:red;");
-            SendLogMsg(msg + "|Fail.");
-          }
-        });
-
-        cbbBdVetoPolarity[iDigi] = new RComboBox(digiTab[iDigi]);
-        boardLayout->addWidget(cbbBdVetoPolarity[iDigi], rowId, 6);
-        SetupShortComboBox(cbbBdVetoPolarity[iDigi], PHA::DIG::BoardVetoPolarity);
-        connect(cbbBdVetoPolarity[iDigi], &RComboBox::currentIndexChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::BoardVetoPolarity.GetPara());
-          msg += " = " + cbbBdVetoPolarity[ID]->currentData().toString();
-          if( digi[ID]->WriteValue(PHA::DIG::BoardVetoPolarity, cbbBdVetoPolarity[ID]->currentData().toString().toStdString()) ){
-            SendLogMsg(msg + "|OK.");
-            cbbBdVetoPolarity[ID]->setStyleSheet("");
-          }else{
-            SendLogMsg(msg + "|Fail.");
-            cbbBdVetoPolarity[ID]->setStyleSheet("color:red");
-          }
-        });
+        /// No label of its own: it shares "Board Veto Width" with the box beside it.
+        SetupComboBox(cbbBdVetoPolarity[iDigi], PHA::DIG::BoardVetoPolarity, -1, false, "", boardLayout, rowId, 6);
 
         
         //-------------------------------------
@@ -498,75 +381,14 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         SetupComboBox(cbbIOLevel[iDigi], PHA::DIG::IO_Level, -1, false, "IO Level :", boardLayout, rowId, 0, 1, 2);
 
         //-------------------------------------
-        QLabel * lbClockOutDelay = new QLabel("Temp. Clock Out Delay [ps] :", digiTab[iDigi]);
-        lbClockOutDelay->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbClockOutDelay, rowId, 3, 1, 2);
-
-        dsbVolatileClockOutDelay[iDigi] = new RSpinBox(digiTab[iDigi], 3);
-        dsbVolatileClockOutDelay[iDigi]->setMinimum(-18888.888);
-        dsbVolatileClockOutDelay[iDigi]->setMaximum(18888.888);
-        dsbVolatileClockOutDelay[iDigi]->setSingleStep(74.074);
-        dsbVolatileClockOutDelay[iDigi]->setValue(0);
-        dsbVolatileClockOutDelay[iDigi]->SetToolTip();
-        boardLayout->addWidget(dsbVolatileClockOutDelay[iDigi], rowId, 5);
-        connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          dsbVolatileClockOutDelay[ID]->setStyleSheet("color:blue;");
-        });
-        connect(dsbVolatileClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
-          if( !enableSignalSlot ) return;
-          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-          double step = dsbVolatileClockOutDelay[ID]->singleStep();
-          double value = dsbVolatileClockOutDelay[ID]->value();
-          dsbVolatileClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::VolatileClockOutDelay.GetPara());
-          msg += " = " + QString::number(dsbVolatileClockOutDelay[iDigi]->value());
-          if( digi[ID]->WriteValue(PHA::DIG::VolatileClockOutDelay, std::to_string(dsbVolatileClockOutDelay[ID]->value()), -1) ){
-            dsbVolatileClockOutDelay[ID]->setStyleSheet("");
-            SendLogMsg(msg + "|OK.");
-          }else{
-            dsbVolatileClockOutDelay[ID]->setStyleSheet("color:red;");
-            SendLogMsg(msg + "|Fail.");
-          }
-        });
+        /// snapToStep: the board takes multiples of 74.074 ps; snap what was typed before writing.
+        SetupSpinBox(dsbVolatileClockOutDelay[iDigi], PHA::DIG::VolatileClockOutDelay, -1, false, "Temp. Clock Out Delay [ps] :", boardLayout, rowId, 3, 1, 1, 2, true);
 
         //-------------------------------------
         rowId ++;
         SetupComboBox(cbDACoutMode[iDigi], PHA::DIG::DACoutMode, -1, false, "DAC out Mode :", boardLayout, rowId, 0, 1, 2);
 
-        QLabel * lbClockOutDelay2 = new QLabel("Perm. Clock Out Delay [ps] :", digiTab[iDigi]);
-        lbClockOutDelay2->setAlignment(Qt::AlignRight);
-        boardLayout->addWidget(lbClockOutDelay2, rowId, 3, 1, 2);
-
-        dsbClockOutDelay[iDigi] = new RSpinBox(digiTab[iDigi], 3);
-        dsbClockOutDelay[iDigi]->setMinimum(-18888.888);
-        dsbClockOutDelay[iDigi]->setMaximum(18888.888);
-        dsbClockOutDelay[iDigi]->setValue(0);
-        dsbClockOutDelay[iDigi]->setSingleStep(74.074);
-        dsbClockOutDelay[iDigi]->SetToolTip();
-        boardLayout->addWidget(dsbClockOutDelay[iDigi], rowId, 5);
-        connect(dsbClockOutDelay[iDigi], &RSpinBox::valueChanged, this, [=](){
-          if( !enableSignalSlot ) return;
-          dsbClockOutDelay[ID]->setStyleSheet("color:blue;");
-        });
-        connect(dsbClockOutDelay[iDigi], &RSpinBox::returnPressed, this, [=](){
-          if( !enableSignalSlot ) return;
-          //printf("%s %d  %d \n", para.GetPara().c_str(), ch_index, spb->value());
-          double step = dsbClockOutDelay[ID]->singleStep();
-          double value = dsbClockOutDelay[ID]->value();
-          dsbClockOutDelay[ID]->setValue( (std::round(value/step) * step) );
-          QString msg;
-          msg = "DIG:"+ QString::number(digi[ID]->GetSerialNumber()) + "|" + QString::fromStdString(PHA::DIG::PermanentClockOutDelay.GetPara());
-          msg += " = " + QString::number(dsbClockOutDelay[iDigi]->value());
-          if( digi[ID]->WriteValue(PHA::DIG::PermanentClockOutDelay, std::to_string(dsbClockOutDelay[ID]->value()), -1) ){
-            dsbClockOutDelay[ID]->setStyleSheet("");
-            SendLogMsg(msg + "|OK.");
-          }else{
-            dsbClockOutDelay[ID]->setStyleSheet("color:red;");
-            SendLogMsg(msg + "|Fail.");
-          }
-        });
+        SetupSpinBox(dsbClockOutDelay[iDigi], PHA::DIG::PermanentClockOutDelay, -1, false, "Perm. Clock Out Delay [ps] :", boardLayout, rowId, 3, 1, 1, 2, true);
 
         //-------------------------------------
         rowId ++;
@@ -2796,20 +2618,16 @@ void DigiSettingsPanel::SetGlobalTriggerSource(){
 
 
 //^###########################################################################
-void DigiSettingsPanel::SetupShortComboBox(RComboBox *&cbb, const Reg & para){
-  for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
-    cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), 
-                QString::fromStdString((para.GetAnswers())[i].first));
+void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol, int labelSpan){
+  if( !labelTxt.isEmpty() ){
+    QLabel * lb = new QLabel(labelTxt, this);
+    layout->addWidget(lb, row, col, 1, labelSpan);
+    lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
+    col += labelSpan;
   }
-}
-
-void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
-  QLabel * lb = new QLabel(labelTxt, this); 
-  layout->addWidget(lb, row, col);
-  lb->setAlignment(Qt::AlignRight | Qt::AlignCenter);
   cbb = new RComboBox(this);
   ctrlReg.insert(cbb, para);
-  layout->addWidget(cbb, row, col+1, srow, scol);
+  layout->addWidget(cbb, row, col, srow, scol);
   for( int i = 0 ; i < (int) para.GetAnswers().size(); i++){
     cbb->addItem(QString::fromStdString((para.GetAnswers())[i].second), QString::fromStdString((para.GetAnswers())[i].first));
   }
@@ -2845,10 +2663,13 @@ void DigiSettingsPanel::ReportWriteFail(QWidget * w, const QString & msg){
   w->setStyleSheet("color:red;");
 }
 
-void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol){
-  QLabel * lb = new QLabel(labelTxt, this); 
-  layout->addWidget(lb, row, col);
-  lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol, int labelSpan, bool snapToStep){
+  if( !labelTxt.isEmpty() ){
+    QLabel * lb = new QLabel(labelTxt, this);
+    layout->addWidget(lb, row, col, 1, labelSpan);
+    lb->setAlignment(Qt::AlignRight| Qt::AlignCenter);
+    col += labelSpan;
+  }
   spb = new RSpinBox(this);  
   ctrlReg.insert(spb, para);
   /// A FLOAT parameter shows as many decimals as its step (Fine Gain 0.001, VGA 0.5 dB). Before
@@ -2869,7 +2690,9 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
     printf("--- missed. %s\n", para.GetPara().c_str());
   }
   spb->SetToolTip( atof( para.GetAnswers()[0].first.c_str()));
-  layout->addWidget(spb, row, col + 1, srow, scol);
+  layout->addWidget(spb, row, col, srow, scol);
+  /// The parameter's own step, kept apart from the wheel step a caller may set afterwards.
+  const double regStep = ( para.GetAnswers().size() >= 3 ) ? atof(para.GetAnswers()[2].first.c_str()) : 1.0;
 
   connect(spb, &RSpinBox::valueChanged, this, [=](){
     if( !enableSignalSlot ) return;
@@ -2885,10 +2708,8 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
                  + ",CH:All | channels differ, type a value first. Nothing written.");
       return;
     }
-    if( spb->decimals() == 0 && spb->singleStep() != 1) {
-      double step = spb->singleStep();
-      double value = spb->value();
-      spb->setValue( (std::round(value/step) * step) );
+    if( regStep > 0 && ( snapToStep || (spb->decimals() == 0 && regStep != 1) ) ){
+      spb->setValue( std::round(spb->value() / regStep) * regStep );
     }
     int index = ( ch_index == -1 && isMaster ?  cbChPick[ID]->currentData().toInt() : ch_index);
     QString msg;

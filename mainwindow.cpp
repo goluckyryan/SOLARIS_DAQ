@@ -260,17 +260,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
       disconnect(runTimer, &QTimer::timeout, nullptr, nullptr);
       StopACQ();
 
-      if( !isACQRunning ){
-        bnStartACQ->setEnabled(true);
-        bnStopACQ->setEnabled(false);
-        bnComment->setEnabled(false);
-        bnOpenScope->setEnabled(true);
-        chkSaveRun->setEnabled(true);
-        cbDataFormat->setEnabled(true);
-        if(chkSaveRun->isChecked() ) cbAutoRun->setEnabled(true);
-        bnCloseDigitizers->setEnabled(true); // run stopped by hand: chain is done
-        if( digiSetting ) digiSetting->EnableControl();
-      }
+      if( !isACQRunning ) SetRunControls(false);   // run stopped by hand: chain is done
 
     });
 
@@ -760,48 +750,40 @@ void MainWindow::StopACQ(){
 
 }
 
+/// The run controls in the two states with the boards open: a run (chain) is live, or idle.
+/// Close Digitizers is off while running: it frees digi[], and an auto-run timer would then
+/// StartACQ() on freed boards. Opening/closing the digitizers sets the other buttons itself.
+void MainWindow::SetRunControls(bool running){
+  bnStartACQ->setEnabled(!running);
+  bnStopACQ->setEnabled(running);
+  bnComment->setEnabled(running && chkSaveRun->isChecked());
+  bnOpenScope->setEnabled(!running);
+  chkSaveRun->setEnabled(!running);
+  cbDataFormat->setEnabled(!running);
+  cbAutoRun->setEnabled(!running && chkSaveRun->isChecked());
+  bnCloseDigitizers->setEnabled(!running);
+  if( digiSetting ) digiSetting->EnableControl();
+}
+
 void MainWindow::AutoRun(){
 
   if( chkSaveRun->isChecked() == false){
-    if( StartACQ() ){  
-      bnStartACQ->setEnabled(false);
-      bnStopACQ->setEnabled(true);
-      bnComment->setEnabled(false);
-      bnOpenScope->setEnabled(false);
-      chkSaveRun->setEnabled(false);
-      cbAutoRun->setEnabled(false);
-      cbDataFormat->setEnabled(false);
-      /// Close Digitizers frees digi[]; the auto-run timer would then StartACQ() on freed
-      /// boards. Reachable only when no run chain is live, so gate it here and re-enable
-      /// where the chain ends (Stop handler and the single-timed-run gap below).
-      bnCloseDigitizers->setEnabled(false);
-      if( digiSetting ) digiSetting->EnableControl();
-    }
+    if( StartACQ() ) SetRunControls(true);
     return;
   }
 
   needManualComment = true;
-  int isRun = 0;
   ///=========== always disconnect previous timer connection first
   disconnect(runTimer,  &QTimer::timeout, nullptr, nullptr);
 
-  ///=========== infinite single run
-  if( cbAutoRun->currentData().toInt() == 0 ){
-    isRun = StartACQ();
-  }else{
-    isRun = StartACQ();
+  const int isRun = StartACQ();
+
+  ///=========== timed runs: the timer stops the run (and, for repeated runs, starts the next)
+  if( cbAutoRun->currentData().toInt() != 0 ){
     connect(runTimer, &QTimer::timeout, this, [=](){
       StopACQ();
       if( cbAutoRun->currentData().toInt() > 0 ) {
-        bnStartACQ->setEnabled(true);
-        bnStopACQ->setEnabled(false);
-        bnComment->setEnabled(false);
-        bnOpenScope->setEnabled(true);
-        chkSaveRun->setEnabled(true);
-        cbAutoRun->setEnabled(true);
-        cbDataFormat->setEnabled(true);
-        bnCloseDigitizers->setEnabled(true); // timed-run chain is done
-        if( digiSetting ) digiSetting->EnableControl();
+        SetRunControls(false);   // timed-run chain is done
       }else{
         LogMsg("Wait for 10 sec for next Run....");
         runTimer->stop();
@@ -821,10 +803,6 @@ void MainWindow::AutoRun(){
 
   if( isRun == 0 ) return;
 
-  /// Save-mode run chain is live (timed or interval): Close Digitizers must not free the
-  /// boards under the timer's next StartACQ(). See the note in the non-save branch above.
-  bnCloseDigitizers->setEnabled(false);
-
   int timeMiliSec = cbAutoRun->currentData().toInt() * 60 * 1000;
 
   ///=========== single timed run
@@ -841,14 +819,7 @@ void MainWindow::AutoRun(){
     needManualComment = false;
   }
 
-  bnStartACQ->setEnabled(false);
-  bnStopACQ->setEnabled(true);
-  if(chkSaveRun->isChecked()) bnComment->setEnabled(true);
-  bnOpenScope->setEnabled(false);
-  chkSaveRun->setEnabled(false);
-  cbDataFormat->setEnabled(false);
-  cbAutoRun->setEnabled(false);
-  if( digiSetting ) digiSetting->EnableControl();
+  SetRunControls(true);   // also keeps Close Digitizers off while the chain is live
 
 }
 
@@ -923,11 +894,7 @@ void MainWindow::OpenDigitizers(){
 
   if( nDigiConnected > 0 ){
     SetUpScalar();
-    bnStartACQ->setEnabled(true);
-    bnStopACQ->setEnabled(false);
-    bnComment->setEnabled(false);
-    bnOpenScope->setEnabled(true);
-    chkSaveRun->setEnabled(true);
+    SetRunControls(false);
     if( nDigiConnected == 1 ) {
       bnSyncHelper->setEnabled(false);
     }else{
@@ -935,8 +902,6 @@ void MainWindow::OpenDigitizers(){
     }
     bnOpenDigitizers->setEnabled(false);
     bnOpenDigitizers->setStyleSheet("");
-    cbAutoRun->setEnabled(chkSaveRun->isChecked());
-    cbDataFormat->setEnabled(true);
     bnOpenScalar->setEnabled(true);
 
     singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
@@ -1495,9 +1460,9 @@ void MainWindow::CleanUpScalar(){
   leTriggers.clear();
   leAccepted.clear();
 
-  //Clean up the remaining QLabels (last update, ACQ status), which sit outside the boxes
-  QList<QLabel *> labelChildren = scalar->findChildren<QLabel *>();
-  for( int i = 0; i < labelChildren.size(); i++) delete labelChildren[i];
+  /// The two labels SetUpScalar() puts outside the boxes.
+  delete lbLastUpdateTime;  lbLastUpdateTime  = nullptr;
+  delete lbScalarACQStatus; lbScalarACQStatus = nullptr;
 
 }
 
@@ -3091,9 +3056,9 @@ void MainWindow::CloseRunTimeStampRow(const QString & note){
 
 /// The run record lives next to the raw data, except on solaris-daq itself where that path has
 /// no /data_raw level. Shared by the two writers above so the convention is stated once.
+/// In the raw-data folder, which UpdateDataPaths() keeps in step with expName (and the solaris-daq layout).
 QString MainWindow::RunTimeStampPath(const QString & ext) const {
-  const QString data_raw_str = (qEnvironmentVariable("PCName") == "solaris-daq") ? "" : "/data_raw";
-  return masterExpDataPath + "/" + expName + data_raw_str + "/RunTimeStamp." + ext;
+  return rawDataPath + "RunTimeStamp." + ext;
 }
 
 /// The three copies of this all did new + deleteLater and then read lineEdit->text() after

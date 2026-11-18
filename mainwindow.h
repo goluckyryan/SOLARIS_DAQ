@@ -60,6 +60,7 @@ private slots:
   int  StartACQ(); // return 1 when ACQ start
   void StopACQ();
   void AutoRun();
+  void SetRunControls(bool running);
 
   void OpenScaler();
   void SetUpScalar();
