@@ -1483,9 +1483,11 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
     }
   });
 
-  for( ID = 0; ID < nDigi; ID ++) EnableControl();
-
+  /// Once: EnableControl() already loops over every board. (Its closing UpdatePanelFromMemory() does
+  /// nothing here -- the panel is not shown yet; MainWindow refreshes it after construction and the
+  /// tab-change handler refreshes each board when its tab is opened.)
   ID = 0;
+  EnableControl();
 
   cbBdSettings->setCurrentText("ModelName");
   cbChSettings->setCurrentIndex(10);

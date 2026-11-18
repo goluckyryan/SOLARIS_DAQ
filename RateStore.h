@@ -32,8 +32,9 @@
 class RateStore{
 public:
   void Sample(const QString & key, qint64 tMs, unsigned long cumTotal, int keepMs){
-    if( !chans.contains(key) ) order.append(key);
-    Chan & c = chans[key];
+    auto it = chans.find(key);                          // one lookup, not contains() + operator[]
+    if( it == chans.end() ){ order.append(key); it = chans.insert(key, Chan()); }
+    Chan & c = it.value();
     c.keepMs = qMax(c.keepMs, keepMs);                  // the producer's own horizon (label window)
     if( !c.h.empty() && cumTotal < c.h.back().second ) c.h.clear(); // source was cleared
     c.h.append(qMakePair(tMs, cumTotal));

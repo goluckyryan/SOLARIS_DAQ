@@ -11,6 +11,7 @@
 #include <QGroupBox>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QElapsedTimer>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QLineSeries>
@@ -181,6 +182,17 @@ private:
   QPushButton * bnScopeStop;
   
   QLineEdit * leTriggerRate;
+  /// Accepted rate: hits read out for the shown channel (the scalar's "Accepted" column), averaged
+  /// over ~1 s of host time. Restarts when the board, channel or run changes; see UpdateScope().
+  QLineEdit * leAcceptedRate;
+  int           accDigi = -1, accCh = -1;
+  uint64_t      accCount0 = 0;
+  QElapsedTimer accTimer;
+  /// The board's SelfTrgRate, read about once a second (with the accepted-rate window), not every
+  /// 0.1 s tick: each read is a blocking network round trip on the GUI thread.
+  int           lastTrigRate = 0;
+  /// UpdateScope's copy of the newest trace; a member so a ~97 KB struct is not on the stack each tick.
+  TraceSnapshot scopeTs;
 
   /// browse the trace ring buffer; only usable when the scope is stopped, see DrawTraceFromBuffer().
   /// plain QSpinBox, not RSpinBox: RSpinBox ignores wheelEvent and scrolling traces is the point.

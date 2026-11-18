@@ -314,6 +314,17 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
   layout->addWidget(bnClose, rowID, 5);
   connect(bnClose, &QPushButton::clicked, this, &Scope::close);
 
+  //------------ accepted rate, under the trigger rate
+  rowID ++;
+  QLabel * lbAcceptedRate = new QLabel("Accepted Rate [Hz] : ", this);
+  lbAcceptedRate->setAlignment(Qt::AlignCenter | Qt::AlignRight);
+  layout->addWidget(lbAcceptedRate, rowID, 2);
+
+  leAcceptedRate = new QLineEdit(this);
+  leAcceptedRate->setAlignment(Qt::AlignRight);
+  leAcceptedRate->setReadOnly(true);
+  layout->addWidget(leAcceptedRate, rowID, 3);
+
   show();
 
   //StartScope();
@@ -715,6 +726,7 @@ void Scope::StartScope(){
     /// board's ReadDataThread is started below, so nothing is writing to its ring yet.
     digi[iDigi]->traceRingBuffer.clear();
     digi[iDigi]->fillTraceRing.store(true, std::memory_order_relaxed);
+    accTimer.invalidate();   // new run: restart the accepted-rate window
 
     digi[iDigi]->StartACQ();
 
@@ -790,28 +802,56 @@ void Scope::UpdateScope(){
 
   if( digi ){
 
-    std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
-    leTriggerRate->setText(QString::fromStdString(haha));
+    /// Accepted rate: hits ReadData() delivered on this channel (GetAcceptedCount, the scalar's
+    /// "Accepted" column) over host time. Averaged over >= 1 s: this runs every 0.1 s, where a rate
+    /// would jump by whole hits. A new board/channel or run restarts the window (shown blank meanwhile).
+    /// The trigger rate (a blocking board read) is refreshed at the same moments, not every tick.
+    const uint64_t acc = digi[iDigi]->GetAcceptedCount(ch);
+    bool readTrig = false;
+    if( iDigi != accDigi || ch != accCh || !accTimer.isValid() || acc < accCount0 ){
+      accDigi = iDigi; accCh = ch; accCount0 = acc;
+      accTimer.start();
+      leAcceptedRate->clear();
+      readTrig = true;
+    }else if( accTimer.elapsed() >= 1000 ){
+      const double hz = (acc - accCount0) * 1000.0 / accTimer.elapsed();
+      leAcceptedRate->setText(QString::number(hz, 'f', 1));
+      accCount0 = acc;
+      accTimer.restart();
+      readTrig = true;
+    }
+    if( readTrig ){
+      const std::string haha = digi[iDigi]->ReadValue(PHA::CH::SelfTrgRate, ch);
+      leTriggerRate->setText(QString::fromStdString(haha));
+      lastTrigRate = atoi(haha.c_str());
+    }
 
     /// Take a private copy of the newest completed snapshot, slot (traceIdx - 1). The DAQ thread can
     /// lap us mid-copy, so re-read the write cursor afterwards and drop the frame if it reached our
     /// slot again. The check is entirely on this side - the producer pays nothing for it.
-    TraceSnapshot ts;
+    /// Only the samples that will be drawn are copied (at most MaxDisplayTraceDataLength), not the
+    /// whole snapshot.
+    TraceSnapshot & ts = scopeTs;
     unsigned int traceLength = 0;
     bool traceValid = false;
 
     unsigned long traceIdx = digi[iDigi]->traceRingBuffer.index();
     if( traceIdx > 0 ){
-      ts = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
+      const TraceSnapshot & src = digi[iDigi]->traceRingBuffer.ref(traceIdx - 1);
+      const unsigned int n = qMin((unsigned int) src.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
+      ts.traceLenght = n;
+      for( int j = 0; j < 2; j++ ) memcpy(ts.analog_probes[j],  src.analog_probes[j],  n * sizeof(int32_t));
+      for( int j = 0; j < 4; j++ ) memcpy(ts.digital_probes[j], src.digital_probes[j], n);
       if( digi[iDigi]->traceRingBuffer.index() - (traceIdx - 1) < digi[iDigi]->traceRingBuffer.size() ){
         traceValid = true;
-        traceLength = qMin((unsigned int) ts.traceLenght, (unsigned int) MaxDisplayTraceDataLength);
+        traceLength = n;
       }
     }
 
-    if( atoi(haha.c_str()) == 0 || !traceValid ) {
+    if( lastTrigRate == 0 || !traceValid ) {
       for( int j = 0; j < 6; j++){
         QVector<QPointF> points;
+        points.reserve(traceLength);
         for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , j > 1 ? 0 : (j+1)*1000));
         dataTrace[j]->replace(points);
       }
@@ -829,11 +869,13 @@ void Scope::PlotSnapshot(const TraceSnapshot & ts, unsigned int traceLength, int
 
   for( int j = 0; j < 2; j++) {
     QVector<QPointF> points;
+    points.reserve(traceLength);
     for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , ts.analog_probes[j][i]));
     dataTrace[j]->replace(points);
   }
   for( int j = 0; j < 4; j++) {
     QVector<QPointF> points;
+    points.reserve(traceLength);
     for( unsigned int i = 0 ; i < traceLength; i++) points.append(QPointF(sample2ns * i , (j+1)*5000 + 4000*ts.digital_probes[j][i]));
     dataTrace[j+2]->replace(points);
   }

@@ -38,6 +38,7 @@ public:
 
   void UpdatePlot(){ colorMap->rescaleDataRange(true); replot(); }
   void Clear(); // Clear Data and histrogram
+  void ResetGrid(); // every cell NaN, current geometry
 
   void Fill(double x, double y);
 
@@ -161,6 +162,7 @@ private:
   double oldMouseX = 0.0, oldMouseY = 0.0;
 
   bool isBusy;
+  bool redrawOnShow = false;   ///< cleared while hidden; draw on the next show (see Clear)
 
   void rightMouseClickMenu(QMouseEvent * event);
   void rightMouseClickRebin();
@@ -244,6 +246,10 @@ public:
   }
 
 protected:
+  void showEvent(QShowEvent * e) override {
+    QCustomPlot::showEvent(e);
+    if( redrawOnShow ){ redrawOnShow = false; UpdatePlot(); }
+  }
   void mousePressEvent(QMouseEvent * event) override{
     if( event->button() == Qt::LeftButton && !usingMenu && !isDrawCut ){
       int ci = -1, vi = -1;
@@ -534,15 +540,7 @@ inline  void Histogram2D::Rebin(int xbin, double xmin, double xmax, int ybin, do
   if( xBin > 1002) xBin = 1002;
   if( yBin > 1002) yBin = 1002;
 
-  colorMap->data()->clear();
-  colorMap->data()->setSize(xBin, yBin);
-  colorMap->data()->setRange(QCPRange(xMin, xMax), QCPRange(yMin, yMax));
-
-  for( int i = 0; i < xBin; i++){
-    for( int j = 0; j < yBin; j++){
-      colorMap->data()->setCell(i, j, NAN);
-    }
-  }
+  ResetGrid();
 
   if( isChannelMap ){
     QCPAxis * xAxis = colorMap->keyAxis();
@@ -574,6 +572,17 @@ inline void Histogram2D::Clear(){
       txt[i][j]->setText("0");
     }
   }
+  ResetGrid();
+
+  /// A hidden plot (an unmounted pane) is redrawn when shown instead: "Clear All Hist." clears
+  /// every board's plot, and replotting the hidden ones is nearly all of its cost.
+  if( isVisible() ) UpdatePlot(); else redrawOnShow = true;
+}
+
+/// Empty grid of the current geometry: every cell NaN (drawn transparent). Cell by cell on purpose:
+/// this QCustomPlot's QCPColorMapData::fill(z) is a memset of the double truncated to one byte,
+/// which is only right for z = 0.
+inline void Histogram2D::ResetGrid(){
   colorMap->data()->clear();
   colorMap->data()->setSize(xBin, yBin);
   colorMap->data()->setRange(QCPRange(xMin, xMax), QCPRange(yMin, yMax));
@@ -582,8 +591,6 @@ inline void Histogram2D::Clear(){
       colorMap->data()->setCell(i, j, NAN);
     }
   }
-
-  UpdatePlot();
 }
 
 

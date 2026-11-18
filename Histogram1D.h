@@ -49,6 +49,10 @@ public:
     connect(xAxis, SIGNAL(rangeChanged(QCPRange)), xAxis2, SLOT(setRange(QCPRange)));
     connect(yAxis, SIGNAL(rangeChanged(QCPRange)), yAxis2, SLOT(setRange(QCPRange)));
 
+    /// A drag-zoom pins the view: UpdatePlot() stops resetting the axes until UnZoom or a rebin.
+    /// `accepted` fires only for a real drag; a plain click cancels the rectangle.
+    connect(selectionRect(), &QCPSelectionRect::accepted, this, [this](const QRect &, QMouseEvent *){ userZoomed = true; });
+
     graph(0)->setData(xList, yList[0]);
 
     //setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
@@ -129,10 +133,8 @@ public:
         QAction *selectedAction = menu.exec(event->globalPosition().toPoint());
         //*========================================== UnZoom
         if( selectedAction == a1 ){
-          xAxis->setRangeLower(xMin);
-          xAxis->setRangeUpper(xMax);
-          yAxis->setRangeLower(0);
-          yAxis->setRangeUpper(yMax * 1.2 > 10 ? yMax * 1.2 : 10);
+          userZoomed = false;
+          SetFullRange();
           replot();
           usingMenu = false;
         }
@@ -304,7 +306,7 @@ public:
   void SetDisplayRate(double r){
     haveRate = (r >= 0.0);
     dispRate = qMax(0.0, r);
-    if( txt[1] ) txt[1]->setText(TotalEntryLabel());
+    SetLabel(txt[1], TotalEntryLabel());
   }
 
   int  RateIntervalMs() const { return rateIntervalMs; }
@@ -318,7 +320,7 @@ public:
   /// the value to all plots; this widget only counts on it being what the store windowed with.
   void SetRateIntervalMs(int ms){
     rateIntervalMs = qBound(100, ms, 3600000);
-    if( txt[1] ) txt[1]->setText(TotalEntryLabel());
+    SetLabel(txt[1], TotalEntryLabel());
   }
 
   //^==================== 1D gates
@@ -558,7 +560,7 @@ public:
 
   void UpdateGateLabel(int k){
     if( k < 0 || k >= gates.size() ) return;
-    gates[k].rateTxt->setText( gates[k].name + "\n" + gates[k].rateLine );
+    SetLabel(gates[k].rateTxt, gates[k].name + "\n" + gates[k].rateLine );
   }
 
   /// Vertical span of the band and the rate label follow the y range; the straight lines span
@@ -605,19 +607,42 @@ public:
     SetColor(color, nData-1);
     yList[nData-1].clear();
     for( int i = 0; i < xList.count(); i++) yList[nData-1].append(0);
+    plotDirty = true;
   }
 
   void UpdatePlot(){
-    // DebugPrint("%s", "Histogram1D");
+    /// A publish tick (SetBinContents then UpdatePlot) that changed no bin, total or label has
+    /// nothing new to draw, so it is skipped. Any other caller always redraws.
+    if( publishPending && !contentChanged && !plotDirty ){ publishPending = false; return; }
+    publishPending = contentChanged = plotDirty = false;
+
     for( int ID = 0 ; ID < nData; ID ++) {
       graph(ID)->setVisible(showHist[ID]);
-      graph(ID)->setData(xList, yList[ID]);
+      /// The keys (bin centres) change only in Rebin(), which reloads the whole graph; here only
+      /// the values move, so write them in place instead of rebuilding and re-sorting the data.
+      QSharedPointer<QCPGraphDataContainer> d = graph(ID)->data();
+      if( d->size() == xList.size() ){
+        int i = 0;
+        for( auto it = d->begin(); it != d->end(); ++it, ++i ) it->value = yList[ID][i];
+      }else{
+        graph(ID)->setData(xList, yList[ID], true);
+      }
     }
-    xAxis->setRangeLower(xMin);
-    xAxis->setRangeUpper(xMax);
-    yAxis->setRangeLower(0);
-    yAxis->setRangeUpper(yMax * 1.2 > 10 ? yMax * 1.2 : 10);
+    /// Called every publish tick during a run; a user zoom must survive it.
+    if( !userZoomed ) SetFullRange();
     replot();
+  }
+
+  /// Set a label's text only if it changed (each setText re-lays the item out), and remember
+  /// that something visible changed for the next publish tick.
+  void SetLabel(QCPItemText * t, const QString & text){
+    if( t && t->text() != text ){ t->setText(text); plotDirty = true; }
+  }
+
+  /// The whole histogram: x over [xMin, xMax], y from 0 to 1.2 x the tallest visible bin (at least 10).
+  void SetFullRange(){
+    xAxis->setRange(xMin, xMax);
+    yAxis->setRange(0, yMax * 1.2 > 10 ? yMax * 1.2 : 10);
   }
 
   void Clear(){
@@ -633,7 +658,10 @@ public:
     txt[0]->setText("Under Flow : 0");
     txt[1]->setText(TotalEntryLabel());
     txt[2]->setText("Over Flow : 0");
-    UpdatePlot();
+    plotDirty = true;
+    /// A hidden plot (an unmounted pane) is drawn on its next show instead: "Clear All Hist." clears
+    /// every channel's plot, and replotting the hidden ones was nearly all of its cost.
+    if( isVisible() ) UpdatePlot();
   }
   
   void SetLineTitle(QString title, int lineID = 0) { graph(lineID)->setName(title);  }
@@ -683,13 +711,19 @@ public:
     }
 
     /// Changing the geometry un-zooms: a view pinned to the old range shows a blank or
-    /// cropped plot under the new binning. Full range is also what UpdatePlot keeps, so the
-    /// view does not drift back.
+    /// cropped plot under the new binning.
+    userZoomed = false;
     xAxis->setRange(xMin, xMax);
 
     if( txt[0] ) txt[0]->setText("Under Flow : 0");
     if( txt[1] ) txt[1]->setText(TotalEntryLabel());
     if( txt[2] ) txt[2]->setText("Over Flow : 0");
+
+    /// New bin centres: reload every graph now (sorted), so UpdatePlot()'s in-place value update
+    /// never pairs new values with old keys; and the next publish tick must draw.
+    /// (graphCount(): the constructor calls Rebin() before it adds the first graph.)
+    for( int ID = 0; ID < nData && ID < graphCount(); ID ++ ) graph(ID)->setData(xList, yList[ID], true);
+    plotDirty = true;
   }
 
   void Fill(double value, unsigned int ID = 0){
@@ -744,19 +778,20 @@ public:
     if( ID >= (unsigned int) nData || y == nullptr ) return;
     if( n > xBin ) n = xBin;
 
+    publishPending = true;
     if( ID == 0 ) yMax = 0;
     for( int b = 0; b < yList[ID].count(); b++ ){
       const double v = ( b < n ) ? (double) y[b] : 0.0;
-      yList[ID][b] = v;
+      if( yList[ID][b] != v ){ yList[ID][b] = v; contentChanged = true; }
       if( showHist[ID] && v > yMax ) yMax = v;
     }
 
     totalEntry = total;
     underFlow  = under;
     overFlow   = over;
-    txt[0]->setText("Under Flow : " + QString::number(underFlow));
-    txt[1]->setText(TotalEntryLabel());
-    txt[2]->setText("Over Flow : " + QString::number(overFlow));
+    SetLabel(txt[0], "Under Flow : " + QString::number(underFlow));
+    SetLabel(txt[1], TotalEntryLabel());
+    SetLabel(txt[2], "Over Flow : " + QString::number(overFlow));
   }
 
   void Print(unsigned int ID = 0){
@@ -769,6 +804,11 @@ public:
   QString RateKey() const { return rateKey; }
 
 protected:
+  /// Draws what changed while hidden (see Clear()).
+  void showEvent(QShowEvent * e) override {
+    QCustomPlot::showEvent(e);
+    if( plotDirty ) UpdatePlot();
+  }
   /// Gate grabbing must happen BEFORE QCustomPlot's own press handling starts a zoom rect,
   /// so it is an override, not a signal connect (signals fire after the internal logic).
   void mousePressEvent(QMouseEvent * event) override{
@@ -838,6 +878,10 @@ private:
   int xBin;
 
   double yMax;
+  bool   userZoomed = false;   ///< set by a drag-zoom; UpdatePlot() then leaves the axes alone
+  /// Skip-unchanged bookkeeping for UpdatePlot(): a publish tick is pending, it changed a bin or
+  /// total, or something else visible (a label, the binning, a series) changed since the last draw.
+  bool   publishPending = false, contentChanged = false, plotDirty = true;
 
   unsigned long totalEntry;   ///< in-range entries only (the plotted "Total Entry"); under/over are the rejects
   unsigned long underFlow;

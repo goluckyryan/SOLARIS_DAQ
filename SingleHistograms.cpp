@@ -498,6 +498,9 @@ void SingleSpectra::ClearAllCounts(){
   }
 }
 
+/// The counters use fetch_add on purpose, though this worker is the only filler: "Clear All Hist."
+/// zeroes them from the GUI thread, and a load+store here could write a pre-clear value back. The
+/// RMWs cost ~5 ns per hit more (measured), well under the 1 GbE readout rate's budget.
 void SingleSpectra::AddCount1D(int d, int ch, int series, double v){
   H1Counts & h = c1[d][ch];
   if( series >= h.nSeries || !h.c[series] ) return;
@@ -606,6 +609,9 @@ void SingleSpectra::SampleRates(){
       const QString key = w->RateKey();
       const unsigned long tot = (unsigned long) h.total.load(std::memory_order_relaxed);
       rateStore.Sample(key, now, tot, keepMs);
+      /// Every tick on purpose: SetMeta only decorates a key that exists, and Sample() is what creates
+      /// it, so a SetMeta made at registration (before the first sample) or before a re-created key
+      /// does nothing. This one is what labels the key.
       rateStore.SetMeta(key, i, j, QString("Digi-%1 ch-%2").arg(sn).arg(j));
       w->SetDisplayRate( rateStore.Rate(key, rateBaseMs, r) ? r : -1.0 );
 
