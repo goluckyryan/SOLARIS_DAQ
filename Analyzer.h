@@ -277,7 +277,13 @@ public slots:
 private:
   OnlineEventBuilder * eb;
   QTimer * timer = nullptr;
+  bool running = false;          ///< between Start and Stop; a queued re-run after Stop does nothing
+  bool rerunQueued = false;      ///< one immediate re-run in flight at most
 };
+
+/// Events per BuildWorker/AnaWorker batch. Bounded, so a GUI call queued to the worker (the
+/// parameter fence) waits at most one batch; a full batch is followed at once by the next one.
+static constexpr long AnalyzerBatch = 20000;
 
 /// Drains the event ring through the selected analysis.
 class AnaWorker : public QObject {
@@ -295,12 +301,14 @@ public slots:
   void ApplyChannel(int * digi, int * channel, int d, int c);
   void ApplyFlag(bool * value, bool v);
 private:
-  void Drain();
+  long Drain();                  ///< one batch; returns the events processed
   EventRing      * ring;
   Analysis       * ana = nullptr;
   QtHistRegistry * reg = nullptr;
   QTimer         * timer = nullptr;
   std::vector<BuiltHit> scratch;
+  bool running = false;
+  bool rerunQueued = false;
 };
 
 //^============================================================ the window

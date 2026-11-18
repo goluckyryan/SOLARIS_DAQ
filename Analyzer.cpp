@@ -518,17 +518,26 @@ void BuildWorker::Init(){
 void BuildWorker::Start(int periodMs){
   eb->ResetStat();
   eb->Reset();
+  running = true;
   timer->start(periodMs);
 }
 
 void BuildWorker::Stop(){
+  running = false;
   timer->stop();
   eb->BuildEvents(true);             // flush the tail into the ring before the analysis drains
 }
 
+/// One bounded batch per call, so a GUI thread blocking on one of our slots waits at most one
+/// batch. A full batch means more is waiting: queue the next batch at once instead of waiting for
+/// the 20 ms timer, which capped the builder at 20000 events / 20 ms = 1 M events/s. Queued (not a
+/// loop), so slots the GUI queued in the meantime still run between batches.
 void BuildWorker::Tick(){
-  /// Bounded, so a GUI thread blocking on one of our slots never waits long.
-  eb->BuildEvents(false, 20000);
+  if( !running ) return;
+  if( eb->BuildEvents(false, AnalyzerBatch) >= AnalyzerBatch && !rerunQueued ){
+    rerunQueued = true;
+    QTimer::singleShot(0, this, [this](){ rerunQueued = false; Tick(); });
+  }
 }
 
 //^============================================================ AnaWorker
@@ -546,24 +555,35 @@ void AnaWorker::SetAnalysis(Analysis * a, QtHistRegistry * r){
 void AnaWorker::Start(int periodMs){
   reader.Rewind(*ring);
   if( ana ) ana->OnRunStart();
+  running = true;
   timer->start(periodMs);
 }
 
 void AnaWorker::Stop(){
+  running = false;
   timer->stop();
-  Drain();                           // the builder already flushed; take what it left
+  /// The builder already flushed; take ALL it left, not one batch.
+  while( Drain() >= AnalyzerBatch ){}
   if( ana ) ana->OnRunStop();
 }
 
-void AnaWorker::Tick(){ Drain(); }
+/// Same batching as BuildWorker::Tick: a full batch queues the next one at once.
+void AnaWorker::Tick(){
+  if( !running ) return;
+  if( Drain() >= AnalyzerBatch && !rerunQueued ){
+    rerunQueued = true;
+    QTimer::singleShot(0, this, [this](){ rerunQueued = false; Tick(); });
+  }
+}
 
-void AnaWorker::Drain(){
-  if( ana == nullptr || reg == nullptr ) return;
-  int n = 0;
-  while( n < 20000 && reader.Next(*ring, scratch) ){
+long AnaWorker::Drain(){
+  if( ana == nullptr || reg == nullptr ) return 0;
+  long n = 0;
+  while( n < AnalyzerBatch && reader.Next(*ring, scratch) ){
     ana->ProcessEvent(scratch.data(), (int)scratch.size(), *reg);
     n++;
   }
+  return n;
 }
 
 void AnaWorker::ApplyChannel(int * digiPtr, int * channel, int d, int c){

@@ -230,6 +230,9 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
 
   const uint64_t guard = GetGuardTime();
   long built = 0;
+  /// The horizon depends only on the index snapshot and liveness taken above, so it is the same for
+  /// every event of this pass: compute it once, not per event (it walks every board's ring).
+  const uint64_t horizon = isFinal ? UINT64_MAX : GetBuildHorizon();
 
   while( maxEvents < 0 || built < maxEvents ){
 
@@ -249,7 +252,6 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
     const uint64_t eventStart = board[b].front.timestamp;
 
     if( !isFinal ){
-      const uint64_t horizon = GetBuildHorizon();
       /// UINT64_MAX means no live board constrains us — every board has been quiet longer than the
       /// stall timeout — so whatever is still buffered can be flushed now rather than waiting for
       /// end of run. That is what makes the builder drain itself when the beam goes off.
