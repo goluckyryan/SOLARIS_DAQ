@@ -704,6 +704,10 @@ void Scope::StartScope(){
 
     }
 
+    /// the statistics count during scope runs too (the scalar runs alongside); see EnsureStatEvents
+    const QString statMsg = StatEventsMessage(digi[iDigi]->EnsureStatEvents());
+    if( !statMsg.isEmpty() ) SendLogMsg("Digi-" + QString::number(digi[iDigi]->GetSerialNumber()) + " : " + statMsg);
+
     digi[iDigi]->SetDataFormat(DataFormat::ALL);
 
     /// drop the previous run's traces so the browser only ever shows this run. Safe here: this

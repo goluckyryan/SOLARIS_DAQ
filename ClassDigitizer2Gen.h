@@ -197,6 +197,14 @@ class Digitizer2Gen {
 
     void Reset();
     void ProgramBoard();
+
+    /// The board statistics -- trigger count, saved count, real/dead time -- only count with
+    /// EnStatEvents on: the DPP formats read them from the stats endpoint (ReadStat), Raw from the
+    /// stat events in the data. The board's default is False. It cannot change during a run
+    /// (setinrun false), so a running board is left as it is. Called before every start (StartACQ,
+    /// the scope) and when the scalar opens; the caller logs the result.
+    enum class StatEvents { On, TurnedOn, BlockedByRun, Failed };
+    StatEvents EnsureStatEvents();
     void ProgramChannels(bool testPulse = false);
 
     /// Whether this model answers a given environment-sensor board parameter. The one place that

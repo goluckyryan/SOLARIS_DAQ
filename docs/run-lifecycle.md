@@ -31,10 +31,13 @@ For each board:
 - reset the per-channel scaler bookkeeping
 - `SetDataFormat(dataFormatID)` from the combo. **This is where the Raw-vs-decoded fork is chosen**,
   and therefore which of the two hit-push paths in `ReadData()` will run
+- `EnsureStatEvents(i)` (`Digitizer2Gen::EnsureStatEvents`): `EnStatEvents = True` for every format,
+  logged when it has to change it. Without it the board statistics never count: trigger/saved counts
+  and real/dead time read 0, from the stats endpoint in the DPP formats and from the stat events in
+  Raw. The scope's start, the scalar panel's opening and "Set Default" (`ProgramBoard`) turn it on
+  too; during a run the setting cannot change, so a running board is only reported
 - `WaveSaving` = `Always` for `ALL`/`OneTrace`, else `OnRequest`. Raw is the exception: it leaves
-  `WaveSaving` alone (the blob is written verbatim, so traces are the settings panel's call) and
-  instead forces `EnStatEvents = True`, without which the Raw rate display is dead — see
-  `sol-file-format.md`
+  `WaveSaving` alone (the blob is written verbatim, so traces are the settings panel's call)
 - if saving: create the run folder, dump the board's settings to
   `<expName>_<runID>XSetting_<SN>.dat`, and `OpenOutFile()`
 - `digi[i]->StartACQ()` — `/cmd/armacquisition` then `/cmd/swstartacquisition`

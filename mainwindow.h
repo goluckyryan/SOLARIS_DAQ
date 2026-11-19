@@ -60,6 +60,7 @@ private slots:
   void SetRunControls(bool running);
 
   void OpenScaler();
+  void EnsureStatEvents(int i);   ///< turn the board statistics on if allowed, and log it
   void SetUpScalar();
   void CleanUpScalar();
   void UpdateScalar();

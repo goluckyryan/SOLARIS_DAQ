@@ -517,20 +517,12 @@ int MainWindow::StartACQ(){
     int dataFormatID = cbDataFormat->currentData().toInt();
     digi[i]->SetDataFormat(dataFormatID);
 
+    /// Every format: the board statistics need EnStatEvents (see EnsureStatEvents).
+    EnsureStatEvents(i);
+
     if( dataFormatID == DataFormat::Raw ){
       /// WaveSaving is deliberately left alone here -- the blob is written verbatim, so whether it
       /// carries traces is the settings panel's call, not the data format's.
-      ///
-      /// EnStatEvents is not optional though. ReadStat() returns early under Raw (the DAQ thread
-      /// already owns those five arrays), so the rate display is fed only by the decoder's
-      /// time-counter events. With stat events off every rate silently reads zero, with nothing
-      /// anywhere reporting why.
-      if( digi[i]->ReadValue(PHA::DIG::EnableStatisticEvents) != "True" ){
-        LogMsg("digi-" + QString::number(digi[i]->GetSerialNumber()) +
-               " : Raw format needs EnStatEvents, turning it on (rates come from stat events).");
-        digi[i]->WriteValue(PHA::DIG::EnableStatisticEvents, "True");
-      }
-
     }else if( dataFormatID == DataFormat::ALL || dataFormatID == DataFormat::OneTrace ){
       digi[i]->WriteValue(PHA::CH::WaveSaving, "Always", -1);
     }else{
@@ -1380,7 +1372,15 @@ void MainWindow::UpdateAllPanel(int panelID){
 }
 
 //^###################################################################### Open Scaler, when DAQ is running
+/// Digitizer2Gen::EnsureStatEvents() plus the log line. With EnStatEvents off the scalar's Trg/Saved
+/// columns would silently read 0.
+void MainWindow::EnsureStatEvents(int i){
+  const QString msg = StatEventsMessage(digi[i]->EnsureStatEvents());
+  if( !msg.isEmpty() ) LogMsg("digi-" + QString::number(digi[i]->GetSerialNumber()) + " : " + msg);
+}
+
 void MainWindow::OpenScaler(){
+  for( int i = 0; i < (int) nDigi; i++ ) EnsureStatEvents(i);
   scalar->show();
   if( isACQRunning ) {
     lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");

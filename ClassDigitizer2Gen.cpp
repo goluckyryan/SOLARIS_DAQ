@@ -1353,6 +1353,13 @@ void Digitizer2Gen::SaveDataToFile(){
 //###########################################
 void Digitizer2Gen::Reset(){ SendCommand("/cmd/Reset"); }
 
+Digitizer2Gen::StatEvents Digitizer2Gen::EnsureStatEvents(){
+  if( isDummy || !isConnected ) return StatEvents::On;
+  if( ReadValue(PHA::DIG::EnableStatisticEvents) == "True" ) return StatEvents::On;
+  if( !CanWriteNow(PHA::DIG::EnableStatisticEvents) ) return StatEvents::BlockedByRun;
+  return WriteValue(PHA::DIG::EnableStatisticEvents, "True") ? StatEvents::TurnedOn : StatEvents::Failed;
+}
+
 void Digitizer2Gen::ProgramBoard(){
   /// Safety net, kept on purpose: the panel's button is off for unconnected boards and every write
   /// checks again, but ProgramBoard() is public and does many writes.
@@ -1374,7 +1381,7 @@ void Digitizer2Gen::ProgramBoard(){
   WriteValue("/par/IOlevel"   , "NIM");
 
   WriteValue("/par/EnAutoDisarmAcq" , "False");
-  WriteValue("/par/EnStatEvents", "true"); // enable for both PHA and PSD (needed for raw decoder scaler)
+  WriteValue(PHA::DIG::EnableStatisticEvents, "True"); // the board statistics need it, every format (EnsureStatEvents)
   
   WriteValue("/par/BoardVetoWidth"    , "0");
   WriteValue("/par/VolatileClockOutDelay"    , "0");

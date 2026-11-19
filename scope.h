@@ -22,6 +22,19 @@
 #include "CustomThreads.h"
 #include "CustomWidgets.h"
 
+/// Log text for Digitizer2Gen::EnsureStatEvents(), shared by MainWindow and the Scope; empty when
+/// there is nothing to say.
+inline QString StatEventsMessage(Digitizer2Gen::StatEvents r){
+  switch( r ){
+    case Digitizer2Gen::StatEvents::TurnedOn:     return "turning EnStatEvents on (the board statistics need it).";
+    case Digitizer2Gen::StatEvents::BlockedByRun: return "<font style=\"color: red;\">EnStatEvents is off and cannot change while the "
+                                                         "board runs -- trigger/saved counts read 0 until the next start.</font>";
+    case Digitizer2Gen::StatEvents::Failed:       return "<font style=\"color: red;\">could not turn EnStatEvents on -- trigger/saved "
+                                                         "counts will read 0.</font>";
+    default: return QString();
+  }
+}
+
 class Trace : public QChart{
 public:
   explicit Trace(QGraphicsItem *parent = nullptr, Qt::WindowFlags wFlags = {})

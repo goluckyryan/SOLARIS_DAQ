@@ -154,9 +154,9 @@ Two consequences of the data never being decoded on the way in:
 - **`EnStatEvents` must be on.** `ReadStat()` returns early under Raw, because the DAQ thread
   already fills `realTime`/`deadTime`/`triggerCount`/`savedEventCount` from the
   decoder's time-counter events; reading the stats endpoint from the GUI timer thread as well
-  would race it. So those events *are* the rate display. `StartACQ()` forces the setting on when
-  Raw is selected, but a board programmed elsewhere will show zero rates without it.
-- **The scope cannot run on Raw.** `ReadData()` sets `isTraceAllZero`, so no trace ever reaches
+  would race it. So those events *are* the rate display. `StartACQ()` turns the setting on for
+  every format (so do the scope's start, the scalar panel's opening and "Set Default").
+- **The scope cannot run on Raw.** Raw has no `hasTrace` (`Hit.h`), so no trace ever reaches
   `traceRingBuffer`. `StartScope()` forces `DataFormat::ALL` for the duration; `StartACQ()`
   re-reads the combo box on the next run, so the Raw selection restores itself.
 

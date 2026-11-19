@@ -114,7 +114,7 @@ Raw mode reads from the `/endpoint/raw` endpoint, which returns many events per 
 
 Raw is selectable from the GUI data format dropdown, and writes **`*.raw`** instead of `*.sol` — the extension is picked automatically by `OpenOutFile()` from the data format. Decode offline with `Aux/EventBuilderRaw`. Two things to know:
 
-- Selecting Raw forces `EnStatEvents = True`. `ReadStat()` returns early under Raw, so the rate display is fed entirely by the decoder's time-counter events; without them every rate reads zero.
+- `EnStatEvents` must be on, and `StartACQ()` turns it on for every format (so do the scope's start, the scalar panel's opening and "Set Default"). Under Raw `ReadStat()` returns early, so the rate display is fed entirely by the decoder's time-counter events; in the other formats it comes from the stats endpoint. Without it the trigger/saved counts read zero.
 - The scope cannot run on Raw — the waveform stays inside the undecoded blob and never reaches `traceRingBuffer`. `StartScope()` forces `DataFormat::ALL` while it runs, and `StartACQ()` re-reads the combo afterwards, so the selection comes back on its own.
 
 The pipeline is **not yet optimized**: `ReadData()` yields one decoded hit per call (to preserve the existing `ReadDataThread` loop contract), which limits throughput to roughly the same as the decoded endpoint. Higher throughput needs the pipeline restructured to save whole blobs in batch.

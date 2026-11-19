@@ -31,11 +31,9 @@ Start ACQ button, no SingleHistograms and no `Analyzer` object at all. Also
 `maxNumChannelAcrossDigitizer` is only updated inside the `IsConnected()` branch, so it stays 0
 while `SetUpScalar()` still lays out channel rows.
 
-**2. `hit` is `NULL` for a dummy**, because it is only allocated in `SetDataFormat()`. So
-[CustomThreads.h:38](CustomThreads.h#L38)'s `digi->hit->ClearTrace()` is a null dereference the
-moment a dummy ever returns `Stop`. That makes "never return `Stop`" a *memory-safety invariant*,
-not merely a save policy — far too fragile to leave implicit. Guard `hit`, and give `SetDataFormat`
-a dummy branch that allocates it without touching CAEN.
+**2. `hit` is `NULL` for a dummy**, because it is only allocated in `SetDataFormat()`, and
+`ReadData()` / `SaveDataToFile()` use it without a check. Give `SetDataFormat` a dummy branch that
+allocates it without touching CAEN.
 
 **3. The dummy would be invisible where it matters.** `boardIndex` has four consumers and only one
 is the builder. `QtHistRegistry` holds its **own copy** ([Analyzer.cpp:550](Analyzer.cpp#L550)) and
