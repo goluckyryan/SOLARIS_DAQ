@@ -7,7 +7,6 @@
 #include <sys/stat.h>
 
 Digitizer2Gen::Digitizer2Gen(){  
-  //printf("======== %s \n",__func__);
   Initialization();
 }
 
@@ -25,11 +24,9 @@ Digitizer2Gen::~Digitizer2Gen(){
 }
 
 void Digitizer2Gen::Initialization(){
-  //printf("======== %s \n",__func__);
 
   handle = 0;
   ep_handle = 0;
-  ep_folder_handle = 0;
   stat_handle = 0;
   isConnected = false;
   isDummy = false;
@@ -129,7 +126,6 @@ int Digitizer2Gen::FindIndex(const Reg &para){
 
 int Digitizer2Gen::ReadRaw(const char * parameter, std::string & out, bool verbose){
   if( !isConnected ){ out = "not connected"; return CAEN_FELib_GenericError; }
-  //printf(" %s|%s \n", __func__, parameter);
   char retValue[256] = {0};
   int ret = CAEN_FELib_GetValue(handle, parameter, retValue);
   if (ret != CAEN_FELib_Success) {
@@ -175,7 +171,6 @@ std::string Digitizer2Gen::ReadValue(const Reg &para, int ch_index,  bool verbos
     case TYPE::GROUP: if( ch_index >= 0 && ch_index < MaxNumberOfGroup ) InputDelay[ch_index].SetValue(ans); break;
   }
   
-  //printf("%s | %s | index %d | %s \n", para.GetFullPara(ch_index).c_str(), ans.c_str(), index, chValue[ch_index][index].c_str());
 
   return ans;
 }
@@ -352,10 +347,6 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
             }
           }
 
-          //if( ch_index < 0 ) ch_index = 0;
-          //printf("%s %s %s |%s|\n", __func__, para.GetPara().c_str(),
-          //                     chSettingTable[index].GetFullPara(ch_index).c_str(),
-          //                     chValue[ch_index][index].c_str());
         }break;
         
         case TYPE::VGA : {
@@ -363,17 +354,11 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
           if( ch_index < 0 || ch_index >= 4 ) break;
           VGASetting[ch_index].SetValue(value);
 
-          //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
-          //                      VGASetting[ch_index].GetFullPara(ch_index).c_str(), 
-          //                      VGASetting[ch_index].GetValue().c_str());
         }break;
 
         case TYPE::DIG : {
           if( index >= (int) boardSettings.size() ) break;
           boardSettings[index].SetValue(value);
-          //printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
-          //                     boardSettings[index].GetFullPara(ch_index).c_str(), 
-          //                     boardSettings[index].GetValue().c_str()); 
         }break;
         
         case TYPE::LVDS : {
@@ -386,9 +371,6 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
           /// number when a GROUP parameter is edited with the channel picker active.
           if( ch_index < 0 || ch_index >= MaxNumberOfGroup ) break;
           InputDelay[ch_index].SetValue(value);
-          // printf("%s %s %s |%s|\n", __func__,  para.GetPara().c_str(),
-          //                     InputDelay[ch_index].GetFullPara(ch_index).c_str(), 
-          //                     InputDelay[ch_index].GetValue().c_str()); 
         }break;
 
       }
@@ -458,11 +440,9 @@ void Digitizer2Gen::SendCommand(std::string shortPara){
 //########################################### Open digitizer
 int Digitizer2Gen::OpenDigitizer(const char * url){
   
-  //printf("======== %s \n",__func__);
 
   int ret = CAEN_FELib_Open(url, &handle);
 
-  //printf("===  ret : %d | %d \n", ret, CAEN_FELib_Success);
 
   if (ret != CAEN_FELib_Success) {
     ErrorMsg(__func__, ret);
@@ -628,6 +608,7 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
   int ret = CAEN_FELib_Success;
 
   ///========== get endpoint and endpoint folder handle
+  uint64_t ep_folder_handle = 0;
   if( dataFormat == DataFormat::Raw ){
 
     ret  = CAEN_FELib_GetHandle(handle, "/endpoint/raw", &ep_handle);
@@ -874,14 +855,12 @@ void Digitizer2Gen::SetDataFormat(unsigned short dataFormat){
     return;
   }
 
-  //TODO Statistic handle and endpoint
   if( FPGAType == DPPType::PHA ) ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppha/stats", &stat_handle);
   if( FPGAType == DPPType::PSD ) ret  = CAEN_FELib_GetHandle(handle, "/endpoint/dpppsd/stats", &stat_handle);
   ret |= CAEN_FELib_SetReadDataFormat(stat_handle, 
     " [ \
         { \"name\": \"REAL_TIME_NS\",    \"type\": \"U64\", \"dim\": 1 }, \
         { \"name\": \"DEAD_TIME_NS\",    \"type\": \"U64\", \"dim\": 1 }, \
-        { \"name\": \"LIVE_TIME_NS\",    \"type\": \"U64\", \"dim\": 1 }, \
         { \"name\": \"TRIGGER_CNT\",     \"type\": \"U32\", \"dim\": 1 }, \
         { \"name\": \"SAVED_EVENT_CNT\", \"type\": \"U32\", \"dim\": 1 } \
     ]"
@@ -898,12 +877,12 @@ int Digitizer2Gen::ReadStat(){
 
   /// SelfTrgRate is the one field the statistics endpoint does not carry, so it is read per
   /// channel either way. It sits above the Raw early-out because the scalar panel has always read
-  /// it live on the Raw path too, and it lands in chValue, not in the five arrays below.
+  /// it live on the Raw path too, and it lands in chValue, not in the four arrays below.
   for( int ch = 0; ch < nChannels && ch < MaxNumberOfChannel; ch++) ReadValue( PHA::CH::SelfTrgRate, ch);
 
-  /// Under Raw, ReadData() on the DAQ thread already fills realTime/deadTime/liveTime/
+  /// Under Raw, ReadData() on the DAQ thread already fills realTime/deadTime/
   /// triggerCount/savedEventCount from the decoder's time-counter events. Reading the stats
-  /// endpoint here, from the GUI timer thread, would write the same five arrays concurrently --
+  /// endpoint here, from the GUI timer thread, would write the same four arrays concurrently --
   /// and the decoder's numbers are the authoritative ones on that path anyway.
   if( hit && hit->dataType == DataFormat::Raw ) return CAEN_FELib_Success;
 
@@ -916,7 +895,6 @@ int Digitizer2Gen::ReadStat(){
   int ret = CAEN_FELib_ReadData(stat_handle, 100,
         realTime,
         deadTime,
-        liveTime,
         triggerCount,
         savedEventCount
       );
@@ -927,7 +905,6 @@ int Digitizer2Gen::ReadStat(){
 }
 
 int Digitizer2Gen::ReadData(){
-  //printf("Digitizer2Gen::%s, DPP : %s, dataFormat : %d \n", __func__, FPGAType.c_str(), hit->dataType);
 
   /// Above the FPGAType guard, because that guard does NOT stop a dummy: SetDummy() sets
   /// FPGAType to DPP_PHA, so a dummy falls straight through to hit->dataType below — and hit is
@@ -975,7 +952,6 @@ int Digitizer2Gen::ReadData(){
         &hit->event_size
       );
 
-      //printf("ch:%02d, trace Length %ld \n", hit->channel, hit->traceLenght);
     }else{
       ret = CAEN_FELib_ReadData(ep_handle, 100,
         &hit->channel,
@@ -1006,11 +982,8 @@ int Digitizer2Gen::ReadData(){
         &hit->event_size
       );
 
-      //printf("ch:%02d, energy: %d, trace Length %ld \n", hit->channel, hit->energy, hit->traceLenght);
 
     }
-
-    hit->isTraceAllZero = false;
 
   }else if( hit->dataType == DataFormat::OneTrace){
     if( !isPSD ){
@@ -1052,8 +1025,6 @@ int Digitizer2Gen::ReadData(){
       );
     }
 
-    hit->isTraceAllZero = false;
-
   }else if( hit->dataType == DataFormat::NoTrace){
     if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
@@ -1088,8 +1059,6 @@ int Digitizer2Gen::ReadData(){
       );
     }
 
-    hit->isTraceAllZero = true;
-
   }else if( hit->dataType == DataFormat::MiniWithFineTime){
     if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
@@ -1108,8 +1077,6 @@ int Digitizer2Gen::ReadData(){
       );
     }
 
-    hit->isTraceAllZero = true;
-
   }else if( hit->dataType == DataFormat::Minimum){
     if( !isPSD ){
       ret = CAEN_FELib_ReadData(ep_handle, 100,
@@ -1125,8 +1092,6 @@ int Digitizer2Gen::ReadData(){
         &hit->energy_short
       );
     }
-
-    hit->isTraceAllZero = true;
 
   }else if( hit->dataType == DataFormat::Raw){
 
@@ -1154,7 +1119,7 @@ int Digitizer2Gen::ReadData(){
       }
 
       // Apply stat updates from time/counter events
-      /// The decoder hands over raw ticks; realTime/deadTime/liveTime are ns everywhere else (the
+      /// The decoder hands over raw ticks; realTime/deadTime are ns everywhere else (the
       /// stats endpoint's *_NS fields). Unscaled, every Raw-mode rate built on realTime read
       /// tick2ns times too high and the elog <Realtime> tick2ns times too short.
       for( const auto& su : rawDecoder.GetStatUpdates() ){
@@ -1163,25 +1128,17 @@ int Digitizer2Gen::ReadData(){
           const uint64_t dtNs = su.deadTime * tick2ns;
           realTime[su.channel]       = rtNs;
           deadTime[su.channel]       = dtNs;
-          liveTime[su.channel]       = (rtNs > dtNs) ? (rtNs - dtNs) : 0;
           triggerCount[su.channel]   = su.triggerCount;
           savedEventCount[su.channel] = su.savedEventCount;
         }
       }
     }
 
-    /// Suppresses the trace-ring fill below, which is the intent: under Raw the waveform stays
-    /// inside the undecoded blob and is never unpacked here, so there is nothing to push. The
-    /// scope therefore cannot run on Raw -- StartScope() forces DataFormat::ALL for exactly this
-    /// reason.
-    hit->isTraceAllZero = true;
-
   }else{
     return CAEN_FELib_UNKNOWN;
   }
 
   if( ret != CAEN_FELib_Success) {
-    //ErrorMsg("ReadData()");
     return ret;
   }
 
@@ -1221,7 +1178,7 @@ int Digitizer2Gen::ReadData(){
   hit->fine_timestamp *= tick2ns;
 
   //======== fill trace ring buffer for scope, only while the scope is running; see fillTraceRing
-  if( !hit->isTraceAllZero && fillTraceRing.load(std::memory_order_relaxed) ){
+  if( hit->hasTrace && fillTraceRing.load(std::memory_order_relaxed) ){
     TraceSnapshot& ts = traceRingBuffer.nextSlot();
     ts.traceLenght = hit->traceLenght;
     memcpy(ts.analog_probes[0], hit->analog_probes[0], hit->traceLenght * sizeof(int32_t));
@@ -1626,7 +1583,6 @@ void Digitizer2Gen::ReadAllSettings(){
     for( int i = 0; i < (int) LVDSSettings[index].size(); i++){
       if( LVDSSettings[index][i].ReadWrite() == RW::WriteOnly) continue;
       ReadValue(LVDSSettings[index][i], index, false);
-      //printf("%d %d | %s | %s \n", index, i, LVDSSettings[index][i].GetPara().c_str(), LVDSSettings[index][i].GetValue().c_str());
     }
   }
 
@@ -1788,11 +1744,7 @@ int Digitizer2Gen::SaveSettingsToFile(const char * saveFileName, bool setReadOnl
       if( result != 0 ) printf("somewrong when set file (%s) to read only.", settingFileName.c_str());
     }
 
-    //printf("Saved setting files to %s\n", saveFileName);
     return 1;
-
-  }else{
-    //printf("Save file accessing error.");
   }
 
   return 0;
@@ -1990,7 +1942,6 @@ std::string Digitizer2Gen::GetSettingValueFromMemory(const Reg &para, unsigned i
       return ( ch < MaxNumberOfGroup ) ? InputDelay[ch].GetValue() : "invalid";
     default : return "invalid";
   }
-  return "no such parameter";
 }
 
 std::string Digitizer2Gen::GetBoardSettingByName(const std::string & name, bool * found) const {

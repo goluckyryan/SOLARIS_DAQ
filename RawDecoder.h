@@ -98,9 +98,8 @@ private:
 
   void ParseBlob(const uint8_t* data, size_t dataSize){
 
-    // dataSize must be a multiple of 8
+    // dataSize must be a multiple of 8; LoadBlob() guarantees at least one word
     size_t nTotalWords = dataSize / 8;
-    if( nTotalWords == 0 ) return;
 
     size_t pos = 0;
     while( pos < nTotalWords ){
@@ -123,9 +122,8 @@ private:
     }
   }
 
+  /// Called only with remaining >= 1 (ParseBlob loops while pos < nTotalWords).
   size_t ParseAggregate(const uint8_t* aggData, size_t remaining){
-    if( remaining < 1 ) return 1;
-
     uint64_t header = W(aggData, 0);
     uint32_t nAggWords = header & 0xFFFFFFFF;
     if( nAggWords == 0 || nAggWords > remaining ) return remaining; // safety
@@ -137,7 +135,6 @@ private:
     size_t pos = 1; // skip aggregate header
     while( pos < nAggWords ){
 
-      if( pos >= nAggWords ) break;
       uint64_t w0 = W(aggData, pos);
 
       /// No "[63:60] == 0x3 = embedded special event" test here. Inside an aggregate Word 0 is

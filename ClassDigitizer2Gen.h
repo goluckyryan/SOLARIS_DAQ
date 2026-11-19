@@ -17,7 +17,6 @@
 /// it only produced the intended value because its single use casts the leading 2 to unsigned,
 /// which quietly made the whole expression unsigned arithmetic. Any other use would have been UB.
 #define MaxOutFileSize (2UL*1024*1024*1024)  //2GB
-//#define MaxOutFileSize 20*1024*1024  //20MB
 #define MaxNumberOfChannel 64
 #define MaxNumberOfGroup 16
 #define RingBufferSize 10000
@@ -42,10 +41,8 @@ class Digitizer2Gen {
   private:
     uint64_t handle;    
     uint64_t ep_handle; ///end point handle
-    uint64_t ep_folder_handle; ///end point folder handle
 
     uint64_t stat_handle;
-    //uint64_t stat_folder_handle;
 
     bool isDummy;
     bool isConnected;
@@ -89,7 +86,6 @@ class Digitizer2Gen {
 
     uint64_t realTime[MaxNumberOfChannel];
     uint64_t deadTime[MaxNumberOfChannel];
-    uint64_t liveTime[MaxNumberOfChannel];
     uint32_t triggerCount[MaxNumberOfChannel];
     uint32_t savedEventCount[MaxNumberOfChannel];
     

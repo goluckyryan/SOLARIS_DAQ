@@ -70,7 +70,10 @@ class Hit {
     size_t  dataSize;  /// number of byte of the data, size/8 = word [64 bits]
     uint32_t n_events;
 
-    bool isTraceAllZero;
+    /// The format carries a trace (ALL, OneTrace); set by SetDataType(). ReadData() pushes to the
+    /// scope's trace ring only when this is true -- never under Raw, where the waveform stays inside
+    /// the undecoded blob (which is why StartScope() forces ALL).
+    bool hasTrace = false;
 
     Hit(){
       DPPType =  DPPType::PHA;
@@ -113,14 +116,11 @@ class Hit {
       traceLenght = 0;
       dataSize = 0;
       n_events = 0;
-
-      isTraceAllZero = true; // indicate trace are all zero
     }
 
     void ZeroProbes(){
       std::memset(analog_probes,  0, sizeof(analog_probes));
       std::memset(digital_probes, 0, sizeof(digital_probes));
-      isTraceAllZero = true;
     }
 
     /// Re-callable: SetDataFormat() calls this on the same Hit at every start-run, so it must not
@@ -130,11 +130,11 @@ class Hit {
     void SetDataType(unsigned int type, std::string dppType){
       dataType = type;
       DPPType = dppType;
+      hasTrace = ( type == DataFormat::ALL || type == DataFormat::OneTrace );
       ResetEventFields();
 
-      /// Zero all six, not just the last event's span: OneTrace/NoTrace never write AP1/DP*, and
-      /// ClearTrace() only clears what the previous event wrote, so a trace left over from an ALL
-      /// run would otherwise show up in a OneTrace run.
+      /// Zero all six: OneTrace/NoTrace never write AP1/DP*, so a trace left over from an ALL run
+      /// would otherwise show up in a OneTrace run.
       ZeroProbes();
 
       /// Allocated on first use and kept: Raw -> ALL -> Raw does not reallocate 20 MB. Freed only
@@ -142,30 +142,6 @@ class Hit {
       if( dataType == DataFormat::Raw && data == NULL ){
         data = new uint8_t[20*1024*1024];
       }
-    }
-
-    void ClearTrace(){
-      if( isTraceAllZero ) return; // no need to clear again
-
-      /// Clear only what the previous event wrote: traceLenght is still its length here
-      /// (pre-read call, CustomThreads.h), so the per-event memset scales with real data
-      /// instead of array capacity -- MaxTraceLenght is now larger than almost every trace.
-      const size_t n = traceLenght > MaxTraceLenght ? (size_t)MaxTraceLenght : traceLenght;
-
-      /// All six are member arrays, always present, so none of these needs a null check.
-      std::memset(analog_probes[0], 0, n * sizeof(int32_t));
-      std::memset(analog_probes[1], 0, n * sizeof(int32_t));
-
-      std::memset(digital_probes[0], 0, n);
-      std::memset(digital_probes[1], 0, n);
-      std::memset(digital_probes[2], 0, n);
-      std::memset(digital_probes[3], 0, n);
-
-      isTraceAllZero = true;
-    }
-
-    void PrintEnergyTimeStamp(){
-      printf("ch: %2d, energy: %u, timestamp: %lu ch, traceLenght: %lu\n", channel, energy, timestamp, traceLenght);
     }
 
     std::string AnaProbeType(uint8_t probeType){
@@ -230,23 +206,6 @@ class Hit {
       }
     }
 
-    std::string HighPriority(uint16_t prio){
-      std::string output;
-
-      bool pileup = prio & 0x1;
-      //bool pileupGuard = (prio >> 1) & 0x1; 
-      //bool eventSaturated = (prio >> 2) & 0x1;
-      //bool postSatEvent = (prio >> 3) & 0x1;
-      //bool trapSatEvent = (prio >> 4) & 0x1;
-      //bool SCA_Event = (prio >> 5) & 0x1;
-
-      output = std::string("Pile-up: ") + (pileup ? "Yes" : "No");
-
-      return output;
-    }
-
-    //TODO LowPriority
-
     void PrintAll(){
       
       switch(dataType){
@@ -270,36 +229,6 @@ class Hit {
                                                                 DigiProbeType(digital_probes_type[1]).c_str(), digital_probes_type[1],
                                                                 DigiProbeType(digital_probes_type[2]).c_str(), digital_probes_type[2],
                                                                 DigiProbeType(digital_probes_type[3]).c_str(), digital_probes_type[3]);
-    }
-
-    void PrintTrace(unsigned short ID){
-      for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){
-        if( ID == 0 ) printf("%4d| %6d\n", i, analog_probes[0][i]); 
-        if( ID == 1 ) printf("%4d| %6d\n", i, analog_probes[1][i]); 
-        if( ID == 2 ) printf("%4d| %u\n", i, digital_probes[0][i]); 
-        if( ID == 3 ) printf("%4d| %u\n", i, digital_probes[1][i]); 
-        if( ID == 4 ) printf("%4d| %u\n", i, digital_probes[2][i]); 
-        if( ID == 5 ) printf("%4d| %u\n", i, digital_probes[3][i]); 
-      }
-    }
-
-    void PrintTrace(){
-      printf("---------- trace length : %zu\n", traceLenght);
-      if( dataType == DataFormat::OneTrace ){
-        for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){  
-          printf("%4d| %6d\n", i, analog_probes[0][i]);
-        }
-      }
-      if( dataType == DataFormat::ALL){
-        for(unsigned short i = 0; i < (unsigned short)traceLenght; i++){  
-          printf("%4d| %6d  %6d   %1d  %1d   %1d  %1d\n", i, analog_probes[0][i], 
-                                                  analog_probes[1][i], 
-                                                  digital_probes[0][i], 
-                                                  digital_probes[1][i], 
-                                                  digital_probes[2][i], 
-                                                  digital_probes[3][i]);
-        }
-      }
     }
 
 };

@@ -40,13 +40,6 @@ public:
         
       int ret = digi->ReadData();
       
-      if( ret == CAEN_FELib_Stop ){
-        /// hit is only allocated by SetDataFormat(), which a board with no CAEN handle never
-        /// gets through. Without this guard, "never return Stop" would be a memory-safety
-        /// invariant of ReadData() rather than a policy.
-        if( digi->hit ) digi->hit->ClearTrace();
-      }
-
       if( isSaveData && ret == CAEN_FELib_Success ){
         digi->SaveDataToFile();
 
