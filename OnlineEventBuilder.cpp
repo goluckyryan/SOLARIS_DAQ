@@ -293,7 +293,6 @@ long OnlineEventBuilder::BuildEvents(bool isFinal, long maxEvents){
       PullNext(k);
     }
 
-    if( event.empty() ) break; // defensive; PickEarliestBoard said there was a hit
 
     settledBelow = eventStart + timeWindow;
     Bump(totalEventsBuilt);

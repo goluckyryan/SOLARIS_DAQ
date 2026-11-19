@@ -772,23 +772,13 @@ Analyzer::Analyzer(Digitizer2Gen ** digi_, unsigned int nDigi_, QMainWindow * pa
     SetEnabled(on);
   });
 
-  /// Guard time is factor x window, so moving either one moves the other's product. Idle-only:
-  /// sbTimeWindow/sbGuardFactor are disabled while running, exactly like the old raw guard spin.
-  connect(sbGuardFactor, &QDoubleSpinBox::valueChanged, this, [this](double f){
-    if( !isSignalSlotActive ) return;
-    eb->SetGuardTime((uint64_t)( f * (double) sbTimeWindow->value() ));
-  });
-  connect(sbTimeWindow, &QDoubleSpinBox::valueChanged, this, [this](double w){
-    if( !isSignalSlotActive ) return;
-    eb->SetGuardTime((uint64_t)( sbGuardFactor->value() * w ));
-  });
+  /// sbTimeWindow/sbGuardFactor need no handlers: SetEnabled(true) hands both to the builder at
+  /// every start, and they are disabled while running.
 
+  /// Disabled while running (SetEnabled), so a change here always happens idle.
   connect(cbAnalysis, &QComboBox::currentTextChanged, this, [this](const QString & name){
     if( !isSignalSlotActive ) return;
-    const bool wasOn = chkEnable->isChecked();
-    if( wasOn ) SetEnabled(false);
     SelectAnalysis(name);
-    if( wasOn ) SetEnabled(true);
   });
 
   connect(bnRescan,  &QPushButton::clicked, this, [this](){ RescanPlugins(); });

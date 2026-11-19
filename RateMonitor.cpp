@@ -403,12 +403,10 @@ bool RateMonitor::HasKey(const QString & key) const{
 }
 
 void RateMonitor::HoldChannel(int d, int ch){
-  if( d < 0 || ch < 0 ) return;
-  ss->SetMonitorSelected(d, ch, true);
+  ss->SetMonitorSelected(d, ch, true);   // it rejects a channel that does not exist
 }
 
 void RateMonitor::ReleaseIfUnused(int d, int ch){
-  if( d < 0 || ch < 0 ) return;
   for( const Trace & tr : traces ) if( tr.d == d && tr.ch == ch ) return; // still needed
   ss->SetMonitorSelected(d, ch, false);
 }

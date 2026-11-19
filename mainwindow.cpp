@@ -1209,7 +1209,7 @@ void MainWindow::OpenScope(){
 
     }else{
       scope->show();
-      if( scope->isVisible() ) scope->activateWindow();
+      scope->activateWindow();
       //scope->StartScope();
       if( digiSetting ) digiSetting->EnableControl();
     }
@@ -1229,7 +1229,7 @@ void MainWindow::OpenDigitizersSettings(){
 
   }else{
     digiSetting->show();
-    if( digiSetting->isVisible() ) digiSetting->activateWindow();
+    digiSetting->activateWindow();
   }
   digiSetting->UpdatePanelFromMemory();
 }
@@ -1239,7 +1239,7 @@ void MainWindow::OpenSOLARISpanel(){
   LogMsg("Open SOLARIS Panel.");
   solarisSetting->show();
   solarisSetting->UpdatePanelFromMemory();
-  if( solarisSetting->isVisible() ) solarisSetting->activateWindow();
+  solarisSetting->activateWindow();
 }
 
 bool MainWindow::CheckSOLARISpanelOK(){
@@ -1413,7 +1413,7 @@ void MainWindow::OpenScaler(){
 
   RepositionScalar();
 
-  if( scalar->isVisible() ) scalar->activateWindow();
+  scalar->activateWindow();
 }
 
 void MainWindow::RepositionScalar(){
@@ -1547,8 +1547,7 @@ void MainWindow::CleanUpScalar(){
 
 void MainWindow::UpdateScalar(){
   if( !digi ) return;
-  if( scalar == NULL ) return;
-  if( scalar->isVisible() == false ) return;
+  if( scalar->isVisible() == false ) return;   // scalar: made in the constructor, never deleted
 
   lbLastUpdateTime->setText("Last update: " + QDateTime::currentDateTime().toString("MM.dd hh:mm:ss"));
 

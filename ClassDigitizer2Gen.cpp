@@ -937,6 +937,8 @@ int Digitizer2Gen::ReadData(){
   stopRunSeen = false;   // per call; set below when this call's Raw blob carries the Stop Run event
   if( isDummy || hit == NULL ) return CAEN_FELib_Stop;
 
+  /// Safety net, kept on purpose: OpenDigitizer() closes unsupported firmware, so hit stays NULL and
+  /// the line above already returns. This catches a future path that skips that.
   if( !isSupportedFw ) return -404;
 
   /// local, not a member: the GUI thread calls ReadValue() on this same object while we are here,
@@ -1395,6 +1397,8 @@ void Digitizer2Gen::SaveDataToFile(){
 void Digitizer2Gen::Reset(){ SendCommand("/cmd/Reset"); }
 
 void Digitizer2Gen::ProgramBoard(){
+  /// Safety net, kept on purpose: the panel's button is off for unconnected boards and every write
+  /// checks again, but ProgramBoard() is public and does many writes.
   if( !isConnected ) return ;
 
   //============= Board

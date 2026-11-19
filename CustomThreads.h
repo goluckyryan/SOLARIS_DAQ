@@ -122,7 +122,7 @@ public:
       usleep(100000); // sleep for 100 ms
       count ++;
       const unsigned int period = waitTime.load(std::memory_order_relaxed);
-      if( period > 0 && count % period == 0){
+      if( count % period == 0){             // period >= 1: set to 20 above, SetWaitTimeSec clamps
         emit TimeUp();
       }
     }while(!stop);

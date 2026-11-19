@@ -800,7 +800,7 @@ void Scope::UpdateScope(){
 
   /// the settings are the same for PHA and PSD
 
-  if( digi ){
+  {
 
     /// Accepted rate: hits ReadData() delivered on this channel (GetAcceptedCount, the scalar's
     /// "Accepted" column) over host time. Averaged over >= 1 s: this runs every 0.1 s, where a rate

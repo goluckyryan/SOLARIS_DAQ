@@ -539,8 +539,7 @@ void SingleSpectra::AddCount2D(int d, int ch, double e){
 //^ load -- the same one the monitor needs and nothing more.
 
 void SingleSpectra::SetMonitorSelected(int d, int ch, bool on){
-  if( d < 0 || d >= (int)MaxNumberOfDigitizer || ch < 0 || ch >= MaxNumberOfChannel ) return;
-  if( d >= (int)nDigi || ch >= (int)digi[d]->GetNChannels() ) return; // not a real channel
+  if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= std::min((int)digi[d]->GetNChannels(), (int)MaxNumberOfChannel) ) return; // not a real channel
 
   if( on && !monitorSelected[d][ch].load(std::memory_order_relaxed) ){
     // Snap the fill cursor to the ring head so a freshly monitored channel does not dump a whole

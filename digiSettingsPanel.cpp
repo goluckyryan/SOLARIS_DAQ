@@ -1183,8 +1183,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
         
         CheckRadioAndCheckedButtons();
 
-        if( !CheckDigitizersCanCopy() ) {
+        if( !CheckDigitizersCanCopy() ) {   // different model/firmware: no copy at all
           pbCopyChannel->setEnabled(false);
+          pbCopyBoard->setEnabled(false);
+          pbCopyDigi->setEnabled(false);
           return;
         }
 
@@ -1222,6 +1224,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
           }
         }
         if( chFromIndex < 0 ) return;
+        if( !CheckDigitizersCanCopy() ) return;   // once here, not once per channel
 
         for( int i = 0; i < (int)digi[0]->GetNChannels(); i++){
           if( chkChTo[i]->isChecked() ) CopyChannelSettings(cbCopyDigiFrom->currentIndex(), chFromIndex, cbCopyDigiTo->currentIndex(), i );
@@ -1253,8 +1256,10 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(cbCopyDigiTo, &RComboBox::currentIndexChanged, this, [=](int index){
         CheckRadioAndCheckedButtons();
 
-        if( !CheckDigitizersCanCopy() ) {
+        if( !CheckDigitizersCanCopy() ) {   // different model/firmware: no copy at all
           pbCopyChannel->setEnabled(false);
+          pbCopyBoard->setEnabled(false);
+          pbCopyDigi->setEnabled(false);
           return;
         }
 
@@ -3155,9 +3160,8 @@ void DigiSettingsPanel::CheckRadioAndCheckedButtons(){
 /// Both copies walk the TARGET board's own table: the global PHA list was used before, which on a
 /// PSD board tried PHA-only parameters. A failed parameter is logged and the copy carries on, so
 /// one refusal does not leave the rest half-copied; the return value says whether all went in.
+/// The callers (the Copy Channel button, CopyWholeDigitizer) check CheckDigitizersCanCopy() once.
 bool DigiSettingsPanel::CopyChannelSettings(int digiFrom, int chFrom, int digiTo, int chTo){
-
-  if( !CheckDigitizersCanCopy() ) return false;
 
   SendLogMsg("Copy Settings from DIG:" +  QString::number(digi[digiFrom]->GetSerialNumber()) + ", CH:" +  QString::number(chFrom) + " ---> DIG:" + QString::number(digi[digiTo]->GetSerialNumber()) + ", CH:" +  QString::number(chTo));
   int nFail = 0;
