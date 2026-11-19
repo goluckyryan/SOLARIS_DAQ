@@ -915,14 +915,17 @@ void MainWindow::PromptSettingsRestore(std::vector<SettingsRestore> & pending){
   QVBoxLayout * layout = new QVBoxLayout(&dialog);
 
   QLabel * info = new QLabel("These boards report settings that differ from their saved setting files.\n"
-                             "Restore writes only the settings that differ, so the board ends up as in the file.\n"
-                             "Keep leaves the board as it is.", &dialog);
+                             "Restore: write only the settings that differ to the board, so the board ends up as in the file.\n"
+                             "Update setting file: write the board's settings into the file (e.g. the settings were changed\n"
+                             "but not saved before the program closed). The old file is kept as <file>.bak.\n"
+                             "Keep: change neither.", &dialog);
+  info->setTextFormat(Qt::PlainText);   // "<file>" is not a tag
   layout->addWidget(info);
 
   std::vector<QCheckBox *> restore;
   int nRows = 0;
   for( const SettingsRestore & r : pending ){
-    QCheckBox * cb = new QCheckBox("Restore Digi-" + QString::number(digi[r.digi]->GetSerialNumber()) + " from " + r.file
+    QCheckBox * cb = new QCheckBox("Digi-" + QString::number(digi[r.digi]->GetSerialNumber()) + " : " + r.file
                                    + "  (" + QString::number(r.diffs.size()) + " setting(s) differ)", &dialog);
     cb->setChecked(true);
     layout->addWidget(cb);
@@ -949,15 +952,45 @@ void MainWindow::PromptSettingsRestore(std::vector<SettingsRestore> & pending){
   layout->addWidget(table);
 
   QDialogButtonBox * buttons = new QDialogButtonBox(&dialog);
-  QPushButton * bnRestore = buttons->addButton("Restore checked boards", QDialogButtonBox::AcceptRole);
-  buttons->addButton("Keep board settings", QDialogButtonBox::RejectRole);
+  QPushButton * bnRestore = buttons->addButton("Restore checked boards (file -> board)", QDialogButtonBox::AcceptRole);
+  QPushButton * bnUpdate  = buttons->addButton("Update checked setting files (board -> file)", QDialogButtonBox::ActionRole);
+  buttons->addButton("Keep both", QDialogButtonBox::RejectRole);
   bnRestore->setDefault(true);
-  connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+  enum { Keep = 0, Restore = 1, Update = 2 };
+  connect(bnRestore, &QPushButton::clicked, &dialog, [&dialog](){ dialog.done(Restore); });
+  connect(bnUpdate,  &QPushButton::clicked, &dialog, [&dialog](){ dialog.done(Update); });
   connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
   layout->addWidget(buttons);
 
-  if( dialog.exec() != QDialog::Accepted ){
-    LogMsg("Kept the boards' settings; setting files not restored.");
+  const int choice = dialog.exec();
+  if( choice == Keep ){
+    LogMsg("Kept the boards' settings and the setting files as they are.");
+    return;
+  }
+
+  if( choice == Update ){
+    /// OpenDigitizer() read every setting and nothing has written since, so memory is the board:
+    /// SaveSettingsToFile() writes exactly what the board has. The old file is kept as .bak.
+    for( size_t k = 0; k < pending.size(); k++ ){
+      const SettingsRestore & r = pending[k];
+      const QString sn = QString::number(digi[r.digi]->GetSerialNumber());
+      if( !restore[k]->isChecked() ){ LogMsg("Digi-" + sn + ": setting file left as it is."); continue; }
+      const QString bak = r.file + ".bak";
+      QFile::remove(bak);
+      const bool backedUp = QFile::copy(r.file, bak);
+      QFile(r.file).setPermissions(QFile(r.file).permissions() | QFileDevice::WriteOwner);   // a read-only file cannot be updated
+      const int flag = digi[r.digi]->SaveSettingsToFile(r.file.toStdString().c_str());
+      std::vector<Digitizer2Gen::SettingLine> now;
+      const bool matches = flag == 1 && Digitizer2Gen::ReadSettingsFile(r.file.toStdString().c_str(), now)
+                           && digi[r.digi]->DiffWithSettings(now).empty();
+      if( matches ){
+        LogMsg("Digi-" + sn + ": setting file <b>" + r.file + "</b> updated from the board"
+               + (backedUp ? " (old file kept as " + bak + ")." : "."));
+      }else{
+        LogMsg("<font style=\"color: red;\">Digi-" + sn + ": could not update <b>" + r.file + "</b>"
+               + (backedUp ? " (the old file is in " + bak + ")" : "") + ".</font>");
+      }
+    }
     return;
   }
 

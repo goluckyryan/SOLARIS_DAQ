@@ -147,8 +147,14 @@ settings editing work.
 `Settings/setting_<SN>_<PHA|PSD>.dat`, if present, is only compared. Boards whose file matches are
 left alone. If any differ, one dialog (`MainWindow::PromptSettingsRestore`), shown after all boards
 are open and before the panels are built, lists every difference (board, parameter, board value,
-file value) with a Restore checkbox per board: Restore applies the file to the ticked boards
-(writing only the differences), Keep writes nothing.
+file value) with a checkbox per board and three buttons:
+
+- **Restore** (file -> board) applies the file to the ticked boards, writing only the differences.
+- **Update setting files** (board -> file) saves the ticked boards' settings over their files --
+  for when the settings were changed but not saved before the program closed. Memory equals the
+  board at this point, so the file ends up matching it (checked by re-reading it); the old file is
+  kept as `<file>.bak`.
+- **Keep both** writes nothing.
 
 Where these files land:
 

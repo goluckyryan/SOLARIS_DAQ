@@ -139,7 +139,7 @@ git-ignored, so they do not follow the repository to another machine — expect 
 
 **Register dumps** go to two `Settings/` folders. The SOLARIS panel saves to
 `<analysisPath>/working/Settings/` (`SOLARISpanel.cpp:96`). The boards' settings files, compared with
-the boards at open (and offered for restore when they differ) and used by the settings panel's
+the boards at open (when they differ, offered for restore, or to be updated from the board) and used by the settings panel's
 Save/Load, are in `<expDataPath>/Settings/` (`MainWindow::OpenDigitizers`). During a run, `StartACQ` also writes a settings snapshot next to
 the data itself (`<expName>_<runID>XSetting_<SN>.dat`), so a run's raw files and the configuration
 that produced them stay together.
