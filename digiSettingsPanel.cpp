@@ -993,11 +993,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(sbBdSettingsWrite, &RSpinBox::valueChanged, this, [=](){if( enableSignalSlot ) sbBdSettingsWrite->setStyleSheet("color: green;");});
       connect(sbBdSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
         if( !enableSignalSlot ) return;
-        if( sbBdSettingsWrite->decimals() == 0 && sbBdSettingsWrite->singleStep() != 1) {
-          double step = sbBdSettingsWrite->singleStep();
-          double value = sbBdSettingsWrite->value();
-          sbBdSettingsWrite->setValue( (std::round(value/step) * step) );
-        }
 
         const Reg & para = IQBoardPara();
         ID = cbIQDigi->currentIndex();
@@ -1119,11 +1114,6 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
       connect(sbChSettingsWrite, &RSpinBox::valueChanged, this, [=](){ if( enableSignalSlot ) sbChSettingsWrite->setStyleSheet("color: green;");});
       connect(sbChSettingsWrite, &RSpinBox::returnPressed, this, [=](){ 
         if( !enableSignalSlot ) return;
-        if( sbChSettingsWrite->decimals() == 0 && sbChSettingsWrite->singleStep() != 1) {
-          double step = sbChSettingsWrite->singleStep();
-          double value = sbChSettingsWrite->value();
-          sbChSettingsWrite->setValue( (std::round(value/step) * step) );
-        }
         
         ID = cbIQDigi->currentIndex();
         const Reg & para = IQChannelPara();
@@ -2708,7 +2698,9 @@ void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_in
                  + ",CH:All | channels differ, type a value first. Nothing written.");
       return;
     }
-    if( regStep > 0 && ( snapToStep || (spb->decimals() == 0 && regStep != 1) ) ){
+    /// Integers are clamped and snapped by Digitizer2Gen::WriteValue (from the parameter's minimum),
+    /// and the panel then shows what was written. Decimal boxes are not, so snapToStep does it here.
+    if( snapToStep && regStep > 0 ){
       spb->setValue( std::round(spb->value() / regStep) * regStep );
     }
     int index = ( ch_index == -1 && isMaster ?  cbChPick[ID]->currentData().toInt() : ch_index);

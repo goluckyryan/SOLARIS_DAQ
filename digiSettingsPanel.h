@@ -319,8 +319,8 @@ private:
   /// Label at (row, col) spanning labelSpan columns, the widget right after it, spanning srow x scol.
   /// An empty labelTxt makes no label; the widget then goes at (row, col).
   void SetupComboBox(RComboBox * &cbb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1, int labelSpan = 1);
-  /// As SetupComboBox. On Enter the value is snapped to the parameter's step (from the Reg, not the
-  /// widget's wheel step) for an integer box; snapToStep does it for a decimal box too.
+  /// As SetupComboBox. Integer values are clamped and snapped to the parameter's step by
+  /// Digitizer2Gen::WriteValue; snapToStep snaps a decimal box (which the base does not) on Enter.
   void SetupSpinBox(RSpinBox * &spb, const Reg & para, int ch_index, bool isMaster,  QString labelTxt, QGridLayout * layout, int row, int col, int srow = 1, int scol = 1, int labelSpan = 1, bool snapToStep = false);
 
   void SyncComboBox(RComboBox *(&cbb)[][MaxNumberOfChannel+1], int ch);

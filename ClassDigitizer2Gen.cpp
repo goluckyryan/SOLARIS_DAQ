@@ -207,10 +207,13 @@ std::string Digitizer2Gen::ClampToRange(const char * parameter, std::string valu
 }
 
 bool Digitizer2Gen::WriteValue(const char * parameter, std::string value, bool verbose){
-  if( !isConnected ) return false;
-  if( verbose) printf(" %s|%d|%-45s|%s|\n", __func__, serialNumber, parameter, value.c_str());
+  return SendToBoard(parameter, ClampToRange(parameter, value), verbose);
+}
 
-  value = ClampToRange(parameter, value);
+/// The board write itself, for a value already clamped to the parameter's range and step.
+bool Digitizer2Gen::SendToBoard(const char * parameter, std::string value, bool verbose){
+  if( !isConnected ) return false;
+  if( verbose) printf(" WriteValue|%d|%-45s|%s|\n", serialNumber, parameter, value.c_str());
 
   if( ModelName == "VX2730" && (strstr(parameter, "ChPreTriggerT") != nullptr
                              || strstr(parameter, "ChRecordLengthT") != nullptr
@@ -298,9 +301,9 @@ bool Digitizer2Gen::WriteValue(const Reg &para, std::string value, int ch_index)
     return false;
   }
   const std::string fullPara = para.GetFullPara(ch_index, nChannels);
-  /// Compare and cache what is actually sent, not what the caller asked for.
+  /// Clamp once, here, so the read-back check and the cache use exactly what is sent.
   value = ClampToRange(fullPara.c_str(), value);
-  if( WriteValue(fullPara.c_str(), value) || isDummy){
+  if( SendToBoard(fullPara.c_str(), value) || isDummy){
     /// Verify on the board, not on faith: SetValue can succeed while the firmware stores a
     /// clamped or different value. ReadValue() caches the REAL value, so the panels and the
     /// per-run SaveSettingsToFile snapshot tell the truth either way; a mismatch fails the
