@@ -65,8 +65,6 @@ public:
 
   uint64_t GetTimeWindow()   const { return timeWindow; }
   uint64_t GetGuardTime()    const { return guardTime < timeWindow ? timeWindow : guardTime; }
-  uint64_t GetTimeJump()     const { return timeJump; }
-  unsigned GetStallTimeout() const { return stallTimeoutMs; }
 
   /// Start from "now": every cursor jumps to its ring's current write index, so whatever is
   /// already buffered is skipped. Same idea as SingleHistograms::ClearInternalDataCount(). Call this
@@ -85,7 +83,6 @@ public:
   /// allocated by the caller; keeping it out of this class is also what keeps the builder
   /// stack-constructible, which Aux/testOnlineBuilder.cpp relies on. May be null.
   void SetEventSink(EventRing * sink) { eventSink = sink; }
-  EventRing * GetEventSink() const { return eventSink; }
 
   /// Called once per completed event, on the caller's thread, after the event reaches the sink.
   /// Must not block — the caller is typically draining a ring the DAQ thread is still filling.

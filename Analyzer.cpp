@@ -608,15 +608,6 @@ long AnaWorker::Drain(){
   return n;
 }
 
-void AnaWorker::ApplyChannel(int * digiPtr, int * channel, int d, int c){
-  if( digiPtr ) *digiPtr = d;
-  if( channel ) *channel = c;
-}
-
-void AnaWorker::ApplyFlag(bool * value, bool v){
-  if( value ) *value = v;
-}
-
 //^============================================================ SettingsKV over QJsonObject
 
 namespace {

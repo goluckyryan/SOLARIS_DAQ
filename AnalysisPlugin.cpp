@@ -130,10 +130,8 @@ Analysis * AnalysisPlugin::Load(const std::string & path, std::string & err){
 
   /// Only now commit: an earlier failure must leave the previously loaded plugin usable.
   handle       = h;
-  createFn     = crtFn;
   destroyFn    = dstFn;
   declaredName = namFn() ? namFn() : "";
-  loadedFrom   = path;
 
   return a;
 }

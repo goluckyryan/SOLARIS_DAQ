@@ -29,33 +29,30 @@ class MUSIC : public Analysis {
   //^---- gain matching, [board][channel]; identity by default, persisted as one KV string.
   //^     Only the analysis thread reads it during ProcessEvent; SaveState/LoadState ride the
   //^     parked-thread window like every other member.
-  int    nBoards_ = 1;
   double gain_[8][16];   // filled with 1.0 in the constructor; a brace initializer would set only [0][0]
 
   int hLeft = -1, hRight = -1, hSum = -1, hMulti = -1;
 
   HistRegistry * reg_ = nullptr;
-  QWidget      * root_ = nullptr;
 
 public:
 
   MUSIC(){ std::fill(&gain_[0][0], &gain_[0][0] + 8 * 16, 1.0); }
 
-  void Declare(HistRegistry & reg, const AnalysisContext & ctx) override {
+  void Declare(HistRegistry & reg, const AnalysisContext & /*ctx*/) override {
 
     reg_ = &reg;
-    nBoards_ = ctx.nBoards > 0 ? ctx.nBoards : 1;
 
     hLeft  = reg.Hist2D("Left",         "strip", "energy", kStrips, 0, kStrips, 200, 0, 30000, nullptr);
     hRight = reg.Hist2D("Right",        "strip", "energy", kStrips, 0, kStrips, 200, 0, 30000, nullptr);
     hSum   = reg.Hist2D("Left + Right", "strip", "energy", kStrips, 0, kStrips, 200, 0, 30000, nullptr);
     hMulti = reg.Hist1D("Multiplicity", "hits / event", 65, 0, 65, nullptr);
 
-    root_ = static_cast<QWidget *>( reg.WorkArea() );
-    if( root_ == nullptr ) return;              // headless: declared, nothing to arrange
+    QWidget * root = static_cast<QWidget *>( reg.WorkArea() );
+    if( root == nullptr ) return;               // headless: declared, nothing to arrange
 
     //^---- [ L | R ] over [ L+R | Multiplicity ], filling the whole work area
-    QGridLayout * plots = new QGridLayout(root_);
+    QGridLayout * plots = new QGridLayout(root);
     plots->setContentsMargins(4, 4, 4, 4);
     if( QWidget * w = static_cast<QWidget *>( reg.View2(hLeft) ) )  plots->addWidget(w, 0, 0);
     if( QWidget * w = static_cast<QWidget *>( reg.View2(hRight) ) ) plots->addWidget(w, 0, 1);
@@ -68,7 +65,6 @@ public:
 
   /// strip index for a hit; -1 to ignore it. The FSUDAQ per-board mapping table lived here.
   int MapStrip(const BuiltHit & h) const {
-    (void)h;
     return h.channel;                       // bench remap goes here
   }
   bool IsLeft(const BuiltHit & h) const { return ( h.digi % 2 ) == 0; }

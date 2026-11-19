@@ -32,7 +32,6 @@ public:
   static constexpr double kMinS     =   5.0;   ///< deepest wheel zoom in
   static constexpr double kMaxS     = 3600.0;  ///< widest zoom == history kept in the deques
 
-  double windowS() const { return winS_; }
   void   SetWindowS(double s){ winS_ = std::clamp(s, kMinS, kMaxS); update(); }
 
   struct Series {
@@ -67,10 +66,6 @@ public:
     }
     update();
   }
-
-  double t0()   const { return t0_; }           ///< <0 = idle (no run's points)
-  double yMax() const { return yMax_; }
-  const std::map<std::string,Series> & series() const { return ser_; }
 
 protected:
   void paintEvent( QPaintEvent * ) override {

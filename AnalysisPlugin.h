@@ -50,19 +50,15 @@ public:
   /// operator new, so the plugin must free it.
   void Destroy(Analysis * a);
 
-  bool                IsLoaded()    const { return handle != nullptr; }
   const std::string & DeclaredName() const { return declaredName; }
-  const std::string & LoadedFrom()   const { return loadedFrom; }
   int                 LoadCount()    const { return loadCount; }
 
 private:
   static bool CopyFile(const std::string & from, const std::string & to, std::string & err);
 
   void      * handle       = nullptr;   ///< intentionally leaked on reload; see the class comment
-  Analysis * (*createFn)()             = nullptr;
   void       (*destroyFn)(Analysis *)  = nullptr;
   std::string declaredName;
-  std::string loadedFrom;
   std::string tempDir;                  ///< /tmp/solaris-analyzers-<pid>, removed by ~AnalysisPlugin
   int         loadCount = 0;
 };

@@ -286,9 +286,6 @@ public slots:
   void Stop();                 ///< drain whatever is left, then OnRunStop
   void Tick();
   void SetAnalysis(Analysis * a, QtHistRegistry * r);
-  /// Apply a parameter change on this thread, which is what makes the plain int members safe.
-  void ApplyChannel(int * digi, int * channel, int d, int c);
-  void ApplyFlag(bool * value, bool v);
 private:
   long Drain();                  ///< one batch; returns the events processed
   EventRing      * ring;

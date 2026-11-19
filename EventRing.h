@@ -68,8 +68,6 @@ public:
     idxRing.clear();
   }
 
-  unsigned long EventsWritten() const { return idxRing.index(); }
-  unsigned long HitsWritten()   const { return hitRing.index(); }
 
   //^=========================================== consumer side
 
