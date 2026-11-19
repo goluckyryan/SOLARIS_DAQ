@@ -97,7 +97,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
-    digiMTX[iDigi].lock();
     ReadScopeSettings();
     int prevCh = oldCh;
     RestoreSettings(false);
@@ -107,7 +106,6 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
       digi[iDigi]->WriteValue(PHA::CH::WaveSaving, "Always", ch);
       digi[iDigi]->WriteValue(PHA::CH::WaveTriggerSource, "ChSelfTrigger", ch);
     }
-    digiMTX[iDigi].unlock();
 
   });
 
@@ -166,9 +164,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(anaProbeList[0], (cbAnaProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
   
   connect(cbAnaProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
@@ -176,9 +172,7 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(anaProbeList[1], (cbAnaProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
 
   connect(cbDigProbe[0], &RComboBox::currentIndexChanged, this, [=](){ this->ProbeChange(cbDigProbe, 4);});
@@ -191,36 +185,28 @@ Scope::Scope(Digitizer2Gen **digi, unsigned int nDigi, ReadDataThread ** readDat
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(digiProbeList[0], (cbDigProbe[0]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[1], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(digiProbeList[1], (cbDigProbe[1]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[2], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(digiProbeList[2], (cbDigProbe[2]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
   connect(cbDigProbe[3], &RComboBox::currentIndexChanged, this, [=](){ 
     if( !allowChange ) return;
     int iDigi = cbScopeDigi->currentIndex();
     int ch = cbScopeCh->currentIndex();
     if( chkSetAllChannel->isChecked() ) ch = -1;
-    digiMTX[iDigi].lock();
     digi[iDigi]->WriteValue(digiProbeList[3], (cbDigProbe[3]->currentData()).toString().toStdString(), ch);
-    digiMTX[iDigi].unlock();
   });
 
   layout->addWidget(cbAnaProbe[0], rowID, 0);
@@ -417,14 +403,12 @@ void Scope::ChangeDigitizer(){
   if( digi[index]->GetFPGAType() == DPPType::PSD ) SetupPSD();
 
 
-  digiMTX[index].lock();
   ReadScopeSettings();
 
   if( digi[index]->IsAcqOn() ){
     digi[index]->WriteValue(PHA::CH::ChannelEnable, "False", -1);
     digi[index]->WriteValue(PHA::CH::ChannelEnable, "True", cbScopeCh->currentIndex());
   }
-  digiMTX[index].unlock();
   allowChange = true;
 
   /// SetupPHA/SetupPSD just rebuilt every setting widget, enabled. While the scope runs that
@@ -767,13 +751,11 @@ void Scope::StopScope(){
       /// After the join, so the ring keeps this run's last traces for the trace browser.
       digi[i]->fillTraceRing.store(false, std::memory_order_relaxed);
 
-      digiMTX[i].lock();
       digi[i]->StopACQ();
       for( int ch2 = 0 ; ch2 < digi[i]->GetNChannels(); ch2 ++){
         digi[i]->WriteValue(PHA::CH::ChannelEnable, channelEnable[i][ch2], ch2);
       }
       RestoreSettings(true);
-      digiMTX[i].unlock();
     }
     
     emit TellACQOnOff(false);
@@ -973,14 +955,12 @@ void Scope::ProbeChange(RComboBox * cb[], const int size ){
   }
 
   //int ID = cbScopeDigi->currentIndex();
-  //digiMTX[ID].lock();
   if( size == 2) {// analog probes
     for( int j = 0; j < 2; j++ )dataTrace[j]->setName(cb[j]->currentText());
   }
   if( size == 4){ // digitial probes
     for( int j = 2; j < 6; j++ )dataTrace[j]->setName(cb[j-2]->currentText());
   }
-  //digiMTX[ID].unlock();
 
 }
 

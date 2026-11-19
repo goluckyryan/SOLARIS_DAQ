@@ -3,7 +3,6 @@
 #define CUSTOMTHREADS_H
 
 #include <QThread>
-#include <QMutex>
 
 #include <atomic>
 #include <chrono>
@@ -11,7 +10,6 @@
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
 
-extern QMutex digiMTX[MaxNumberOfDigitizer];
 
 /// BOTH threads below override run() and never start an event loop, so QThread::quit() does
 /// NOTHING to them -- it only asks an event loop to return. Stop() is the only way to end either

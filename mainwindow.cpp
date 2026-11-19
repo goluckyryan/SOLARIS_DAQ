@@ -29,7 +29,6 @@
 
 //------ static memeber
 Digitizer2Gen ** MainWindow::digi = nullptr;
-QMutex digiMTX[MaxNumberOfDigitizer];
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
@@ -649,9 +648,7 @@ void MainWindow::StopACQ(){
   //=============== Stop digitizer
   for( int i = nDigi - 1; i >= 0; i--){
     if( digi[i]->IsDummy () ) continue;
-    digiMTX[i].lock();
     digi[i]->StopACQ();
-    digiMTX[i].unlock();
   }
   isACQRunning = false;
   lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
@@ -1584,9 +1581,7 @@ void MainWindow::UpdateScalar(){
     ///
     /// By design this also runs when no board is acquiring: the scalar shows the live trigger
     /// rates whenever it is open, not only during a run. Do not skip boards with !IsAcqOn().
-    // digiMTX[iDigi].lock();
     digi[iDigi]->ReadStat();
-    // digiMTX[iDigi].unlock();
 
     /// Accepted rate time base: host clock, once per board. The hits are counted as they reach
     /// the host, so the board's realTime (the stats snapshot's clock) is the wrong reference.

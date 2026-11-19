@@ -137,8 +137,7 @@ want to change a rate. Put a comment at `EnableControl()` saying the omission is
 
 Per channel: enable, rate Hz, energy mean, energy sigma; plus an all-channels master row, board
 group rate and jitter, and the master arm. Parameters are written by the GUI and read by
-`ReadDataThread`, so each is a relaxed `std::atomic`, as `fillHitRing` already is — and **not** under
-`digiMTX`, which the GUI holds across network writes. When a rate changes mid-run set
+`ReadDataThread`, so each is a relaxed `std::atomic`, as `fillHitRing` already is. When a rate changes mid-run set
 `nextTime[ch] = frontier + exponential(newRate)`; never recompute from the origin, or you inject
 backdated hits.
 

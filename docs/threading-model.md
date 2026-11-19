@@ -35,12 +35,14 @@ instead — it needs 50 ms.
 | `EventRing` | Analyzer builder worker | Analyzer analysis worker | lock-free, `Reader` holds the cursor |
 | histogram count arrays | Analyzer analysis worker, `SingleSpectra` worker | GUI thread publishes | `std::atomic<uint32_t>` |
 | `digi[i]->hit` | `ReadDataThread` | **nobody else may touch it** | convention only |
-| digitizer settings (`ReadValue`/`WriteValue`) | GUI, Scope, settings panel | — | **`digiMTX[i]`** |
+| digitizer settings (`ReadValue`/`WriteValue`) | GUI, Scope, settings panel | — | all on the GUI thread; FELib serializes calls itself |
 | `realTime`/`deadTime`/`triggerCount`… | `ReadDataThread` (raw path) and `ReadStat()` | `UpdateScalar` | **none** (see *Known rough edges*) |
 
-`digiMTX[MaxNumberOfDigitizer]` (`mainwindow.cpp:31`, declared `extern` in `CustomThreads.h:14`) is
-the only mutex, and it guards **hardware access**, not data. Held across network round-trips, so
-never take it on a data path — the rings are lock-free precisely so nothing on the hot path has to.
+There is no mutex around board access. Every settings read and write comes from the GUI thread, so
+they already run one at a time, and CAEN FELib serializes calls on a handle itself. `ReadDataThread`
+reads only its own endpoint handle. If a worker thread ever needs to talk to the board, marshal the
+call to the GUI thread rather than adding a lock: a lock held across network round-trips must never
+sit on a data path — the rings are lock-free precisely so nothing on the hot path has to wait.
 
 ## The `RingBuffer` contract
 
@@ -92,7 +94,7 @@ ACQ entirely.
 `MainWindow::StopACQ` (`mainwindow.cpp:615-737`) does things in an order that matters:
 
 1. quiesce consumers first — `singleSpectra->stopTimer()`
-2. stop the boards under `digiMTX`
+2. stop the boards
 3. **join the read threads** — for a **save run** `Stop()` is deliberately *not* called first, so the
    loop drains to the end of the run: `CAEN_FELib_Stop` in the DPP formats, the blob holding the
    Stop Run event in Raw. The wait is capped at `drainTimeoutSec` (2 s, `MainWindow::StopACQ`): a
@@ -109,7 +111,7 @@ check at all (`scope.cpp:858-880`).
 - **Never touch a Qt widget off the GUI thread.** Not even indirectly: `Histogram1D::Fill()` writes a
   `QString` into a `QCPItemText`, which is a use-after-free against the GUI thread's `draw()`. Workers
   count into atomic arrays and the GUI thread publishes them; see `online-analysis-design.md`.
-- **Never take `digiMTX` on a data path.**
+- **Never take a lock on a data path.**
 - **Never add a second producer to a `RingBuffer`.**
 - **Hook both ACQ paths**, or handle neither and use your own control like the Analyzer does.
 - Prefer marshalling a call to the thread that owns the state (`Qt::BlockingQueuedConnection`) over

@@ -234,8 +234,8 @@ All of the following is safe because it runs on the GUI thread. Each item become
   is not tied to the scope.
 - **Start-run re-configures the stats handle.** `SetDataFormat()` calls
   `SetReadDataFormat(stat_handle)`, which must not overlap another call on that handle.
-  → `digiMTX[i]` around `SetDataFormat` (in `StartACQ` and `scope.cpp:699`) and around the worker's
-  read.
+  → Both `SetDataFormat` (in `StartACQ` and `scope.cpp:707`) and `ReadStat` (in `UpdateScalar`) run
+  on the GUI thread, so they cannot overlap. Keep it that way: do not move either onto a worker.
 - **`hit` lives for the life of the digitizer object.** `SetDataFormat()` creates it once
   (`ClassDigitizer2Gen.cpp:544`) and re-calls `Hit::SetDataType()`, which zeroes the fixed probe
   arrays instead of reallocating them. The 20 MB raw buffer is allocated on first Raw use and kept.

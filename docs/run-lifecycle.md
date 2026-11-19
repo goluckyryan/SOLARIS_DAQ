@@ -56,7 +56,7 @@ intentional: data keeps flowing while the operator types.
 **2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:638`, *before* the boards are
 touched.
 
-**3. Stop the boards**, backwards again, each under `digiMTX[i]`: `StopACQ()`. `WaveSaving` is left
+**3. Stop the boards**, backwards again: `StopACQ()`. `WaveSaving` is left
 as `StartACQ` set it, so a Raw run keeps the settings panel's choice. `isACQRunning = false`.
 
 **4. Join the read threads** (`:686-702`) — and here is the subtle part:
