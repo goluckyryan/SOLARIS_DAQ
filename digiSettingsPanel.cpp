@@ -707,6 +707,12 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
 
       if( digi[iDigi]->GetFPGAType() == DPPType::PHA ) SetupPHAChannels(iDigi);
       if( digi[iDigi]->GetFPGAType() == DPPType::PSD ) SetupPSDChannels(iDigi);
+      /// Let Qt empty its event queue and timer list once per board. Every combo box builds its
+      /// popup list the moment its index is set, and each list posts events and starts timers;
+      /// without an event loop these pile up and every later combo box scans all of them, so the
+      /// build grew as n^1.5 (16 boards: 13.8 s -> 4.6 s with this). User input is excluded, and
+      /// MainWindow's digiSetting is still null here, so nothing can reach this half-built panel.
+      QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
 
       {//@============== Status  tab
         QTabWidget * statusTab = new QTabWidget(digiTab[iDigi]);
