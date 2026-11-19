@@ -11,16 +11,8 @@
 //#include "TClonesArray.h" // plan to save trace as TVector with TClonesArray
 //#include "TVector.h"
 
-#include <sys/time.h> /** struct timeval, select() */
+#include "BuilderCommon.h"
 
-inline unsigned int getTime_us(){
-  unsigned int time_us;
-  struct timeval t1;
-  struct timezone tz;
-  gettimeofday(&t1, &tz);
-  time_us = (t1.tv_sec) * 1000 * 1000 + t1.tv_usec;
-  return time_us;
-}
 
 #define MAX_MULTI 50000
 #define MAX_TRACE_LEN 5000 ///  = 40 us, 8 ns per sample
@@ -33,27 +25,17 @@ std::vector<std::vector<int>> idList;
 unsigned long totFileSize = 0;
 unsigned long processedFileSize = 0;
 
-std::vector<int> activeFileID;
-std::vector<int> activeGroupID; // maps activeFileID index to original group index
-std::vector<int> groupIndex;
-std::vector<std::vector<int>> group; // group[i][j], i = group ID, j = group member)
+/// The run's files grouped by board, and which file each board is on (BuilderCommon.h). The old
+/// names stay as references so the file-grouping code below reads as before.
+FileGroups fg;
+std::vector<int> & activeFileID  = fg.activeFileID;
+std::vector<int> & activeGroupID = fg.activeGroupID;   // maps activeFileID index to original group index
+std::vector<int> & groupIndex    = fg.groupIndex;
+std::vector<std::vector<int>> & group = fg.group;      // group[i][j], i = group ID, j = group member
 
+/// The board whose current hit is earliest (ties: the last such board).
 void findEarliestTime(int &fileID, int &groupID){
-
-  /// Seeded at the maximum so i == 0 needs no special case. Keep the <= : it makes a tie resolve
-  /// to the LAST tied entry, which is the behaviour the builder was tuned against. An empty
-  /// activeFileID still leaves fileID and groupID untouched, as before.
-  unsigned long firstTime = ULONG_MAX;
-  for( int i = 0; i < (int) activeFileID.size(); i++){
-    int id = activeFileID[i];
-    if( hit[id]->timestamp <= firstTime) {
-      firstTime = hit[id]->timestamp;
-      fileID = id;
-      groupID = i;
-      //printf("%d | %d %lu %d | %d \n", id, reader[id]->GetBlockID(), hit[id]->timestamp, hit[id]->channel, (int) activeFileID.size());
-    }
-  }
-
+  fg.Earliest([](int id){ return hit[id]->timestamp; }, fileID, groupID);
 }
 
 unsigned long long            evID  = 0;
@@ -277,15 +259,7 @@ int main(int argc, char ** argv){
   //@---- using file from group[i][0] first
 
   //--- find earlist time among the files
-  activeFileID.clear();
-  activeGroupID.clear();
-  groupIndex.clear();  //the index of each group
-
-  for(int i = 0; i < (int) group.size(); i++) {
-    groupIndex.push_back(0);
-    activeFileID.push_back(group[i][0]);
-    activeGroupID.push_back(i);
-  }
+  fg.Start();
 
   int fileID = 0;
   int groupID = 0;
@@ -296,21 +270,10 @@ int main(int argc, char ** argv){
   unsigned long long lastTimeStamp = 0;
 
   int last_percentage = 0;
-  while((activeFileID.size() > 0)){
+  while( !fg.Done() ){
 
     findEarliestTime(fileID, groupID);
-    if( reader[fileID]->IsEndOfFile() ){
-      int origGroup = activeGroupID[groupID];
-      groupIndex[groupID] ++;
-      if( groupIndex[groupID] < (int) group[origGroup].size() ){
-        activeFileID[groupID] = group[origGroup][groupIndex[groupID]];
-        fileID = activeFileID[groupID];
-      }else{
-        activeFileID.erase(activeFileID.begin() + groupID);
-        activeGroupID.erase(activeGroupID.begin() + groupID);
-        groupIndex.erase(groupIndex.begin() + groupID);
-      }
-    }
+    if( reader[fileID]->IsEndOfFile() ) fg.NextFile(groupID, fileID);
 
     if (timeWindow < 0 ){
       lastTimeStamp = e_t[0];
@@ -339,14 +302,7 @@ int main(int argc, char ** argv){
     /// it used to run once per hit -- hundreds of millions of times on a real run -- for a number
     /// that is thrown away unless the percentage has moved.
     if( (evID & 0xFFFF) == 0 ){
-      processedFileSize = 0;
-      for( int p = 0; p < (int) activeGroupID.size(); p ++){
-        int gID = activeGroupID[p];
-        for( int q = 0; q <= groupIndex[p]; q++){
-          int id = group[gID][q];
-          processedFileSize += reader[id]->GetFilePos();
-        }
-      }
+      processedFileSize = fg.BytesRead([](int id){ return reader[id]->GetFilePos(); });
       double percentage = processedFileSize * 100.0 / totFileSize; // both operands are unsigned long
       if( percentage >= last_percentage ) {
         printf("Processed : %llu, %.0f%% | %lu/%lu | ", evID, percentage, processedFileSize, totFileSize);
@@ -357,13 +313,7 @@ int main(int argc, char ** argv){
     }
   }; ///====== end of event building loop
 
-  processedFileSize = 0;
-  for( int p = 0; p < (int) group.size(); p ++){
-   for( int q = 0; q < (int) group[p].size(); q++){
-     int id = group[p][q];
-     processedFileSize += reader[id]->GetFilePos();
-   }
-  }
+  processedFileSize = fg.BytesReadAll([](int id){ return reader[id]->GetFilePos(); });
   double percentage = processedFileSize * 100.0 / totFileSize;
   printf("Processed : %llu, %.0f%% | %lu/%lu            \n", evID, percentage, processedFileSize, totFileSize);
 

@@ -30,8 +30,15 @@ static void connect(Sender * s, Signal sig, Context * ctx, Func && fn){
 //^============================================================ QtHistRegistry
 
 QtHistRegistry::QtHistRegistry(QWidget * root_, Digitizer2Gen ** digi_, unsigned int nDigi_,
-                               const std::vector<int> & boardIndex_, const AnalyzerHooks & hooks_)
-  : root(root_), digi(digi_), nDigi(nDigi_), boardIndex(boardIndex_), hooks(hooks_) {}
+                               const std::vector<int> & boardIndex_, Analyzer * owner_)
+  : root(root_), digi(digi_), nDigi(nDigi_), boardIndex(boardIndex_), owner(owner_) {}
+
+void QtHistRegistry::Fence(const std::function<void()> & fn){
+  if( owner ) QMetaObject::invokeMethod(owner->anaWorker, fn, Qt::BlockingQueuedConnection);
+  else fn();
+}
+
+bool QtHistRegistry::SignalsActive() const { return owner == nullptr || owner->isSignalSlotActive; }
 
 void * QtHistRegistry::WorkArea(){ return root; }
 
@@ -154,16 +161,31 @@ void * QtHistRegistry::BoolParam(const char * label, bool * value, void * placem
   return flags[i].cb;
 }
 
-void * QtHistRegistry::StatusControl(){        return hooks.claimStatus ? hooks.claimStatus() : nullptr; }
-uint64_t QtHistRegistry::TimeWindow(){         return hooks.timeWindow    ? hooks.timeWindow()    : 0; }
-void QtHistRegistry::SetTimeWindow(uint64_t ns){ if( hooks.setTimeWindow ) hooks.setTimeWindow(ns); }
-double QtHistRegistry::GuardFactor(){          return hooks.guardFactor   ? hooks.guardFactor()   : 0; }
-void QtHistRegistry::SetGuardFactor(double f){ if( hooks.setGuardFactor ) hooks.setGuardFactor(f); }
-void QtHistRegistry::SetWindowTitle(const char * t){ if( hooks.setWindowTitle ) hooks.setWindowTitle(QString::fromUtf8(t)); }
-void QtHistRegistry::ResizeWindow(int w, int h){     if( hooks.resizeWindow )   hooks.resizeWindow(w, h); }
-bool QtHistRegistry::InfluxOut(){              return hooks.influxOut     ? hooks.influxOut()     : false; }
+/// The claimable plumbing calls the owner window directly (null in the headless tests).
+void * QtHistRegistry::StatusControl(){
+  if( !owner ) return nullptr;
+  owner->lbStatus->show();
+  return owner->lbStatus;
+}
+uint64_t QtHistRegistry::TimeWindow(){ return owner ? (uint64_t) owner->sbTimeWindow->value() : 0; }
+void QtHistRegistry::SetTimeWindow(uint64_t ns){
+  if( !owner ) return;
+  if( owner->chkEnable->isChecked() ){ owner->Log("SetTimeWindow ignored: analysis is running", true); return; }
+  owner->sbTimeWindow->setValue((double) ns);      ///< the valueChanged wiring updates the builder
+}
+double QtHistRegistry::GuardFactor(){ return owner ? owner->sbGuardFactor->value() : 0; }
+void QtHistRegistry::SetGuardFactor(double f){
+  if( !owner ) return;
+  if( owner->chkEnable->isChecked() ){ owner->Log("SetGuardFactor ignored: analysis is running", true); return; }
+  owner->sbGuardFactor->setValue(f);
+}
+void QtHistRegistry::SetWindowTitle(const char * t){ if( owner ) owner->setWindowTitle(QString::fromUtf8(t)); }
+void QtHistRegistry::ResizeWindow(int w, int h){     if( owner ) owner->resize(w, h); }
+bool QtHistRegistry::InfluxOut(){ return owner && owner->influxOut.load(std::memory_order_relaxed); }
 void QtHistRegistry::InfluxConfig(std::string & url, std::string & token, std::string & db){
-  if( hooks.influxConfig ) hooks.influxConfig(url, token, db);
+  if( !owner ) return;
+  std::lock_guard<std::mutex> g(owner->influxMtx);
+  url = owner->influxURL; token = owner->influxToken; db = owner->influxDatabase;
 }
 
 double QtHistRegistry::GateRates(int id, std::vector<std::pair<std::string,double>> & rates){
@@ -194,7 +216,7 @@ void QtHistRegistry::CreateH1(size_t i){
   /// the same fence the channel pickers use.
   const int id = (int)i;
   connect(h.w, &Histogram1D::ReBinned, h.w, [this, id](){
-    hooks.fence([this, id](){ Resize1(id); });
+    Fence([this, id](){ Resize1(id); });
   });
   h.created.store(true, std::memory_order_release);
 }
@@ -213,7 +235,7 @@ void QtHistRegistry::CreateH2(size_t i){
   for( size_t k = 0; k < n; k++ ) h.c[k].store(0, std::memory_order_relaxed);
   const int id = (int)i;
   connect(h.w, &Histogram2D::ReBinned, h.w, [this, id](){
-    hooks.fence([this, id](){ Resize2(id); });
+    Fence([this, id](){ Resize2(id); });
   });
   h.created.store(true, std::memory_order_release);
 }
@@ -284,12 +306,12 @@ void QtHistRegistry::WireChan(size_t i){
   }
 
   auto apply = [this, cbD, cbC, dp, cp](){
-    if( !hooks.signalsActive() ) return;
+    if( !SignalsActive() ) return;
     const int d = cbD->currentData().toInt();
     const int c = cbC->currentData().toInt();
     /// Runs ON the analysis thread, between ProcessEvent calls. That is the fence, and it is why
     /// the analysis can keep these as plain ints with no atomics.
-    hooks.fence([dp, cp, d, c](){
+    Fence([dp, cp, d, c](){
       if( dp ) *dp = d;
       if( cp ) *cp = c;
     });
@@ -311,8 +333,8 @@ void QtHistRegistry::WireFlag(size_t i){
   rq.wired = true;
   bool * v = rq.value;
   connect(rq.cb, &QCheckBox::toggled, rq.cb, [this, v](bool on){
-    if( !hooks.signalsActive() ) return;
-    hooks.fence([v, on](){ if( v ) *v = on; });
+    if( !SignalsActive() ) return;
+    Fence([v, on](){ if( v ) *v = on; });
     ClearCounts();
   });
 }
@@ -340,7 +362,7 @@ void QtHistRegistry::DrainPending(){
 //^-------------------------------------------------------------- rate ledger (v6, GUI thread)
 
 void QtHistRegistry::SampleRates(){
-  const double baseS = hooks.rateBase ? hooks.rateBase() : 0;
+  const double baseS = ( owner && owner->sbRateBase ) ? owner->sbRateBase->value() : 5.0;   ///< the bar's rate-average window
   if( baseS <= 0 ) return;
   const int    baseMs  = (int)( baseS * 1000.0 );
   const qint64 tMs     = (qint64)( std::chrono::duration_cast<std::chrono::milliseconds>
@@ -860,11 +882,7 @@ void Analyzer::Log(const QString & text, bool isError){
 
 void Analyzer::RescanPlugins(){
 
-  found = AnalysisPlugin::Scan(pluginDir.toStdString());
-  std::sort(found.begin(), found.end(),
-            [](const AnalysisPlugin::Info & a, const AnalysisPlugin::Info & b){
-              return a.name < b.name;                        ///< deterministic "first plugin"
-            });
+  found = AnalysisPlugin::Scan(pluginDir.toStdString());   ///< sorted by name: a deterministic "first plugin"
 
   const QString keep = cbAnalysis->currentText().isEmpty() ? currentName : cbAnalysis->currentText();
   isSignalSlotActive = false;
@@ -1036,32 +1054,7 @@ void Analyzer::SelectAnalysis(const QString & name){
         .arg(QString::fromStdString(plugin.DeclaredName()))
         .arg(plugin.LoadCount()));
 
-  AnalyzerHooks hooks;
-  hooks.fence = [this](const std::function<void()> & fn){
-    QMetaObject::invokeMethod(anaWorker, fn, Qt::BlockingQueuedConnection);
-  };
-  hooks.signalsActive = [this](){ return isSignalSlotActive; };
-  hooks.claimStatus      = [this](){ lbStatus->show(); return (QWidget*)lbStatus; };
-  hooks.timeWindow    = [this](){ return (uint64_t) sbTimeWindow->value(); };
-  hooks.setTimeWindow = [this](uint64_t ns){
-    if( chkEnable->isChecked() ){ Log("SetTimeWindow ignored: analysis is running", true); return; }
-    sbTimeWindow->setValue((double) ns);           ///< the valueChanged wiring updates the builder
-  };
-  hooks.guardFactor    = [this](){ return sbGuardFactor->value(); };
-  hooks.setGuardFactor = [this](double f){
-    if( chkEnable->isChecked() ){ Log("SetGuardFactor ignored: analysis is running", true); return; }
-    sbGuardFactor->setValue(f);
-  };
-  hooks.setWindowTitle = [this](const QString & t){ setWindowTitle(t); };
-  hooks.resizeWindow   = [this](int w, int h){ resize(w, h); };
-  hooks.influxOut      = [this](){ return influxOut.load(std::memory_order_relaxed); };
-  hooks.influxConfig   = [this](std::string & url, std::string & token, std::string & db){
-    std::lock_guard<std::mutex> g(influxMtx);
-    url = influxURL; token = influxToken; db = influxDatabase;
-  };
-  hooks.rateBase       = [this](){ return sbRateBase ? sbRateBase->value() : 5.0; };
-
-  registry = new QtHistRegistry(workArea, digi, nDigi, boardIndex, hooks);
+  registry = new QtHistRegistry(workArea, digi, nDigi, boardIndex, this);
 
   AnalysisContext ctx;
   ctx.nBoards    = (int) boardIndex.size();

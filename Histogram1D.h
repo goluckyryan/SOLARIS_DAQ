@@ -3,6 +3,7 @@
 
 #include "qcustomplot.h"
 #include "macro.h"
+#include "RebinDialog.h"
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -136,13 +137,11 @@ public:
           userZoomed = false;
           SetFullRange();
           replot();
-          usingMenu = false;
         }
 
         //*========================================== Clear Hist
         if( selectedAction == a2 ){
           Clear();
-          usingMenu = false;
         }
 
         //*========================================== Toggle Stat.
@@ -151,72 +150,18 @@ public:
             txt[i]->setVisible( !txt[i]->visible());
           }
           replot();
-          usingMenu = false;
         }
         //*========================================== Rebin
         if( selectedAction == a4 ){
-          QDialog dialog(this);
-          dialog.setWindowTitle("Rebin histogram");
-
-          QFormLayout layout(&dialog);
-
-          QLabel * info = new QLabel(&dialog);
-          info->setStyleSheet("color:red;");
-          info->setText("This will also clear histogram!!");
-          layout.addRow(info);
-
-          QStringList nameList = {"Num. Bin", "x-Min", "x-Max"};
-          QLineEdit* lineEdit[3];
-
-          for (int i = 0; i < 3; ++i) {
-              lineEdit[i] = new QLineEdit(&dialog);
-              layout.addRow(nameList[i] + " : ", lineEdit[i]);
-          }
-          lineEdit[0]->setText(QString::number(xBin));
-          lineEdit[1]->setText(QString::number(xMin));
-          lineEdit[2]->setText(QString::number(xMax));
-
-          QLabel * msg = new QLabel(&dialog);
-          msg->setStyleSheet("color:red;");
-          layout.addRow(msg);
-
-          QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
-          layout.addRow(&buttonBox);
-
-          double number[3];
-
-          QObject::connect(&buttonBox, &QDialogButtonBox::accepted, [&]() {
-            int OKcount = 0;
-            bool conversionOk = true;
-            for( int i = 0; i < 3; i++ ){
-              number[i] = lineEdit[i]->text().toDouble(&conversionOk);
-              if( conversionOk ){
-                OKcount++;
-              }else{
-                msg->setText(nameList[i] + " is invalid.");
-                return;
-              }
-            }
-
-            if( OKcount == 3 ) {
-              if( number[2] > number[1] ) {
-                dialog.accept();
-              }else{
-                msg->setText(nameList[2] + " is smaller than " + nameList[1]);
-              }
-            }
-          });
-          QObject::connect(&buttonBox, &QDialogButtonBox::rejected, [&]() { dialog.reject();});
-
-          if( dialog.exec() == QDialog::Accepted ){
+          std::vector<RebinAxis> ax = { {"Num. Bin", "x-Min", "x-Max", xBin, xMin, xMax} };
+          if( AskRebin(this, ax) ){
             /// Direct connection on the GUI thread, so every AboutToRebin handler has returned --
             /// and any worker filling this plot has drained -- before Rebin() touches yList.
             emit AboutToRebin();
-            Rebin((int)number[0], number[1], number[2]);
+            Rebin(ax[0].nBin, ax[0].lo, ax[0].hi);
             emit ReBinned();
             UpdatePlot();
           }
-
         }
 
         //*========================================== Toggle line Display
@@ -262,20 +207,16 @@ public:
         //*========================================== Gate add / remove
         if( gAdd && selectedAction == gAdd ){
           AddGate(event->pos());   // center the new band under the right-click
-          usingMenu = false;
         }
         if( gClr && selectedAction == gClr ){
           ClearGates();
-          usingMenu = false;
         }
         if( gRen && selectedAction == gRen ){
           EditGatesDialog();
-          usingMenu = false;
         }
         for( int k = 0; k < gDelActs.size(); k++ ){
           if( selectedAction == gDelActs[k] ){
             RemoveGate( gDelActs[k]->data().toInt() );
-            usingMenu = false;
           }
         }
         usingMenu = false;

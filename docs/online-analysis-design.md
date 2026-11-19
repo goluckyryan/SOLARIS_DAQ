@@ -172,8 +172,11 @@ sees a widget, so it cannot get this wrong.
 
 ## Why the analysis interface has no Qt
 
-`Analysis` and `HistRegistry` are pure abstract, and no STL type crosses the boundary — only
-`const char *`, primitives and POD structs. Consequence, measured: an analysis compiles into a
+`Analysis` and `HistRegistry` are pure abstract, and no Qt type crosses the boundary — mostly
+`const char *`, primitives and POD structs. Three calls do pass standard-library types
+(`InfluxConfig` and `SettingsKV::GetStr`, used by `SaveState`/`LoadState`, take `std::string &`; `GateRates` a `std::vector`), so a
+plugin must be built with the same compiler and standard library as the DAQ, which
+`analyzers/Makefile` on the DAQ machine does. Consequence, measured: an analysis compiles into a
 17.8 KB shared object in 0.23 s with **zero undefined symbols from the host**. No `-rdynamic`,
 nothing linked from the DAQ, no Qt, no CAEN.
 

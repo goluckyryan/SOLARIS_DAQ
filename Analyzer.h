@@ -66,24 +66,7 @@
 /// honoured either way, which is what makes an analysis-thread "add a histogram now" complete
 /// without any GUI-side follow-up from the analysis.
 
-struct AnalyzerHooks {
-  /// Run fn on the analysis thread and wait for it. This is the fence every parameter write rides.
-  std::function<void(const std::function<void()> &)> fence;
-  /// Analyzer::isSignalSlotActive, read when a widget signal fires.
-  std::function<bool()> signalsActive;
-  /// v4 plumbing: only the status label can be claimed; the builder setters are idle-gated
-  /// inside the window and keep the bar spinboxes in sync as a side effect.
-  std::function<QWidget *()> claimStatus;
-  std::function<uint64_t()>   timeWindow;
-  std::function<void(uint64_t)> setTimeWindow;
-  std::function<double()>     guardFactor;
-  std::function<void(double)> setGuardFactor;
-  std::function<void(const QString &)> setWindowTitle;
-  std::function<void(int,int)> resizeWindow;
-  std::function<bool()> influxOut;
-  std::function<void(std::string &, std::string &, std::string &)> influxConfig;
-  std::function<double()> rateBase;   ///< the bar's rate-average window in seconds
-};
+class Analyzer;   // the window that owns the registry; QtHistRegistry calls it directly
 
 /// Append-only list whose storage never moves, so one thread can index it while another appends.
 /// A std::vector reallocates on push_back, which is a use-after-free for a concurrent reader.
@@ -116,8 +99,10 @@ private:
 
 class QtHistRegistry : public HistRegistry {
 public:
+  /// owner is the Analyzer window. It may be null (the headless tests): the window-related calls
+  /// then do nothing and parameter changes run on the calling thread.
   QtHistRegistry(QWidget * root, Digitizer2Gen ** digi, unsigned int nDigi,
-                 const std::vector<int> & boardIndex, const AnalyzerHooks & hooks);
+                 const std::vector<int> & boardIndex, Analyzer * owner);
 
   //---- HistRegistry. Declare-side calls work on any thread (see class comment).
   void * WorkArea() override;
@@ -131,7 +116,7 @@ public:
   void * ChannelParam(const char * label, int * digi, int * channel, void * placement) override;
   void * BoolParam(const char * label, bool * value, void * placement) override;
 
-  //---- HistRegistry, v3 claimable plumbing. GUI thread; they forward to AnalyzerHooks.
+  //---- HistRegistry, v3 claimable plumbing. GUI thread; they call the owner Analyzer directly.
   void * StatusControl() override;   ///< the only claimable plumbing widget; enable/window/guard
                                      ///< are fixed Analyzer-bar chrome (v4)
   uint64_t TimeWindow() override;
@@ -141,7 +126,7 @@ public:
   void SetWindowTitle(const char * title) override;
   void ResizeWindow(int width, int height) override;
 
-  //---- HistRegistry, v3+ InfluxDB plumbing (v5). Any thread; forwarded to AnalyzerHooks.
+  //---- HistRegistry, v3+ InfluxDB plumbing (v5). Any thread; read from the owner Analyzer.
   bool InfluxOut() override;
   void InfluxConfig(std::string & url, std::string & token, std::string & database) override;
 
@@ -237,7 +222,7 @@ private:
   void DrainPending();
   bool OnGuiThread() const;
 
-  //---- analysis thread (routed through hooks.fence)
+  //---- analysis thread (routed through Fence)
   void Resize1(int id);
   void Resize2(int id);
 
@@ -259,7 +244,11 @@ private:
   Digitizer2Gen ** digi;
   unsigned int   nDigi;
   std::vector<int> boardIndex;   ///< view position -> digi[] index
-  AnalyzerHooks hooks;
+  Analyzer * owner;
+
+  /// Run fn on the analysis thread and wait for it: the fence every parameter write rides.
+  void Fence(const std::function<void()> & fn);
+  bool SignalsActive() const;    ///< the owner's isSignalSlotActive (true with no owner)
 };
 
 //^============================================================ workers
@@ -315,6 +304,7 @@ private:
 
 class Analyzer : public QMainWindow {
   Q_OBJECT
+  friend class QtHistRegistry;   ///< it reads the bar's controls and runs the parameter fence
 public:
   Analyzer(Digitizer2Gen ** digi, unsigned int nDigi, QMainWindow * parent = nullptr);
   ~Analyzer();
@@ -386,7 +376,7 @@ private:
   bool isSignalSlotActive = true;
 
   //^---- InfluxDB output config (v5 ABI). Written on the GUI thread by SetInflux, read on the
-  //^     analysis thread through the registry hooks, so the mutex IS the fence -- there is no
+  //^     analysis thread through the registry (InfluxConfig), so the mutex IS the fence -- there is no
   //^     worker-parked window for a settings change to ride. influxOut mirrors the checkbox for
   //^     the same cross-thread read.
   std::mutex        influxMtx;

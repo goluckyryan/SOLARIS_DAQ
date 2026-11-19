@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "OnlineEventBuilder.h"   // BuiltHit
+#include "BuiltHit.h"
 #include "RingBuffer.h"
 
 /// Buffer of built events, sitting between the event builder and whatever analyses them.

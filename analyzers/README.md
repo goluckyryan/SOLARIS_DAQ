@@ -86,11 +86,13 @@ void Declare(HistRegistry & reg, const AnalysisContext & ctx) override;
 
 ## The two examples
 
-- **`Coincidence.cpp`** — the minimal shape: A/B channel pickers, one E(A) x E(B) matrix in a
-  splitter layout. Claims nothing: the bar's Enable checkbox and spins just work for it.
+- **`Coincidence.cpp`** — the everyday shape: A/B channel pickers, one E(A) x E(B) matrix in a
+  splitter layout, a live rate scatter of its 2D cuts, and optional InfluxDB output of the
+  coincidence counts and cut rates. Claims nothing: the bar's Enable checkbox and spins just work
+  for it.
 - **`MUSICAnalyzer.cpp`** — the maximal shape (port of FSUDAQ's MUSIC): strip-array matrices
-  (Left / Right / L+R-sum / multiplicity), a gain-match table persisted through SaveState, a
-  builder-window request via `SetTimeWindow(10000)`, and the status label claimed into its rail.
+  (Left / Right / L+R-sum / multiplicity), a gain-match table persisted through SaveState, and its
+  own window title via `SetWindowTitle`.
 
 ## Testing without hardware or a GUI
 

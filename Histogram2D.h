@@ -3,6 +3,7 @@
 
 #include "qcustomplot.h"
 #include "macro.h"
+#include "RebinDialog.h"
 #include <QFileDialog>
 #include <QDir>
 #include <limits>
@@ -855,106 +856,15 @@ inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
 
 inline void Histogram2D::rightMouseClickRebin(){
   DebugPrint("%s", "Histogram2D");
-  QDialog dialog(this);
-  dialog.setWindowTitle("Rebin histogram");
-
-  QFormLayout layout(&dialog);
-
-  QLabel * info = new QLabel(&dialog);
-  info->setStyleSheet("color:red;");
-  info->setText("This will also clear histogram!!");
-  layout.addRow(info);
-
-  QStringList nameListX = {"Num. x-Bin", "x-Min", "x-Max"};
-  QLineEdit* lineEditX[3];
-  for (int i = 0; i < 3; ++i) {
-      lineEditX[i] = new QLineEdit(&dialog);
-      layout.addRow(nameListX[i] + " : ", lineEditX[i]);
-  }
-  lineEditX[0]->setText(QString::number(xBin-2));
-  lineEditX[1]->setText(QString::number(xMin));
-  lineEditX[2]->setText(QString::number(xMax));
-
-  QStringList nameListY = {"Num. y-Bin", "y-Min", "y-Max"};
-  QLineEdit* lineEditY[3];
-  for (int i = 0; i < 3; ++i) {
-      lineEditY[i] = new QLineEdit(&dialog);
-      layout.addRow(nameListY[i] + " : ", lineEditY[i]);
-  }
-  lineEditY[0]->setText(QString::number(yBin-2));
-  lineEditY[1]->setText(QString::number(yMin));
-  lineEditY[2]->setText(QString::number(yMax));
-
-  QLabel * msg = new QLabel(&dialog);
-  msg->setStyleSheet("color:red;");
-  layout.addRow(msg);
-
-  QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, Qt::Horizontal, &dialog);
-  layout.addRow(&buttonBox);
-
-  double number[3][2];
-
-  QObject::connect(&buttonBox, &QDialogButtonBox::accepted, [&]() {
-      int OKcount = 0;
-      bool conversionOk = true;
-      for( int i = 0; i < 3; i++ ){
-        number[i][0] = lineEditX[i]->text().toDouble(&conversionOk);
-        if( conversionOk ){
-          OKcount++;
-        }else{
-          msg->setText(nameListX[i] + " is invalid.");
-          return;
-        }
-      }
-      for( int i = 0; i < 3; i++ ){
-        number[i][1] = lineEditY[i]->text().toDouble(&conversionOk);
-        if( conversionOk ){
-          OKcount++;
-        }else{
-          msg->setText(nameListY[i] + " is invalid.");
-          return;
-        }
-      }
-
-      if( OKcount == 6 ) {
-        if( number[0][0] <= 0 ) {
-          msg->setText( nameListX[0] + " is zero or negative" );
-          return;
-        }
-        if( number[0][1] <= 0 ) {
-          msg->setText( nameListY[0] + " is zero or negative" );
-          return;
-        }
-
-        if( number[2][0] > number[1][0] && number[2][1] > number[1][1]  ) {
-          dialog.accept();
-        }else{
-          /// These are the negation of the accept test, not a copy of it. Written as a copy, an
-          /// invalid y-range was reported as an x-range fault and both being invalid said nothing
-          /// at all -- the dialog just refused to close. Collect them so both axes are reported.
-          QString err;
-          if( number[2][0] <= number[1][0] ){
-            err = nameListX[2] + " is not larger than " + nameListX[1];
-          }
-          if( number[2][1] <= number[1][1] ){
-            if( !err.isEmpty() ) err += "; ";
-            err += nameListY[2] + " is not larger than " + nameListY[1];
-          }
-          msg->setText(err);
-        }
-      }
-  });
-
-  QObject::connect(&buttonBox, &QDialogButtonBox::rejected, [&]() { dialog.reject();});
-
-  if( dialog.exec() == QDialog::Accepted ){
-    emit AboutToRebin();
-    isBusy = true;
-    Rebin((int)number[0][0], number[1][0], number[2][0], (int)number[0][1], number[1][1], number[2][1]);
-    isBusy = false;
-    emit ReBinned();
-  }
-
+  /// xBin/yBin include the two guard bins Rebin() adds, so the user sees and types the inner count.
+  std::vector<RebinAxis> ax = { {"Num. x-Bin", "x-Min", "x-Max", xBin - 2, xMin, xMax},
+                                {"Num. y-Bin", "y-Min", "y-Max", yBin - 2, yMin, yMax} };
+  if( !AskRebin(this, ax) ) return;
+  emit AboutToRebin();
+  isBusy = true;
+  Rebin(ax[0].nBin, ax[0].lo, ax[0].hi, ax[1].nBin, ax[1].lo, ax[1].hi);
+  isBusy = false;
+  emit ReBinned();
 }
 
 inline void Histogram2D::SaveCuts(QString cutFileName){

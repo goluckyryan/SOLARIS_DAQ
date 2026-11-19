@@ -46,6 +46,7 @@ HEADERS += ClassDigitizer2Gen.h \
 					 qcustomplot.h \
 					 Histogram1D.h \
 					 Histogram2D.h \
+					 RebinDialog.h \
 					 SingleHistograms.h \
 					 RateMonitor.h \
 					 RateStore.h

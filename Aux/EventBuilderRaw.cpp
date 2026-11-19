@@ -11,16 +11,8 @@
 #include "TString.h"
 #include "TMacro.h"
 
-#include <sys/time.h>
+#include "BuilderCommon.h"
 
-inline unsigned int getTime_us(){
-  unsigned int time_us;
-  struct timeval t1;
-  struct timezone tz;
-  gettimeofday(&t1, &tz);
-  time_us = (t1.tv_sec) * 1000 * 1000 + t1.tv_usec;
-  return time_us;
-}
 
 #define MAX_MULTI 50000
 
@@ -111,14 +103,10 @@ public:
     numBlock++;
 
     // Decode
-    decoder.LoadBlob(blobBuffer, blobSize, dppType);
+    decoder.LoadBlob(blobBuffer, blobSize, dppType == DPPType::PSD);
 
     // Collect all physics hits
-    hits.clear();
-    RawDecoder::DecodedHit dh;
-    while( decoder.Next(dh) ){
-      hits.push_back(dh);
-    }
+    hits = decoder.Hits();
     hitCursor = 0;
 
     return 0;
@@ -157,27 +145,17 @@ std::vector<std::vector<int>> idList;
 unsigned long totFileSize = 0;
 unsigned long processedFileSize = 0;
 
-std::vector<int> activeFileID;
-std::vector<int> activeGroupID;
-std::vector<int> groupIndex;
-std::vector<std::vector<int>> group;
+/// The run's files grouped by board, and which file each board is on (BuilderCommon.h). The old
+/// names stay as references so the file-grouping code below reads as before.
+FileGroups fg;
+std::vector<int> & activeFileID  = fg.activeFileID;
+std::vector<int> & activeGroupID = fg.activeGroupID;
+std::vector<int> & groupIndex    = fg.groupIndex;
+std::vector<std::vector<int>> & group = fg.group;
 
+/// The board whose current hit is earliest (ties: the last such board).
 void findEarliestTime(int &fileID, int &groupID){
-  unsigned long firstTime = 0;
-  for( int i = 0; i < (int) activeFileID.size(); i++){
-    int id = activeFileID[i];
-    if( i == 0 ) {
-      firstTime = reader[id]->timestamp;
-      fileID = id;
-      groupID = i;
-      continue;
-    }
-    if( reader[id]->timestamp <= firstTime) {
-      firstTime = reader[id]->timestamp;
-      fileID = id;
-      groupID = i;
-    }
-  }
+  fg.Earliest([](int id){ return reader[id]->timestamp; }, fileID, groupID);
 }
 
 unsigned long long            evID  = 0;
@@ -351,15 +329,7 @@ int main(int argc, char ** argv){
 
   //*=========================================== build event
 
-  activeFileID.clear();
-  activeGroupID.clear();
-  groupIndex.clear();
-
-  for(int i = 0; i < (int) group.size(); i++) {
-    groupIndex.push_back(0);
-    activeFileID.push_back(group[i][0]);
-    activeGroupID.push_back(i);
-  }
+  fg.Start();
 
   int fileID = 0;
   int groupID = 0;
@@ -370,21 +340,10 @@ int main(int argc, char ** argv){
   unsigned long long lastTimeStamp = 0;
 
   int last_percentage = 0;
-  while((activeFileID.size() > 0)){
+  while( !fg.Done() ){
 
     findEarliestTime(fileID, groupID);
-    if( reader[fileID]->IsEndOfFile() ){
-      int origGroup = activeGroupID[groupID];
-      groupIndex[groupID] ++;
-      if( groupIndex[groupID] < (int) group[origGroup].size() ){
-        activeFileID[groupID] = group[origGroup][groupIndex[groupID]];
-        fileID = activeFileID[groupID];
-      }else{
-        activeFileID.erase(activeFileID.begin() + groupID);
-        activeGroupID.erase(activeGroupID.begin() + groupID);
-        groupIndex.erase(groupIndex.begin() + groupID);
-      }
-    }
+    if( reader[fileID]->IsEndOfFile() ) fg.NextFile(groupID, fileID);
 
     if (timeWindow < 0 ){
       lastTimeStamp = e_t[0];
@@ -406,28 +365,18 @@ int main(int argc, char ** argv){
       }
     }
 
-    processedFileSize = 0;
-    for( int p = 0; p < (int) activeGroupID.size(); p ++){
-      int gID = activeGroupID[p];
-      for( int q = 0; q <= groupIndex[p]; q++){
-        int id = group[gID][q];
-        processedFileSize += reader[id]->GetFilePos();
+    /// Only when we might print: summing every file's position after every hit is wasted work.
+    if( (evID & 0xFFFF) == 0 ){
+      processedFileSize = fg.BytesRead([](int id){ return reader[id]->GetFilePos(); });
+      double percentage = processedFileSize * 100.0 / totFileSize;
+      if( percentage >= last_percentage ) {
+        printf("Processed : %llu, %.0f%% | %lu/%lu\n\033[A\r", evID, percentage, processedFileSize, totFileSize);
+        last_percentage = percentage + 1.0;
       }
-    }
-    double percentage = processedFileSize * 100.0 / totFileSize;
-    if( percentage >= last_percentage ) {
-      printf("Processed : %llu, %.0f%% | %lu/%lu\n\033[A\r", evID, percentage, processedFileSize, totFileSize);
-      last_percentage = percentage + 1.0;
     }
   };
 
-  processedFileSize = 0;
-  for( int p = 0; p < (int) group.size(); p ++){
-    for( int q = 0; q < (int) group[p].size(); q++){
-      int id = group[p][q];
-      processedFileSize += reader[id]->GetFilePos();
-    }
-  }
+  processedFileSize = fg.BytesReadAll([](int id){ return reader[id]->GetFilePos(); });
   double percentage = processedFileSize * 100.0 / totFileSize;
   printf("Processed : %llu, %.0f%% | %lu/%lu            \n", evID, percentage, processedFileSize, totFileSize);
 

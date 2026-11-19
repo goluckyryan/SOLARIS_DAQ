@@ -14,10 +14,10 @@ testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp .
                    ../OnlineEventBuilder.h ../LeanHit.h ../BuiltHit.h ../RingBuffer.h ../Hit.h ../ClassInfluxDB.h ../ClassInfluxDB.cpp
 	$(CC) $(CFLAG) -fPIC $(shell pkg-config --cflags Qt6Widgets) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp ../analyzers/*.cpp ../ClassInfluxDB.cpp -o testOnlineBuilder $(shell pkg-config --libs Qt6Widgets) -lcurl
 
-EventBuilder: EventBuilder.cpp SolReader.h ../Hit.h
+EventBuilder: EventBuilder.cpp SolReader.h BuilderCommon.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilder.cpp -o EventBuilder ${ROOTFLAG}
 
-EventBuilderRaw: EventBuilderRaw.cpp ../RawDecoder.h ../Hit.h
+EventBuilderRaw: EventBuilderRaw.cpp BuilderCommon.h ../RawDecoder.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilderRaw.cpp -o EventBuilderRaw ${ROOTFLAG}
 
 ClassDigitizer.o : ../ClassDigitizer.cpp ../ClassDigitizer.h ../RegisterAddress.h ../macro.h ../ClassData.h

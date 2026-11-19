@@ -8,7 +8,7 @@
 
 #include "BuiltHit.h"
 
-/// The online analysis interface. ABI version 4.
+/// The online analysis interface. Its version is ANALYSIS_ABI_VERSION, below.
 ///
 /// An analysis declares histograms and controls and fills them; the HOST creates every widget.
 /// That is not shyness about Qt -- an analysis may link Qt and include widget headers, it only
@@ -176,7 +176,7 @@ public:
 //^==================================================================== registry
 
 /// Analyses register themselves, so adding one never means editing mainwindow.cpp or the .pro.
-/// Drop a .cpp in analyzers/, end it with REGISTER_ANALYSIS, then re-run qmake (see README).
+/// Drop a .cpp in analyzers/, end it with ANALYSIS_ENTRY, then run make in analyzers/ (see README).
 class AnalysisRegistry {
 public:
   typedef Analysis * (*Factory)();
@@ -249,30 +249,28 @@ private:
   #define ANALYSIS_PLUGIN_EXPORTS(cls, nameStr)
 #endif
 
+/// The static registrar, only when the analysis is linked directly into a program
+/// (Aux/testOnlineBuilder). A .so is found through its C entry points instead, so it gets none.
+/// The registrar is in an anonymous namespace so two analyses can never clash on its symbol.
+#ifdef ANALYSIS_PLUGIN_BUILD
+  #define ANALYSIS_REGISTRAR(cls, name)
+#else
+  #define ANALYSIS_REGISTRAR(cls, name)                                     \
+    namespace {                                                             \
+      struct cls##_Registrar {                                              \
+        cls##_Registrar(){                                                  \
+          AnalysisRegistry::Instance().Add(                                 \
+            name, [](){ return (Analysis *) new cls(); });                  \
+        }                                                                   \
+      } g_##cls##_Registrar;                                                \
+    }
+#endif
+
 /// Put this at the bottom of an analysis. It works in both link modes:
 ///   - built as a .so  (analyzers/Makefile, -DANALYSIS_PLUGIN_BUILD) -> the C entry points
 ///   - linked directly (Aux/testOnlineBuilder)                       -> the static registrar
-/// The registrar is in an anonymous namespace so two analyses can never clash on its symbol.
 #define ANALYSIS_ENTRY(cls, name)                                           \
-  namespace {                                                               \
-    struct cls##_Registrar {                                                \
-      cls##_Registrar(){                                                    \
-        AnalysisRegistry::Instance().Add(                                   \
-          name, [](){ return (Analysis *) new cls(); });                    \
-      }                                                                     \
-    } g_##cls##_Registrar;                                                  \
-  }                                                                         \
+  ANALYSIS_REGISTRAR(cls, name)                                             \
   ANALYSIS_PLUGIN_EXPORTS(cls, name)
-
-/// Older spelling, static linking only.
-#define REGISTER_ANALYSIS(cls, name)                                        \
-  namespace {                                                               \
-    struct cls##_Registrar {                                                \
-      cls##_Registrar(){                                                    \
-        AnalysisRegistry::Instance().Add(                                   \
-          name, [](){ return (Analysis *) new cls(); });                    \
-      }                                                                     \
-    } g_##cls##_Registrar;                                                  \
-  }
 
 #endif

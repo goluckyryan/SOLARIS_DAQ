@@ -143,23 +143,11 @@ static bool SameEvents(std::vector<Event> a, std::vector<Event> b, const char * 
 
 //^===================================================================== streaming runs
 
-/// The builder is no longer copyable: its counters are std::atomic, which has no copy assignment.
-/// Only the counters were ever wanted from the copy this replaces, so move just those across.
-static void CopyStats(const OnlineEventBuilder & from, OnlineEventBuilder & to){
-  to.totalEventsBuilt      .store(from.totalEventsBuilt      .load());
-  to.totalHitsConsumed     .store(from.totalHitsConsumed     .load());
-  to.totalHitsDropped      .store(from.totalHitsDropped      .load());
-  to.totalHitsLate         .store(from.totalHitsLate         .load());
-  to.monotonicityViolations.store(from.monotonicityViolations.load());
-  to.timeJumpEvents        .store(from.timeJumpEvents        .load());
-  to.stallEvents           .store(from.stallEvents           .load());
-}
-
 /// Push `chunk` hits per board per round, draining between rounds, so the build horizon has to
 /// do the work. The stall timeout is pushed out of reach: these runs must not depend on
 /// wall-clock speed.
 static std::vector<Event> StreamBuild(std::vector<Board> & boards, uint64_t window, size_t chunk,
-                                      OnlineEventBuilder * statOut = nullptr){
+                                      bool printStat = false){
 
   RewindBoards(boards);
 
@@ -191,7 +179,7 @@ static std::vector<Event> StreamBuild(std::vector<Board> & boards, uint64_t wind
   }
   eb.BuildEvents(true);
 
-  if( statOut ) CopyStats(eb, *statOut);
+  if( printStat ) eb.PrintStat();
   return out;
 }
 
@@ -974,12 +962,9 @@ int main(int argc, char ** argv){
     return 0;
   }
 
-  OnlineEventBuilder stat((std::vector<DigiHitView>()));
-  std::vector<Event> evs = StreamBuild(boards, window, chunk, &stat);
-
   printf("\nstreaming:\n");
+  std::vector<Event> evs = StreamBuild(boards, window, chunk, true);   // prints the builder's statistics
   Summary(evs);
-  stat.PrintStat();
 
   std::vector<Event> ref = ReferenceBuild(boards, window);
   printf("\nreference:\n");
