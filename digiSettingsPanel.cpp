@@ -600,9 +600,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
               SendLogMsg(msg + "|OK.");
             }else{
-              SendLogMsg(msg + "|Fail.");
-              digi[ID]->ReadValue(PHA::CH::ITLConnect, i);
-              chITLConnect[iDigi][i][0]->setStyleSheet("background-color : red;");
+              ReportWriteFail(nullptr, msg);   // puts both buttons back to the board's state
             }
 
           });
@@ -632,9 +630,7 @@ DigiSettingsPanel::DigiSettingsPanel(Digitizer2Gen ** digi, unsigned short nDigi
             if( digi[ID]->WriteValue(PHA::CH::ITLConnect, value, i) ){
               SendLogMsg(msg + "|OK.");
             }else{
-              SendLogMsg(msg + "|Fail.");
-              digi[ID]->ReadValue(PHA::CH::ITLConnect, i);
-              chITLConnect[iDigi][i][1]->setStyleSheet("background-color : red;");
+              ReportWriteFail(nullptr, msg);   // puts both buttons back to the board's state
             }
           });
 
@@ -1992,13 +1988,11 @@ void DigiSettingsPanel::onTriggerClick(int haha){
 
   if( digi[iDig]->WriteValue(PHA::CH::ChannelsTriggerMask, kaka.toStdString(), ch) ){
     SendLogMsg(msg + "|OK.");
+    UpdatePanelFromMemory();
+    UpdateOtherPanels();
   }else{
-    SendLogMsg(msg + "|Fail.");
-    digi[iDig]->ReadValue(PHA::CH::ChannelsTriggerMask, ch);
+    ReportWriteFail(nullptr, msg);       // the refill puts the map back to the board's mask
   }
-
-  UpdatePanelFromMemory();
-  UpdateOtherPanels();
 
 }
 
@@ -2645,12 +2639,13 @@ void DigiSettingsPanel::SetupComboBox(RComboBox *&cbb, const Reg & para, int ch_
 
 /// A failed write leaves the board unchanged, so the widget must not keep showing the value the
 /// user typed: refill every widget from the cache (which holds what the board reported), then
-/// mark this one red and say why in the log.
+/// mark this one red and say why in the log. w may be null for a button whose state IS its
+/// background colour (ITL, trigger map): the refill already shows the board's state there.
 void DigiSettingsPanel::ReportWriteFail(QWidget * w, const QString & msg){
   const std::string & why = digi[ID]->GetLastWriteError();
   SendLogMsg(msg + "|Fail" + (why.empty() ? QString(".") : ": " + QString::fromStdString(why)));
   UpdatePanelFromMemory();
-  w->setStyleSheet("color:red;");
+  if( w ) w->setStyleSheet("color:red;");
 }
 
 void DigiSettingsPanel::SetupSpinBox(RSpinBox *&spb, const Reg & para, int ch_index, bool isMaster, QString labelTxt, QGridLayout *layout, int row, int col, int srow, int scol, int labelSpan, bool snapToStep){
