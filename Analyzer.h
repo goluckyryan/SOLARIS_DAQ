@@ -309,7 +309,7 @@ public:
   Analyzer(Digitizer2Gen ** digi, unsigned int nDigi, QMainWindow * parent = nullptr);
   ~Analyzer();
 
-  /// MainWindow's InfluxDB connection settings, like SingleSpectra::SetInflux: pass real values
+  /// MainWindow's InfluxDB connection settings, like SingleHistograms::SetInflux: pass real values
   /// when the singleton is healthy, empty strings when it is not, and the bar's "Influx out"
   /// checkbox enables itself accordingly. Re-callable mid-session (Program Settings -> Database).
   void SetInflux(const QString & url, const QString & token, const QString & database);

@@ -20,7 +20,7 @@
 #include <QAbstractItemView>
 #include <QMenu>
 
-RateMonitor::RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleSpectra * ss, QWidget * parent)
+RateMonitor::RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleHistograms * ss, QWidget * parent)
   : QWidget(parent, Qt::Window), digi(digi), nDigi(nDigi), ss(ss){
 
   setWindowTitle("Rate Monitor");
@@ -47,7 +47,7 @@ RateMonitor::RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleSpectr
 
 RateMonitor::~RateMonitor(){
   if( timer ) timer->stop();
-  // ss outlives us (SingleSpectra deletes us in its own dtor), so it is safe to stop the worker
+  // ss outlives us (SingleHistograms deletes us in its own dtor), so it is safe to stop the worker
   // from draining the channels we were tracking. on=false only stores a flag, never the cursor.
   for( const Trace & tr : traces ) if( tr.d >= 0 ) ss->SetMonitorSelected(tr.d, tr.ch, false);
 }
@@ -55,7 +55,7 @@ RateMonitor::~RateMonitor(){
 void RateMonitor::DAQStarted(){
   acqOn = true;
   // One DAQ run, one time zero: the x clock restarts and the previous run's points are erased.
-  // (SingleSpectra zeroes the STORE's clock and histories in the same hook, so store dt math
+  // (SingleHistograms zeroes the STORE's clock and histories in the same hook, so store dt math
   // never straddles the reset either.) Hidden windows wait for showEvent to arm the timer.
   clock.restart();
   for( Trace & tr : traces ) tr.graph->data()->clear();
@@ -160,7 +160,7 @@ void RateMonitor::BuildUI(){
 
   //---- InfluxDB output: exactly what the plot computes, batched into ONE write per tick.
   //     Enabled only with a healthy singleton connection; the preference persists through
-  //     SingleSpectra (json "influxOut" + auto save).
+  //     SingleHistograms (json "influxOut" + auto save).
   chkInflux = new QCheckBox("Influx out", this);
   chkInflux->setObjectName("chkInflux");
   chkInflux->setToolTip("Push every traced rate to InfluxDB once per time-average tick"
@@ -535,7 +535,7 @@ void RateMonitor::Sample(){
   //---- batched push: everything this tick computed travels in ONE write -- and nothing
   //     unmeasured fakes a zero. Synchronous curl on the GUI thread, exactly like the
   //     scalar writers (tick period >= 1 s); should sub-second bases ever reach here,
-  //     move to SingleSpectra's one-shot writer-thread pattern.
+  //     move to SingleHistograms's one-shot writer-thread pattern.
   if( influxOut && influx && influx->IsConnectionOK() && !pushLines.isEmpty() ){
     influx->ClearDataPointsBuffer();
     for( const QByteArray & line : pushLines ) influx->AddDataPoint( line.constData() );

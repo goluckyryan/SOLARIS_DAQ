@@ -15,25 +15,25 @@ the whole-system view.
 | **`ReadDataThread`** | one per board | `mainwindow.cpp:857` | tight loop on `digi->ReadData()`, and `SaveDataToFile()` when saving. `QThread::HighestPriority`. **The only producer** for that board's rings |
 | **`scalarThread`** | 1 | `mainwindow.cpp:99` | a `TimingThread`; fires `MainWindow::UpdateScalar` every 2 s |
 | **`updateTraceThread`** | 1, while the Scope is open | `scope.cpp:67` | a `TimingThread`; fires `Scope::UpdateScope` |
-| **`SingleSpectra` worker** | 1, while that window exists | `SingleHistograms.cpp:334-339` | drains the per-channel `ringBuffer` into atomic count arrays |
+| **`SingleHistograms` worker** | 1, while that window exists | `SingleHistograms.cpp:334-339` | drains the per-channel `ringBuffer` into atomic count arrays |
 | **Analyzer builder worker** | 1, while the Analyzer exists | `Analyzer.cpp` | `OnlineEventBuilder::BuildEvents()` → `EventRing` |
 | **Analyzer analysis worker** | 1, same | `Analyzer.cpp` | drains `EventRing` → `ProcessEvent` → atomic counts |
 
 Note what `TimingThread` actually does (`CustomThreads.h:95-128`): it sleeps in 100 ms steps and
 emits `TimeUp()`. Because the receiver lives in the GUI thread, Qt queues the signal, so
 **`UpdateScalar` and `UpdateScope` run on the GUI thread, not on the timing thread.** The thread is
-only a clock. Its 100 ms granularity is also why `SingleSpectra` uses a `QTimer` plus `moveToThread`
+only a clock. Its 100 ms granularity is also why `SingleHistograms` uses a `QTimer` plus `moveToThread`
 instead — it needs 50 ms.
 
 ## Who owns what
 
 | state | producer | consumers | protection |
 |---|---|---|---|
-| `digi[i]->ringBuffer[ch]` (HitSummary) | `ReadDataThread` | `SingleSpectra` worker; `UpdateScalar` reads only `index()` | lock-free `RingBuffer` |
+| `digi[i]->ringBuffer[ch]` (HitSummary) | `ReadDataThread` | `SingleHistograms` worker; `UpdateScalar` reads only `index()` | lock-free `RingBuffer` |
 | `digi[i]->traceRingBuffer` | `ReadDataThread` | `Scope`, on the GUI thread | lock-free `RingBuffer` |
 | `digi[i]->hitRing` (LeanHit) | `ReadDataThread` | Analyzer builder worker | lock-free `RingBuffer` |
 | `EventRing` | Analyzer builder worker | Analyzer analysis worker | lock-free, `Reader` holds the cursor |
-| histogram count arrays | Analyzer analysis worker, `SingleSpectra` worker | GUI thread publishes | `std::atomic<uint32_t>` |
+| histogram count arrays | Analyzer analysis worker, `SingleHistograms` worker | GUI thread publishes | `std::atomic<uint32_t>` |
 | `digi[i]->hit` | `ReadDataThread` | **nobody else may touch it** | convention only |
 | digitizer settings (`ReadValue`/`WriteValue`) | GUI, Scope, settings panel | — | all on the GUI thread; FELib serializes calls itself |
 | `realTime`/`deadTime`/`triggerCount`… | `ReadDataThread` (raw path) and `ReadStat()` | `UpdateScalar` | **none** (see *Known rough edges*) |
@@ -58,7 +58,7 @@ copy with `at()`, re-read `index()`, discard if the producer advanced by `size()
 Two idioms exist in the codebase and they are not equivalent:
 
 - **`scope.cpp:785-792`** — copy, re-read, reject. Correct.
-- **`SingleHistograms.cpp:1094-1110`** (`SingleSpectra::FillHistograms`) — checks the gap once, then drains. The producer can lap it
+- **`SingleHistograms.cpp:1094-1110`** (`SingleHistograms::FillHistograms`) — checks the gap once, then drains. The producer can lap it
   *inside* the loop. Tolerable for histogram entries; **not** for event building, which is why
   `OnlineEventBuilder::PullNext()` re-checks per copy.
 
@@ -81,7 +81,7 @@ So there are **two independent paths that start and stop acquisition**, and the 
 overrides the data format to `ALL` because it needs traces.
 
 `TellACQOnOff` is how the rest of the GUI finds out. `MainWindow` connects it
-(`mainwindow.cpp:1115-1128`) to update the ACQ indicator, start/stop `SingleSpectra` and write the
+(`mainwindow.cpp:1115-1128`) to update the ACQ indicator, start/stop `SingleHistograms` and write the
 InfluxDB start/stop point. **Any new
 consumer of acquisition state must hook both paths** — `StartACQ`/`StopACQ` *and* this signal — or it
 silently misses every scope-driven run.
@@ -93,7 +93,7 @@ ACQ entirely.
 
 `MainWindow::StopACQ` (`mainwindow.cpp:615-737`) does things in an order that matters:
 
-1. quiesce consumers first — `singleSpectra->stopTimer()`
+1. quiesce consumers first — `singleHistograms->stopTimer()`
 2. stop the boards
 3. **join the read threads** — for a **save run** `Stop()` is deliberately *not* called first, so the
    loop drains to the end of the run: `CAEN_FELib_Stop` in the DPP formats, the blob holding the
@@ -115,7 +115,7 @@ check at all (`scope.cpp:858-880`).
 - **Never add a second producer to a `RingBuffer`.**
 - **Hook both ACQ paths**, or handle neither and use your own control like the Analyzer does.
 - Prefer marshalling a call to the thread that owns the state (`Qt::BlockingQueuedConnection`) over
-  inventing a flag. The Analyzer does this. `SingleSpectra` instead uses a `suspendFilling` flag and
+  inventing a flag. The Analyzer does this. `SingleHistograms` instead uses a `suspendFilling` flag and
   `WaitForFillToDrain()`, which gives up after 200 ms.
 
 ## Known rough edges

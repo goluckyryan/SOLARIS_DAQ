@@ -10,7 +10,6 @@
 #include <QVBoxLayout>
 #include <QGroupBox>
 #include <QVector>
-#include <QRandomGenerator>
 
 #include <atomic>
 #include <memory>
@@ -50,12 +49,12 @@ struct HistPane{
 
 //^====================================================
 //^====================================================
-class SingleSpectra : public QMainWindow{
+class SingleHistograms : public QMainWindow{
   Q_OBJECT
 
 public:
-  SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent = nullptr);
-  ~SingleSpectra();
+  SingleHistograms(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent = nullptr);
+  ~SingleHistograms();
 
   void ClearInternalDataCount();
   // void SetFillHistograms(bool onOff) { fillHistograms = onOff;}
@@ -73,31 +72,17 @@ public:
   void markSettingsDirty();
   void autoSaveTick();
 
-  void SetMaxFillTime(unsigned short milliSec) { maxFillTimeinMilliSec = milliSec;}
-  unsigned short GetMaxFillTime() const {return maxFillTimeinMilliSec;};
-
   QVector<int> generateNonRepeatedCombination(int size);
 
   void ReplotHistograms();
 
   //^---- RateMonitor support. SetMonitorSelected is GUI-thread only (it snaps lastFilledIndex,
-  //^     fenced like every other GUI-thread write of that array); GetTotal1D is a plain atomic
-  //^     load of the in-range total the fill worker maintains, so the monitor can call it anywhere.
+  //^     fenced like every other GUI-thread write of that array).
   void SetMonitorSelected(int d, int ch, bool on);
-  unsigned long GetTotal1D(int d, int ch) const;
 
   /// Stable RateStore key of a channel's total ("d<i>_sn<SN>_ch<j>"), or empty if the channel
   /// has no 1D histogram object.
   QString TotalRateKey(int d, int ch) const;
-
-  /// True while a key's owning channel is actually being drained and sampled (mounted in a pane
-  /// or held by a monitor trace) -- i.e. its window is fresh, not a stale leftover.
-  bool RateChannelLive(const QString & key) const;
-
-  /// Redirects where settings are read/written. The headless harness MUST call this:
-  /// without it a test instance saves its chaos straight into the live experiment tree.
-  void SetSettingPath(const QString & p){ settingPath = p; }
-  QString SettingPath() const { return settingPath; }   // for the harness's self-check
 
   /// MainWindow's InfluxDB singleton (may be null) + database name, forwarded to the
   /// RateMonitor the moment it exists. Called at window creation AND at the end of
@@ -107,12 +92,6 @@ public:
   /// the persisted "Influx out" preference, flipped by the monitor's checkbox
   void SetInfluxOut(bool on);
 
-  /// The (d,ch) histogram widget, or nullptr. Unmounted widgets are parentless -- this is the
-  /// only handle to them (the test harness verifies gate/monitor behaviour on them).
-  Histogram1D * ChannelHist(int d, int ch) const {
-    if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= MaxNumberOfChannel ) return nullptr;
-    return hist[d][ch];
-  }
 
   /// Pump the RateStore from the worker atomics: totals and live 1D gate sums, for every channel
   /// that is mounted or monitored. GUI thread; called by the replot clock and by the monitor's
@@ -122,7 +101,7 @@ public:
   //^---- THE rate time base: one shared integration window for every instantaneous number --
   //^     all histogram total/gate labels and every RateMonitor trace. The control sits next to
   //^     the "Rate Monitor" button; the monitor's own combo is a second face of the same value.
-  void SetRateTimeBase(int ms);          ///< push to all plots, the store horizon, and the monitor
+  void SetRateTimeBase(int ms);          ///< the store horizon (so every plot's rate) and the monitor
   int  RateTimeBase() const { return rateBaseMs; }
 
   /// Sliding-window dN/dt ledger for totals and 1D gates, sampled by the publish path on the
@@ -130,9 +109,6 @@ public:
   RateStore rateStore;
 
 signals:
-  // void startWorkerTimer(int interval);
-  // void stopWorkerTimer();
-
   /// Emitted from the one-shot writer thread; received queued on the GUI thread.
   void settingsWriteFinished(bool ok);
 
@@ -142,10 +118,6 @@ public slots:
   /// starting a run also zeroes the RateStore clock and the monitor's time axis.
   void startTimer();
   void stopTimer();
-
-  /// True between startTimer() and stopTimer(). The RateMonitor refuses to sample outside
-  /// this window: opening it before DAQ start shows an empty, idle window.
-  bool AcquisitionRunning() const { return acqRunning; }
 
 private:
 
@@ -269,7 +241,7 @@ private:
   QTimer * timer;
 
   /// The RateMonitor window, opened from a control-box button. It is NOT a QObject child: this
-  /// object owns the pointer and deletes it in ~SingleSpectra (after the worker is stopped), so it
+  /// object owns the pointer and deletes it in ~SingleHistograms (after the worker is stopped), so it
   /// cannot be auto-freed a second time by the QObject destructor.
   RateMonitor * rateMonitor = nullptr;
 
@@ -306,7 +278,7 @@ protected:
 class HistWorker : public QObject{
   Q_OBJECT
 public:
-  HistWorker(SingleSpectra * parent): SS(parent){}
+  HistWorker(SingleHistograms * parent): SS(parent){}
 
 public slots:
   void FillHistograms(){
@@ -314,7 +286,7 @@ public slots:
   }
 
 private:
-  SingleSpectra * SS;
+  SingleHistograms * SS;
 };
 
 #endif

@@ -40,7 +40,7 @@ For each board:
 - `digi[i]->StartACQ()` — `/cmd/armacquisition` then `/cmd/swstartacquisition`
 - `readDataThread[i]->SetSaveData(...)` and `start(QThread::HighestPriority)`
 
-**4. Consumers.** `singleSpectra->startTimer()` (`:575`). The Analyzer is deliberately **not** here —
+**4. Consumers.** `singleHistograms->startTimer()` (`:575`). The Analyzer is deliberately **not** here —
 it is driven by its own enable checkbox and is independent of ACQ.
 
 **5. Bookkeeping.** elog start entry, `expName.sh`, the run-timestamp file, InfluxDB `StartStop`
@@ -53,7 +53,7 @@ The order matters more here, and three steps are load-bearing.
 **1. Stop comment dialog** — blocks in `exec()` **while the DAQ threads are still running**. That is
 intentional: data keeps flowing while the operator types.
 
-**2. Quiesce consumers first** — `singleSpectra->stopTimer()` at `:638`, *before* the boards are
+**2. Quiesce consumers first** — `singleHistograms->stopTimer()` at `:638`, *before* the boards are
 touched.
 
 **3. Stop the boards**, backwards again: `StopACQ()`. `WaveSaving` is left
@@ -112,7 +112,7 @@ layout and `settings-system.md` for the `.dat`.
 
 **The Scope starts and stops the same `ReadDataThread`s independently** of everything above, forcing
 `DataFormat::ALL` and never saving. It announces this with `TellACQOnOff`, which `MainWindow` uses to
-update the indicator and drive `SingleSpectra`.
+update the indicator and drive `SingleHistograms`.
 
 So there are two ACQ paths. Anything that needs to know whether data is flowing must hook **both**
 `StartACQ`/`StopACQ` and that signal — or, like the Analyzer, deliberately hook neither and use its

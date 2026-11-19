@@ -28,7 +28,7 @@ The core digitizer control classes are independent from the Qt UI classes.
 | mainwindow.h/cpp | Main window: digitizer management, run control, scaler display |
 | digiSettingsPanel.h/cpp | Register editing panel for board and channel settings |
 | scope.h/cpp | Oscilloscope for waveform display |
-| SingleSpectra.h/cpp | Per-channel energy spectra (1D histograms) |
+| SingleHistograms.h/cpp | Per-channel energy spectra (1D histograms) |
 | Analyzer.h/cpp | Online analyzer window: owns the event builder, event ring and worker threads |
 | analyzers/*.cpp | The analyses themselves; each registers itself, see Online Analyzer below |
 | SOLARISpanel.h/cpp | SOLARIS-specific detector mapping and configuration |
@@ -80,7 +80,7 @@ it never produces a hit. Any code that reads data or talks to hardware must ther
 `IsDummy()` — as `scope.cpp`, `SOLARISpanel.cpp`, `digiSettingsPanel.cpp` and `mainwindow.cpp`'s
 scaler and elog paths already do.
 
-How much that matters depends on the consumer, and the gap is worth knowing. `SingleSpectra` has no
+How much that matters depends on the consumer, and the gap is worth knowing. `SingleHistograms` has no
 `IsDummy()` check at all and gets away with it: a dummy's ring never advances, so its histogram
 simply stays empty. The event builder cannot be so relaxed, because its build horizon is a
 **minimum over boards** — a board that never delivers pins the horizon at zero and *no events are
@@ -151,7 +151,7 @@ It is written only by that board's `ReadDataThread`, preserving the single-produ
 One ring per **board**, not per channel, because a board already emits all of its channels
 interleaved in timestamp order (see `format_RAW.md`, Aggregate Header). Splitting per channel would
 buy nothing and turn a 4-way merge into a 256-way one. `ringBuffer[]` (per-channel energies, for
-`SingleSpectra`) and `traceRingBuffer` (for the scope) are unchanged and still filled alongside.
+`SingleHistograms`) and `traceRingBuffer` (for the scope) are unchanged and still filled alongside.
 
 ### The build horizon
 
@@ -349,7 +349,7 @@ GUI thread publishes them into the widgets, through `Histogram1D::SetBinContents
 `Histogram2D::SetCellContents()`. An analysis holds `void *` handles it can position but never
 draw on, so it cannot get this wrong.
 
-(`SingleSpectra` still fills from its worker. That predates this and should eventually move to the
+(`SingleHistograms` still fills from its worker. That predates this and should eventually move to the
 same discipline; do not copy it.)
 
 ### Writing an analysis

@@ -45,7 +45,7 @@ channel's ring buffer, `ringBuffer[ch]` (DPP formats `ClassDigitizer2Gen.cpp:107
 The ring's write index is a running total of every hit ever pushed on that channel. It only goes
 up: it is never cleared, and it keeps counting when the 10 000-entry ring wraps around.
 `GetAcceptedCount(ch)` (`ClassDigitizer2Gen.h:164`) returns it. `ReadData()` does no extra
-work for it. It is the same counter `SingleSpectra` fills its histograms from, so the scalar and the
+work for it. It is the same counter `SingleHistograms` fills its histograms from, so the scalar and the
 histograms see the same hits.
 
 *Why the ring does not wrap the count.* `RingBuffer::push()` (`RingBuffer.h:22`) stores the hit

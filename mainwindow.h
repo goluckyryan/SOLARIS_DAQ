@@ -14,15 +14,12 @@
 #include <QTimer>
 #include <QThread>
 
-#include <QChart>
-#include <QLineSeries>
 
 #include <vector>
 #include <time.h> // time in nano-sec
 
 #include "macro.h"
 #include "ClassDigitizer2Gen.h"
-// #include "influxdb.h"
 #include "ClassInfluxDB.h"
 #include "ClassElog.h"
 #include "ClassElogTemplate.h"
@@ -98,7 +95,7 @@ private slots:
   void resizeEvent(QResizeEvent * event);
   void RepositionScalar();
 
-  void OpenSingleSpectra();
+  void OpenSingleHistograms();
   void OpenAnalyzer();
 
   void WriteElog(QString htmlText, QString subject = "", QString category = "",  int runNumber = 0);
@@ -111,8 +108,6 @@ private slots:
   void WriteRunTimeStampDat(bool isStartRun, QString timeStr);
   void CloseRunTimeStampRow(const QString & note);  /// terminates the stop row started above
   QString RunTimeStampPath(const QString & ext) const;
-
-signals :
 
 private:
 
@@ -188,8 +183,6 @@ private:
   bool needManualComment;
   bool isACQRunning;
   QTimer * runTimer;
-  QElapsedTimer elapsedTimer;
-  unsigned int autoRunStartRunID;
 
   bool ACQStopButtonPressed;
 
@@ -302,8 +295,8 @@ private:
 
   //@------ single spectra
 
-  QPushButton * bnSingleSpectra;
-  SingleSpectra * singleSpectra;
+  QPushButton * bnSingleHistograms;
+  SingleHistograms * singleHistograms;
 
   QPushButton * bnAnalyzer;
   Analyzer * analyzer;

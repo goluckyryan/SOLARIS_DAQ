@@ -228,10 +228,9 @@ public:
   int    GetNBin() const {return xBin;}
   double GetXMin() const {return xMin;}
   double GetXMax() const {return xMax;}
-  unsigned long GetTotalEntry() const {return totalEntry;}
 
   /// "Total Entry" stat line. The bracketed rate is INSTANTANEOUS (trailing time-average window,
-  /// global "Time average" control), normalized to Hz: SingleSpectra's sample path feeds the
+  /// global "Time average" control), normalized to Hz: SingleHistograms's sample path feeds the
   /// worker's exact counts through its RateStore and pushes the windowed dN/dt back in via
   /// SetDisplayRate() -- the widget never times on its own, so the counting clock lives in
   /// exactly one place. Until the window has two samples the rate is omitted entirely.
@@ -250,24 +249,10 @@ public:
     SetLabel(txt[1], TotalEntryLabel());
   }
 
-  int  RateIntervalMs() const { return rateIntervalMs; }
-  QString RateIntervalText() const {
-    return ( rateIntervalMs % 1000 == 0 ) ? QString("%1 s").arg(rateIntervalMs/1000)
-                                          : QString("%1 ms").arg(rateIntervalMs);
-  }
-  /// MIRROR of the one GLOBAL time average (the "Time average" control next to "Rate Monitor"):
-  /// every plot and the monitor window use the same trailing window; a per-plot menu would only
-  /// invite numbers that look alike but do not agree. SingleSpectra::SetRateTimeBase() pushes
-  /// the value to all plots; this widget only counts on it being what the store windowed with.
-  void SetRateIntervalMs(int ms){
-    rateIntervalMs = qBound(100, ms, 3600000);
-    SetLabel(txt[1], TotalEntryLabel());
-  }
-
   //^==================== 1D gates
   //^ A gate is a shaded [x0,x1] band with two draggable edge lines. Its instantaneous rate is
-  //^ derived GUI-side from the PUBLISHED bins (GateSum = sum of series-0 bins inside the band),
-  //^ sampled into SingleSpectra::RateStore under key "<rateKey>/g<n>" by the publish path --
+  //^ derived GUI-side from the PUBLISHED bins (the sum of series-0 bins inside the band),
+  //^ sampled into SingleHistograms::RateStore under key "<rateKey>/g<n>" by the publish path --
   //^ the fill worker never knows gates exist. The cost is exact at bin resolution and bounded
   //^ by the publish period; it follows the pane, so an unmounted histogram has no gate counts
   //^ (by design, for now).
@@ -279,19 +264,10 @@ public:
   QString GateName(int k)const { return (k>=0 && k<gates.size()) ? gates[k].name : QString(); }
   /// The gate's own colour (picked in Edit Gates; seeded from the id palette on creation)
   QColor GateColor(int k)  const { return (k>=0 && k<gates.size()) ? gates[k].color : QColor(); }
-  void SetGateColor(int k, const QColor & c){
-    if( k < 0 || k >= gates.size() || !c.isValid() ) return;
-    gates[k].color = c; ApplyGateColor(k); replot();
-  }
   /// RateStore key. Carries the gate's NEVER-REUSED id, not its position: a middle delete must
   /// not graft the victim's rate history onto a survivor.
   QString GateKey(int k) const{
     return (k>=0 && k<gates.size()) ? rateKey + QString("/g%1").arg(gates[k].id) : QString();
-  }
-
-  int FindGate(const QString & name) const{
-    for( int k = 0; k < gates.size(); k++ ) if( gates[k].name == name ) return k;
-    return -1;
   }
 
   bool RenameGate(int k, const QString & name){
@@ -320,8 +296,6 @@ public:
     g.color = gateColor(g.id);
     g.rateLine = "(gathering...)";
 
-    const QColor col = gateColor(g.id);
-    QPen pen(col, 1.5);
     g.l0 = new QCPItemStraightLine(this);
     g.l1 = new QCPItemStraightLine(this);
     g.band = new QCPItemRect(this);
@@ -393,7 +367,7 @@ public:
   /// Delete live gate at position k. Index shifts are safe here (the 2D cut list needed
   /// tombstones because its entries reference shared QCustomPlot list indices; gates hold
   /// their item pointers directly), but the RATE key must not shift -- see GateKey().
-  /// Emits GateDeleted so SingleSpectra can drop the store history.
+  /// Emits GateDeleted so SingleHistograms can drop the store history.
   void RemoveGate(int k){
     if( k < 0 || k >= gates.size() ) return;
     emit GateDeleted(GateKey(k));
@@ -404,8 +378,6 @@ public:
     else if( dragGate > k ) dragGate --;
     replot();
   }
-  void RemoveGate(const QString & name){ RemoveGate(FindGate(name)); }
-  void RemoveGate(){ RemoveGate(gates.size()-1); }   // legacy "remove the last one"
 
   void ClearGates(){
     while( !gates.isEmpty() ) RemoveGate(0);
@@ -468,17 +440,6 @@ public:
     replot();
   }
 
-  /// Cumulative in-range entries inside gate k, from the published series-0 bins.
-  unsigned long GateSum(int k) const{
-    if( k < 0 || k >= gates.size() || dX <= 0. ) return 0;
-    const double lo = qMin(gates[k].x0, gates[k].x1);
-    const double hi = qMax(gates[k].x0, gates[k].x1);
-    const int b0 = qBound(0, (int)qFloor((lo - xMin)/dX), yList[0].count()-1);
-    const int b1 = qBound(0, (int)qFloor((hi - xMin)/dX), yList[0].count()-1);
-    unsigned long s = 0;
-    for( int b = b0; b <= b1; b++ ) s += (unsigned long)yList[0][b];
-    return s;
-  }
 
   void SetGateRate(int k, bool valid, double r){
     if( k < 0 || k >= gates.size() ) return;
@@ -523,10 +484,6 @@ public:
     static const QColor c[MaxGates] = { QColor(200, 0,   0),   QColor(170, 0, 170),
                                         QColor(0, 120,   0),   QColor(230, 130, 0) };
     return c[( id % MaxGates + MaxGates ) % MaxGates];
-  }
-  static QString gateColorName(int id){
-    static const char * n[MaxGates] = { "red", "magenta", "green", "orange" };
-    return QString(n[( id % MaxGates + MaxGates ) % MaxGates]);
   }
 
   void SetColor(QColor color, unsigned short ID = 0) {
@@ -605,8 +562,6 @@ public:
     if( isVisible() ) UpdatePlot();
   }
   
-  void SetLineTitle(QString title, int lineID = 0) { graph(lineID)->setName(title);  }
-  void SetXTitle(QString xTitle) { xAxis->setLabel(xTitle);}
 
   void Rebin(int xbin, double xmin, double xmax){
     // DebugPrint("%s", "Histogram1D");
@@ -735,12 +690,6 @@ public:
     SetLabel(txt[2], "Over Flow : " + QString::number(overFlow));
   }
 
-  void Print(unsigned int ID = 0){
-    for( int i = 0; i < xList.count(); i++){
-      printf("%f  %f\n", xList[i], yList[ID][i]);
-    }
-  }
-
   void SetRateKey(const QString & k){ rateKey = k; }
   QString RateKey() const { return rateKey; }
 
@@ -802,7 +751,7 @@ signals:
   void AboutToRebin();
   void ReBinned();
 
-  /// A gate was deleted; SingleSpectra drops its RateStore history so the key does not linger.
+  /// A gate was deleted; SingleHistograms drops its RateStore history so the key does not linger.
   void GateDeleted(const QString & storeKey);
 
   /// A gate's birth / rename. Key follows the gate ID (stable across renames); the owner
@@ -828,9 +777,8 @@ private:
   unsigned long underFlow;
   unsigned long overFlow;
 
-  //^---- instantaneous rate (see RateStore in SingleSpectra: the window math lives there)
-  QString rateKey;            ///< my channel name in the store, set by SingleSpectra at creation
-  int  rateIntervalMs = 1000; ///< right-click adjustable integration window
+  //^---- instantaneous rate (see RateStore in SingleHistograms: the window math lives there)
+  QString rateKey;            ///< my channel name in the store, set by SingleHistograms at creation
   bool haveRate = false;
   double dispRate = 0.0;
 

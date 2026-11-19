@@ -30,10 +30,7 @@ public:
               QWidget * parent = nullptr,
               QString defaultPath = QDir::homePath());
 
-  void SetXTitle(QString xTitle) { xAxis->setLabel(xTitle);}
-  void SetYTitle(QString yTitle) { yAxis->setLabel(yTitle);}
   void Rebin(int xbin, double xmin, double xmax, int ybin, double ymin, double ymax);
-  void RebinY(int ybin, double ymin, double ymax);
 
   void SetChannelMap(bool onOff, int tickStep = 1) { isChannelMap = onOff; this->tickStep = tickStep;}
 
@@ -91,7 +88,6 @@ public:
   };
 
   const QList<Cut> & GetCuts() const { return cutList; } // may contain deleted (empty-poly) entries
-  void PrintCutEntry() const;
 
   double GetXNBin() const {return xBin;}
   double GetXMin()  const {return xMin;}
@@ -109,17 +105,6 @@ public:
   /// Public so tests can drive the exact flow of the "Create a Cut" action, which calls this.
   void BeginCreateCut(){ tempCut.clear(); tempCutID ++; isDrawCut = true; numCut ++; }
 
-  /// diagnostics: how many cells currently hold counts, and the map's live range
-  int CountPopulatedCells() const{
-    const int nx = colorMap->data()->keySize(), ny = colorMap->data()->valueSize();
-    int n = 0;
-    for( int ix = 0; ix < nx; ix++ ) for( int iy = 0; iy < ny; iy++ ){
-      const double v = colorMap->data()->cell(ix, iy);
-      if( !std::isnan(v) && v > 0. ) n++;
-    }
-    return n;
-  }
-  QRectF MapRange() const{ return QRectF(xMin, yMin, xMax-xMin, yMax-yMin); }
 
 signals:
   /// Same contract as the Histogram1D pair. Rebin() reaches QCPColorMapData::setSize(), which does
@@ -160,7 +145,6 @@ private:
   int lastPlottableID;
 
   QCPItemLine * line;
-  double oldMouseX = 0.0, oldMouseY = 0.0;
 
   bool isBusy;
   bool redrawOnShow = false;   ///< cleared while hidden; draw on the next show (see Clear)
@@ -416,13 +400,13 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
 
     if (event->button() == Qt::LeftButton && isDrawCut){
 
-      oldMouseX = xAxis->pixelToCoord(event->pos().x());
-      oldMouseY = yAxis->pixelToCoord(event->pos().y());
+      const double x = xAxis->pixelToCoord(event->pos().x());
+      const double y = yAxis->pixelToCoord(event->pos().y());
 
-      tempCut.push_back(QPointF(oldMouseX,oldMouseY));
+      tempCut.push_back(QPointF(x, y));
 
-      line->start->setCoords(oldMouseX, oldMouseY);
-      line->end->setCoords(oldMouseX, oldMouseY);
+      line->start->setCoords(x, y);
+      line->end->setCoords(x, y);
       line->setVisible(true);
 
       DrawCut();
@@ -432,7 +416,6 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
     if (event->button() == Qt::RightButton) rightMouseClickMenu(event);
   });
 
-  //connect( this, &QCustomPlot::mouseDoubleClick, this, [=](QMouseEvent *event){
   connect( this, &QCustomPlot::mouseDoubleClick, this, [=](){
     if( isDrawCut) {
       isDrawCut = false;
@@ -446,10 +429,6 @@ inline Histogram2D::Histogram2D(QString title, QString xLabel, QString yLabel, i
       }
       replot();
     }
-  });
-
-  connect(this, &QCustomPlot::mouseRelease, this, [=](){
-
   });
 }
 
@@ -561,10 +540,6 @@ inline  void Histogram2D::Rebin(int xbin, double xmin, double xmax, int ybin, do
 
 }
 
-inline  void Histogram2D::RebinY(int ybin, double ymin, double ymax){
-  Rebin(xBin-2, xMin, xMax, ybin, ymin, ymax);
-}
-
 inline void Histogram2D::Clear(){
   DebugPrint("%s", "Histogram2D");
   for( int i = 0; i < 3; i ++){
@@ -631,16 +606,6 @@ inline void Histogram2D::CommitCut(const QString & name){
   cutList.push_back(cut);
 }
 
-inline void Histogram2D::PrintCutEntry() const{
-  DebugPrint("%s", "Histogram2D");
-  if( numCut == 0 ) return;
-  printf("=============== There are %d cuts. (%lld)\n", numCut, cutList.count());
-  for( const Cut & cut : cutList ){
-    if( cut.poly.isEmpty() ) continue;
-    printf("%10s | %d \n", cut.name.toStdString().c_str(), cut.entries);
-  }
-}
-
 inline void Histogram2D::DrawCut(){
   DebugPrint("%s", "Histogram2D");
   //The histogram is the 1st plottable.
@@ -673,7 +638,7 @@ inline void Histogram2D::DrawCut(){
 }
 
 inline void Histogram2D::rightMouseClickMenu(QMouseEvent * event){
-  DebugPrint("%s", "SingleSpectra");
+  DebugPrint("%s", "SingleHistograms");
   usingMenu = true;
   setSelectionRectMode(QCP::SelectionRectMode::srmNone);
 
@@ -952,8 +917,6 @@ inline void Histogram2D::LoadCuts(QString cutFileName){
       qDebug() << "File read successfully from" << cutFileName;
       qDebug() << " Number of cut loaded " << numCut << ", " << cutList.count();
 
-      // PrintCutEntry();
-      // DrawCut();
       replot();
 
   } else {

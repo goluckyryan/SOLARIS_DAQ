@@ -7,9 +7,9 @@
 #include <QVector>
 
 #include "qcustomplot.h"
-#include "ClassDigitizer2Gen.h"
+class Digitizer2Gen;
 
-class SingleSpectra;
+class SingleHistograms;
 class InfluxDB;
 class RComboBox;
 class QListWidget;
@@ -20,7 +20,7 @@ class QCPGraph;
 //^====================================================
 //^ A companion "rate monitor": a QCustomPlot with X = time and Y = count rate [counts/s], one
 //^ trace per SUBSCRIBED RATESTORE KEY. Keys come from two pickers: a (digitizer, channel) pair
-//^ for a raw total, or any live key in SingleSpectra::rateStore -- which carries the per-channel
+//^ for a raw total, or any live key in SingleHistograms::rateStore -- which carries the per-channel
 //^ totals AND the 1D gate rates, with the display names registered by SampleRates(). The monitor
 //^ itself never counts: its timer pumps SampleRates() (so its tick is part of the sampling
 //^ clock) and then reads rateStore.Rate(key, timeBase). Adding a trace keeps the owner channel
@@ -30,7 +30,7 @@ class QCPGraph;
 //^ window over the window's actual elapsed time (before one full window exists it degrades to
 //^ elapsed-so-far, never a fake zero). The tick period equals the window, so consecutive points
 //^ tile back-to-back like MCS bins; a longer average = more counts per point = less Poisson
-//^ scatter (1/sqrt N). The window is linked app-wide (SingleSpectra::SetRateTimeBase).
+//^ scatter (1/sqrt N). The window is linked app-wide (SingleHistograms::SetRateTimeBase).
 //^ While hidden the timer is stopped -- closed means idle, never a silent plot loop.
 //^ While the DAQ is not running the window is likewise idle (acqOn gate); each DAQ start
 //^ resets the plot's absolute time to zero and erases the previous run's points.
@@ -39,11 +39,11 @@ class RateMonitor : public QWidget{
   Q_OBJECT
 
 public:
-  // ss is NOT owned and must outlive this widget (SingleSpectra deletes it in its own dtor).
-  RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleSpectra * ss, QWidget * parent = nullptr);
+  // ss is NOT owned and must outlive this widget (SingleHistograms deletes it in its own dtor).
+  RateMonitor(Digitizer2Gen ** digi, unsigned int nDigi, SingleHistograms * ss, QWidget * parent = nullptr);
   ~RateMonitor();
 
-  //^---- the shared rate time base, pushed from SingleSpectra::SetRateTimeBase. This window's
+  //^---- the shared rate time base, pushed from SingleHistograms::SetRateTimeBase. This window's
   //^     time-base combo is a second face of that ONE control; fromUser=false when the change
   //^     originated from the main window, so it updates here without echoing back.
   void SetTimeBase(int ms, bool fromUser = true);
@@ -54,17 +54,17 @@ public:
 
   /// MainWindow's InfluxDB singleton (may be null) + database + the persisted output
   /// preference. The checkbox self-disables (with an explanatory tooltip) without a
-  /// healthy connection; the preference itself is SingleSpectra's to persist.
+  /// healthy connection; the preference itself is SingleHistograms's to persist.
   void SetInflux(InfluxDB * db, const QString & database, bool out);
 
   //^---- the acquisition gate. The monitor only samples while DAQ runs: DAQStopped freezes the
   //^     plot (last frame, no loop), DAQStarted resets ABSOLUTE TIME TO ZERO -- the x clock
-  //^     restarts and the previous run's trace points are erased. (SingleSpectra drives both
+  //^     restarts and the previous run's trace points are erased. (SingleHistograms drives both
   //^     from its startTimer/stopTimer ACQ hooks, and tells a freshly created monitor too.)
   void DAQStarted();
   void DAQStopped();
 
-  //^---- SingleSpectra calls this when the gate picture changes WHILE the DAQ is idle (gate
+  //^---- SingleHistograms calls this when the gate picture changes WHILE the DAQ is idle (gate
   //^     drawn/loaded/renamed/deleted, a pane remounted): the picker lists what EXISTS, and
   //^     existence is announced by signals, not by samples. Safe to call any time.
   void RefreshStorePicker();          // relist live, untraced GATE keys (totals come via row 1)
@@ -102,7 +102,7 @@ private:
 
   Digitizer2Gen ** digi;
   unsigned int nDigi;
-  SingleSpectra * ss;       // not owned
+  SingleHistograms * ss;       // not owned
 
   QCustomPlot * plot;
   QTimer      * timer;
@@ -127,13 +127,13 @@ private:
   QVector<Trace> traces;
 
   QVector<QColor> palette;
-  int timeBaseMs = 1000;         // MIRROR of SingleSpectra::rateBaseMs; timer interval = window
+  int timeBaseMs = 1000;         // MIRROR of SingleHistograms::rateBaseMs; timer interval = window
   int windowSec = 300;           // keep the last five minutes
   bool acqOn = false;            // DAQ gate: no sampling, no timer, no pump until DAQStarted()
   bool yAutoBusy = false;        // we are setting the Y range ourselves; do not treat it as user action
   InfluxDB    * influx = nullptr;     // not owned
   QString      influxDb;
-  bool         influxOut = false;     // mirror of the checkbox (source of truth: SingleSpectra)
+  bool         influxOut = false;     // mirror of the checkbox (source of truth: SingleHistograms)
   bool         yFixed    = false;        // Y auto-rescale paused by a USER zoom (Unzoom resumes)
 };
 

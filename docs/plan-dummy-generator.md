@@ -27,7 +27,7 @@ of them break the feature outright.
 
 **1. With no hardware, there is no GUI to use.** [mainwindow.cpp:821](mainwindow.cpp#L821) gates on
 `nDigiConnected > 0` — so with every IP bogus, which is the whole point of a generator, there is no
-Start ACQ button, no SingleSpectra and no `Analyzer` object at all. Also
+Start ACQ button, no SingleHistograms and no `Analyzer` object at all. Also
 `maxNumChannelAcrossDigitizer` is only updated inside the `IsConnected()` branch, so it stays 0
 while `SetUpScalar()` still lays out channel rows.
 
@@ -155,7 +155,7 @@ Steps 1-3 are pure bug fixes with no new behaviour, so the feature lands on a st
    silently do nothing for *every* board.
    *Verify:* bogus IP + real board, Start/Stop ACQ, no crash; Scope still starts board 1.
 2. **Usable GUI with zero connected boards.** Move the `maxNumChannelAcrossDigitizer` update out of
-   the `IsConnected()` branch; gate SingleSpectra / Analyzer / Start ACQ on connected **plus**
+   the `IsConnected()` branch; gate SingleHistograms / Analyzer / Start ACQ on connected **plus**
    dummies, keeping hardware-only buttons on connected.
 3. **Dummy-safe ACQ and the save lockout.** Dummy branches in `StartACQ`/`StopACQ`/`SetDataFormat`;
    `OpenOutFile`/`SaveDataToFile` early-return; threads created for dummies; `StartACQ` restructured
@@ -177,7 +177,7 @@ Steps 1-3 are pure bug fixes with no new behaviour, so the feature lands on a st
 3. **The point of the change**: Channel A on board 0, B on board 1 — `tB - tA` shows a peak at zero
    with flat sidebands, and multiplicity broadens as the window widens. First end-to-end exercise of
    the cross-board merge.
-4. SingleSpectra shows the generated singles at the configured rate and energy distribution.
+4. SingleHistograms shows the generated singles at the configured rate and energy distribution.
 5. **No file is written** during a saving run with dummies.
 6. Start/stop with an unreachable IP no longer crashes.
 7. Arm the generator after the Analyzer window is open, then enable analysis — the board is picked
@@ -195,5 +195,5 @@ ordering bug would be hidden at exactly the moment you are looking for it.
 - `monotonicityViolations` is both the generator's correctness signal and the tripwire for the
   real-hardware per-board sorting assumption. A generator bug could be misread as a hardware
   finding. The console test is the authority.
-- Synthetic data now appears in SingleSpectra and the Analyzer, so window titles and the status line
+- Synthetic data now appears in SingleHistograms and the Analyzer, so window titles and the status line
   must make it obvious which boards are fake.

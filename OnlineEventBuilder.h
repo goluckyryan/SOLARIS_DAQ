@@ -69,7 +69,7 @@ public:
   unsigned GetStallTimeout() const { return stallTimeoutMs; }
 
   /// Start from "now": every cursor jumps to its ring's current write index, so whatever is
-  /// already buffered is skipped. Same idea as SingleSpectra::ClearInternalDataCount(). Call this
+  /// already buffered is skipped. Same idea as SingleHistograms::ClearInternalDataCount(). Call this
   /// on ACQ start — StartACQ() restarts the board timestamp counter but does NOT clear the host
   /// ring, so without it the builder would see pre-reset hits with huge timestamps ahead of new
   /// hits near zero. Does not touch the counters; use ResetStat() for those.

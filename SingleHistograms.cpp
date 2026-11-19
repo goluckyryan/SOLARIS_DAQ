@@ -2,12 +2,8 @@
 
 #include "RateMonitor.h"
 
-#include <QValueAxis>
-#include <QElapsedTimer>
 #include <cmath>
-#include <QGroupBox>
 #include <QStandardItemModel>
-#include <QLabel>
 #include <QHBoxLayout>
 #include <QRandomGenerator>
 #include <QScreen>
@@ -15,8 +11,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 
-SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent) : QMainWindow(parent){
-  DebugPrint("%s", "SingleSpectra");
+SingleHistograms::SingleHistograms(Digitizer2Gen ** digi, unsigned int nDigi, QString rawDataPath, QMainWindow * parent) : QMainWindow(parent){
+  DebugPrint("%s", "SingleHistograms");
   this->digi = digi;
   this->nDigi = nDigi;
   this->settingPath       = rawDataPath + "/HistogramSettings.json";
@@ -132,7 +128,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     ctrlLayout->addWidget(lbSettingPath, 1, 0, 1, 9);
 
     QPushButton * bnSaveButton = new QPushButton("Save Hist. Settings", this);
-    connect(bnSaveButton, &QPushButton::clicked, this, &SingleSpectra::SaveSetting);
+    connect(bnSaveButton, &QPushButton::clicked, this, &SingleHistograms::SaveSetting);
     
     //^---- Auto save: every change schedules one debounced write (quiet 1.5 s, cap 5 s).
     //^     Off = the button (and the close flush) do everything, like before this existed.
@@ -174,7 +170,7 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
     
     autoSaveTimer = new QTimer(this);
     autoSaveTimer->setObjectName("autoSaveTimer");
-    connect(autoSaveTimer, &QTimer::timeout, this, &SingleSpectra::autoSaveTick);
+    connect(autoSaveTimer, &QTimer::timeout, this, &SingleHistograms::autoSaveTick);
 
     // RateMonitor: a separate window that plots the total-entry (in-range) count rate over time
     // for whatever channels the user adds there. Created lazily on first click, then raised.
@@ -262,8 +258,8 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
         if( digi[i]->GetFPGAType() == DPPType::PSD ){
           hist[i][j]->AddDataList("Short Energy", Qt::green);
         }
-        connect(hist[i][j], &Histogram1D::AboutToRebin, this, &SingleSpectra::BeginHistogramEdit);
-        connect(hist[i][j], &Histogram1D::ReBinned,     this, &SingleSpectra::EndHistogramEdit);
+        connect(hist[i][j], &Histogram1D::AboutToRebin, this, &SingleHistograms::BeginHistogramEdit);
+        connect(hist[i][j], &Histogram1D::ReBinned,     this, &SingleHistograms::EndHistogramEdit);
         connect(hist[i][j], &Histogram1D::GateDeleted,  this, [this](const QString & k){
           rateStore.Drop(k);
           if( rateMonitor ) rateMonitor->RefreshStorePicker();
@@ -285,8 +281,8 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
       hist2D[i] = new Histogram2D("Digi-" + QString::number(digi[i]->GetSerialNumber()), "Channel", "Raw Energy [ch]", digi[i]->GetNChannels(), 0, digi[i]->GetNChannels(), nBin, eMin, eMax);
       hist2D[i]->SetChannelMap(true, digi[i]->GetNChannels() < 20  ? 1 : 4);
       hist2D[i]->Rebin(digi[i]->GetNChannels(), -0.5, digi[i]->GetNChannels()+0.5, nBin, eMin, eMax);
-      connect(hist2D[i], &Histogram2D::AboutToRebin, this, &SingleSpectra::BeginHistogramEdit);
-      connect(hist2D[i], &Histogram2D::ReBinned,     this, &SingleSpectra::EndHistogramEdit);
+      connect(hist2D[i], &Histogram2D::AboutToRebin, this, &SingleHistograms::BeginHistogramEdit);
+      connect(hist2D[i], &Histogram2D::ReBinned,     this, &SingleHistograms::EndHistogramEdit);
     }
 
     BuildPanes();
@@ -341,8 +337,8 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
   // this is another way
   // timer = new QTimer();
   // timer->moveToThread(workerThread);
-  // connect(this, &SingleSpectra::startWorkerTimer, timer, static_cast<void(QTimer::*)(int)>(&QTimer::start));
-  // connect(this, &SingleSpectra::stopWorkerTimer, timer, &QTimer::stop);
+  // connect(this, &SingleHistograms::startWorkerTimer, timer, static_cast<void(QTimer::*)(int)>(&QTimer::start));
+  // connect(this, &SingleHistograms::stopWorkerTimer, timer, &QTimer::stop);
 
   isFillingHistograms = false;
   connect(timer, &QTimer::timeout, histWorker, &HistWorker::FillHistograms);
@@ -352,14 +348,14 @@ SingleSpectra::SingleSpectra(Digitizer2Gen ** digi, unsigned int nDigi, QString 
   /// and the repaint no longer jitters with the worker's pass time under load.
   replotTimer = new QTimer(this);
   replotTimer->setTimerType(Qt::CoarseTimer);
-  connect(replotTimer, &QTimer::timeout, this, &SingleSpectra::ReplotHistograms);
+  connect(replotTimer, &QTimer::timeout, this, &SingleHistograms::ReplotHistograms);
 
   workerThread->start();
 
 }
 
-SingleSpectra::~SingleSpectra(){
-  DebugPrint("%s", "SingleSpectra");
+SingleHistograms::~SingleHistograms(){
+  DebugPrint("%s", "SingleHistograms");
 
   timer->stop();
 
@@ -389,13 +385,13 @@ SingleSpectra::~SingleSpectra(){
   }
 }
 
-void SingleSpectra::SetInflux(InfluxDB * db, const QString & database){
+void SingleHistograms::SetInflux(InfluxDB * db, const QString & database){
   influx = db;
   influxDatabase = database;
   if( rateMonitor ) rateMonitor->SetInflux( influx, influxDatabase, influxOut );
 }
 
-void SingleSpectra::SetInfluxOut(bool on){
+void SingleHistograms::SetInfluxOut(bool on){
   if( influxOut == on ) return;
   influxOut = on;
   if( rateMonitor ) rateMonitor->SetInflux( influx, influxDatabase, influxOut );
@@ -406,7 +402,7 @@ void SingleSpectra::SetInfluxOut(bool on){
 //^ the RateStore sampling clock restarts, its sample histories are wiped (the counters were
 //^ zeroed by the matching stopTimer), and the RateMonitor resets its absolute-time axis and
 //^ erases the previous run's traces. One DAQ run == one time zero.
-void SingleSpectra::startTimer(){
+void SingleHistograms::startTimer(){
   timer->start(maxFillTimeinMilliSec);
   replotTimer->start(replotIntervalMs);
 
@@ -416,7 +412,7 @@ void SingleSpectra::startTimer(){
   if( rateMonitor ) rateMonitor->DAQStarted();
 }
 
-void SingleSpectra::stopTimer(){
+void SingleHistograms::stopTimer(){
   timer->stop();
   replotTimer->stop();
   isFillingHistograms = false; // this will also break the FillHistogram do-loop
@@ -426,8 +422,8 @@ void SingleSpectra::stopTimer(){
   if( rateMonitor ) rateMonitor->DAQStopped();
 }
 
-void SingleSpectra::ClearInternalDataCount(){
-  DebugPrint("%s", "SingleSpectra");
+void SingleHistograms::ClearInternalDataCount(){
+  DebugPrint("%s", "SingleHistograms");
   for( unsigned int i = 0; i < nDigi; i++){
     for( int ch = 0; ch < digi[i]->GetNChannels() ; ch++) {
       lastFilledIndex[i][ch] = digi[i]->ringBuffer[ch].index();
@@ -440,7 +436,7 @@ void SingleSpectra::ClearInternalDataCount(){
 //^ widget. Every function here except AddCount1D/AddCount2D is GUI thread only, and the resize
 //^ ones additionally need the suspendFilling fence, because they reallocate under the worker.
 
-void SingleSpectra::ResizeCounts1D(int d, int ch){
+void SingleHistograms::ResizeCounts1D(int d, int ch){
   if( d < 0 || d >= (int)MaxNumberOfDigitizer || ch < 0 || ch >= MaxNumberOfChannel ) return;
   Histogram1D * w = hist[d][ch];
   if( w == nullptr ) return;
@@ -463,7 +459,7 @@ void SingleSpectra::ResizeCounts1D(int d, int ch){
   h.total.store(0); h.under.store(0); h.over.store(0);
 }
 
-void SingleSpectra::ResizeCounts2D(int d){
+void SingleHistograms::ResizeCounts2D(int d){
   if( d < 0 || d >= (int)MaxNumberOfDigitizer ) return;
   if( hist2D[d] == nullptr ) return;
 
@@ -479,7 +475,7 @@ void SingleSpectra::ResizeCounts2D(int d){
   h.total.store(0); h.out.store(0);
 }
 
-void SingleSpectra::ClearAllCounts(){
+void SingleHistograms::ClearAllCounts(){
   for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++ ){
     for( int ch = 0; ch < MaxNumberOfChannel; ch++ ){
       H1Counts & h = c1[i][ch];
@@ -501,7 +497,7 @@ void SingleSpectra::ClearAllCounts(){
 /// The counters use fetch_add on purpose, though this worker is the only filler: "Clear All Hist."
 /// zeroes them from the GUI thread, and a load+store here could write a pre-clear value back. The
 /// RMWs cost ~5 ns per hit more (measured), well under the 1 GbE readout rate's budget.
-void SingleSpectra::AddCount1D(int d, int ch, int series, double v){
+void SingleHistograms::AddCount1D(int d, int ch, int series, double v){
   H1Counts & h = c1[d][ch];
   if( series >= h.nSeries || !h.c[series] ) return;
 
@@ -520,7 +516,7 @@ void SingleSpectra::AddCount1D(int d, int ch, int series, double v){
   if( b >= 0 && b < h.nBin ) h.c[series][b].fetch_add(1, std::memory_order_relaxed);
 }
 
-void SingleSpectra::AddCount2D(int d, int ch, double e){
+void SingleHistograms::AddCount2D(int d, int ch, double e){
   H2Counts & h = c2[d];
   if( !h.c ) return;
   h.total.fetch_add(1, std::memory_order_relaxed);
@@ -535,10 +531,9 @@ void SingleSpectra::AddCount2D(int d, int ch, double e){
 //^======================================================== RateMonitor accessors
 //^ SetMonitorSelected is GUI-thread only: turning a channel on snaps lastFilledIndex, and that
 //^ array is a plain long the fill worker increments concurrently, so the write is fenced with
-//^ suspendFilling exactly like SetPaneSource()/BeginHistogramEdit(). GetTotal1D is a bare atomic
-//^ load -- the same one the monitor needs and nothing more.
+//^ suspendFilling exactly like SetPaneSource()/BeginHistogramEdit().
 
-void SingleSpectra::SetMonitorSelected(int d, int ch, bool on){
+void SingleHistograms::SetMonitorSelected(int d, int ch, bool on){
   if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= std::min((int)digi[d]->GetNChannels(), (int)MaxNumberOfChannel) ) return; // not a real channel
 
   if( on && !monitorSelected[d][ch].load(std::memory_order_relaxed) ){
@@ -552,12 +547,7 @@ void SingleSpectra::SetMonitorSelected(int d, int ch, bool on){
   monitorSelected[d][ch].store(on, std::memory_order_relaxed);
 }
 
-unsigned long SingleSpectra::GetTotal1D(int d, int ch) const{
-  if( d < 0 || d >= (int)MaxNumberOfDigitizer || ch < 0 || ch >= MaxNumberOfChannel ) return 0;
-  return (unsigned long)c1[d][ch].total.load(std::memory_order_relaxed);
-}
-
-void SingleSpectra::PublishHist1D(int d, int ch){
+void SingleHistograms::PublishHist1D(int d, int ch){
   if( hist[d][ch] == nullptr ) return;
   H1Counts & h = c1[d][ch];
   if( h.nBin <= 0 ) return;
@@ -586,7 +576,7 @@ void SingleSpectra::PublishHist1D(int d, int ch){
 //^ the atomics (series 0, bin resolution) -- never from the widget's published bins -- so a
 //^ monitored-but-unmounted channel yields true counts. The decrease-on-clear re-seed lives in
 //^ the store. Meta labels registered here are what RateMonitor's picker shows.
-void SingleSpectra::SampleRates(){
+void SingleHistograms::SampleRates(){
   if( !sampleClock.isValid() ) return;
   const qint64 now = sampleClock.elapsed();
 
@@ -632,11 +622,11 @@ void SingleSpectra::SampleRates(){
   }
 }
 
-//^ Push the ONE shared rate time base to every consumer: all histogram total/gate labels (via the
-//^ per-widget mirror), the store retention horizon (via the next SampleRates/Rate call), and the
-//^ RateMonitor window if it is open. cbRateBase and the monitor's combo are two faces of this one
+//^ Push the ONE shared rate time base to every consumer: the histogram total/gate labels and the
+//^ store retention horizon pick it up on the next SampleRates/Rate call (the publish path), and
+//^ the RateMonitor window if it is open. cbRateBase and the monitor's combo are two faces of this one
 //^ value; the isSignalSlotActive guard keeps the combo write-back from re-entering the slot.
-void SingleSpectra::SetRateTimeBase(int ms){
+void SingleHistograms::SetRateTimeBase(int ms){
   rateBaseMs = qBound(100, ms, 3600000);
 
   bool oldFlag = isSignalSlotActive;
@@ -645,28 +635,17 @@ void SingleSpectra::SetRateTimeBase(int ms){
   if( index >= 0 ) cbRateBase->setCurrentIndex(index);
   isSignalSlotActive = oldFlag;
 
-  for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++ )
-    for( int j = 0; j < MaxNumberOfChannel; j++ )
-      if( hist[i][j] ) hist[i][j]->SetRateIntervalMs( rateBaseMs );
-
   if( rateMonitor ) rateMonitor->SetTimeBase(rateBaseMs, false); // do not echo back
   markSettingsDirty();
 }
 
-QString SingleSpectra::TotalRateKey(int d, int ch) const{
+QString SingleHistograms::TotalRateKey(int d, int ch) const{
   if( d < 0 || d >= (int)nDigi || ch < 0 || ch >= MaxNumberOfChannel ) return QString();
   if( hist[d][ch] == nullptr ) return QString();
   return hist[d][ch]->RateKey();
 }
 
-bool SingleSpectra::RateChannelLive(const QString & key) const{
-  const int d = rateStore.OwnerD(key), ch = rateStore.OwnerCh(key);
-  if( d < 0 || ch < 0 || d >= (int)nDigi || ch >= MaxNumberOfChannel ) return false;
-  return histVisibility[d][ch].load(std::memory_order_relaxed) ||
-         monitorSelected[d][ch].load(std::memory_order_relaxed);
-}
-
-void SingleSpectra::PublishHist2D(int d){
+void SingleHistograms::PublishHist2D(int d){
   if( hist2D[d] == nullptr ) return;
   H2Counts & h = c2[d];
   if( !h.c ) return;
@@ -684,8 +663,8 @@ void SingleSpectra::PublishHist2D(int d){
 
 //^#======================================================== the split grid
 
-void SingleSpectra::BuildPanes(){
-  DebugPrint("%s", "SingleSpectra");
+void SingleHistograms::BuildPanes(){
+  DebugPrint("%s", "SingleHistograms");
 
   QFont smallFont = font();
   smallFont.setPointSize( qMax(7, smallFont.pointSize() - 1) );
@@ -749,7 +728,7 @@ void SingleSpectra::BuildPanes(){
   }
 }
 
-void SingleSpectra::RebuildChannelCombo(int p){
+void SingleHistograms::RebuildChannelCombo(int p){
   if( p < 0 || p >= MaxNumberOfPane ) return;
 
   bool oldFlag = isSignalSlotActive;
@@ -772,19 +751,19 @@ void SingleSpectra::RebuildChannelCombo(int p){
   isSignalSlotActive = oldFlag;
 }
 
-void SingleSpectra::WaitForFillToDrain(){
+void SingleHistograms::WaitForFillToDrain(){
   // suspendFilling must already be set; FillHistograms() then backs off at its next entry,
   // and also at its next channel -- see the loop conditions there.
   int guard = 0;
   while( isFillingHistograms && guard++ < 200 ) QThread::msleep(1);
 }
 
-void SingleSpectra::BeginHistogramEdit(){
+void SingleHistograms::BeginHistogramEdit(){
   suspendFilling = true;
   WaitForFillToDrain();
 }
 
-void SingleSpectra::EndHistogramEdit(){
+void SingleHistograms::EndHistogramEdit(){
 
   /// Re-sync the counters to the binning the widget has just moved to, before letting the worker
   /// back in. sender() identifies which plot rebinned -- the counters are per histogram, and one
@@ -802,7 +781,7 @@ void SingleSpectra::EndHistogramEdit(){
   markSettingsDirty();   // the geometry the save will write just changed
 }
 
-void SingleSpectra::SetPaneSource(int p, int d, int ch){
+void SingleHistograms::SetPaneSource(int p, int d, int ch){
   if( p < 0 || p >= MaxNumberOfPane ) return;
 
   //---- normalise the request
@@ -882,7 +861,7 @@ void SingleSpectra::SetPaneSource(int p, int d, int ch){
   markSettingsDirty();   // pane sources are part of the saved layout
 }
 
-void SingleSpectra::PaneSelectionChanged(int p){
+void SingleHistograms::PaneSelectionChanged(int p){
   suspendFilling = true;
   WaitForFillToDrain();
 
@@ -895,8 +874,8 @@ void SingleSpectra::PaneSelectionChanged(int p){
   UpdateRefreshRate();
 }
 
-void SingleSpectra::ApplySplit(int rows, int cols, bool autoAssign){
-  DebugPrint("%s", "SingleSpectra");
+void SingleHistograms::ApplySplit(int rows, int cols, bool autoAssign){
+  DebugPrint("%s", "SingleHistograms");
 
   // clamp : cbSplit only offers sane values, a hand-edited settings file may not
   rows = qBound(1, rows, 4);
@@ -972,7 +951,7 @@ void SingleSpectra::ApplySplit(int rows, int cols, bool autoAssign){
   UpdateRefreshRate();
 }
 
-void SingleSpectra::RefreshComboEnables(){
+void SingleHistograms::RefreshComboEnables(){
   // same idea as Scope::ProbeChange() : grey out what another pane already shows
   int nPane = NumberOfPanes();
 
@@ -997,7 +976,7 @@ void SingleSpectra::RefreshComboEnables(){
   }
 }
 
-void SingleSpectra::UpdateVisibilityFlags(){
+void SingleHistograms::UpdateVisibilityFlags(){
   for( unsigned int i = 0; i < MaxNumberOfDigitizer; i++){
     hist2DVisibility[i] = false;
     for( int j = 0; j < MaxNumberOfChannel; j++) histVisibility[i][j] = false;
@@ -1019,7 +998,7 @@ void SingleSpectra::UpdateVisibilityFlags(){
   if( rateMonitor ) rateMonitor->RefreshStorePicker();
 }
 
-void SingleSpectra::UpdateRefreshRate(){
+void SingleHistograms::UpdateRefreshRate(){
   int nPane = NumberOfPanes();
 
   int n1D = 0, n2D = 0;
@@ -1048,7 +1027,7 @@ void SingleSpectra::UpdateRefreshRate(){
   lbEffRefresh->setText( QString("Replot: %1 ms (%2 plot%3)").arg(replotIntervalMs).arg(n1D + n2D).arg(n1D + n2D == 1 ? "" : "s") );
 }
 
-void SingleSpectra::FillHistograms(){
+void SingleHistograms::FillHistograms(){
 
   /// Atomic mirrors, not isVisible() and checkState(): this runs on the worker thread and QWidget
   /// accessors are not safe to call from one. The GUI writes them, see showEvent/hideEvent and
@@ -1066,10 +1045,9 @@ void SingleSpectra::FillHistograms(){
     isFillingHistograms = false;
     return;
   }
-  // printf("####################### SingleSpectra::%s\n", __func__);
+  // printf("####################### SingleHistograms::%s\n", __func__);
   // qDebug() << __func__ << "| thread:" << QThread::currentThreadId();
 
-  long totalFilled = 0;
   bool timeout = false;
 
   /// One pass is budgeted. Without this a single pass can drain 20 boards x 64 channels x a full
@@ -1123,17 +1101,15 @@ void SingleSpectra::FillHistograms(){
         }
       }
 
-      totalFilled += filled;
       // printf("Digi-%2d ch-%2d | event filled %ld / %ld\n", ID, ch, filled, gap);
     }
   }
-  (void) totalFilled;
 
   isFillingHistograms = false;
 
 }
 
-void SingleSpectra::ReplotHistograms(){
+void SingleHistograms::ReplotHistograms(){
 
   // qDebug() << __func__ << "| thread:" << QThread::currentThreadId();
 
@@ -1165,12 +1141,12 @@ void SingleSpectra::ReplotHistograms(){
 
 }
 
-void SingleSpectra::showEvent(QShowEvent * event){
+void SingleHistograms::showEvent(QShowEvent * event){
   QMainWindow::showEvent(event);
   windowVisible = true;
 }
 
-void SingleSpectra::hideEvent(QHideEvent * event){
+void SingleHistograms::hideEvent(QHideEvent * event){
   QMainWindow::hideEvent(event);
   windowVisible = false;
 }
@@ -1178,14 +1154,14 @@ void SingleSpectra::hideEvent(QHideEvent * event){
 //^ The Rate Monitor is a companion top-level window: Qt parents it for ownership/stacking only
 //^ and does NOT auto-close top-levels when the parent window closes. Closing it here hides it
 //^ (hideEvent stops its timer -- no zombie sampling), its traces and drain-holds are preserved,
-//^ and ~SingleSpectra still deletes it. So "closed together" without losing the user's setup.
-void SingleSpectra::closeEvent(QCloseEvent * event){
+//^ and ~SingleHistograms still deletes it. So "closed together" without losing the user's setup.
+void SingleHistograms::closeEvent(QCloseEvent * event){
   if( rateMonitor ) rateMonitor->close();
   QMainWindow::closeEvent(event);
 }
 
-  QByteArray SingleSpectra::buildSettingsJson(){
-    DebugPrint("%s", "SingleSpectra");
+  QByteArray SingleHistograms::buildSettingsJson(){
+    DebugPrint("%s", "SingleHistograms");
  
     QJsonObject root;
     root["formatVersion"] = 2;
@@ -1286,12 +1262,12 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
 
  //^ Save = build here (reads widgets), write on a one-shot thread (may be NFS). The manual
  //^ button lands here; markSettingsDirty()/the timer reach it through the same path.
- void SingleSpectra::SaveSetting(){
+ void SingleHistograms::SaveSetting(){
    if( settingsDirty ){ settingsDirty = false; if( autoSaveTimer ) autoSaveTimer->stop(); }
    writeJsonAsync( buildSettingsJson() );
  }
 
- void SingleSpectra::writeJsonAsync(const QByteArray & data){
+ void SingleHistograms::writeJsonAsync(const QByteArray & data){
    if( fileWriterBusy.exchange(true) ){        // a write is in flight: coalesce, newest wins
      filePendingData = data;
      filePending = true;
@@ -1305,7 +1281,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
    t->start();
  }
 
- void SingleSpectra::onWriteDone(bool ok){
+ void SingleHistograms::onWriteDone(bool ok){
    if( !ok ) printf("SaveSetting: FAILED to write %s\n", settingPath.toStdString().c_str());
    else      printf("Saved Histogram Settings to %s\n",   settingPath.toStdString().c_str());
    fileWriterBusy.store(false);
@@ -1320,7 +1296,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
  //^ Any settings-affecting change routes through here. Quiet-period debounce: flush 1.5 s
  //^ after the LAST mark, with a 5 s cap from the FIRST so endless editing still lands on
  //^ disk. When the checkbox is off the marks are simply dropped (button + dtor still save).
- void SingleSpectra::markSettingsDirty(){
+ void SingleHistograms::markSettingsDirty(){
    if( settingsLoading ) return;   // LoadSetting's own restores must not re-dirty
    if( !chkAutoSave || !chkAutoSave->isChecked() ) return;
    if( !settingsDirty ){
@@ -1336,7 +1312,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
 
  //^ the autoSaveTimer tick (250 ms poll while dirty). Quiet = "wait time before Auto save"
  //^ spinbox; the cap, max(5 s, 2x quiet), bounds how long endless editing can postpone it.
- void SingleSpectra::autoSaveTick(){
+ void SingleHistograms::autoSaveTick(){
    if( !settingsDirty ) return;
    const qint64 quiet = sbAutoSaveQuietMs ? (qint64) sbAutoSaveQuietMs->value() : 1500;
    const qint64 cap   = qMax( 5000, 2 * quiet );
@@ -1350,7 +1326,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
 
  //^ Final state, always written, always synchronously: the last thing the window ever does
  //^ with its settings. Waits briefly for an in-flight async write, then owns the file.
- void SingleSpectra::flushSettingsBlocking(){
+ void SingleHistograms::flushSettingsBlocking(){
    settingsDirty = false;
    if( autoSaveTimer ) autoSaveTimer->stop();
    QElapsedTimer w; w.start();
@@ -1369,14 +1345,14 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
  //^ Each Rebin is wrapped in AboutToRebin/ReBinned, the same pair the right-click menu emits,
  //^ so a LoadSetting mid-run (tests, future re-read) resizes the count arrays safely instead
  //^ of relying on the old "runs before the worker starts" assumption.
- void SingleSpectra::LoadSetting(){
-   DebugPrint("%s", "SingleSpectra");
+ void SingleHistograms::LoadSetting(){
+   DebugPrint("%s", "SingleHistograms");
 
    //^ Everything this function applies (Rebin, Clear/RestoreGate, SetPaneSource,
    //^ SetRateTimeBase, refresh) is a markSettingsDirty() source; suppress marking for the
    //^ whole load so opening the app never rewrites the file it just read. RAII: early
    //^ returns (missing/corrupt file, migration) still clear it.
-   struct LoadGuard { SingleSpectra * s; ~LoadGuard(){ s->settingsLoading = false; } } _lg{this};
+   struct LoadGuard { SingleHistograms * s; ~LoadGuard(){ s->settingsLoading = false; } } _lg{this};
    settingsLoading = true;
 
    QFile file(settingPath);
@@ -1479,7 +1455,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
         }
         //^---- (v1 "rateMs" is gone: the time base is global, applied above.)
 
-        //^---- The gates are REPLACED, not appended. MainWindow::OpenSingleSpectra() runs this on
+        //^---- The gates are REPLACED, not appended. MainWindow::OpenSingleHistograms() runs this on
         //^     an already-populated window whose gates came from a previous LoadSetting, and
         //^     RestoreGate() always creates -- without this clear every reopen doubles the list
         //^     (a real file once held Gate-6/Gate-8 twice). ClearGates() emits GateDeleted per
@@ -1559,7 +1535,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
  //^======================================================== legacy txt reader (frozen)
  //^ Kept verbatim from the pre-JSON LoadSetting for the one-time migration. Do not extend;
  //^ new fields go into the JSON reader/writer above.
- void SingleSpectra::ApplyLegacyTxtSettings(QFile & file){
+ void SingleHistograms::ApplyLegacyTxtSettings(QFile & file){
 
   if( file.open(QIODevice::Text | QIODevice::ReadOnly) ){
 
@@ -1676,7 +1652,7 @@ static bool writeSettingsFile(const QString & path, const QByteArray & data){
 
 }
 
-QVector<int> SingleSpectra::generateNonRepeatedCombination(int size) {
+QVector<int> SingleHistograms::generateNonRepeatedCombination(int size) {
   QVector<int> combination;
   for (int i = 0; i < size; ++i) combination.append(i);
 

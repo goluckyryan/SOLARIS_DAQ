@@ -9,7 +9,7 @@
 ///
 /// This exists because HitSummary (ClassDigitizer2Gen.h) carries only {energy, energy_short}:
 /// the timestamp is decoded and then thrown away at the ring push, which makes event building
-/// impossible. LeanHit is pushed alongside HitSummary, into a separate ring, so SingleSpectra's
+/// impossible. LeanHit is pushed alongside HitSummary, into a separate ring, so SingleHistograms's
 /// hot path and memory footprint are untouched.
 ///
 /// Contract notes for anyone touching this struct:

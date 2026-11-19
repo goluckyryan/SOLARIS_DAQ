@@ -12,10 +12,8 @@
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QElapsedTimer>
-#include <QComboBox>
 #include <QGridLayout>
 #include <QLineSeries>
-#include <QRubberBand>
 #include <QMouseEvent>
 #include <QGestureEvent>
 

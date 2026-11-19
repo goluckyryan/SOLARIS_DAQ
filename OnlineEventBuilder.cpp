@@ -72,7 +72,7 @@ void OnlineEventBuilder::SnapshotIndices(){
 
 /// Advance board b by one hit, leaving it in s.front. Returns false when the ring is exhausted.
 ///
-/// The lap check is per copy, not once before the loop. SingleSpectra::FillHistograms() checks the
+/// The lap check is per copy, not once before the loop. SingleHistograms::FillHistograms() checks the
 /// gap once and then drains, which lets the producer lap it mid-loop; that costs a few smeared
 /// histogram entries there, but here it would mean building an event out of torn hits. This
 /// follows the stricter recipe from Scope::UpdateScope() (scope.cpp:752-767) and the contract

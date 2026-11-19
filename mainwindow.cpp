@@ -8,12 +8,8 @@
 #include <QMessageBox>
 #include <QDir>
 #include <QFile>
-#include <QRandomGenerator>
 #include <QVariant>
 #include <QCoreApplication>
-//#include <QChartView>
-//#include <QValueAxis>
-#include <QStandardItemModel>
 #include <QApplication>
 #include <QDateTime>
 #include <QProcess>
@@ -95,7 +91,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     lbFileSize.clear();
 
     scalarThread = new TimingThread(); // 2 sec is default
-    //scalarThread->SetWaitTimeSec(2); 
     connect(scalarThread, &TimingThread::TimeUp, this, &MainWindow::UpdateScalar);
 
   }
@@ -103,7 +98,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
   solarisSetting = nullptr;
   scope = nullptr;
   digiSetting = nullptr;
-  singleSpectra = nullptr;
+  singleHistograms = nullptr;
   analyzer = nullptr;
 
   QWidget * mainLayoutWidget = new QWidget(this);
@@ -153,9 +148,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     bnSyncHelper->setEnabled(false);
     connect(bnSyncHelper, &QPushButton::clicked, this, &MainWindow::OpenSyncHelper);
 
-    bnSingleSpectra = new QPushButton("Single Spectra", this);
-    bnSingleSpectra->setEnabled(false);
-    connect(bnSingleSpectra, &QPushButton::clicked, this, &MainWindow::OpenSingleSpectra);
+    bnSingleHistograms = new QPushButton("Single Histograms", this);
+    bnSingleHistograms->setEnabled(false);
+    connect(bnSingleHistograms, &QPushButton::clicked, this, &MainWindow::OpenSingleHistograms);
 
     bnAnalyzer = new QPushButton("Analyzer", this);
     bnAnalyzer->setEnabled(false);
@@ -174,7 +169,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
     layout1->addWidget(bnDigiSettings, 2, 1);
     layout1->addWidget(bnSOLSettings, 2, 2, 1, 2);
 
-    layout1->addWidget(bnSingleSpectra, 3, 0);
+    layout1->addWidget(bnSingleHistograms, 3, 0);
     layout1->addWidget(bnAnalyzer, 3, 1);
 
     layout1->setColumnStretch(0, 2);
@@ -345,9 +340,9 @@ MainWindow::~MainWindow(){
   remove(DAQLockFile);
 
   printf("-------- delete single spectra\n");
-  if( singleSpectra ){
-    delete singleSpectra;
-    singleSpectra = nullptr;
+  if( singleHistograms ){
+    delete singleHistograms;
+    singleHistograms = nullptr;
   }
 
   printf("-------- delete analyzer\n");
@@ -519,7 +514,6 @@ int MainWindow::StartACQ(){
       lastAcceptedRate[i][ch] = 0;
     }
 
-    //digi[i]->SetPHADataFormat(1);// only save 1 trace
     int dataFormatID = cbDataFormat->currentData().toInt();
     digi[i]->SetDataFormat(dataFormatID);
 
@@ -542,12 +536,6 @@ int MainWindow::StartACQ(){
     }else{
       digi[i]->WriteValue(PHA::CH::WaveSaving, "OnRequest", -1);
     }
-
-    //Additional settings, it is better user to control
-    //if( cbDataFormat->currentIndex() <  2 )  {
-    //  digi[i]->WriteValue("/ch/0..63/par/WaveAnalogProbe0", "ADCInput");
-    //  digi[i]->WriteValue(PHA::CH::WaveSaving, "True", -1);
-    //}
 
     if( chkSaveRun->isChecked() ){
 
@@ -578,7 +566,7 @@ int MainWindow::StartACQ(){
   }
 
 
-  if( singleSpectra ) singleSpectra->startTimer();
+  if( singleHistograms ) singleHistograms->startTimer();
 
   if(chkSaveRun->isChecked() ){
     runStartDateTime = QDateTime::currentDateTime();
@@ -611,7 +599,6 @@ int MainWindow::StartACQ(){
   }
   isACQRunning = true;
   lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
-  //scalarThread->start();
   scalarOutputInflux = true;
 
   return 1;
@@ -641,7 +628,7 @@ void MainWindow::StopACQ(){
     }
   }
 
-  if ( singleSpectra ) singleSpectra->stopTimer();
+  if ( singleHistograms ) singleHistograms->stopTimer();
 
   //=============== Stop digitizer
   for( int i = nDigi - 1; i >= 0; i--){
@@ -908,9 +895,9 @@ void MainWindow::OpenDigitizers(){
     bnOpenDigitizers->setStyleSheet("");
     bnOpenScalar->setEnabled(true);
 
-    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath, this);
-    singleSpectra->SetInflux(influx, DatabaseName);   // may be null; the monitor self-disables
-    bnSingleSpectra->setEnabled(true);
+    singleHistograms = new SingleHistograms(digi, nDigi, rawDataPath, this);
+    singleHistograms->SetInflux(influx, DatabaseName);   // may be null; the monitor self-disables
+    bnSingleHistograms->setEnabled(true);
 
     analyzer = new Analyzer(digi, nDigi, this);
     if( influx ) analyzer->SetInflux(DatabaseIP, DatabaseToken, DatabaseName);   // may be null; the checkbox self-disables
@@ -1017,10 +1004,10 @@ void MainWindow::CloseDigitizers(){
     CleanUpScalar(); // this use digi->GetNChannels(); 
   }
 
-  if( singleSpectra ){
-    singleSpectra->close();
-    delete singleSpectra;
-    singleSpectra = NULL;
+  if( singleHistograms ){
+    singleHistograms->close();
+    delete singleHistograms;
+    singleHistograms = NULL;
   }
   /// Before digi[] goes: the Analyzer's builder holds pointers into each board's hitRing, and its
   /// destructor joins both worker threads.
@@ -1099,7 +1086,7 @@ void MainWindow::CloseDigitizers(){
   chkSaveRun->setEnabled(false);
   cbAutoRun->setEnabled(false);
   cbDataFormat->setEnabled(false);
-  bnSingleSpectra->setEnabled(false);
+  bnSingleHistograms->setEnabled(false);
   bnAnalyzer->setEnabled(false);
 
   bnProgramSettings->setEnabled(true);
@@ -1183,10 +1170,10 @@ void MainWindow::OpenScope(){
         }
         if( onOff){
           lbScalarACQStatus->setText("<font style=\"color: green;\"><b>ACQ On</b></font>");
-          if ( singleSpectra ) singleSpectra->startTimer();
+          if ( singleHistograms ) singleHistograms->startTimer();
         }else{
           lbScalarACQStatus->setText("<font style=\"color: red;\"><b>ACQ Off</b></font>");
-          if ( singleSpectra ) singleSpectra->stopTimer();
+          if ( singleHistograms ) singleHistograms->stopTimer();
         }
       });
 
@@ -1200,12 +1187,9 @@ void MainWindow::OpenScope(){
         digiSetting->EnableControl();
       }  
 
-      //scope->StartScope();
-
     }else{
       scope->show();
       scope->activateWindow();
-      //scope->StartScope();
       if( digiSetting ) digiSetting->EnableControl();
     }
   }
@@ -1429,12 +1413,10 @@ void MainWindow::SetUpScalar(){
 
   lbLastUpdateTime = new QLabel("Last update : ", scalar);
   lbLastUpdateTime->setAlignment(Qt::AlignCenter);
-  scalarLayout->removeWidget(lbLastUpdateTime);
   scalarLayout->addWidget(lbLastUpdateTime, 0, 1, 1, nDigi);
 
   lbScalarACQStatus = new QLabel("ACQ status", scalar);
   lbScalarACQStatus->setAlignment(Qt::AlignCenter);
-  scalarLayout->removeWidget(lbScalarACQStatus);
   scalarLayout->addWidget(lbScalarACQStatus, 1, 1, 1, nDigi);
 
   /// One container widget per column -- the channel numbers, then one per board -- instead of
@@ -1640,7 +1622,6 @@ void MainWindow::UpdateScalar(){
 
   if( influx && influx->GetDataLength() > 0 && scalarOutputInflux ){
     if( chkSaveRun->isChecked() ) influx->AddDataPoint("FileSize value=" + std::to_string(totalFileSize));
-    //influx->PrintDataPoints();
     influx->WriteData(DatabaseName.toStdString());
     influx->ClearDataPointsBuffer();
   }
@@ -1960,7 +1941,6 @@ bool MainWindow::LoadProgramSettings(){
 
       count ++;
       line = in.readLine();
-      // printf("%d | %s \n", count, line.toStdString().c_str());
     }
 
     if( ElogPort.isEmpty() ) ElogPort = defaultElogPort;
@@ -2005,7 +1985,6 @@ bool MainWindow::LoadProgramSettings(){
       bnProgramSettings->setStyleSheet("color: red;");
       bnOpenDigitizers->setEnabled(false);
       bnNewExp->setEnabled(false);
-      // return false;
     }else{
       QFileInfo dirInfo(dir.absolutePath());
       if( !dirInfo.isWritable() ){
@@ -2013,7 +1992,6 @@ bool MainWindow::LoadProgramSettings(){
         bnProgramSettings->setStyleSheet("color: red;");
         bnOpenDigitizers->setEnabled(false);
         bnNewExp->setEnabled(false);
-        // return false;
       }else{
         leRawDataPath->setText(rawDataPath);
         leExpName->setText(expName);
@@ -2036,7 +2014,6 @@ bool MainWindow::LoadProgramSettings(){
     if(analysisPath.isEmpty()) {
       LogMsg("Analysis Path is empty.");
       bnNewExp->setEnabled(false);
-      // return false;
     }
 
     return true;
@@ -2108,8 +2085,6 @@ void MainWindow::OpenDirectory(int id){
   fileDialog.setFileMode(QFileDialog::Directory);
   fileDialog.exec();
 
-  //qDebug() << fileDialog.selectedFiles();
-  
   switch (id){
     case 1 : lAnalysisPath->setText(fileDialog.selectedFiles().at(0)); break;
     case 2 : lExpDataPath->setText(fileDialog.selectedFiles().at(0)); break;
@@ -2201,16 +2176,6 @@ void MainWindow::SetupNewExpPanel(){
   le2->setReadOnly(true);
   layout->addWidget(le2, rowID, 1, 1, 3);
 
-  // //------- Root Data Path
-  // rowID ++;
-  // QLabel * l2a = new QLabel("Root Data Path ", &dialog);
-  // l2a->setAlignment(Qt::AlignCenter | Qt::AlignRight);
-  // layout->addWidget(l2a, rowID, 0);
-
-  // QLineEdit * le2a = new QLineEdit(rootDataPath, &dialog);
-  // le2a->setReadOnly(true);
-  // layout->addWidget(le2a, rowID, 1, 1, 3);
-
   //------- get harddisk space;
   rowID ++;
   QStorageInfo storage = QStorageInfo::root();
@@ -2237,8 +2202,6 @@ void MainWindow::SetupNewExpPanel(){
   QByteArray output = git.readAllStandardOutput();
   existGitBranches = (QString::fromLocal8Bit(output)).split("\n");
   existGitBranches.removeAll("");
-
-  //qDebug() << branches;
 
   if( existGitBranches.size() == 0) {
     isGitExist = false;
@@ -2353,7 +2316,6 @@ void MainWindow::SetupNewExpPanel(){
 
   QLineEdit * newExp = new QLineEdit("type and Enter", &dialog);
   layout->addWidget(newExp, rowID, 1, 1, 2);
-  //newExp->setFocus();
 
   QPushButton *bnCreateNewExp = new QPushButton("Create", &dialog);
   layout->addWidget(bnCreateNewExp, rowID, 3);
@@ -2416,15 +2378,11 @@ bool MainWindow::LoadExpNameSh(){
   QFile file(settingFile);
   if( !file.open(QIODevice::Text | QIODevice::ReadOnly) ) {
     LogMsg("<b>" + settingFile + "</b> not found. Create one.");
-    // LogMsg("Please Open the <font style=\"color : red;\">New/Change/Reload Exp</font>");
     runID = -1;
     elog->SetID(0);
-    //bnOpenDigitizers->setEnabled(false);
-    //leExpName->setText("no expName found.");
 
     WriteExpNameSh();
     
-    // return false;
   }
 
   QTextStream in(&file);
@@ -2436,11 +2394,8 @@ bool MainWindow::LoadExpNameSh(){
     int index = line.indexOf("=");
     QString haha = line.mid(index+1).remove(" ").remove("\"");
 
-    //qDebug() << haha;
-
     switch (count){
       case 0 : expName = haha; break;
-      // case 1 : masterExpDataPath = haha; break;
       case 1 : runID = haha.toInt(); break;
       case 2 : elog->SetID(haha.toInt()); break;
     }
@@ -2449,10 +2404,6 @@ bool MainWindow::LoadExpNameSh(){
     line = in.readLine();
   }
 
-  // rawDataPath = masterExpDataPath + "/" + expName + "/data_raw/";
-  // rootDataPath = masterExpDataPath + "/" + expName + "/root_data/";
-
-  // leRawDataPath->setText(rawDataPath);
   leExpName->setText(expName);
   leRunID->setText(QString::number(runID));
 
@@ -2473,7 +2424,6 @@ void MainWindow::WriteExpNameSh(){
     return;
   }
   file2.write(("expName="+ expName + "\n").toStdString().c_str());
-  // file2.write(("ExpDataPath="+ masterExpDataPath + "\n").toStdString().c_str());
   file2.write(("runID="+std::to_string(runID)+"\n").c_str());
   file2.write(("elogID="+std::to_string(elog->GetID())+"\n").c_str());
   file2.write("#------------end of file.");
@@ -2577,15 +2527,9 @@ void MainWindow::CreateNewExperiment(const QString newExpName){
   }
 
   //TODO is there anyway to create a new elog ?? direct edit the config.cfg??
-  //SetupElog();
   logMsgHTMLMode = true;
   LogMsg("<font style=\"color red;\"> !!!! Please Create a new Elog with name <b>" + GetElogName() + "</b>. </font>");
 
-  // expDataPath = masterExpDataPath + "/" + newExpName;
-  // rawDataPath = expDataPath + "/data_raw/"; 
-  // rootDataPath = expDataPath + "/root_data/"; 
-
-  // CreateRawDataFolder();
   CreateDataSymbolicLink();
 
   leRawDataPath->setText(rawDataPath);
@@ -2703,24 +2647,20 @@ void MainWindow::CreateDataSymbolicLink(){
 //*###################################################################### 
 //*###################################################################### Single Spectrum
 void MainWindow::OpenAnalyzer(){
-  /// Unlike OpenSingleSpectra, never construct here: the button is only enabled once
-  /// OpenDigitizers() has made one, so a null pointer would mean digi[] is not ready.
+  /// Same as OpenSingleHistograms: the button is only enabled once OpenDigitizers() has made
+  /// one, so a null pointer would mean digi[] is not ready.
   if( analyzer == nullptr ) return;
   analyzer->show();
   analyzer->activateWindow();
 }
 
-void MainWindow::OpenSingleSpectra(){
-
-  if( singleSpectra == nullptr ) {
-    singleSpectra = new SingleSpectra(digi, nDigi, rawDataPath);
-    singleSpectra->SetInflux(influx, DatabaseName);
-    singleSpectra->show();
-  }else{
-    singleSpectra->show();
-    singleSpectra->activateWindow();
-    singleSpectra->LoadSetting();
-  }
+void MainWindow::OpenSingleHistograms(){
+  /// The button is only enabled once OpenDigitizers() has made the window (and is disabled when
+  /// it is deleted), so a null pointer would mean digi[] is not ready.
+  if( singleHistograms == nullptr ) return;
+  singleHistograms->show();
+  singleHistograms->activateWindow();
+  singleHistograms->LoadSetting();
 }
 
 
@@ -2756,7 +2696,7 @@ void MainWindow::SetupInflux(){
   /// windows, which then kept a pointer to the just-deleted singleton. The windows' contracts
   /// are "null/unset = disable the output UI", so they must hear about failures too.
   auto NotifyWindows = [this](){
-    if( singleSpectra ) singleSpectra->SetInflux(influx, DatabaseName);
+    if( singleHistograms ) singleHistograms->SetInflux(influx, DatabaseName);
     if( analyzer ){
       if( influx ) analyzer->SetInflux(DatabaseIP, DatabaseToken, DatabaseName);
       else         analyzer->SetInflux(QString(), QString(), QString());   // unhealthy: the checkbox self-disables

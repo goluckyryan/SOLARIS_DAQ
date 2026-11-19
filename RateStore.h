@@ -6,7 +6,7 @@
 #include <QString>
 
 //^====================================================
-//^ A tiny sliding-window dN/dt ledger, owned by SingleSpectra.
+//^ A tiny sliding-window dN/dt ledger, owned by SingleHistograms.
 //^
 //^ Producers (the publish path, later the gate/monitor plumbing) call Sample() with a
 //^ MONOTONICALLY INCREASING cumulative count per named channel -- a histogram's in-range
@@ -20,7 +20,7 @@
 //^ a fresh baseline, so the first rate after a clear is again computed from real deltas.
 //^
 //^ GUI thread only. It rides the replot/monitor clock (Sample is called from
-//^ SingleSpectra::SampleRates), so the window resolution is the sampling period; the counts
+//^ SingleHistograms::SampleRates), so the window resolution is the sampling period; the counts
 //^ themselves stay exact because they come from the fill worker's atomics.
 //^
 //^ Each key also carries display META (human label + owning digitizer/channel) so consumers --

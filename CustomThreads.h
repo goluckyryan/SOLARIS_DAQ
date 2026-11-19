@@ -15,7 +15,7 @@
 /// NOTHING to them -- it only asks an event loop to return. Stop() is the only way to end either
 /// one; wait() then joins. Calls to quit() on these two used to be sprinkled around the shutdown
 /// paths, reading as if they helped, and have been removed. Do not add them back.
-/// (SingleSpectra's workerThread and the Analyzer's build/analysis threads are plain QThreads with
+/// (SingleHistograms's workerThread and the Analyzer's build/analysis threads are plain QThreads with
 /// real event loops and worker objects moved onto them -- those do need quit().)
 
 //^#===================================================== ReadData Thread

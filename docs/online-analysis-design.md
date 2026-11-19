@@ -140,14 +140,14 @@ with a known premium.
 
 ## Why no hand-rolled thread fence
 
-`SingleSpectra` uses `isFillingHistograms` + `suspendFilling` + `WaitForFillToDrain()`, because its
+`SingleHistograms` uses `isFillingHistograms` + `suspendFilling` + `WaitForFillToDrain()`, because its
 GUI thread reallocates the count arrays its worker fills (on rebin or a source change).
 
 The Analyzer does not need any of it. Every GUI-initiated change is a
 `Qt::BlockingQueuedConnection` into the worker that **owns** that state, so the change executes on
 that worker thread between two `ProcessEvent()` calls. **The marshalling is the fence.** That is why
 an analysis can keep plain `int` parameter members with no atomics, and why there is no 200 ms
-give-up loop. In `SingleSpectra` that loop is only safe while one fill pass ends sooner:
+give-up loop. In `SingleHistograms` that loop is only safe while one fill pass ends sooner:
 the pass yields after `maxFillTimeinMilliSec` (default 50 ms), so a fill time set above 200 ms
 would let the GUI reallocate under a running worker.
 
@@ -167,7 +167,7 @@ So `QtHistRegistry` accumulates into `std::atomic<uint32_t>` arrays on the worke
 thread publishes them into the widgets via `SetBinContents` / `SetCellContents`. An analysis never
 sees a widget, so it cannot get this wrong.
 
-`SingleSpectra` follows the same split: its worker increments atomic `H1Counts`/`H2Counts`
+`SingleHistograms` follows the same split: its worker increments atomic `H1Counts`/`H2Counts`
 (`SingleHistograms.cpp:501-530`) and the GUI thread publishes them.
 
 ## Why the analysis interface has no Qt
