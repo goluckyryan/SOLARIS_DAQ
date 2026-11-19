@@ -9,6 +9,8 @@
 #include <QAbstractSpinBox>
 #include <QLineEdit>
 #include <QSet>
+#include <QCoreApplication>
+#include <QEventLoop>
 
 std::vector<std::pair<std::string, Reg>> infoIndex = {{"Serial Num : ",            PHA::DIG::SerialNumber},
                                                       {"IP : ",                    PHA::DIG::IPAddress},
