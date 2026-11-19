@@ -742,10 +742,8 @@ static bool TestRawDataDecode(Digitizer2Gen *digi) {
         if( fread(&blobSize, 8, 1, rf) != 1 ) break;
         if( fread(buf, blobSize, 1, rf) != 1 ) break;
 
-        std::string dppT = DPPTypeOf(ident);
-        dec.LoadBlob(buf, blobSize, dppT);
-        RawDecoder::DecodedHit dh;
-        while( dec.Next(dh) ) readHits++;
+        dec.LoadBlob(buf, blobSize, DPPTypeOf(ident) == DPPType::PSD);
+        readHits += (int) dec.Hits().size();
         readBlobs++;
       }
       fclose(rf);

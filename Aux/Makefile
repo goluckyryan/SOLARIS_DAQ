@@ -3,14 +3,12 @@ CFLAG= -std=c++17 -O2
 # CFLAG= -std=c++17 -g -O0
 ROOTFLAG=`root-config --cflags --glibs`
 
-OBJS = ClassDigitizer.o ClassInfluxDB.o
-
 all: EventBuilder EventBuilderRaw
 
 # Tools that need neither ROOT nor CAEN. Kept out of "all" so they build on any machine.
 tools: testOnlineBuilder
 
-testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp ../EventRing.h ../Analysis.h ../analyzers/Coincidence.cpp \
+testOnlineBuilder: testOnlineBuilder.cpp SolReader.h ../OnlineEventBuilder.cpp ../EventRing.h ../Analysis.h $(wildcard ../analyzers/*.cpp) ../analyzers/RateScatter.h \
                    ../OnlineEventBuilder.h ../LeanHit.h ../BuiltHit.h ../RingBuffer.h ../Hit.h ../ClassInfluxDB.h ../ClassInfluxDB.cpp
 	$(CC) $(CFLAG) -fPIC $(shell pkg-config --cflags Qt6Widgets) -pthread -I.. testOnlineBuilder.cpp ../OnlineEventBuilder.cpp ../analyzers/*.cpp ../ClassInfluxDB.cpp -o testOnlineBuilder $(shell pkg-config --libs Qt6Widgets) -lcurl
 
@@ -20,17 +18,11 @@ EventBuilder: EventBuilder.cpp SolReader.h BuilderCommon.h ../Hit.h
 EventBuilderRaw: EventBuilderRaw.cpp BuilderCommon.h ../RawDecoder.h ../Hit.h
 	$(CC) $(CFLAG) EventBuilderRaw.cpp -o EventBuilderRaw ${ROOTFLAG}
 
-ClassDigitizer.o : ../ClassDigitizer.cpp ../ClassDigitizer.h ../RegisterAddress.h ../macro.h ../ClassData.h
-		$(CC) $(COPTS) -c ../ClassDigitizer.cpp
-
-ClassInfluxDB.o : ../ClassInfluxDB.cpp ../ClassInfluxDB.h 
-		$(CC) $(COPTS) -c ../ClassInfluxDB.cpp -lcurl
-
 test: test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit.h
-	$(CC) $(CFLAG) test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o test -lcurl -lCAEN_FELib -lX11
+	$(CC) $(CFLAG) test.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o test -lcurl -lCAEN_FELib
 
 testRawDecoder: testRawDecoder.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o ../RawDecoder.h ../Hit.h
-	$(CC) $(CFLAG) testRawDecoder.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o testRawDecoder -lcurl -lCAEN_FELib -lX11
+	$(CC) $(CFLAG) testRawDecoder.cpp ../ClassDigitizer2Gen.o ../ClassInfluxDB.o -o testRawDecoder -lcurl -lCAEN_FELib
 
 clean:
 	-rm EventBuilder EventBuilderRaw test testRawDecoder testOnlineBuilder

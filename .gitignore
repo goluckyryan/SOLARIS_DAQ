@@ -89,7 +89,6 @@ CMakeLists.txt.user*
 
 EventBuilder
 EventBuilderRaw
-Aux/debug_raw
 Aux/check*
 Aux/testOnlineBuilder
 Aux/testRawDecoder

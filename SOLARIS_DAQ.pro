@@ -8,7 +8,7 @@ INCLUDEPATH += .
 
 QT += core widgets charts printsupport
 
-LIBS += -lcurl -lCAEN_FELib -lX11 -ldl
+LIBS += -lcurl -lCAEN_FELib -ldl
 
 #=========== for GDB debug
 QMAKE_CXXFLAGS += -g  # for gdb debug

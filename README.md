@@ -558,7 +558,6 @@ The window shows `totalHitsDropped`, `totalHitsLate`, `monotonicityViolations` a
   See [Ubuntu 24.04 and 26.04](#ubuntu-2404-and-2604) for the tested matrix.
 - Qt6: `sudo apt install qt6-base-dev qt6-charts-dev`
 - libcurl: `sudo apt install libcurl4-openssl-dev`
-- X11: `sudo apt install libx11-dev` — the `.pro` links `-lX11`
 - CAEN FELib: CAEN_FELib v1.2.2+ (install first)
 - CAEN Dig2: CAEN_DIG2 v1.5.3+
 - ROOT — **only** for `Aux/EventBuilder`; the DAQ itself does not use it
