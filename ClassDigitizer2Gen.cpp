@@ -1848,10 +1848,17 @@ bool Digitizer2Gen::SameSettingValue(const std::string & a, const std::string & 
   /// source lists: "TrgIn | SwTrg" == "SwTrg|TrgIn"
   if( x.find('|') != std::string::npos || y.find('|') != std::string::npos ){
     auto split = [&](const std::string & s){
-      std::vector<std::string> v; size_t p = 0;
-      while( true ){ size_t q = s.find('|', p); v.push_back(lower(trim(s.substr(p, q == std::string::npos ? std::string::npos : q - p))));
-                     if( q == std::string::npos ) break; p = q + 1; }
-      std::sort(v.begin(), v.end()); return v; };
+      std::vector<std::string> v;
+      size_t p = 0;
+      while( true ){
+        const size_t q = s.find('|', p);
+        v.push_back(lower(trim(s.substr(p, q == std::string::npos ? std::string::npos : q - p))));
+        if( q == std::string::npos ) break;
+        p = q + 1;
+      }
+      std::sort(v.begin(), v.end());
+      return v;
+    };
     return split(x) == split(y);
   }
   return lower(x) == lower(y);
